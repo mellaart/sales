@@ -16,6 +16,7 @@ export type OfferTemplateInput = {
   salesName: string;
   salesEmail?: string;
   salesPhone?: string;
+  notes?: string;
   includeVat: boolean;
   totalUsers: number;
   selectedModules: OfferModule[];

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, ShieldCheck } from "lucide-react";
+import { KeyRound, LockKeyhole } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -16,16 +17,13 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) {
-      router.replace("/");
-    }
+    if (!loading && user) router.replace("/");
   }, [loading, router, user]);
 
   async function handleResetPassword() {
     setStatus("");
 
     const supabase = getSupabaseClient();
-
     if (!supabase) {
       setStatus("Supabase keys ontbreken.");
       return;
@@ -45,7 +43,7 @@ export default function LoginPage() {
       return;
     }
 
-    setStatus("Password reset e-mail verzonden. Controleer je inbox.");
+    setStatus("E-mail verzonden. Open de link en stel daarna je nieuwe wachtwoord in.");
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -54,9 +52,8 @@ export default function LoginPage() {
     setStatus("");
 
     const supabase = getSupabaseClient();
-
     if (!supabase) {
-      setStatus("Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in.");
+      setStatus("Supabase keys ontbreken.");
       setBusy(false);
       return;
     }
@@ -72,74 +69,61 @@ export default function LoginPage() {
 
     const { error } = await action;
 
+    setBusy(false);
+
     if (error) {
       setStatus(`${mode === "login" ? "Inloggen" : "Account maken"} mislukt: ${error.message}`);
-      setBusy(false);
       return;
     }
 
-    setBusy(false);
-    setStatus(mode === "login" ? "Ingelogd, je wordt doorgestuurd." : "Account aangemaakt. Nieuwe gebruikers starten standaard als sales.");
     router.replace("/");
   }
 
   return (
-    <div className="page-shell">
-      <div className="container auth-page">
-        <section className="card auth-card">
-          <div className="brand-mark">Smart Trade</div>
-          <h1>Versie 9 — offertegenerator</h1>
-          <p>
-            Log in om offertes te maken, deals op te slaan en rollen/toegang te beheren.
-          </p>
+    <div className="modern-auth-page">
+      <section className="modern-auth-card">
+        <div className="modern-auth-brand">SMART TRADE</div>
 
-          <div className="auth-mode-row">
-            <button type="button" className={`package-button ${mode === "login" ? "active" : ""}`} onClick={() => setMode("login")}>
-              Inloggen
+        <h1>Welkom terug</h1>
+        <p className="modern-auth-subtitle">
+          Log in om offertes te maken, deals te beheren en verkoopkansen sneller op te volgen.
+        </p>
+
+        <div className="modern-auth-tabs">
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+            Inloggen
+          </button>
+          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>
+            Account maken
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modern-auth-form">
+          <label>
+            <span>E-mailadres</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </label>
+
+          <label>
+            <span>Wachtwoord</span>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+          </label>
+
+          <button type="submit" className="modern-auth-primary" disabled={busy}>
+            <KeyRound size={18} />
+            {busy ? "Bezig..." : mode === "login" ? "Inloggen" : "Account maken"}
+          </button>
+
+          {mode === "login" ? (
+            <button type="button" className="modern-auth-secondary" onClick={handleResetPassword}>
+              <LockKeyhole size={16} />
+              Reset password
             </button>
-            <button type="button" className={`package-button ${mode === "signup" ? "active" : ""}`} onClick={() => setMode("signup")}>
-              Account maken
-            </button>
-          </div>
+          ) : null}
+        </form>
 
-          <form onSubmit={handleSubmit} className="auth-form">
-            <label>
-              <span className="input-label">E-mailadres</span>
-              <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </label>
-
-            <label>
-              <span className="input-label">Wachtwoord</span>
-              <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-            </label>
-
-            <div className="button-row">
-              <button type="submit" className="primary-button" disabled={busy}>
-                <KeyRound size={16} /> {busy ? "Bezig..." : mode === "login" ? "Inloggen" : "Account maken"}
-              </button>
-
-              {mode === "login" ? (
-                <button type="button" className="secondary-button" onClick={handleResetPassword}>
-                  Reset password
-                </button>
-              ) : null}
-            </div>
-          </form>
-
-          <div className="soft-card auth-note">
-            <div className="section-title">
-              <ShieldCheck size={16} /> Toegang
-            </div>
-            <ul className="auth-list">
-              <li>Sales maakt offertes en ziet eigen deals</li>
-              <li>Managers zien alle deals</li>
-              <li>Admins beheren rollen en toegang</li>
-            </ul>
-          </div>
-
-          {status ? <div className="save-status">{status}</div> : null}
-        </section>
-      </div>
+        {status ? <div className="modern-auth-status">{status}</div> : null}
+      </section>
     </div>
   );
 }

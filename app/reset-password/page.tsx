@@ -7,7 +7,6 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,60 +25,44 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-    });
+    const { error } = await supabase.auth.updateUser({ password });
+
+    setBusy(false);
 
     if (error) {
-      setStatus(error.message);
-      setBusy(false);
+      setStatus(`Wachtwoord aanpassen mislukt: ${error.message}`);
       return;
     }
 
-    setStatus("Wachtwoord succesvol aangepast.");
+    setStatus("Wachtwoord aangepast. Je wordt doorgestuurd.");
 
-    setTimeout(() => {
-      router.replace("/");
-    }, 1500);
+    setTimeout(() => router.replace("/"), 1200);
   }
 
   return (
-    <div className="auth-layout">
-      <div className="auth-panel">
-        <div className="auth-brand">SMART TRADE</div>
+    <div className="modern-auth-page">
+      <section className="modern-auth-card">
+        <div className="modern-auth-brand">SMART TRADE</div>
 
-        <h1>Nieuw wachtwoord instellen</h1>
-
-        <p className="auth-subtitle">
-          Kies een nieuw wachtwoord voor je account.
+        <h1>Nieuw wachtwoord</h1>
+        <p className="modern-auth-subtitle">
+          Kies hieronder een nieuw wachtwoord voor je account.
         </p>
 
-        <form onSubmit={handleUpdatePassword} className="auth-form-modern">
+        <form onSubmit={handleUpdatePassword} className="modern-auth-form">
           <label>
             <span>Nieuw wachtwoord</span>
-
-            <input
-              type="password"
-              className="auth-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
           </label>
 
-          <button
-            type="submit"
-            className="auth-primary-button"
-            disabled={busy}
-          >
+          <button type="submit" className="modern-auth-primary" disabled={busy}>
             <Lock size={18} />
             {busy ? "Opslaan..." : "Wachtwoord opslaan"}
           </button>
         </form>
 
-        {status ? <div className="auth-status">{status}</div> : null}
-      </div>
+        {status ? <div className="modern-auth-status">{status}</div> : null}
+      </section>
     </div>
   );
 }

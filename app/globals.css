@@ -1114,4 +1114,135 @@ td {
   color: #dbeafe;
 
   font-size: 14px;
+
+}
+.modern-auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(59, 130, 246, 0.5), transparent 30%),
+    radial-gradient(circle at 85% 85%, rgba(14, 165, 233, 0.35), transparent 32%),
+    linear-gradient(135deg, #061426 0%, #0b2340 45%, #07111f 100%);
+}
+
+.modern-auth-card {
+  width: min(480px, 100%);
+  padding: 42px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 28px;
+  background: rgba(8, 22, 40, 0.82);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.45);
+  backdrop-filter: blur(22px);
+  color: white;
+}
+
+.modern-auth-brand {
+  margin-bottom: 18px;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.24em;
+}
+
+.modern-auth-card h1 {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.modern-auth-subtitle {
+  margin: 14px 0 28px;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
+.modern-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 6px;
+  margin-bottom: 22px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.07);
+}
+
+.modern-auth-tabs button {
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #cbd5e1;
+  font-weight: 800;
+}
+
+.modern-auth-tabs button.active {
+  background: #2563eb;
+  color: white;
+}
+
+.modern-auth-form {
+  display: grid;
+  gap: 16px;
+}
+
+.modern-auth-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.modern-auth-form span {
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.modern-auth-form input {
+  height: 54px;
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.07);
+  color: white;
+  padding: 0 16px;
+  font-size: 15px;
+}
+
+.modern-auth-form input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96,165,250,0.16);
+}
+
+.modern-auth-primary,
+.modern-auth-secondary {
+  height: 52px;
+  border-radius: 14px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.modern-auth-primary {
+  border: 0;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: white;
+}
+
+.modern-auth-secondary {
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: #dbeafe;
+}
+
+.modern-auth-status {
+  margin-top: 18px;
+  padding: 13px 15px;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.16);
+  color: #dbeafe;
+  font-size: 14px;
 }

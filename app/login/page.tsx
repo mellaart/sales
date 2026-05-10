@@ -21,23 +21,57 @@ export default function LoginPage() {
     }
   }, [loading, router, user]);
 
+  async function handleResetPassword() {
+    setStatus("");
+
+    const supabase = getSupabaseClient();
+
+    if (!supabase) {
+      setStatus("Supabase keys ontbreken.");
+      return;
+    }
+
+    if (!email.trim()) {
+      setStatus("Vul eerst je e-mailadres in.");
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/login`,
+    });
+
+    if (error) {
+      setStatus(`Reset password mislukt: ${error.message}`);
+      return;
+    }
+
+    setStatus("Password reset e-mail verzonden. Controleer je inbox.");
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setStatus("");
 
     const supabase = getSupabaseClient();
+
     if (!supabase) {
       setStatus("Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in.");
       setBusy(false);
       return;
     }
 
-    const action = mode === "login"
-      ? supabase.auth.signInWithPassword({ email, password })
-      : supabase.auth.signUp({ email, password, options: { data: { full_name: email.split("@")[0] } } });
+    const action =
+      mode === "login"
+        ? supabase.auth.signInWithPassword({ email, password })
+        : supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: email.split("@")[0] } },
+          });
 
     const { error } = await action;
+
     if (error) {
       setStatus(`${mode === "login" ? "Inloggen" : "Account maken"} mislukt: ${error.message}`);
       setBusy(false);
@@ -54,14 +88,18 @@ export default function LoginPage() {
       <div className="container auth-page">
         <section className="card auth-card">
           <div className="brand-mark">Smart Trade</div>
-          <h1>Versie 8 — rollen en toegangsbeheer</h1>
+          <h1>Versie 9 — offertegenerator</h1>
           <p>
-            Sales ziet alleen eigen deals, managers zien alle deals en admins beheren daarnaast ook gebruikersrollen.
+            Log in om offertes te maken, deals op te slaan en rollen/toegang te beheren.
           </p>
 
           <div className="auth-mode-row">
-            <button type="button" className={`package-button ${mode === "login" ? "active" : ""}`} onClick={() => setMode("login")}>Inloggen</button>
-            <button type="button" className={`package-button ${mode === "signup" ? "active" : ""}`} onClick={() => setMode("signup")}>Account maken</button>
+            <button type="button" className={`package-button ${mode === "login" ? "active" : ""}`} onClick={() => setMode("login")}>
+              Inloggen
+            </button>
+            <button type="button" className={`package-button ${mode === "signup" ? "active" : ""}`} onClick={() => setMode("signup")}>
+              Account maken
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="auth-form">
@@ -69,21 +107,33 @@ export default function LoginPage() {
               <span className="input-label">E-mailadres</span>
               <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </label>
+
             <label>
               <span className="input-label">Wachtwoord</span>
               <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
             </label>
-            <button type="submit" className="primary-button" disabled={busy}>
-              <KeyRound size={16} /> {busy ? "Bezig..." : mode === "login" ? "Inloggen" : "Account maken"}
-            </button>
+
+            <div className="button-row">
+              <button type="submit" className="primary-button" disabled={busy}>
+                <KeyRound size={16} /> {busy ? "Bezig..." : mode === "login" ? "Inloggen" : "Account maken"}
+              </button>
+
+              {mode === "login" ? (
+                <button type="button" className="secondary-button" onClick={handleResetPassword}>
+                  Reset password
+                </button>
+              ) : null}
+            </div>
           </form>
 
           <div className="soft-card auth-note">
-            <div className="section-title"><ShieldCheck size={16} /> Wat v8 toevoegt</div>
+            <div className="section-title">
+              <ShieldCheck size={16} /> Toegang
+            </div>
             <ul className="auth-list">
-              <li>Profielen met rollen: sales, manager, admin</li>
-              <li>Managers zien alle deals via RLS</li>
-              <li>Admins beheren rollen in een apart admin-scherm</li>
+              <li>Sales maakt offertes en ziet eigen deals</li>
+              <li>Managers zien alle deals</li>
+              <li>Admins beheren rollen en toegang</li>
             </ul>
           </div>
 

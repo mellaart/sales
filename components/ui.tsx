@@ -30,10 +30,12 @@ export function NumberInput({
   label,
   value,
   onChange,
+  step,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  step?: number;
 }) {
   return (
     <label className="input-wrap">
@@ -42,12 +44,12 @@ export function NumberInput({
         className="input"
         type="number"
         value={value}
+        step={step}
         onChange={(event) => onChange(Number(event.target.value || 0))}
       />
     </label>
   );
 }
-
 export function TextArea({
   label,
   value,

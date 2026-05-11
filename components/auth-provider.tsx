@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { getSupabaseClient, type UserRole } from "@/lib/supabase";
 
 type AuthContextType = {
@@ -16,17 +16,9 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
 });
 
-function getUserRole(user: User | null): UserRole | null {
+function getRole(user: User | null): UserRole | null {
   if (!user) return null;
   return (user.user_metadata?.role as UserRole) || "admin";
-}
-
-async function loadCurrentUser(client: SupabaseClient) {
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  return user ?? null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -35,37 +27,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const client = getSupabaseClient();
+    let mounted = true;
 
-    if (!client) {
-      setUser(null);
-      setRole(null);
-      setLoading(false);
-      return;
+    async function init() {
+      try {
+        const supabase = getSupabaseClient();
+
+        if (!supabase) {
+          if (mounted) {
+            setUser(null);
+            setRole(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const { data } = await supabase.auth.getSession();
+        const currentUser = data.session?.user ?? null;
+
+        if (mounted) {
+          setUser(currentUser);
+          setRole(getRole(currentUser));
+          setLoading(false);
+        }
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          const nextUser = session?.user ?? null;
+          setUser(nextUser);
+          setRole(getRole(nextUser));
+          setLoading(false);
+        });
+
+        return () => subscription.unsubscribe();
+      } catch {
+        if (mounted) {
+          setUser(null);
+          setRole(null);
+          setLoading(false);
+        }
+      }
     }
 
-    const supabase = client as SupabaseClient;
-
-    async function initializeAuth() {
-      const currentUser = await loadCurrentUser(supabase);
-      setUser(currentUser);
-      setRole(getUserRole(currentUser));
-      setLoading(false);
-    }
-
-    void initializeAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      setRole(getUserRole(currentUser));
-      setLoading(false);
-    });
+    const cleanupPromise = init();
 
     return () => {
-      subscription.unsubscribe();
+      mounted = false;
+      void cleanupPromise.then((cleanup) => cleanup?.());
     };
   }, []);
 

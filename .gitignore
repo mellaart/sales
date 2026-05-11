@@ -1,4 +1,7 @@
-.DS_Store
+cat > .gitignore <<'EOF'
 node_modules
 .next
 .env.local
+.DS_Store
+*.zip
+EOF

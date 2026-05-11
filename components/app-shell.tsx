@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Shield, UserRound, Users2 } from "lucide-react";
 import { canManageRoles } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export function AppShellHeader() {
   const { user, role, signOut } = useAuth();
@@ -14,10 +15,17 @@ export function AppShellHeader() {
   if (!user) return null;
 
   const handleLogout = async () => {
-    await signOut();
-    router.replace("/login");
-    router.refresh();
-  };
+  const supabase = getSupabaseClient();
+
+  if (supabase) {
+    await supabase.auth.signOut();
+  }
+
+  localStorage.clear();
+  sessionStorage.clear();
+
+  window.location.href = "/login";
+};
 
   return (
     <div className="app-nav">

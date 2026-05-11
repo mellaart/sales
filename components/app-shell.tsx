@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Shield, UserRound, Users2, LayoutDashboard } from "lucide-react";
+import { LogOut, Shield, UserRound, Users2 } from "lucide-react";
 import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 
@@ -21,21 +21,18 @@ export function AppShellHeader() {
 
     localStorage.clear();
     sessionStorage.clear();
-
     window.location.href = "/login";
   };
 
   return (
-    <div className="app-nav">
+    <header className="app-nav">
       <div className="app-nav-inner">
         <Link href="/" className="app-nav-brand">
-          <span className="brand-dot" />
           Smart Trade
         </Link>
 
-        <div className="app-nav-actions">
+        <nav className="app-nav-actions">
           <Link href="/" className={`nav-button ${pathname === "/" ? "active" : ""}`}>
-            <LayoutDashboard size={15} />
             Calculator
           </Link>
 
@@ -50,23 +47,22 @@ export function AppShellHeader() {
             </Link>
           ) : null}
 
-          <div className="user-meta">
-            <span className="user-chip">
-              <Users2 size={13} />
-              {role ?? "sales"}
-            </span>
-            <span className="user-chip email-chip">
-              <UserRound size={13} />
-              {user.email}
-            </span>
-          </div>
+          <span className="user-chip">
+            <Users2 size={13} />
+            {role ?? "sales"}
+          </span>
+
+          <span className="user-chip email-chip">
+            <UserRound size={13} />
+            {user.email}
+          </span>
 
           <button type="button" className="logout-button" onClick={handleLogout}>
             <LogOut size={15} />
             Uitloggen
           </button>
-        </div>
+        </nav>
       </div>
-    </div>
+    </header>
   );
 }

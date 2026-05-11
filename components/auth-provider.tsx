@@ -1,13 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-
-import { User } from "@supabase/supabase-js";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabase";
 
 type UserRole = "sales" | "manager" | "admin";
@@ -24,39 +18,34 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
 });
 
-export function AuthProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function getUserRole(user: User | null): UserRole | null {
+  if (!user) return null;
+
+  return (user.user_metadata?.role as UserRole) || "admin";
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const supabase = getSupabaseClient();
+    const supabaseClient = getSupabaseClient();
 
-    if (!supabase) {
+    if (!supabaseClient) {
+      setUser(null);
+      setRole(null);
       setLoading(false);
       return;
     }
 
     async function loadUser() {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { user: currentUser },
+      } = await supabaseClient.auth.getUser();
 
-      setUser(user ?? null);
-
-      if (user) {
-        const userRole =
-          (user.user_metadata?.role as UserRole) || "admin";
-
-        setRole(userRole);
-      } else {
-        setRole(null);
-      }
-
+      setUser(currentUser ?? null);
+      setRole(getUserRole(currentUser ?? null));
       setLoading(false);
     }
 
@@ -64,19 +53,12 @@ export function AuthProvider({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
 
       setUser(currentUser);
-
-      if (currentUser) {
-        const userRole =
-          (currentUser.user_metadata?.role as UserRole) || "admin";
-
-        setRole(userRole);
-      } else {
-        setRole(null);
-      }
+      setRole(getUserRole(currentUser));
+      setLoading(false);
     });
 
     return () => {
@@ -85,13 +67,7 @@ export function AuthProvider({
   }, []);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        role,
-        loading,
-      }}
-    >
+    <AuthContext.Provider value={{ user, role, loading }}>
       {children}
     </AuthContext.Provider>
   );

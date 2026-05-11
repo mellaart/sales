@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabase";
 
 type UserRole = "sales" | "manager" | "admin";
@@ -20,8 +20,15 @@ const AuthContext = createContext<AuthContextType>({
 
 function getUserRole(user: User | null): UserRole | null {
   if (!user) return null;
-
   return (user.user_metadata?.role as UserRole) || "admin";
+}
+
+async function loadCurrentUser(client: SupabaseClient) {
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
+  return user ?? null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -30,30 +37,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const supabaseClient = getSupabaseClient();
+    const client = getSupabaseClient();
 
-    if (!supabaseClient) {
+    if (!client) {
       setUser(null);
       setRole(null);
       setLoading(false);
       return;
     }
 
-    async function loadUser() {
-      const {
-        data: { user: currentUser },
-      } = await supabaseClient.auth.getUser();
+    const supabase = client as SupabaseClient;
 
-      setUser(currentUser ?? null);
-      setRole(getUserRole(currentUser ?? null));
+    async function initializeAuth() {
+      const currentUser = await loadCurrentUser(supabase);
+
+      setUser(currentUser);
+      setRole(getUserRole(currentUser));
       setLoading(false);
     }
 
-    void loadUser();
+    void initializeAuth();
 
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
 
       setUser(currentUser);

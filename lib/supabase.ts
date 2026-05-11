@@ -5,6 +5,7 @@ export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant";
 export type ProfileRecord = {
   id: string;
   email: string | null;
+  full_name?: string | null;
   role: UserRole;
   created_at?: string | null;
   updated_at?: string | null;
@@ -44,7 +45,7 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,email,role,created_at,updated_at")
+    .select("id,email,full_name,role,created_at,updated_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -55,6 +56,7 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
   return {
     id: data.id,
     email: data.email,
+    full_name: data.full_name ?? null,
     role: data.role as UserRole,
     created_at: data.created_at,
     updated_at: data.updated_at,

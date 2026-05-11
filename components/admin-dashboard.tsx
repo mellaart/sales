@@ -45,7 +45,10 @@ export default function AdminDashboard() {
 
   async function updateRole(profileId: string, nextRole: UserRole) {
     if (!supabase) return;
-    const { error } = await supabase.from("profiles").update({ role: nextRole }).eq("id", profileId);
+    const { error } = await supabase
+  .from("profiles")
+  .update({ role: nextRole } as never)
+  .eq("id", profileId);
     if (error) {
       setStatus(`Rol wijzigen mislukt: ${error.message}`);
       return;

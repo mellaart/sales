@@ -1,5 +1,5 @@
 import "./globals.css";
-import "./globals.assets.css";
+
 
 import type { Metadata } from "next";
 

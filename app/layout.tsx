@@ -1,7 +1,7 @@
 import "./globals.css";
+import "./globals.assets.css";
+
 import type { Metadata } from "next";
-import { AuthProvider } from "@/components/auth-provider";
-import { AppShellHeader } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "Smart Trade",
@@ -15,12 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="nl">
-      <body>
-        <AuthProvider>
-          <AppShellHeader />
-          {children}
-        </AuthProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

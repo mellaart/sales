@@ -1,32 +1,32 @@
-# Versie 9 - Offertegenerator
-
-Gebaseerd op v8.6.2.
+# V11 - Assets / upsell API patch
 
 Vervang:
-- components/price-calculator.tsx
-- lib/pdf.ts
-- app/globals.css
+- components/app-shell.tsx
 
 Voeg toe:
-- lib/offer-template.ts
+- lib/smart-trade-api.ts
+- app/api/smart-trade/relations/search/route.ts
+- app/api/smart-trade/assets/by-relation/route.ts
+- app/assets/page.tsx
+- components/assets-dashboard.tsx
 
-Nieuw:
-- PDF export is nu een echte offerte-opbouw zoals de voorbeeldmail/PDF.
-- Vaste teksten voor:
-  - Functionaliteiten / pakketkeuze
-  - Support
-  - Smart Trade maandtarief
-  - Implementatie
-  - Financieel pakket
-  - Consultancy
-  - Hardware
-  - Tot slot
-- Tabellen voor licentie, support en extra modules.
-- Starter is standaard geselecteerd.
-- BTW-toggle is verwijderd.
-- Aanbevolen-badge is verwijderd.
-- PDF-knop heet nu 'Maak offerte-PDF'.
+CSS:
+- Voeg de inhoud van app/globals.assets.css onderaan app/globals.css toe.
 
-Let op:
-- De PDF blijft jsPDF gebruiken. Dit is robuust in Next.js, maar nog geen HTML-to-PDF renderer.
-- Logo/beeldmerk kan in v9.1 toegevoegd worden.
+Environment variables lokaal en in Vercel:
+SMART_TRADE_API_BASE_URL=https://my.troublefree.nl/v3/api
+SMART_TRADE_API_TOKEN=<jouw bearer token>
+SMART_TRADE_COMPANY_KEY=<jouw company key>
+SMART_TRADE_AUTH_MODE=bearer
+
+Voor Basic Auth:
+SMART_TRADE_AUTH_MODE=basic
+SMART_TRADE_API_TOKEN=username:password
+
+Werking:
+1. Nieuw tabblad Assets.
+2. Zoek debiteur via GET /api/relations?company[partial]=term.
+3. Selecteer debiteur.
+4. Haal assets op via GET /api/assets?owner=relationId.
+5. Per asset detail via GET /api/assets/{asset}?include=contractAgreements.
+6. Toon contractAgreements als modules/diensten.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Shield, UserRound, Users2 } from "lucide-react";
+import { Boxes, LogOut, Shield, UserRound, Users2 } from "lucide-react";
 import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 
@@ -28,6 +28,7 @@ export function AppShellHeader() {
     <header className="app-nav">
       <div className="app-nav-inner">
         <Link href="/" className="app-nav-brand">
+          <span className="brand-dot" />
           Smart Trade
         </Link>
 
@@ -38,6 +39,11 @@ export function AppShellHeader() {
 
           <Link href="/deals" className={`nav-button ${pathname.startsWith("/deals") ? "active" : ""}`}>
             Deals
+          </Link>
+
+          <Link href="/assets" className={`nav-button ${pathname.startsWith("/assets") ? "active" : ""}`}>
+            <Boxes size={15} />
+            Assets
           </Link>
 
           {canManageRoles(role) ? (

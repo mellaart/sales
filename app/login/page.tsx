@@ -24,6 +24,7 @@ export default function LoginPage() {
     setStatus("");
 
     const supabase = getSupabaseClient();
+
     if (!supabase) {
       setStatus("Supabase keys ontbreken.");
       return;
@@ -52,6 +53,7 @@ export default function LoginPage() {
     setStatus("");
 
     const supabase = getSupabaseClient();
+
     if (!supabase) {
       setStatus("Supabase keys ontbreken.");
       setBusy(false);

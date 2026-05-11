@@ -45,9 +45,7 @@ export default function ResetPasswordPage() {
         <div className="modern-auth-brand">SMART TRADE</div>
 
         <h1>Nieuw wachtwoord</h1>
-        <p className="modern-auth-subtitle">
-          Kies hieronder een nieuw wachtwoord voor je account.
-        </p>
+        <p className="modern-auth-subtitle">Kies hieronder een nieuw wachtwoord voor je account.</p>
 
         <form onSubmit={handleUpdatePassword} className="modern-auth-form">
           <label>

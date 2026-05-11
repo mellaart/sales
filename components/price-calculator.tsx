@@ -163,15 +163,15 @@ export default function PriceCalculator() {
         <header className="brand-hero card">
           <div>
             <div className="brand-mark">Smart Trade</div>
-            <h1>Prijs calculator en offertegenerator</h1>
+            <h1>Smart Trade offerteplatform</h1>
             <p>
-              Maak automatisch een Smart Trade offerte in dezelfde opbouw als je verkoopmail.
+              Een modern sales platform voor offertes, deals en uitbreidingen.
             </p>
           </div>
           <div className="brand-actions">
             <StatusPill tone="success">PDF-offerte</StatusPill>
             <StatusPill tone="success">Supabase-ready</StatusPill>
-            <StatusPill tone="warning">Versie 9</StatusPill>
+            <StatusPill tone="warning">Versie 10</StatusPill>
             <Link href="/deals" className="secondary-button">
               <Table2 size={16} /> Deal overzicht
             </Link>
@@ -182,7 +182,7 @@ export default function PriceCalculator() {
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card panel">
             <div className="top-row">
               <div>
-                <div className="eyebrow">Versie 9</div>
+                <div className="eyebrow">Versie 10</div>
                 <h2 className="headline">Sales input</h2>
                 <div className="subtext">Vul alleen de noodzakelijke velden in. De calculator doet de rest.</div>
               </div>

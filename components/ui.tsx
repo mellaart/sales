@@ -87,22 +87,31 @@ export function StatusPill({
 export function StatCard({
   title,
   value,
+  sublabel,
   subtitle,
-  icon,
+  icon: Icon,
 }: {
   title: string;
   value: string;
+  sublabel?: string;
   subtitle?: string;
-  icon?: ReactNode;
+  icon?: React.ElementType;
 }) {
   return (
     <div className="stat-card">
       <div className="stat-card-inner">
-        {icon ? <div className="stat-icon">{icon}</div> : null}
+        {Icon ? (
+          <div className="stat-icon">
+            <Icon size={20} />
+          </div>
+        ) : null}
+
         <div>
           <div className="kpi-title">{title}</div>
           <div className="kpi-value">{value}</div>
-          {subtitle ? <div className="kpi-subtitle">{subtitle}</div> : null}
+          {sublabel || subtitle ? (
+            <div className="kpi-subtitle">{sublabel || subtitle}</div>
+          ) : null}
         </div>
       </div>
     </div>

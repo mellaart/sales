@@ -50,7 +50,13 @@ export default function DealsDashboard() {
     const q = query.trim().toLowerCase();
     if (!q) return deals;
     return deals.filter((deal) =>
-      [deal.customer_name, deal.quote_title, deal.contact_name, deal.package_name, deal.sales_name]
+      [
+  deal.customer_name,
+  deal.quote_title,
+  deal.contact_name,
+  deal.package_key,
+  deal.sales_name,
+]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q)),
     );

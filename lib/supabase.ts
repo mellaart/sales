@@ -31,12 +31,14 @@ export type DealRecord = {
 notes?: string | null;
 
   package_key?: string | null;
+  package_name?: string | null;
   selected_package?: string | null;
 
   total_users?: number | null;
   extra_users?: number | null;
 
   monthly_price?: number | null;
+  monthly_total?: number | null;
   implementation_price?: number | null;
   implementation_base?: number | null;
   manual_implementation_adjustment?: number | null;

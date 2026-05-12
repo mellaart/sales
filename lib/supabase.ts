@@ -16,6 +16,7 @@ export type DealCalculatorInputs = {
   selectedPackage: string;
   manualImplementationAdjustment: number;
   includeVat: boolean;
+  quantities: Record<string, number>;
 };
 
 export type DealRecord = {

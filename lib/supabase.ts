@@ -23,6 +23,7 @@ export type DealRecord = {
   monthly_price?: number | null;
   implementation_price?: number | null;
   calculator_inputs?: DealCalculatorInputs | null;
+  modules?: Array<{ key?: string; qty?: number }> | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

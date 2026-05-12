@@ -21,6 +21,9 @@ export type DealRecord = {
   contact_name?: string | null;
   quote_title?: string | null;
 
+  sales_name?: string | null;
+notes?: string | null;
+
   package_key?: string | null;
   selected_package?: string | null;
 

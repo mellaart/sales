@@ -11,7 +11,12 @@ export type ProfileRecord = {
   updated_at?: string | null;
 };
 
-export type DealCalculatorInputs = Record<string, unknown>;
+export type DealCalculatorInputs = {
+  extraUsers: number;
+  selectedPackage: string;
+  manualImplementationAdjustment: number;
+  includeVat: boolean;
+};
 
 export type DealRecord = {
   id: string;

@@ -139,11 +139,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       },
     };
 
-    const { error } = await supabase
-  .from("deals")
-  .update(payload as never)
-  .eq("id", dealId);
-  
+    const { error } = await supabase.from("deals").update(payload).eq("id", dealId);
     if (error) {
       setStatus(`Opslaan mislukt: ${error.message}`);
       return;

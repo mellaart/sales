@@ -83,7 +83,7 @@ export default function AdminDashboard() {
               <div className="eyebrow">Gebruikers</div>
               <h2 className="headline">Rolbeheer</h2>
             </div>
-            <StatusPill tone="success">{profiles.length} profielen</StatusPill>
+            <StatusPill tone="neutral">{profiles.length} profielen</StatusPill>
           </div>
 
           {loading ? <div className="save-status">Profielen worden geladen...</div> : null}

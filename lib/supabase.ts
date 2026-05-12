@@ -16,14 +16,27 @@ export type DealCalculatorInputs = Record<string, unknown>;
 export type DealRecord = {
   id: string;
   user_id?: string | null;
+
   customer_name?: string | null;
   contact_name?: string | null;
   quote_title?: string | null;
+
+  package_key?: string | null;
   selected_package?: string | null;
+
+  total_users?: number | null;
+  extra_users?: number | null;
+
   monthly_price?: number | null;
   implementation_price?: number | null;
+  implementation_base?: number | null;
+  manual_implementation_adjustment?: number | null;
+
+  include_vat?: boolean | null;
+
   calculator_inputs?: DealCalculatorInputs | null;
   modules?: Array<{ key?: string; qty?: number }> | null;
+
   created_at?: string | null;
   updated_at?: string | null;
 };

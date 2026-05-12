@@ -91,15 +91,17 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
     .maybeSingle();
 
   if (error || !data) {
-    return null;
-  }
+  return null;
+}
 
-  return {
-    id: data.id,
-    email: data.email,
-    full_name: data.full_name ?? null,
-    role: data.role as UserRole,
-    created_at: data.created_at,
-    updated_at: data.updated_at,
-  };
+const profile = data as ProfileRecord;
+
+return {
+  id: profile.id,
+  email: profile.email,
+  full_name: profile.full_name ?? null,
+  role: profile.role,
+  created_at: profile.created_at,
+  updated_at: profile.updated_at,
+};
 }

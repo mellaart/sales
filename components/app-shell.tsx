@@ -46,12 +46,9 @@ export function AppShellHeader() {
             Assets
           </Link>
 
-          {canManageRoles(role) ? (
-            <Link href="/admin" className={`nav-button ${pathname.startsWith("/admin") ? "active" : ""}`}>
-              <Shield size={15} />
-              Admin
-            </Link>
-          ) : null}
+          <Link href="/admin" className={`nav-button ${pathname.startsWith("/admin") ? "active" : ""}`}>
+  Admin
+</Link>
 
           <span className="user-chip">
             <Users2 size={13} />

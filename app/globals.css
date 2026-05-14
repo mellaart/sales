@@ -227,6 +227,11 @@ select:focus {
     0 12px 30px rgba(37,99,235,0.3);
 }
 
+
+.create-user-button {
+  align-self: end;
+  min-height: 50px;
+}
 .primary-button:hover {
   transform: translateY(-1px);
 }

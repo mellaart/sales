@@ -227,7 +227,7 @@ export default function AdminDashboard() {
               </select>
             </label>
 
-            <button type="submit" className="primary-button" disabled={busy}>
+            <button type="submit" className="primary-button create-user-button" disabled={busy}>
               <UserPlus size={16} />
               {busy ? "Aanmaken..." : "Gebruiker aanmaken"}
             </button>

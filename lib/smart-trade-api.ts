@@ -35,12 +35,15 @@ function requiredEnv(name: string) {
   return value;
 }
 
+const DEFAULT_TIMEOUT_MS = 15000;
+
 function getConfig() {
   return {
     baseUrl: process.env.SMART_TRADE_API_BASE_URL ?? "https://my.troublefree.nl/v3/api",
     token: requiredEnv("SMART_TRADE_API_TOKEN"),
     company: requiredEnv("SMART_TRADE_COMPANY_KEY"),
     authMode: process.env.SMART_TRADE_AUTH_MODE ?? "bearer",
+    timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };
 }
 
@@ -91,11 +94,31 @@ async function apiGet<T>(path: string, params: Record<string, string | number | 
     }
   });
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: getHeaders(),
-    cache: "no-store",
-  });
+  const configTimeout = Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
+    ? config.timeoutMs
+    : DEFAULT_TIMEOUT_MS;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), configTimeout);
+
+  let response: Response;
+
+  try {
+    response = await fetch(url.toString(), {
+      method: "GET",
+      headers: getHeaders(),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Smart Trade API timeout na ${configTimeout}ms.`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const body = await response.text();
@@ -113,7 +136,9 @@ export function getRelationName(relation: SmartTradeRelation) {
 
 export async function searchRelations(term: string) {
   const params: Record<string, string> = {};
-  if (term.trim()) params["company[partial]"] = term.trim();
+  const normalized = term.trim().slice(0, 120);
+
+  if (normalized) params["company[partial]"] = normalized;
 
   const json = await apiGet<unknown>("/api/relations", params);
   return arrayFromApi<SmartTradeRelation>(json);

@@ -85,9 +85,7 @@ export default function PriceCalculator() {
   const [salesName, setSalesName] = useState("Erik");
   const [extraUsers, setExtraUsers] = useState(1);
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
-  const [selectedModules, setSelectedModules] = useState<Record<string, boolean>>({
-    postnl: true,
-  });
+  const [selectedModules, setSelectedModules] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState(
     "Bedragen zijn gebaseerd op het geselecteerde pakket, de gekozen modules en de huidige implementatie-inschatting.",
   );

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Boxes, LogOut, Shield, UserRound, Users2 } from "lucide-react";
-import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
+import { Boxes, LogOut, UserRound, Users2 } from "lucide-react";
+import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 
 export function AppShellHeader() {

@@ -1,5 +1,5 @@
 import type { PricingResult } from "@/lib/pricing";
-import { euro, IMPLEMENTATION_DAY_RATE, MODULES } from "@/lib/pricing";
+import { euro, IMPLEMENTATION_DAY_RATE } from "@/lib/pricing";
 
 export type OfferModule = {
   key: string;

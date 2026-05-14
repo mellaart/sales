@@ -84,50 +84,48 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
     return null;
   }
 
-  const profileSelect = "id,email,full_name,role,created_at,updated_at";
-  const profileSelectFallback = "id,email,role,created_at,updated_at";
+  const profileSelects = [
+    "id,email,full_name,role,created_at,updated_at",
+    "id,email,full_name,role,created_at",
+    "id,email,role,created_at,updated_at",
+    "id,email,role,created_at",
+  ];
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(profileSelect)
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error && error.message.includes("profiles.full_name does not exist")) {
-    const { data: fallbackData, error: fallbackError } = await supabase
+  for (const selectFields of profileSelects) {
+    const { data, error } = await supabase
       .from("profiles")
-      .select(profileSelectFallback)
+      .select(selectFields)
       .eq("id", userId)
       .maybeSingle();
 
-    if (fallbackError || !fallbackData) {
+    if (error) {
+      const isSchemaColumnError =
+        error.message.includes("profiles.full_name does not exist") ||
+        error.message.includes("profiles.updated_at does not exist");
+
+      if (isSchemaColumnError) {
+        continue;
+      }
+
       return null;
     }
 
-    const profile = fallbackData as ProfileRecord;
+    if (!data) {
+      return null;
+    }
+
+    const profile = data as ProfileRecord;
 
     return {
       id: profile.id,
       email: profile.email,
-      full_name: null,
+      full_name: profile.full_name ?? null,
       role: profile.role,
       created_at: profile.created_at,
-      updated_at: profile.updated_at,
+      updated_at: profile.updated_at ?? null,
     };
   }
 
-  if (error || !data) {
-    return null;
-  }
+  return null;
 
-  const profile = data as ProfileRecord;
-
-  return {
-    id: profile.id,
-    email: profile.email,
-    full_name: profile.full_name ?? null,
-    role: profile.role,
-    created_at: profile.created_at,
-    updated_at: profile.updated_at,
-  };
 }

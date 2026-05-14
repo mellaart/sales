@@ -88,9 +88,27 @@ export default function AdminDashboard() {
     setBusy(true);
     setStatus("");
 
+    if (!supabase) {
+      setBusy(false);
+      setStatus("Supabase client ontbreekt.");
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setBusy(false);
+      setStatus("Je sessie is verlopen. Log opnieuw in.");
+      return;
+    }
+
     const response = await fetch("/api/admin/users/create", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify({ email, password, role: newRole }),
     });
 
@@ -128,12 +146,25 @@ export default function AdminDashboard() {
   }
 
   async function deleteUser(profileId: string) {
+    if (!supabase) return;
+
     const confirmed = confirm("Weet je zeker dat je deze gebruiker wilt verwijderen?");
     if (!confirmed) return;
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setStatus("Je sessie is verlopen. Log opnieuw in.");
+      return;
+    }
+
     const response = await fetch("/api/admin/users/delete", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify({ userId: profileId }),
     });
 

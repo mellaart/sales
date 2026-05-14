@@ -10,14 +10,25 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const isLoginPage = pathname === "/login";
+  const isResetPasswordPage = pathname === "/reset-password";
+  const mustSetPassword = Boolean(user?.user_metadata?.must_set_password);
 
   useEffect(() => {
     if (!loading && !user && !isLoginPage) {
       router.replace("/login");
+      return;
     }
-  }, [loading, user, isLoginPage, router]);
+
+    if (!loading && user && mustSetPassword && !isResetPasswordPage) {
+      router.replace("/reset-password");
+    }
+  }, [loading, user, isLoginPage, isResetPasswordPage, mustSetPassword, router]);
 
   if (!loading && !user && !isLoginPage) {
+    return null;
+  }
+
+  if (!loading && user && mustSetPassword && !isResetPasswordPage) {
     return null;
   }
 

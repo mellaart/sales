@@ -84,24 +84,50 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
     return null;
   }
 
+  const profileSelect = "id,email,full_name,role,created_at,updated_at";
+  const profileSelectFallback = "id,email,role,created_at,updated_at";
+
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,email,full_name,role,created_at,updated_at")
+    .select(profileSelect)
     .eq("id", userId)
     .maybeSingle();
 
+  if (error && error.message.includes("profiles.full_name does not exist")) {
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from("profiles")
+      .select(profileSelectFallback)
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (fallbackError || !fallbackData) {
+      return null;
+    }
+
+    const profile = fallbackData as ProfileRecord;
+
+    return {
+      id: profile.id,
+      email: profile.email,
+      full_name: null,
+      role: profile.role,
+      created_at: profile.created_at,
+      updated_at: profile.updated_at,
+    };
+  }
+
   if (error || !data) {
-  return null;
-}
+    return null;
+  }
 
-const profile = data as ProfileRecord;
+  const profile = data as ProfileRecord;
 
-return {
-  id: profile.id,
-  email: profile.email,
-  full_name: profile.full_name ?? null,
-  role: profile.role,
-  created_at: profile.created_at,
-  updated_at: profile.updated_at,
-};
+  return {
+    id: profile.id,
+    email: profile.email,
+    full_name: profile.full_name ?? null,
+    role: profile.role,
+    created_at: profile.created_at,
+    updated_at: profile.updated_at,
+  };
 }

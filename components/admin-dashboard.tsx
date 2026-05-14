@@ -31,10 +31,30 @@ export default function AdminDashboard() {
 
     setLoading(true);
 
+    const profileSelect = "id,email,full_name,role,created_at,updated_at";
+    const profileSelectFallback = "id,email,role,created_at,updated_at";
+
     const { data, error } = await supabase
       .from("profiles")
-      .select("id,email,full_name,role,created_at,updated_at")
+      .select(profileSelect)
       .order("email");
+
+    if (error?.message.includes("profiles.full_name does not exist")) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("profiles")
+        .select(profileSelectFallback)
+        .order("email");
+
+      if (fallbackError) {
+        setStatus(`Profielen laden mislukt: ${fallbackError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      setProfiles(((fallbackData ?? []) as ProfileRecord[]).map((profile) => ({ ...profile, full_name: null })));
+      setLoading(false);
+      return;
+    }
 
     if (error) {
       setStatus(`Profielen laden mislukt: ${error.message}`);

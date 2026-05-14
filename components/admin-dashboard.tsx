@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, ShieldCheck, UserPlus, Users2 } from "lucide-react";
 import {
   canManageRoles,
@@ -15,6 +16,7 @@ const roles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"]
 
 export default function AdminDashboard() {
   const { role, refreshProfile } = useAuth();
+  const router = useRouter();
   const supabase = getSupabaseClient();
 
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
@@ -125,6 +127,7 @@ export default function AdminDashboard() {
     setNewRole("sales");
     setStatus("Gebruiker aangemaakt.");
     await loadProfiles();
+    router.refresh();
   }
 
   async function updateRole(profileId: string, nextRole: UserRole) {

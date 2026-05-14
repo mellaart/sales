@@ -31,48 +31,37 @@ export default function AdminDashboard() {
     if (!supabase) return;
 
     setLoading(true);
+    setStatus("");
 
-    const profileSelects = [
-      "id,email,full_name,role,created_at,updated_at",
-      "id,email,full_name,role,created_at",
-      "id,email,role,created_at,updated_at",
-      "id,email,role,created_at",
-    ];
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
 
-    let loadedProfiles: ProfileRecord[] | null = null;
-    let loadError: string | null = null;
-
-    for (const selectFields of profileSelects) {
-      const { data, error } = await supabase.from("profiles").select(selectFields).order("email");
-
-      if (error) {
-        const isSchemaColumnError =
-          error.message.includes("profiles.full_name does not exist") ||
-          error.message.includes("profiles.updated_at does not exist");
-
-        if (isSchemaColumnError) {
-          loadError = error.message;
-          continue;
-        }
-
-        setStatus(`Profielen laden mislukt: ${error.message}`);
-        setLoading(false);
-        return;
-      }
-
-      loadedProfiles = ((data ?? []) as ProfileRecord[]).map((profile) => ({
-        ...profile,
-        full_name: profile.full_name ?? null,
-        updated_at: profile.updated_at ?? null,
-      }));
-      break;
-    }
-
-    if (!loadedProfiles) {
-      setStatus(`Profielen laden mislukt: ${loadError ?? "onbekende databasefout"}`);
+    if (!accessToken) {
+      setStatus("Je sessie is verlopen. Log opnieuw in.");
       setLoading(false);
       return;
     }
+
+    const response = await fetch("/api/admin/users/list", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const json = await response.json();
+
+    if (!response.ok) {
+      setStatus(json.error || "Profielen laden mislukt.");
+      setLoading(false);
+      return;
+    }
+
+    const loadedProfiles = ((json.users ?? []) as ProfileRecord[])
+      .map((profile) => ({
+        ...profile,
+        full_name: profile.full_name ?? null,
+        updated_at: profile.updated_at ?? null,
+      }))
+      .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
 
     setProfiles(loadedProfiles);
     setLoading(false);

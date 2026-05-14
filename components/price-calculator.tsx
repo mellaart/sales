@@ -339,33 +339,6 @@ export default function PriceCalculator() {
               </div>
             </div>
 
-            <div className="card panel">
-              <div className="brand-mark">Pakketvergelijking</div>
-              <h2>Alle scenario&apos;s naast elkaar</h2>
-
-              <div className="comparison-grid">
-                {(Object.keys(packages) as PackageKey[]).map((key) => {
-                  const item = packages[key];
-                  const modulePrice = selectedModuleRows
-                    .filter((module) => !module.free && module.price > 0)
-                    .sort((a, b) => b.price - a.price)
-                    .slice(item.includedPaidModules)
-                    .reduce((sum, module) => sum + module.price, 0);
-
-                  return (
-                    <div key={key} className={`comparison-card ${effectivePackage === key ? "active" : ""}`}>
-                      <div className="kpi-title">Pakket</div>
-                      <div className="package-name">{item.name}</div>
-                      <div className="summary-list">
-                        <div><span>Maandprijs</span><strong>{euro.format(item.license + item.support + modulePrice)}</strong></div>
-                        <div><span>Implementatie</span><strong>{euro.format(item.implementation + manualImplementationAdjustment)}</strong></div>
-                        <div><span>Bezoeken</span><strong>{Math.ceil(item.implementation / 720)}</strong></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </section>
         </div>
       </div>

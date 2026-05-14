@@ -48,24 +48,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: verified.message }, { status: 403 });
     }
 
-    const body = (await request.json()) as { email?: string; password?: string; role?: UserRole };
+    const body = (await request.json()) as { email?: string; role?: UserRole };
     const email = body.email?.trim().toLowerCase();
-    const password = body.password;
     const role = body.role;
 
-    if (!email || !password || !role) {
-      return NextResponse.json({ error: "E-mail, wachtwoord en rol zijn verplicht." }, { status: 400 });
+    if (!email || !role) {
+      return NextResponse.json({ error: "E-mail en rol zijn verplicht." }, { status: 400 });
     }
 
     if (!allowedRoles.includes(role)) {
       return NextResponse.json({ error: "Ongeldige rol." }, { status: 400 });
     }
 
-    const { data, error } = await verified.service.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { role },
+    const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
+      data: { role },
     });
 
     if (error || !data.user) {

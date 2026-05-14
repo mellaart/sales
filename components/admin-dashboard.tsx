@@ -22,7 +22,6 @@ export default function AdminDashboard() {
   const [status, setStatus] = useState("");
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("sales");
   const [busy, setBusy] = useState(false);
 
@@ -109,7 +108,7 @@ export default function AdminDashboard() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ email, password, role: newRole }),
+      body: JSON.stringify({ email, role: newRole }),
     });
 
     const json = await response.json();
@@ -121,9 +120,8 @@ export default function AdminDashboard() {
     }
 
     setEmail("");
-    setPassword("");
     setNewRole("sales");
-    setStatus("Gebruiker aangemaakt.");
+    setStatus("Gebruiker uitgenodigd. Er is een activatiemail verstuurd.");
     await loadProfiles();
   }
 
@@ -216,7 +214,7 @@ export default function AdminDashboard() {
             <div>
               <div className="brand-mark">Nieuwe gebruiker</div>
               <h2>Collega toegang geven</h2>
-              <p className="subtext">Maak een account aan en kies direct de juiste rol.</p>
+              <p className="subtext">Nodig een collega uit en kies direct de juiste rol.</p>
             </div>
             <div className="icon-badge">
               <UserPlus size={24} />
@@ -232,18 +230,6 @@ export default function AdminDashboard() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-              />
-            </label>
-
-            <label className="input-wrap">
-              <span className="input-label">Tijdelijk wachtwoord</span>
-              <input
-                className="input"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                minLength={6}
               />
             </label>
 

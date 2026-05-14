@@ -85,7 +85,6 @@ export default function PriceCalculator() {
   const [salesName, setSalesName] = useState("Erik");
   const [extraUsers, setExtraUsers] = useState(1);
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
-  const [selectedPackage, setSelectedPackage] = useState<PackageKey>("starter");
   const [selectedModules, setSelectedModules] = useState<Record<string, boolean>>({
     postnl: true,
   });
@@ -99,8 +98,8 @@ export default function PriceCalculator() {
   );
 
   const paidModuleCount = selectedModuleRows.filter((module) => !module.free && module.price > 0).length;
-  const recommendedPackage = getRecommendedPackage(paidModuleCount);
-  const activePackage = packages[selectedPackage];
+  const effectivePackage = getRecommendedPackage(paidModuleCount);
+  const activePackage = packages[effectivePackage];
 
   const paidModuleTotal = selectedModuleRows
     .filter((module) => !module.free && module.price > 0)
@@ -117,10 +116,6 @@ export default function PriceCalculator() {
       ...current,
       [key]: !current[key],
     }));
-  }
-
-  function applyRecommendedPackage() {
-    setSelectedPackage(recommendedPackage);
   }
 
   return (
@@ -190,7 +185,13 @@ export default function PriceCalculator() {
               <div className="field-grid-2">
                 <label className="input-wrap">
                   <span className="input-label">Extra gebruikers</span>
-                  <input className="input" type="number" min={0} value={extraUsers} onChange={(e) => setExtraUsers(Number(e.target.value || 0))} />
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    value={extraUsers}
+                    onChange={(e) => setExtraUsers(Math.max(0, Number(e.target.value || 0)))}
+                  />
                 </label>
 
                 <label className="input-wrap">
@@ -208,37 +209,22 @@ export default function PriceCalculator() {
             <div className="section">
               <div className="section-title">
                 <Package size={16} />
-                Pakket
+                Pakket automatisch gekozen
               </div>
 
               <div className="package-grid">
                 {(Object.keys(packages) as PackageKey[]).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`package-button ${selectedPackage === key ? "active" : ""}`}
-                    onClick={() => setSelectedPackage(key)}
-                  >
+                  <div key={key} className={`package-button ${effectivePackage === key ? "active" : ""}`}>
                     <div className="package-header">
                       <div>
                         <div className="package-name">{packages[key].name}</div>
                         <div className="subtext">{packages[key].includedPaidModules} betaalde modules inbegrepen</div>
                       </div>
-                      {selectedPackage === key ? <CheckCircle2 size={18} /> : null}
+                      {effectivePackage === key ? <CheckCircle2 size={18} /> : null}
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
-
-              {recommendedPackage !== selectedPackage ? (
-                <div className="package-rule-note">
-                  Geselecteerd: {paidModuleCount} betaalde modules. Aanbevolen pakket:{" "}
-                  <strong>{packages[recommendedPackage].name}</strong>.{" "}
-                  <button type="button" className="secondary-button" onClick={applyRecommendedPackage}>
-                    Upgrade toepassen
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div className="section">
@@ -273,7 +259,7 @@ export default function PriceCalculator() {
                   <div className="brand-mark">Actieve berekening</div>
                   <h2>{activePackage.name}</h2>
                 </div>
-                <span className="status-pill success">Aanbevolen: {packages[recommendedPackage].name}</span>
+                <span className="status-pill success">Automatisch pakket: {packages[effectivePackage].name}</span>
               </div>
 
               <div className="kpi-grid">
@@ -367,7 +353,7 @@ export default function PriceCalculator() {
                     .reduce((sum, module) => sum + module.price, 0);
 
                   return (
-                    <div key={key} className={`comparison-card ${selectedPackage === key ? "active" : ""}`}>
+                    <div key={key} className={`comparison-card ${effectivePackage === key ? "active" : ""}`}>
                       <div className="kpi-title">Pakket</div>
                       <div className="package-name">{item.name}</div>
                       <div className="summary-list">

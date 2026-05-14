@@ -31,38 +31,49 @@ export default function AdminDashboard() {
 
     setLoading(true);
 
-    const profileSelect = "id,email,full_name,role,created_at,updated_at";
-    const profileSelectFallback = "id,email,role,created_at,updated_at";
+    const profileSelects = [
+      "id,email,full_name,role,created_at,updated_at",
+      "id,email,full_name,role,created_at",
+      "id,email,role,created_at,updated_at",
+      "id,email,role,created_at",
+    ];
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(profileSelect)
-      .order("email");
+    let loadedProfiles: ProfileRecord[] | null = null;
+    let loadError: string | null = null;
 
-    if (error?.message.includes("profiles.full_name does not exist")) {
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from("profiles")
-        .select(profileSelectFallback)
-        .order("email");
+    for (const selectFields of profileSelects) {
+      const { data, error } = await supabase.from("profiles").select(selectFields).order("email");
 
-      if (fallbackError) {
-        setStatus(`Profielen laden mislukt: ${fallbackError.message}`);
+      if (error) {
+        const isSchemaColumnError =
+          error.message.includes("profiles.full_name does not exist") ||
+          error.message.includes("profiles.updated_at does not exist");
+
+        if (isSchemaColumnError) {
+          loadError = error.message;
+          continue;
+        }
+
+        setStatus(`Profielen laden mislukt: ${error.message}`);
         setLoading(false);
         return;
       }
 
-      setProfiles(((fallbackData ?? []) as ProfileRecord[]).map((profile) => ({ ...profile, full_name: null })));
+      loadedProfiles = ((data ?? []) as ProfileRecord[]).map((profile) => ({
+        ...profile,
+        full_name: profile.full_name ?? null,
+        updated_at: profile.updated_at ?? null,
+      }));
+      break;
+    }
+
+    if (!loadedProfiles) {
+      setStatus(`Profielen laden mislukt: ${loadError ?? "onbekende databasefout"}`);
       setLoading(false);
       return;
     }
 
-    if (error) {
-      setStatus(`Profielen laden mislukt: ${error.message}`);
-      setLoading(false);
-      return;
-    }
-
-    setProfiles((data ?? []) as ProfileRecord[]);
+    setProfiles(loadedProfiles);
     setLoading(false);
   }
 

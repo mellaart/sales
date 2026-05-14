@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     }
 
     const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
-      data: { role },
+      data: { role, must_set_password: true },
     });
 
     if (error || !data.user) {

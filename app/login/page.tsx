@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth-provider";
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const mustSetPassword = Boolean(user?.user_metadata?.must_set_password);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,8 +17,10 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) router.replace("/");
-  }, [loading, router, user]);
+    if (!loading && user) {
+      router.replace(mustSetPassword ? "/reset-password" : "/");
+    }
+  }, [loading, mustSetPassword, router, user]);
 
   async function handleResetPassword() {
     setStatus("");

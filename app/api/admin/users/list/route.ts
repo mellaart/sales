@@ -62,15 +62,22 @@ export async function GET(request: Request) {
 
     const users = authUsers.map((user) => {
       const profile = profileById.get(user.id) as { role?: UserRole; full_name?: string | null; email?: string | null } | undefined;
+      const metadata = user.user_metadata as Record<string, unknown> | undefined;
+      const metadataFullName =
+        (typeof metadata?.full_name === "string" && metadata.full_name.trim()) ||
+        (typeof metadata?.name === "string" && metadata.name.trim()) ||
+        (typeof metadata?.display_name === "string" && metadata.display_name.trim()) ||
+        null;
 
       return {
-      id: user.id,
-      email: profile?.email ?? user.email ?? null,
-      full_name: profile?.full_name ?? (user.user_metadata?.full_name as string | undefined) ?? null,
-      role: profile?.role ?? (user.user_metadata?.role as UserRole | undefined) ?? "sales",
-      created_at: user.created_at ?? null,
-      updated_at: user.updated_at ?? null,
-    }});
+        id: user.id,
+        email: profile?.email ?? user.email ?? null,
+        full_name: profile?.full_name ?? metadataFullName,
+        role: profile?.role ?? (user.user_metadata?.role as UserRole | undefined) ?? "sales",
+        created_at: user.created_at ?? null,
+        updated_at: user.updated_at ?? null,
+      };
+    });
 
     return NextResponse.json({ users });
   } catch (error) {

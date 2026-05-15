@@ -45,37 +45,37 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: verified.message }, { status: 401 });
     }
 
-    const { data, error } = await service.auth.admin.listUsers();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data: profileRows, error: profileError } = await service
+      .from("profiles")
+      .select("id,role,full_name,email,created_at")
+      .order("email", { ascending: true });
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
-    const authUsers = data.users ?? [];
-    const userIds = authUsers.map((user) => user.id);
+    const normalizeText = (value: unknown): string | null => {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
 
-    const { data: profileRows } = await service
-      .from("profiles")
-      .select("id,role,full_name,email")
-      .in("id", userIds);
-
-    const profileById = new Map((profileRows ?? []).map((row) => [row.id as string, row]));
-
-    const users = authUsers.map((user) => {
-      const profile = profileById.get(user.id) as { role?: UserRole; full_name?: string | null; email?: string | null } | undefined;
-      const metadata = user.user_metadata as Record<string, unknown> | undefined;
-      const metadataFullName =
-        (typeof metadata?.full_name === "string" && metadata.full_name.trim()) ||
-        (typeof metadata?.name === "string" && metadata.name.trim()) ||
-        (typeof metadata?.display_name === "string" && metadata.display_name.trim()) ||
-        null;
+    const users = (profileRows ?? []).map((profileRow) => {
+      const profile = profileRow as {
+        id: string;
+        role?: UserRole;
+        full_name?: string | null;
+        email?: string | null;
+        created_at?: string | null;
+      };
 
       return {
-        id: user.id,
-        email: profile?.email ?? user.email ?? null,
-        full_name: profile?.full_name ?? metadataFullName,
-        role: profile?.role ?? (user.user_metadata?.role as UserRole | undefined) ?? "sales",
-        created_at: user.created_at ?? null,
-        updated_at: user.updated_at ?? null,
+        id: profile.id,
+        email: normalizeText(profile.email),
+        full_name: normalizeText(profile.full_name),
+        role: profile.role ?? "sales",
+        created_at: profile.created_at ?? null,
+        updated_at: null,
       };
     });
 

@@ -68,8 +68,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ongeldige rol." }, { status: 400 });
     }
 
+    const redirectBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_VERCEL_URL;
+
+    const redirectTo = redirectBaseUrl
+      ? `${redirectBaseUrl.startsWith("http") ? redirectBaseUrl : `https://${redirectBaseUrl}`}/reset-password`
+      : undefined;
+
     const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
       data: { role, full_name: fullName, must_set_password: true },
+      ...(redirectTo ? { redirectTo } : {}),
     });
 
     if (error || !data.user) {

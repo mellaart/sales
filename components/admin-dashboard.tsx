@@ -287,12 +287,18 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+
           <div className="admin-user-list">
             <div className="admin-user-card"><div><div className="package-name">sales</div><div className="subtext">Eigen deals bekijken en beheren.</div></div></div>
             <div className="admin-user-card"><div><div className="package-name">support</div><div className="subtext">Alle deals bekijken en supporttaken uitvoeren.</div></div></div>
             <div className="admin-user-card"><div><div className="package-name">consultant</div><div className="subtext">Eigen deals beheren en advies voorbereiden.</div></div></div>
             <div className="admin-user-card"><div><div className="package-name">manager</div><div className="subtext">Alle deals bekijken en teamoutput volgen.</div></div></div>
             <div className="admin-user-card"><div><div className="package-name">admin</div><div className="subtext">Gebruikers en rollen beheren plus volledige toegang.</div></div></div>
+          </div>
+
+          <div className="save-status">
+            Rechten samenvatting: sales/consultant zien alleen eigen deals, support/manager zien alle deals,
+            en admin beheert daarnaast ook gebruikers en rollen.
           </div>
         </section>
 

@@ -22,7 +22,7 @@ const AuthContext = createContext<AuthContextType>({
 
 function fallbackRole(user: User | null): UserRole | null {
   if (!user) return null;
-  return (user.user_metadata?.role as UserRole) || "admin";
+  return (user.user_metadata?.role as UserRole) || "sales";
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

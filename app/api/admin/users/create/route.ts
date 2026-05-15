@@ -93,8 +93,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Gebruiker bestaat al" }, { status: 409 });
     }
 
+
     const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
       data: { role, full_name: fullName, must_set_password: true },
+      ...(redirectTo ? { redirectTo } : {}),
     });
 
     if (error || !data.user) {

@@ -194,6 +194,11 @@ select:focus {
   box-shadow: 0 0 0 4px rgba(37,99,235,0.16);
 }
 
+select option {
+  color: #0f172a;
+  background: #ffffff;
+}
+
 .textarea {
   min-height: 120px;
   resize: vertical;

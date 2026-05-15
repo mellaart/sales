@@ -31,17 +31,26 @@ export type SmartTradeAsset = {
 
 function requiredEnv(name: string) {
   const value = process.env[name];
-  if (!value) throw new Error(`Missing env var: ${name}`);
+  if (!value) return null;
   return value;
 }
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
 function getConfig() {
+  const token = requiredEnv("SMART_TRADE_API_TOKEN");
+  const company = requiredEnv("SMART_TRADE_COMPANY_KEY");
+
+  if (!token || !company) {
+    throw new Error(
+      "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_TOKEN en SMART_TRADE_COMPANY_KEY toe aan je environment variables.",
+    );
+  }
+
   return {
     baseUrl: process.env.SMART_TRADE_API_BASE_URL ?? "https://my.troublefree.nl/v3/api",
-    token: requiredEnv("SMART_TRADE_API_TOKEN"),
-    company: requiredEnv("SMART_TRADE_COMPANY_KEY"),
+    token,
+    company,
     authMode: process.env.SMART_TRADE_AUTH_MODE ?? "bearer",
     timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };

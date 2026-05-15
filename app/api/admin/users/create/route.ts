@@ -4,6 +4,13 @@ import type { UserRole } from "@/lib/supabase";
 
 const allowedRoles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
 
+function isMissingFullNameColumnError(message: string) {
+  return (
+    message.includes("Could not find the 'full_name' column of 'profiles' in the schema cache") ||
+    message.includes("profiles.full_name does not exist")
+  );
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -69,12 +76,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error?.message ?? "Gebruiker aanmaken mislukt." }, { status: 400 });
     }
 
-    const { error: profileError } = await verified.service.from("profiles").upsert({
+    let { error: profileError } = await verified.service.from("profiles").upsert({
       id: data.user.id,
       email,
       role,
       full_name: fullName,
     });
+
+    if (profileError && isMissingFullNameColumnError(profileError.message)) {
+      const fallbackResult = await verified.service.from("profiles").upsert({
+        id: data.user.id,
+        email,
+        role,
+      });
+      profileError = fallbackResult.error;
+    }
 
     if (profileError) {
       return NextResponse.json({ error: `Gebruiker aangemaakt, profiel bijwerken mislukt: ${profileError.message}` }, { status: 500 });

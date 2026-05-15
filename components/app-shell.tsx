@@ -34,6 +34,10 @@ export function AppShellHeader() {
 
         <nav className="app-nav-actions">
           <Link href="/" className={`nav-button ${pathname === "/" ? "active" : ""}`}>
+            Dashboard
+          </Link>
+
+          <Link href="/calculator" className={`nav-button ${pathname.startsWith("/calculator") ? "active" : ""}`}>
             Calculator
           </Link>
 
@@ -47,8 +51,8 @@ export function AppShellHeader() {
           </Link>
 
           <Link href="/admin" className={`nav-button ${pathname.startsWith("/admin") ? "active" : ""}`}>
-  Admin
-</Link>
+            Admin
+          </Link>
 
           <span className="user-chip">
             <Users2 size={13} />

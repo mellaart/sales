@@ -68,6 +68,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ongeldige rol." }, { status: 400 });
     }
 
+    const { data: existingUsers, error: existingUsersError } = await verified.service.auth.admin.listUsers();
+
+    if (existingUsersError) {
+      return NextResponse.json({ error: "Bestaande gebruikers controleren mislukt." }, { status: 500 });
+    }
+
+    const alreadyExists = (existingUsers?.users ?? []).some(
+      (user) => user.email?.trim().toLowerCase() === email,
+    );
+
+    if (alreadyExists) {
+      return NextResponse.json({ error: "Gebruiker bestaat al" }, { status: 409 });
+    }
+
     const redirectBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_VERCEL_URL;
 
     const redirectTo = redirectBaseUrl

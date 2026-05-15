@@ -37,14 +37,15 @@ function requiredEnv(name: string) {
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
+export const SMART_TRADE_CONFIG_ERROR =
+  "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_TOKEN en SMART_TRADE_COMPANY_KEY toe aan je environment variables.";
+
 function getConfig() {
   const token = requiredEnv("SMART_TRADE_API_TOKEN");
   const company = requiredEnv("SMART_TRADE_COMPANY_KEY");
 
   if (!token || !company) {
-    throw new Error(
-      "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_TOKEN en SMART_TRADE_COMPANY_KEY toe aan je environment variables.",
-    );
+    throw new Error(SMART_TRADE_CONFIG_ERROR);
   }
 
   return {

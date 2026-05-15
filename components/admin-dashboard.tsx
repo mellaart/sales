@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const [status, setStatus] = useState("");
 
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("sales");
   const [busy, setBusy] = useState(false);
 
@@ -99,7 +100,7 @@ export default function AdminDashboard() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ email, role: newRole }),
+      body: JSON.stringify({ email, fullName, role: newRole }),
     });
 
     const json = await response.json();
@@ -111,6 +112,7 @@ export default function AdminDashboard() {
     }
 
     setEmail("");
+    setFullName("");
     setNewRole("sales");
     setStatus("Gebruiker uitgenodigd. Er is een activatiemail verstuurd.");
     await loadProfiles();
@@ -236,6 +238,18 @@ export default function AdminDashboard() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
+              />
+            </label>
+
+
+            <label className="input-wrap">
+              <span className="input-label">Naam</span>
+              <input
+                className="input"
+                type="text"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                placeholder="Bijv. Erik"
               />
             </label>
 

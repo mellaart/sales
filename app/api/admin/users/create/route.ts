@@ -48,8 +48,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: verified.message }, { status: 403 });
     }
 
-    const body = (await request.json()) as { email?: string; role?: UserRole };
+    const body = (await request.json()) as { email?: string; fullName?: string; role?: UserRole };
     const email = body.email?.trim().toLowerCase();
+    const fullName = body.fullName?.trim() || null;
     const role = body.role;
 
     if (!email || !role) {
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
-      data: { role, must_set_password: true },
+      data: { role, full_name: fullName, must_set_password: true },
     });
 
     if (error || !data.user) {
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
       id: data.user.id,
       email,
       role,
+      full_name: fullName,
     });
 
     if (profileError) {

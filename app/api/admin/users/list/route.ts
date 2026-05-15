@@ -50,14 +50,27 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const users = (data.users ?? []).map((user) => ({
+    const authUsers = data.users ?? [];
+    const userIds = authUsers.map((user) => user.id);
+
+    const { data: profileRows } = await service
+      .from("profiles")
+      .select("id,role,full_name,email")
+      .in("id", userIds);
+
+    const profileById = new Map((profileRows ?? []).map((row) => [row.id as string, row]));
+
+    const users = authUsers.map((user) => {
+      const profile = profileById.get(user.id) as { role?: UserRole; full_name?: string | null; email?: string | null } | undefined;
+
+      return {
       id: user.id,
-      email: user.email ?? null,
-      full_name: (user.user_metadata?.full_name as string | undefined) ?? null,
-      role: (user.user_metadata?.role as UserRole | undefined) ?? "sales",
+      email: profile?.email ?? user.email ?? null,
+      full_name: profile?.full_name ?? (user.user_metadata?.full_name as string | undefined) ?? null,
+      role: profile?.role ?? (user.user_metadata?.role as UserRole | undefined) ?? "sales",
       created_at: user.created_at ?? null,
       updated_at: user.updated_at ?? null,
-    }));
+    }});
 
     return NextResponse.json({ users });
   } catch (error) {

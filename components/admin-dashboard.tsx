@@ -120,13 +120,27 @@ export default function AdminDashboard() {
   async function updateRole(profileId: string, nextRole: UserRole) {
     if (!supabase) return;
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: nextRole } as never)
-      .eq("id", profileId);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
 
-    if (error) {
-      setStatus(`Rol wijzigen mislukt: ${error.message}`);
+    if (!accessToken) {
+      setStatus("Je sessie is verlopen. Log opnieuw in.");
+      return;
+    }
+
+    const response = await fetch("/api/admin/users/update-role", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ userId: profileId, role: nextRole }),
+    });
+
+    const json = await response.json();
+
+    if (!response.ok) {
+      setStatus(json.error || "Rol wijzigen mislukt.");
       return;
     }
 
@@ -241,6 +255,26 @@ export default function AdminDashboard() {
               {busy ? "Aanmaken..." : "Gebruiker aanmaken"}
             </button>
           </form>
+        </section>
+
+
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="brand-mark">Rollen overzicht</div>
+              <h2>Wat mag je per rol?</h2>
+              <p className="subtext">Gebruik dit als snelle referentie voor rechten in de app.</p>
+            </div>
+          </div>
+
+          <div className="admin-user-list">
+            <div className="admin-user-card"><div><div className="package-name">sales</div><div className="subtext">Eigen deals bekijken en beheren.</div></div></div>
+            <div className="admin-user-card"><div><div className="package-name">support</div><div className="subtext">Alle deals bekijken en supporttaken uitvoeren.</div></div></div>
+            <div className="admin-user-card"><div><div className="package-name">consultant</div><div className="subtext">Eigen deals beheren en advies voorbereiden.</div></div></div>
+            <div className="admin-user-card"><div><div className="package-name">manager</div><div className="subtext">Alle deals bekijken en teamoutput volgen.</div></div></div>
+            <div className="admin-user-card"><div><div className="package-name">admin</div><div className="subtext">Gebruikers en rollen beheren plus volledige toegang.</div></div></div>
+          </div>
         </section>
 
         <section className="card panel">

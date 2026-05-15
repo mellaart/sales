@@ -64,7 +64,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Je kunt je eigen admin-rol niet verwijderen." }, { status: 400 });
     }
 
-    const { error: profileError } = await verified.service.from("profiles").upsert({ id: userId, role });
+    const { data: existingProfile, error: profileLookupError } = await verified.service
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profileLookupError) {
+      return NextResponse.json({ error: profileLookupError.message }, { status: 500 });
+    }
+
+    let profileError: { message: string } | null = null;
+
+    if (existingProfile) {
+      const { error } = await verified.service.from("profiles").update({ role }).eq("id", userId);
+      profileError = error;
+    } else {
+      const { data: authUserData, error: authUserError } = await verified.service.auth.admin.getUserById(userId);
+      if (authUserError || !authUserData.user) {
+        return NextResponse.json({ error: authUserError?.message ?? "Gebruiker niet gevonden." }, { status: 404 });
+      }
+
+      const { error } = await verified.service.from("profiles").insert({
+        id: userId,
+        role,
+        email: authUserData.user.email ?? null,
+        full_name: (authUserData.user.user_metadata?.full_name as string | undefined) ?? null,
+      });
+      profileError = error;
+    }
 
     if (profileError) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });

@@ -15,13 +15,17 @@ export function AppShellHeader() {
   const handleLogout = async () => {
     const supabase = getSupabaseClient();
 
-    if (supabase) {
-      await supabase.auth.signOut();
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error("Uitloggen mislukt, lokale sessie wordt alsnog opgeschoond.", error);
+    } finally {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = "/login";
     }
-
-    localStorage.clear();
-    sessionStorage.clear();
-    window.location.href = "/login";
   };
 
   return (

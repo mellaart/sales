@@ -11,6 +11,17 @@ function isMissingFullNameColumnError(message: string) {
   );
 }
 
+
+function isUserAlreadyExistsError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("already") ||
+    normalized.includes("exists") ||
+    normalized.includes("registered") ||
+    normalized.includes("duplicate")
+  );
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -68,11 +79,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ongeldige rol." }, { status: 400 });
     }
 
+    const { data: existingUsers, error: existingUsersError } = await verified.service.auth.admin.listUsers();
+
+    if (existingUsersError) {
+      return NextResponse.json({ error: "Bestaande gebruikers controleren mislukt." }, { status: 500 });
+    }
+
+    const alreadyExists = (existingUsers?.users ?? []).some(
+      (user) => user.email?.trim().toLowerCase() === email,
+    );
+
+    if (alreadyExists) {
+      return NextResponse.json({ error: "Gebruiker bestaat al" }, { status: 409 });
+    }
+
     const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
       data: { role, full_name: fullName, must_set_password: true },
     });
 
     if (error || !data.user) {
+      if (error && isUserAlreadyExistsError(error.message)) {
+        return NextResponse.json({ error: "Gebruiker bestaat al" }, { status: 409 });
+      }
+
       return NextResponse.json({ error: error?.message ?? "Gebruiker aanmaken mislukt." }, { status: 400 });
     }
 

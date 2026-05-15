@@ -79,44 +79,47 @@ export default function AdminDashboard() {
     setBusy(true);
     setStatus("");
 
-    if (!supabase) {
+    try {
+      if (!supabase) {
+        setStatus("Supabase client ontbreekt.");
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/users/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ email, fullName, role: newRole }),
+      });
+
+      const json = (await response.json().catch(() => ({}))) as { error?: string };
+
+      if (!response.ok) {
+        setStatus(json.error || "Gebruiker aanmaken mislukt.");
+        return;
+      }
+
+      setEmail("");
+      setFullName("");
+      setNewRole("sales");
+      setStatus("Gebruiker uitgenodigd. Er is een activatiemail verstuurd.");
+      await loadProfiles();
+      router.refresh();
+    } catch {
+      setStatus("Er ging iets mis bij het aanmaken van de gebruiker.");
+    } finally {
       setBusy(false);
-      setStatus("Supabase client ontbreekt.");
-      return;
     }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-
-    if (!accessToken) {
-      setBusy(false);
-      setStatus("Je sessie is verlopen. Log opnieuw in.");
-      return;
-    }
-
-    const response = await fetch("/api/admin/users/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ email, fullName, role: newRole }),
-    });
-
-    const json = await response.json();
-    setBusy(false);
-
-    if (!response.ok) {
-      setStatus(json.error || "Gebruiker aanmaken mislukt.");
-      return;
-    }
-
-    setEmail("");
-    setFullName("");
-    setNewRole("sales");
-    setStatus("Gebruiker uitgenodigd. Er is een activatiemail verstuurd.");
-    await loadProfiles();
-    router.refresh();
   }
 
   async function updateRole(profileId: string, nextRole: UserRole) {
@@ -269,6 +272,8 @@ export default function AdminDashboard() {
               {busy ? "Aanmaken..." : "Gebruiker aanmaken"}
             </button>
           </form>
+
+          {status ? <div className="save-status">{status}</div> : null}
         </section>
 
 

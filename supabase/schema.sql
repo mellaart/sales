@@ -4,7 +4,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
-  role text not null default 'sales' check (role in ('sales', 'manager', 'admin')),
+  role text not null default 'sales' check (role in ('sales', 'support', 'consultant', 'manager', 'admin')),
   created_at timestamptz not null default now()
 );
 
@@ -157,3 +157,9 @@ create policy "Managers and admins delete all deals"
   for delete
   to authenticated
   using (public.current_user_role() in ('manager', 'admin'));
+
+
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles
+  add constraint profiles_role_check
+  check (role in ('sales', 'support', 'consultant', 'manager', 'admin'));

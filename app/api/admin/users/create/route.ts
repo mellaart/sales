@@ -94,9 +94,11 @@ export async function POST(request: Request) {
     }
 
 
+    const redirectTo = `${new URL(request.url).origin}/reset-password`;
+
     const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
       data: { role, full_name: fullName, must_set_password: true },
-      ...(redirectTo ? { redirectTo } : {}),
+      redirectTo,
     });
 
     if (error || !data.user) {

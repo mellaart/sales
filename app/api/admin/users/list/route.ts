@@ -54,6 +54,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
+    const { data: authData, error: authError } = await service.auth.admin.listUsers();
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 500 });
+    }
+
+    const authById = new Map((authData.users ?? []).map((user) => [user.id, user]));
+
     const normalizeText = (value: unknown): string | null => {
       if (typeof value !== "string") return null;
       const trimmed = value.trim();
@@ -68,14 +75,24 @@ export async function GET(request: Request) {
         email?: string | null;
         created_at?: string | null;
       };
+      const authUser = authById.get(profile.id);
+      const metadata = authUser?.user_metadata as Record<string, unknown> | undefined;
+      const metadataFullName =
+        normalizeText(metadata?.full_name) ??
+        normalizeText(metadata?.name) ??
+        normalizeText(metadata?.display_name);
+
+      const profileEmail = normalizeText(profile.email);
+      const authEmail = normalizeText(authUser?.email);
+      const displayEmail = profileEmail ?? authEmail;
 
       return {
         id: profile.id,
-        email: normalizeText(profile.email),
-        full_name: normalizeText(profile.full_name),
+        email: displayEmail,
+        full_name: normalizeText(profile.full_name) ?? metadataFullName ?? (displayEmail ? displayEmail.split("@")[0] : null),
         role: profile.role ?? "sales",
-        created_at: profile.created_at ?? null,
-        updated_at: null,
+        created_at: profile.created_at ?? authUser?.created_at ?? null,
+        updated_at: authUser?.updated_at ?? null,
       };
     });
 
@@ -85,3 +102,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

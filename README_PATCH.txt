@@ -16,12 +16,16 @@ CSS:
 Environment variables lokaal en in Vercel:
 SMART_TRADE_API_BASE_URL=https://my.troublefree.nl/v3/api
 SMART_TRADE_API_TOKEN=<jouw bearer token>
-SMART_TRADE_COMPANY_KEY=<jouw company key>
+SMART_TRADE_COMPANY_KEY=troublefree
 SMART_TRADE_AUTH_MODE=bearer
 
-Voor Basic Auth:
+Voor Basic Auth (Troublefree):
+SMART_TRADE_API_BASE_URL=https://retail.troublefree.nl/v3/api
 SMART_TRADE_AUTH_MODE=basic
 SMART_TRADE_API_TOKEN=username:password
+# of
+SMART_TRADE_API_USER=<jouw gebruiker>
+SMART_TRADE_API_PASSWORD=<jouw wachtwoord>
 
 Werking:
 1. Nieuw tabblad Assets.

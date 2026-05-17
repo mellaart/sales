@@ -137,7 +137,7 @@ export default function AssetsDashboard() {
             <div>
               <div className="eyebrow">Stap 1</div>
               <h2 className="headline">Debiteur zoeken</h2>
-              <p className="subtext">Zoek op bedrijfsnaam of deel van de naam.</p>
+              <p className="subtext">Zoek op bedrijfsnaam of deel van de naam, bijvoorbeeld &quot;Acme&quot;.</p>
             </div>
             <div className="icon-badge">
               <Search size={26} />

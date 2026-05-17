@@ -148,7 +148,7 @@ export default function PriceCalculator() {
             <div className="section">
               <div className="section-title">
                 <FileText size={16} />
-                Klant en offerte
+                {" "}Klant en offerte
               </div>
 
               <div className="field-grid-2">
@@ -177,7 +177,7 @@ export default function PriceCalculator() {
             <div className="section">
               <div className="section-title">
                 <Users size={16} />
-                Basis invoer
+                {" "}Basis invoer
               </div>
 
               <div className="field-grid-2">
@@ -206,23 +206,8 @@ export default function PriceCalculator() {
 
             <div className="section">
               <div className="section-title">
-                <CheckCircle2 size={16} />
-                Support
-              </div>
-
-              <div className="soft-card">
-                <div className="summary-list">
-                  <div><span>Gekozen support-niveau</span><strong>{activePackage.name}</strong></div>
-                  <div><span>Support tarief p/m</span><strong>{euro.format(activePackage.support)}</strong></div>
-                  <div><span>Toelichting</span><strong>Support is gekoppeld aan het automatisch gekozen pakket.</strong></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="section">
-              <div className="section-title">
                 <Package size={16} />
-                Pakket automatisch gekozen
+                {" "}Pakket automatisch gekozen
               </div>
 
               <div className="package-grid">
@@ -242,8 +227,23 @@ export default function PriceCalculator() {
 
             <div className="section">
               <div className="section-title">
+                <CheckCircle2 size={16} />
+                {" "}Support
+              </div>
+
+              <div className="soft-card">
+                <div className="summary-list">
+                  <div><span>Gekozen support-niveau</span>{" "}<strong>{activePackage.name}</strong></div>
+                  <div><span>Support tarief p/m</span>{" "}<strong>{euro.format(activePackage.support)}</strong></div>
+                  <div><span>Toelichting</span>{" "}<strong>Support is gekoppeld aan het automatisch gekozen pakket.</strong></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">
                 <SlidersHorizontal size={16} />
-                Modules aan/uit
+                {" "}Modules aan/uit
               </div>
 
               <div className="module-grid">
@@ -298,12 +298,12 @@ export default function PriceCalculator() {
                 <div className="soft-card">
                   <div className="section-title">Samenvatting prijsopbouw</div>
                   <div className="summary-list">
-                    <div><span>Licentie p/m</span><strong>{euro.format(activePackage.license)}</strong></div>
-                    <div><span>Support p/m</span><strong>{euro.format(activePackage.support)}</strong></div>
-                    <div><span>Modules p/m</span><strong>{euro.format(paidModuleTotal)}</strong></div>
-                    <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
-                    <div><span>Implementatie basis</span><strong>{euro.format(activePackage.implementation)}</strong></div>
-                    <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
+                    <div><span>Licentie p/m</span>{" "}<strong>{euro.format(activePackage.license)}</strong></div>
+                    <div><span>Support p/m</span>{" "}<strong>{euro.format(activePackage.support)}</strong></div>
+                    <div><span>Modules p/m</span>{" "}<strong>{euro.format(paidModuleTotal)}</strong></div>
+                    <div className="total-row"><span>Maandprijs</span>{" "}<strong>{euro.format(monthlyTotal)}</strong></div>
+                    <div><span>Implementatie basis</span>{" "}<strong>{euro.format(activePackage.implementation)}</strong></div>
+                    <div><span>Correctie implementatie</span>{" "}<strong>{euro.format(manualImplementationAdjustment)}</strong></div>
                   </div>
                 </div>
 
@@ -333,10 +333,10 @@ export default function PriceCalculator() {
                   </div>
 
                   <div className="quote-facts">
-                    <div><span>Gebruikers</span><strong>{totalUsers}</strong></div>
-                    <div><span>Pakket</span><strong>{activePackage.name}</strong></div>
-                    <div><span>Modules</span><strong>{selectedModuleRows.length}</strong></div>
-                    <div><span>BTW</span><strong>Excl.</strong></div>
+                    <div><span>Gebruikers</span>{" "}<strong>{totalUsers}</strong></div>
+                    <div><span>Pakket</span>{" "}<strong>{activePackage.name}</strong></div>
+                    <div><span>Modules</span>{" "}<strong>{selectedModuleRows.length}</strong></div>
+                    <div><span>BTW</span>{" "}<strong>Excl.</strong></div>
                   </div>
                 </div>
               </div>

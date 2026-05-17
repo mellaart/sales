@@ -158,10 +158,16 @@ export function getRelationName(relation: SmartTradeRelation) {
 }
 
 export async function searchRelations(term: string) {
-  const params: Record<string, string> = {};
+  const params: Record<string, string> = {
+    "customFields.smart trade (auto)[exact]": "1",
+    include: "contactAddress",
+    per_page: "5000",
+  };
   const normalized = term.trim().slice(0, 120);
 
-  if (normalized) params["company[partial]"] = normalized;
+  if (normalized) {
+    params["company[partial]"] = normalized;
+  }
 
   const json = await apiGet<unknown>("/api/relations", params);
   return arrayFromApi<SmartTradeRelation>(json);

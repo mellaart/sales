@@ -52,6 +52,8 @@ function getConfig() {
     throw new Error(SMART_TRADE_CONFIG_ERROR);
   }
 
+  // Keep bearer as the default for SMART_TRADE_API_TOKEN (it may legally contain ":").
+  // Only infer basic auth from the SMART_TRADE_API_USER + SMART_TRADE_API_PASSWORD path.
   const inferredAuthMode = tokenFromEnv ? "bearer" : tokenFromPair ? "basic" : "bearer";
 
   return {

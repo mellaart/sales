@@ -2,15 +2,34 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { UserRole } from "@/lib/supabase";
 
-const service = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
+function getServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) return null;
+
+  return createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-  },
-);
+  });
+}
+
+function getAnonClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) return null;
+
+  return createClient(url, anonKey);
+}
 
 async function verifyAdmin(request: Request) {
+  const service = getServiceClient();
+  const anon = getAnonClient();
+
+  if (!service || !anon) {
+    return { ok: false as const, message: "Server configuratie ontbreekt." };
+  }
+
   const authHeader = request.headers.get("authorization") || "";
   const token = authHeader.replace("Bearer ", "").trim();
 
@@ -18,7 +37,6 @@ async function verifyAdmin(request: Request) {
     return { ok: false as const, message: "Geen token ontvangen." };
   }
 
-  const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
   const { data: userData, error: userError } = await anon.auth.getUser(token);
 
   if (userError || !userData.user) {
@@ -45,20 +63,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: verified.message }, { status: 401 });
     }
 
-    const { data, error } = await service.auth.admin.listUsers();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const service = getServiceClient();
+    if (!service) {
+      return NextResponse.json({ error: "Server configuratie ontbreekt." }, { status: 500 });
     }
 
-    const authUsers = data.users ?? [];
-    const userIds = authUsers.map((user) => user.id);
-
-    const { data: profileRows } = await service
+    const { data: profileRows, error: profileError } = await service
       .from("profiles")
-      .select("id,role,full_name,email")
-      .in("id", userIds);
+      .select("id,role,full_name,email,created_at")
+      .order("email", { ascending: true });
 
-    const profileById = new Map((profileRows ?? []).map((row) => [row.id as string, row]));
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+
 
     const normalizeText = (value: unknown): string | null => {
       if (typeof value !== "string") return null;
@@ -66,24 +84,24 @@ export async function GET(request: Request) {
       return trimmed.length > 0 ? trimmed : null;
     };
 
-    const users = authUsers.map((user) => {
-      const profile = profileById.get(user.id) as { role?: UserRole; full_name?: string | null; email?: string | null } | undefined;
-      const metadata = user.user_metadata as Record<string, unknown> | undefined;
-      const metadataFullName =
-        normalizeText(metadata?.full_name) ??
-        normalizeText(metadata?.name) ??
-        normalizeText(metadata?.display_name);
+    const users = (profileRows ?? []).map((profileRow) => {
+      const profile = profileRow as {
+        id: string;
+        role?: UserRole;
+        full_name?: string | null;
+        email?: string | null;
+        created_at?: string | null;
+      };
 
-      const profileFullName = normalizeText(profile?.full_name);
-      const profileEmail = normalizeText(profile?.email);
+      const email = normalizeText(profile.email);
 
       return {
-        id: user.id,
-        email: profileEmail ?? user.email ?? null,
-        full_name: profileFullName ?? metadataFullName,
-        role: profile?.role ?? (user.user_metadata?.role as UserRole | undefined) ?? "sales",
-        created_at: user.created_at ?? null,
-        updated_at: user.updated_at ?? null,
+        id: profile.id,
+        email,
+        full_name: normalizeText(profile.full_name) ?? (email ? email.split("@")[0] : null),
+        role: profile.role ?? "sales",
+        created_at: profile.created_at ?? null,
+        updated_at: null,
       };
     });
 
@@ -93,3 +111,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

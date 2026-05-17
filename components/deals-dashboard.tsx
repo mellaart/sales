@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, RefreshCw, Search, Trash2 } from "lucide-react";
 import { euro } from "@/lib/pricing";
 import { canViewAllDeals, type DealRecord, getSupabaseClient } from "@/lib/supabase";
@@ -16,7 +16,7 @@ export default function DealsDashboard() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
 
-  async function loadDeals() {
+  const loadDeals = useCallback(async () => {
     if (!user) {
       setStatus("Je moet ingelogd zijn om deals te bekijken.");
       setLoading(false);
@@ -40,11 +40,11 @@ export default function DealsDashboard() {
     setDeals((data ?? []) as DealRecord[]);
     setStatus("");
     setLoading(false);
-  }
+  }, [user, supabase]);
 
   useEffect(() => {
     void loadDeals();
-  }, [user, role]);
+  }, [user, role, loadDeals]);
 
   const filteredDeals = useMemo(() => {
     const q = query.trim().toLowerCase();

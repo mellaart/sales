@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, ShieldCheck, UserPlus, Users2 } from "lucide-react";
 import {
@@ -28,7 +28,7 @@ export default function AdminDashboard() {
   const [newRole, setNewRole] = useState<UserRole>("sales");
   const [busy, setBusy] = useState(false);
 
-  async function loadProfiles() {
+  const loadProfiles = useCallback(async () => {
     setLoading(true);
     setStatus("");
 
@@ -70,13 +70,13 @@ export default function AdminDashboard() {
 
     setProfiles(loadedProfiles);
     setLoading(false);
-  }
+  }, [supabase]);
 
   useEffect(() => {
     if (canManageRoles(role)) {
       void loadProfiles();
     }
-  }, [role]);
+  }, [role, loadProfiles]);
 
   async function createUser(event: React.FormEvent) {
     event.preventDefault();

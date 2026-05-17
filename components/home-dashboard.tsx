@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, Calculator, Euro, FileText, Layers3, RefreshCw, Users } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { canViewAllDeals, getSupabaseClient, type DealRecord } from "@/lib/supabase";
@@ -14,7 +14,7 @@ export default function HomeDashboard() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
 
-  async function loadStats() {
+  const loadStats = useCallback(async () => {
     if (!user) return;
     if (!supabase) {
       setStatus("Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in.");
@@ -33,11 +33,11 @@ export default function HomeDashboard() {
     setDeals((data ?? []) as DealRecord[]);
     setStatus("");
     setLoading(false);
-  }
+  }, [user, supabase]);
 
   useEffect(() => {
     void loadStats();
-  }, [user, role]);
+  }, [user, role, loadStats]);
 
   const stats = useMemo(() => {
     const totalDeals = deals.length;

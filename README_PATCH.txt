@@ -29,6 +29,9 @@ SMART_TRADE_API_TOKEN=username:password
 SMART_TRADE_API_USER=<jouw gebruiker>
 SMART_TRADE_API_PASSWORD=<jouw wachtwoord>
 
+Headers voor Troublefree API:
+company=troublefree
+
 Werking:
 1. Nieuw tabblad Assets.
 2. Zoek debiteur via GET /api/relations?company[partial]=term.

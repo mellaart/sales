@@ -122,8 +122,8 @@ function objectFromApi<T>(json: unknown): T | null {
 
 async function apiGet<T>(path: string, params: Record<string, string | number | undefined> = {}) {
   const config = getConfig();
+  const url = new URL(`${config.baseUrl}${normalizePath(path)}`);
   const normalizedPath = normalizePath(path);
-  const url = new URL(`${config.baseUrl}${normalizedPath}`);
 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && String(value).trim() !== "") {

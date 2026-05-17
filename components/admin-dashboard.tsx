@@ -31,45 +31,46 @@ export default function AdminDashboard() {
   const loadProfiles = useCallback(async () => {
     setLoading(true);
     setStatus("");
+    try {
+      if (!supabase) {
+        setStatus("Supabase client ontbreekt.");
+        return;
+      }
 
-    if (!supabase) {
-      setStatus("Supabase client ontbreekt.");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/users/list", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      const json = (await response.json().catch(() => ({}))) as { error?: string; users?: ProfileRecord[] };
+
+      if (!response.ok) {
+        setStatus(json.error || "Profielen laden mislukt.");
+        return;
+      }
+
+      const loadedProfiles = ((json.users ?? []) as ProfileRecord[])
+        .map((profile) => ({
+          ...profile,
+          full_name: profile.full_name ?? null,
+          updated_at: profile.updated_at ?? null,
+        }))
+        .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+
+      setProfiles(loadedProfiles);
+    } catch {
+      setStatus("Er ging iets mis bij het laden van de profielen.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-
-    if (!accessToken) {
-      setStatus("Je sessie is verlopen. Log opnieuw in.");
-      setLoading(false);
-      return;
-    }
-
-    const response = await fetch("/api/admin/users/list", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    const json = await response.json();
-
-    if (!response.ok) {
-      setStatus(json.error || "Profielen laden mislukt.");
-      setLoading(false);
-      return;
-    }
-
-    const loadedProfiles = ((json.users ?? []) as ProfileRecord[])
-      .map((profile) => ({
-        ...profile,
-        full_name: profile.full_name ?? null,
-        updated_at: profile.updated_at ?? null,
-      }))
-      .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
-
-    setProfiles(loadedProfiles);
-    setLoading(false);
   }, [supabase]);
 
   useEffect(() => {

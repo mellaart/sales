@@ -123,7 +123,6 @@ function objectFromApi<T>(json: unknown): T | null {
 async function apiGet<T>(path: string, params: Record<string, string | number | undefined> = {}) {
   const config = getConfig();
   const url = new URL(`${config.baseUrl}${normalizePath(path)}`);
-  const normalizedPath = normalizePath(path);
 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && String(value).trim() !== "") {
@@ -162,7 +161,7 @@ async function apiGet<T>(path: string, params: Record<string, string | number | 
   let attemptedRetryUrl: string | null = null;
 
   if (response.status === 505) {
-    const retryUrl = new URL(`${config.baseUrl}/api${normalizedPath}`);
+    const retryUrl = new URL(`${config.baseUrl}/api${normalizePath(path)}`);
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && String(value).trim() !== "") {
         retryUrl.searchParams.set(key, String(value));
@@ -178,7 +177,11 @@ async function apiGet<T>(path: string, params: Record<string, string | number | 
     const snippet = body.slice(0, 700);
 
     if (response.status === 505 && /Error while determining version/i.test(body)) {
-      const debug = `url=${url.toString()}; retryUrl=${attemptedRetryUrl ?? "none"}; authMode=${config.authMode}; company=${config.company}`;
+      const debug = [
+        `url=${url.toString()}`,
+        `authMode=${config.authMode}`,
+        `company=${config.company}`,
+      ].join("; ");
 
       throw new Error(
         `Smart Trade API fout 505: Error while determining version. Gebruik https://retail.troublefree.nl/v3/api, Basic Auth (SMART_TRADE_AUTH_MODE=basic) met SMART_TRADE_API_TOKEN=username:password of SMART_TRADE_API_USER/SMART_TRADE_API_PASSWORD, en header company=troublefree. Debug: ${debug}`,

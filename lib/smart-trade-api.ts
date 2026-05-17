@@ -37,21 +37,28 @@ function requiredEnv(name: string) {
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
+export const SMART_TRADE_CONFIG_ERROR =
+  "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_COMPANY_KEY toe (bijv. troublefree) en stel auth in via SMART_TRADE_API_TOKEN of SMART_TRADE_API_USER + SMART_TRADE_API_PASSWORD.";
+
 function getConfig() {
-  const token = requiredEnv("SMART_TRADE_API_TOKEN");
-  const company = requiredEnv("SMART_TRADE_COMPANY_KEY");
+  const user = requiredEnv("SMART_TRADE_API_USER");
+  const password = requiredEnv("SMART_TRADE_API_PASSWORD");
+  const tokenFromPair = user && password ? `${user}:${password}` : null;
+  const tokenFromEnv = requiredEnv("SMART_TRADE_API_TOKEN");
+  const token = tokenFromEnv ?? tokenFromPair;
+  const company = requiredEnv("SMART_TRADE_COMPANY_KEY") ?? "troublefree";
 
   if (!token || !company) {
-    throw new Error(
-      "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_TOKEN en SMART_TRADE_COMPANY_KEY toe aan je environment variables.",
-    );
+    throw new Error(SMART_TRADE_CONFIG_ERROR);
   }
+
+  const inferredAuthMode = tokenFromEnv ? "bearer" : tokenFromPair ? "basic" : "bearer";
 
   return {
     baseUrl: process.env.SMART_TRADE_API_BASE_URL ?? "https://my.troublefree.nl/v3/api",
     token,
     company,
-    authMode: process.env.SMART_TRADE_AUTH_MODE ?? "bearer",
+    authMode: process.env.SMART_TRADE_AUTH_MODE ?? inferredAuthMode,
     timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };
 }
@@ -131,7 +138,15 @@ async function apiGet<T>(path: string, params: Record<string, string | number | 
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Smart Trade API fout ${response.status}: ${body.slice(0, 700)}`);
+    const snippet = body.slice(0, 700);
+
+    if (response.status === 505 && /Error while determining version/i.test(body)) {
+      throw new Error(
+        "Smart Trade API fout 505: Error while determining version. Gebruik https://retail.troublefree.nl/v3/api, Basic Auth (SMART_TRADE_AUTH_MODE=basic) met SMART_TRADE_API_TOKEN=username:password of SMART_TRADE_API_USER/SMART_TRADE_API_PASSWORD, en header company=troublefree.",
+      );
+    }
+
+    throw new Error(`Smart Trade API fout ${response.status}: ${snippet}`);
   }
 
   return (await response.json()) as T;

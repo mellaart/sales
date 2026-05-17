@@ -101,7 +101,9 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
     if (error) {
       const isSchemaColumnError =
         error.message.includes("profiles.full_name does not exist") ||
-        error.message.includes("profiles.updated_at does not exist");
+        error.message.includes("column profiles.full_name does not exist") ||
+        error.message.includes("profiles.updated_at does not exist") ||
+        error.message.includes("column profiles.updated_at does not exist");
 
       if (isSchemaColumnError) {
         continue;

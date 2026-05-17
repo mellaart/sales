@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { UserRole } from "@/lib/supabase";
 
+function isMissingColumnError(message: string, column: "full_name" | "created_at") {
+  return (
+    message.includes(`Could not find the '${column}' column of 'profiles' in the schema cache`) ||
+    message.includes(`profiles.${column} does not exist`) ||
+    message.includes(`column profiles.${column} does not exist`)
+  );
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -68,12 +76,38 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Server configuratie ontbreekt." }, { status: 500 });
     }
 
-    const { data: profileRows, error: profileError } = await service
-      .from("profiles")
-      .select("id,role,full_name,email,created_at")
-      .order("email", { ascending: true });
+    const profileSelects = [
+      "id,role,full_name,email,created_at",
+      "id,role,email,created_at",
+      "id,role,full_name,email",
+      "id,role,email",
+    ];
 
-    if (profileError) {
+    let profileRows: unknown[] | null = null;
+    let profileError: Error | null = null;
+
+    for (const selectFields of profileSelects) {
+      const result = await service.from("profiles").select(selectFields).order("email", { ascending: true });
+
+      if (!result.error) {
+        profileRows = result.data ?? [];
+        profileError = null;
+        break;
+      }
+
+      const isSchemaError =
+        isMissingColumnError(result.error.message, "full_name") ||
+        isMissingColumnError(result.error.message, "created_at");
+
+      if (!isSchemaError) {
+        profileError = result.error;
+        break;
+      }
+
+      profileError = result.error;
+    }
+
+    if (profileError && !profileRows) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
@@ -111,4 +145,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

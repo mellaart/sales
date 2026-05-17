@@ -180,7 +180,7 @@ export async function searchRelations(term: string) {
   const params: Record<string, string> = {};
   const normalized = term.trim().slice(0, 120);
 
-  if (normalized) params["company[partial]"] = normalized;
+  if (normalized) params.company = normalized;
 
   const json = await apiGet<unknown>("/relations", params);
   return arrayFromApi<SmartTradeRelation>(json);

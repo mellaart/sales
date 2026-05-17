@@ -18,6 +18,8 @@ SMART_TRADE_API_BASE_URL=https://my.troublefree.nl/v3/api
 SMART_TRADE_API_TOKEN=<jouw bearer token>
 SMART_TRADE_COMPANY_KEY=troublefree
 SMART_TRADE_AUTH_MODE=bearer
+# Let op: als je SMART_TRADE_API_TOKEN gebruikt blijft default auth bearer,
+# ook als de token een : bevat. Zet SMART_TRADE_AUTH_MODE alleen expliciet naar basic indien nodig.
 
 Voor Basic Auth (Troublefree):
 SMART_TRADE_API_BASE_URL=https://retail.troublefree.nl/v3/api

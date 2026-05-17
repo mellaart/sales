@@ -7,7 +7,8 @@ const allowedRoles: UserRole[] = ["sales", "support", "consultant", "manager", "
 function isMissingFullNameColumnError(message: string) {
   return (
     message.includes("Could not find the 'full_name' column of 'profiles' in the schema cache") ||
-    message.includes("profiles.full_name does not exist")
+    message.includes("profiles.full_name does not exist") ||
+    message.includes("column profiles.full_name does not exist")
   );
 }
 

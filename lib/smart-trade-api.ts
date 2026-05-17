@@ -163,17 +163,17 @@ export async function searchRelations(term: string) {
 
   if (normalized) params["company[partial]"] = normalized;
 
-  const json = await apiGet<unknown>("/api/relations", params);
+  const json = await apiGet<unknown>("/relations", params);
   return arrayFromApi<SmartTradeRelation>(json);
 }
 
 export async function getAssetsForRelation(relationId: string | number) {
-  const json = await apiGet<unknown>("/api/assets", { owner: relationId });
+  const json = await apiGet<unknown>("/assets", { owner: relationId });
   return arrayFromApi<SmartTradeAsset>(json);
 }
 
 export async function getAssetWithContractAgreements(assetId: string | number) {
-  const json = await apiGet<unknown>(`/api/assets/${assetId}`, {
+  const json = await apiGet<unknown>(`/assets/${assetId}`, {
     include: "contractAgreements",
   });
 

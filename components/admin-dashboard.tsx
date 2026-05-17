@@ -29,10 +29,14 @@ export default function AdminDashboard() {
   const [busy, setBusy] = useState(false);
 
   async function loadProfiles() {
-    if (!supabase) return;
-
     setLoading(true);
     setStatus("");
+
+    if (!supabase) {
+      setStatus("Supabase client ontbreekt.");
+      setLoading(false);
+      return;
+    }
 
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;

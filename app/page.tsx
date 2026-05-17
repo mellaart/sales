@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import PriceCalculator from "@/components/price-calculator";
+import HomeDashboard from "@/components/home-dashboard";
 import { useAuth } from "@/components/auth-provider";
 
 export default function HomePage() {
@@ -25,7 +25,7 @@ export default function HomePage() {
             <div>
               <div className="brand-mark">Smart Trade</div>
               <h1>Welkom</h1>
-              <p>Log in om de Smart Trade calculator te gebruiken.</p>
+              <p>Log in om je dashboard en calculator te gebruiken.</p>
             </div>
           </section>
 
@@ -37,5 +37,5 @@ export default function HomePage() {
     );
   }
 
-  return <PriceCalculator />;
+  return <HomeDashboard />;
 }

@@ -59,7 +59,6 @@ function normalizePath(path: string) {
 export const SMART_TRADE_CONFIG_ERROR =
   "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_USER, SMART_TRADE_API_PASSWORD en SMART_TRADE_COMPANY_KEY toe aan je environment variables.";
 
-
 function getConfig() {
   const user = requiredEnv("SMART_TRADE_API_USER");
   const password = requiredEnv("SMART_TRADE_API_PASSWORD");

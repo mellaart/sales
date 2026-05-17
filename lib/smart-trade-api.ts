@@ -65,7 +65,9 @@ function getConfig() {
   const user = requiredEnv("SMART_TRADE_API_USER");
   const password = requiredEnv("SMART_TRADE_API_PASSWORD");
   const tokenFromPair = user && password ? `${user}:${password}` : null;
-  const token = requiredEnv("SMART_TRADE_API_TOKEN") ?? tokenFromPair;
+  const tokenFromEnv = requiredEnv("SMART_TRADE_API_TOKEN");
+  const authMode = requiredEnv("SMART_TRADE_AUTH_MODE") ?? (tokenFromEnv?.includes(":") ? "basic" : "bearer");
+  const token = authMode === "basic" ? (tokenFromPair ?? tokenFromEnv) : (tokenFromEnv ?? tokenFromPair);
   const company = requiredEnv("SMART_TRADE_COMPANY_KEY") ?? "troublefree";
 
   if (!token || !company) {
@@ -76,7 +78,7 @@ function getConfig() {
     baseUrl: normalizeBaseUrl(process.env.SMART_TRADE_API_BASE_URL),
     token,
     company,
-    authMode: process.env.SMART_TRADE_AUTH_MODE ?? (token.includes(":") ? "basic" : "bearer"),
+    authMode,
     timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };
 }

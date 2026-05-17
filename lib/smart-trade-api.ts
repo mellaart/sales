@@ -37,6 +37,25 @@ function requiredEnv(name: string) {
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
+function normalizeBaseUrl(value?: string | null) {
+  const fallback = "https://my.troublefree.nl/v3/api";
+  const raw = value?.trim() || fallback;
+
+  const withoutDocs = raw.replace(/\/documentation\/?$/i, "");
+  const withoutTrailingSlash = withoutDocs.replace(/\/$/, "");
+
+  if (/\/v3\/api$/i.test(withoutTrailingSlash)) return withoutTrailingSlash;
+
+  if (/\/v3$/i.test(withoutTrailingSlash)) return `${withoutTrailingSlash}/api`;
+
+  return `${withoutTrailingSlash}/v3/api`;
+}
+
+function normalizePath(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return normalizedPath.replace(/^\/api\//i, "/");
+}
+
 export const SMART_TRADE_CONFIG_ERROR =
 
   "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_TOKEN en SMART_TRADE_COMPANY_KEY toe aan je environment variables.";
@@ -54,7 +73,7 @@ function getConfig() {
   }
 
   return {
-    baseUrl: process.env.SMART_TRADE_API_BASE_URL ?? "https://my.troublefree.nl/v3/api",
+    baseUrl: normalizeBaseUrl(process.env.SMART_TRADE_API_BASE_URL),
     token,
     company,
     authMode: process.env.SMART_TRADE_AUTH_MODE ?? (token.includes(":") ? "basic" : "bearer"),
@@ -101,7 +120,7 @@ function objectFromApi<T>(json: unknown): T | null {
 
 async function apiGet<T>(path: string, params: Record<string, string | number | undefined> = {}) {
   const config = getConfig();
-  const url = new URL(`${config.baseUrl.replace(/\/$/, "")}${path}`);
+  const url = new URL(`${config.baseUrl}${normalizePath(path)}`);
 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && String(value).trim() !== "") {

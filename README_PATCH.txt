@@ -14,7 +14,7 @@ CSS:
 - Voeg de inhoud van app/globals.assets.css onderaan app/globals.css toe.
 
 Environment variables lokaal en in Vercel:
-SMART_TRADE_API_BASE_URL=https://my.troublefree.nl/v3/api
+SMART_TRADE_API_BASE_URL=https://retail.troublefree.nl/v3/api
 SMART_TRADE_API_TOKEN=<jouw bearer token>
 SMART_TRADE_COMPANY_KEY=<jouw company key>
 SMART_TRADE_AUTH_MODE=bearer

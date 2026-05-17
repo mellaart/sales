@@ -39,7 +39,7 @@ const DEFAULT_TIMEOUT_MS = 15000;
 
 export const SMART_TRADE_CONFIG_ERROR =
 
-  "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_TOKEN en SMART_TRADE_COMPANY_KEY toe aan je environment variables.";
+  "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_TOKEN (of SMART_TRADE_API_USER/SMART_TRADE_API_PASSWORD) en SMART_TRADE_COMPANY_KEY toe aan je environment variables.";
 
 
 function getConfig() {
@@ -54,7 +54,7 @@ function getConfig() {
   }
 
   return {
-    baseUrl: process.env.SMART_TRADE_API_BASE_URL ?? "https://my.troublefree.nl/v3/api",
+    baseUrl: process.env.SMART_TRADE_API_BASE_URL ?? "https://retail.troublefree.nl/v3/api",
     token,
     company,
     authMode: process.env.SMART_TRADE_AUTH_MODE ?? (token.includes(":") ? "basic" : "bearer"),

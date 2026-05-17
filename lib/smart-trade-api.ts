@@ -44,18 +44,21 @@ function getConfig() {
   const user = requiredEnv("SMART_TRADE_API_USER");
   const password = requiredEnv("SMART_TRADE_API_PASSWORD");
   const tokenFromPair = user && password ? `${user}:${password}` : null;
-  const token = requiredEnv("SMART_TRADE_API_TOKEN") ?? tokenFromPair;
+  const tokenFromEnv = requiredEnv("SMART_TRADE_API_TOKEN");
+  const token = tokenFromEnv ?? tokenFromPair;
   const company = requiredEnv("SMART_TRADE_COMPANY_KEY") ?? "troublefree";
 
   if (!token || !company) {
     throw new Error(SMART_TRADE_CONFIG_ERROR);
   }
 
+  const inferredAuthMode = tokenFromEnv ? "bearer" : tokenFromPair ? "basic" : "bearer";
+
   return {
     baseUrl: process.env.SMART_TRADE_API_BASE_URL ?? "https://my.troublefree.nl/v3/api",
     token,
     company,
-    authMode: process.env.SMART_TRADE_AUTH_MODE ?? (token.includes(":") ? "basic" : "bearer"),
+    authMode: process.env.SMART_TRADE_AUTH_MODE ?? inferredAuthMode,
     timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };
 }

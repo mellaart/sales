@@ -15,13 +15,17 @@ export function AppShellHeader() {
   const handleLogout = async () => {
     const supabase = getSupabaseClient();
 
-    if (supabase) {
-      await supabase.auth.signOut();
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error("Uitloggen mislukt, lokale sessie wordt alsnog opgeschoond.", error);
+    } finally {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = "/login";
     }
-
-    localStorage.clear();
-    sessionStorage.clear();
-    window.location.href = "/login";
   };
 
   return (
@@ -34,6 +38,10 @@ export function AppShellHeader() {
 
         <nav className="app-nav-actions">
           <Link href="/" className={`nav-button ${pathname === "/" ? "active" : ""}`}>
+            Dashboard
+          </Link>
+
+          <Link href="/calculator" className={`nav-button ${pathname.startsWith("/calculator") ? "active" : ""}`}>
             Calculator
           </Link>
 
@@ -47,8 +55,8 @@ export function AppShellHeader() {
           </Link>
 
           <Link href="/admin" className={`nav-button ${pathname.startsWith("/admin") ? "active" : ""}`}>
-  Admin
-</Link>
+            Admin
+          </Link>
 
           <span className="user-chip">
             <Users2 size={13} />

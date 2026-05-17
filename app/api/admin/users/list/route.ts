@@ -60,19 +60,27 @@ export async function GET(request: Request) {
 
     const profileById = new Map((profileRows ?? []).map((row) => [row.id as string, row]));
 
+    const normalizeText = (value: unknown): string | null => {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+
     const users = authUsers.map((user) => {
       const profile = profileById.get(user.id) as { role?: UserRole; full_name?: string | null; email?: string | null } | undefined;
       const metadata = user.user_metadata as Record<string, unknown> | undefined;
       const metadataFullName =
-        (typeof metadata?.full_name === "string" && metadata.full_name.trim()) ||
-        (typeof metadata?.name === "string" && metadata.name.trim()) ||
-        (typeof metadata?.display_name === "string" && metadata.display_name.trim()) ||
-        null;
+        normalizeText(metadata?.full_name) ??
+        normalizeText(metadata?.name) ??
+        normalizeText(metadata?.display_name);
+
+      const profileFullName = normalizeText(profile?.full_name);
+      const profileEmail = normalizeText(profile?.email);
 
       return {
         id: user.id,
-        email: profile?.email ?? user.email ?? null,
-        full_name: profile?.full_name ?? metadataFullName,
+        email: profileEmail ?? user.email ?? null,
+        full_name: profileFullName ?? metadataFullName,
         role: profile?.role ?? (user.user_metadata?.role as UserRole | undefined) ?? "sales",
         created_at: user.created_at ?? null,
         updated_at: user.updated_at ?? null,

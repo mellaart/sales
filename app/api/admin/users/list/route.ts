@@ -79,6 +79,30 @@ export async function GET(request: Request) {
         role: profile.role ?? "sales",
         created_at: profile.created_at ?? null,
         updated_at: null,
+    const normalizeText = (value: unknown): string | null => {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+
+    const users = authUsers.map((user) => {
+      const profile = profileById.get(user.id) as { role?: UserRole; full_name?: string | null; email?: string | null } | undefined;
+      const metadata = user.user_metadata as Record<string, unknown> | undefined;
+      const metadataFullName =
+        normalizeText(metadata?.full_name) ??
+        normalizeText(metadata?.name) ??
+        normalizeText(metadata?.display_name);
+
+      const profileFullName = normalizeText(profile?.full_name);
+      const profileEmail = normalizeText(profile?.email);
+
+      return {
+        id: user.id,
+        email: profileEmail ?? user.email ?? null,
+        full_name: profileFullName ?? metadataFullName,
+        role: profile?.role ?? (user.user_metadata?.role as UserRole | undefined) ?? "sales",
+        created_at: user.created_at ?? null,
+        updated_at: user.updated_at ?? null,
       };
     });
 

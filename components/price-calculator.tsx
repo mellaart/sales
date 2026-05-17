@@ -206,6 +206,21 @@ export default function PriceCalculator() {
 
             <div className="section">
               <div className="section-title">
+                <CheckCircle2 size={16} />
+                Support
+              </div>
+
+              <div className="soft-card">
+                <div className="summary-list">
+                  <div><span>Gekozen support-niveau</span><strong>{activePackage.name}</strong></div>
+                  <div><span>Support tarief p/m</span><strong>{euro.format(activePackage.support)}</strong></div>
+                  <div><span>Toelichting</span><strong>Support is gekoppeld aan het automatisch gekozen pakket.</strong></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">
                 <Package size={16} />
                 Pakket automatisch gekozen
               </div>

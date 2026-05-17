@@ -79,6 +79,7 @@ function getConfig() {
     token,
     company,
     authMode,
+    authSource: tokenFromPair ? "user_password" : "token",
     timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };
 }
@@ -165,7 +166,7 @@ async function apiGet<T>(path: string, params: Record<string, string | number | 
         `url=${url.toString()}`,
         `authMode=${config.authMode}`,
         `company=${config.company}`,
-        `authSource=${requiredEnv("SMART_TRADE_API_USER") && requiredEnv("SMART_TRADE_API_PASSWORD") ? "user_password" : "token"}` ,
+        `authSource=${config.authSource}`,
       ].join("; ");
 
       throw new Error(

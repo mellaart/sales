@@ -125,6 +125,7 @@ export function getRelationName(relation: SmartTradeRelation) {
 }
 
 export async function searchRelations(_term?: string) {
+  void _term;
   const config = getConfig();
   const url = new URL(`${config.baseUrl}/relations`);
   url.searchParams.set("customFields.smart trade (auto)[exact]", "1");
@@ -159,5 +160,6 @@ export async function searchRelations(_term?: string) {
 }
 
 export async function getAssetsWithModulesForRelation(_relationId: string | number) {
+  void _relationId;
   return [] as AssetWithModules[];
 }

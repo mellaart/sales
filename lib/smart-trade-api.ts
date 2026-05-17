@@ -6,31 +6,27 @@ export type SmartTradeRelation = {
   lastname?: string | null;
   email?: string | null;
   debtorNumber?: string | number | null;
+  street?: string | null;
+  postcode?: string | null;
+  city?: string | null;
 };
 
-export type SmartTradeContractAgreement = {
-  id?: number | string;
-  startsAt?: string | null;
-  endsAt?: string | null;
-  article?: {
-    id?: number | string;
-    code?: string | null;
-    name?: string | null;
-    description?: string | null;
-  } | null;
+type AssetModule = {
+  id: string;
+  name: string;
+  active: boolean;
 };
 
-export type SmartTradeAsset = {
-  id: number | string;
-  name?: string | null;
-  description?: string | null;
-  serialNumber?: string | null;
-  owner?: number | string | null;
-  contractAgreements?: SmartTradeContractAgreement[];
+type AssetWithModules = {
+  id: string;
+  name: string;
+  description: string | null;
+  serialNumber: string | null;
+  modules: AssetModule[];
 };
 
 function requiredEnv(name: string) {
-  const value = process.env[name];
+  const value = process.env[name]?.trim();
   if (!value) return null;
   return value;
 }
@@ -38,155 +34,88 @@ function requiredEnv(name: string) {
 const DEFAULT_TIMEOUT_MS = 15000;
 
 function normalizeBaseUrl(value?: string | null) {
-  const fallback = "https://my.troublefree.nl/v3/api";
+  const fallback = "https://retail.troublefree.nl/v3/api";
   const raw = value?.trim() || fallback;
-
   const withoutDocs = raw.replace(/\/documentation\/?$/i, "");
   const withoutTrailingSlash = withoutDocs.replace(/\/$/, "");
 
   if (/\/v3\/api$/i.test(withoutTrailingSlash)) return withoutTrailingSlash;
-
   if (/\/v3$/i.test(withoutTrailingSlash)) return `${withoutTrailingSlash}/api`;
-
   return `${withoutTrailingSlash}/v3/api`;
-}
-
-function normalizePath(path: string) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return normalizedPath.replace(/^\/api\//i, "/");
 }
 
 export const SMART_TRADE_CONFIG_ERROR =
   "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_USER, SMART_TRADE_API_PASSWORD en SMART_TRADE_COMPANY_KEY toe aan je environment variables.";
 
-function getConfig() {
+type SmartTradeConfig = {
+  baseUrl: string;
+  credentials: string;
+  company: string;
+  timeoutMs: number;
+};
+
+function getConfig(): SmartTradeConfig {
   const user = requiredEnv("SMART_TRADE_API_USER");
   const password = requiredEnv("SMART_TRADE_API_PASSWORD");
-  const token = user && password ? `${user}:${password}` : null;
   const company = requiredEnv("SMART_TRADE_COMPANY_KEY") ?? "troublefree";
 
-  if (!token || !company || !user || !password) {
+  if (!user || !password || !company) {
     throw new Error(SMART_TRADE_CONFIG_ERROR);
   }
 
   return {
     baseUrl: normalizeBaseUrl(process.env.SMART_TRADE_API_BASE_URL),
-    token,
+    credentials: Buffer.from(`${user}:${password}`).toString("base64"),
     company,
-    authMode: "basic" as const,
     timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };
 }
 
-function getHeaders() {
-  const config = getConfig();
-
-  const authorization =
-    config.authMode === "basic"
-      ? `Basic ${Buffer.from(config.token).toString("base64")}`
-      : `Bearer ${config.token}`;
-
+function getHeaders(config: SmartTradeConfig) {
   return {
-    Authorization: authorization,
+    Authorization: `Basic ${config.credentials}`,
     Company: config.company,
     company: config.company,
     Accept: "application/json",
   };
 }
 
-function arrayFromApi<T>(json: unknown): T[] {
-  if (Array.isArray(json)) return json as T[];
+type SmartTradeRelationApiItem = {
+  id?: number | string;
+  company?: string | null;
+  contactAddress?: {
+    data?: {
+      street?: string | null;
+      postcode?: string | null;
+      city?: string | null;
+    } | null;
+  } | null;
+};
 
-  if (json && typeof json === "object" && "data" in json) {
-    const data = (json as { data?: unknown }).data;
-    return Array.isArray(data) ? (data as T[]) : [];
-  }
+type SmartTradeRelationsApiResponse = {
+  data?: SmartTradeRelationApiItem[];
+};
 
-  return [];
-}
+async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS);
 
-function objectFromApi<T>(json: unknown): T | null {
-  if (!json || typeof json !== "object") return null;
-
-  if ("data" in json) {
-    return ((json as { data?: unknown }).data ?? null) as T | null;
-  }
-
-  return json as T;
-}
-
-async function apiGet<T>(path: string, params: Record<string, string | number | undefined> = {}) {
-  const config = getConfig();
-  const url = new URL(`${config.baseUrl}${normalizePath(path)}`);
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && String(value).trim() !== "") {
-      url.searchParams.set(key, String(value));
-    }
-  });
-
-  const configTimeout = Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
-    ? config.timeoutMs
-    : DEFAULT_TIMEOUT_MS;
-
-  const headers = getHeaders();
-  const fetchWithTimeout = async (requestUrl: URL, requestHeaders: ReturnType<typeof getHeaders>) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), configTimeout);
-
-    try {
-      return await fetch(requestUrl.toString(), {
-        method: "GET",
-        headers: requestHeaders,
-        cache: "no-store",
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error(`Smart Trade API timeout na ${configTimeout}ms.`);
-      }
-
-      throw error;
-    } finally {
-      clearTimeout(timeout);
-    }
-  };
-
-  let response = await fetchWithTimeout(url, headers);
-  let attemptedRetryUrl: string | null = null;
-
-  if (response.status === 505) {
-    const retryUrl = new URL(`${config.baseUrl}/api${normalizePath(path)}`);
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && String(value).trim() !== "") {
-        retryUrl.searchParams.set(key, String(value));
-      }
+  try {
+    return await fetch(url, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+      signal: controller.signal,
     });
-
-    attemptedRetryUrl = retryUrl.toString();
-    response = await fetchWithTimeout(retryUrl, headers);
-  }
-
-  if (!response.ok) {
-    const body = await response.text();
-    const snippet = body.slice(0, 700);
-
-    if (response.status === 505 && /Error while determining version/i.test(body)) {
-      const debug = [
-        `url=${url.toString()}`,
-        `authMode=${config.authMode}`,
-        `company=${config.company}`,
-      ].join("; ");
-
-      throw new Error(
-        `Smart Trade API fout 505: Error while determining version. Gebruik https://retail.troublefree.nl/v3/api, Basic Auth met SMART_TRADE_API_USER/SMART_TRADE_API_PASSWORD, en header company=troublefree. Debug: ${debug}`,
-      );
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Smart Trade API timeout na ${timeoutMs}ms.`);
     }
 
-    throw new Error(`Smart Trade API fout ${response.status}: ${snippet}`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return (await response.json()) as T;
 }
 
 export function getRelationName(relation: SmartTradeRelation) {
@@ -195,69 +124,40 @@ export function getRelationName(relation: SmartTradeRelation) {
   return company || person || `Relatie ${relation.id}`;
 }
 
-export async function searchRelations(term: string) {
-  const params: Record<string, string> = {};
-  const normalized = term.trim().slice(0, 120);
+export async function searchRelations(_term?: string) {
+  const config = getConfig();
+  const url = new URL(`${config.baseUrl}/relations`);
+  url.searchParams.set("customFields.smart trade (auto)[exact]", "1");
+  url.searchParams.set("include", "contactAddress");
+  url.searchParams.set("per_page", "5000");
 
-  if (normalized) params.company = normalized;
-
-  const json = await apiGet<unknown>("/relations", params);
-  return arrayFromApi<SmartTradeRelation>(json);
-}
-
-export async function getAssetsForRelation(relationId: string | number) {
-  const json = await apiGet<unknown>("/assets", { owner: relationId });
-  return arrayFromApi<SmartTradeAsset>(json);
-}
-
-export async function getAssetWithContractAgreements(assetId: string | number) {
-  const json = await apiGet<unknown>(`/assets/${assetId}`, {
-    include: "contractAgreements",
-  });
-
-  return objectFromApi<SmartTradeAsset>(json);
-}
-
-function isActive(agreement: SmartTradeContractAgreement) {
-  if (!agreement.endsAt) return true;
-
-  const endDate = new Date(agreement.endsAt);
-  if (Number.isNaN(endDate.getTime())) return true;
-
-  return endDate >= new Date();
-}
-
-function articleName(agreement: SmartTradeContractAgreement) {
-  return (
-    agreement.article?.name ||
-    agreement.article?.description ||
-    agreement.article?.code ||
-    "Onbekende module"
+  const response = await fetchWithTimeout(
+    url.toString(),
+    getHeaders(config),
+    Number.isFinite(config.timeoutMs) ? config.timeoutMs : DEFAULT_TIMEOUT_MS,
   );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Smart Trade API fout ${response.status}: ${body.slice(0, 700)}`);
+  }
+
+  const json = (await response.json()) as SmartTradeRelationsApiResponse;
+  const rows = Array.isArray(json.data) ? json.data : [];
+
+  return rows
+    .filter((row): row is SmartTradeRelationApiItem & { id: number | string } => row.id !== undefined && row.id !== null)
+    .map((row) => ({
+      id: row.id,
+      company: row.company ?? null,
+      email: null,
+      debtorNumber: null,
+      street: row.contactAddress?.data?.street ?? null,
+      postcode: row.contactAddress?.data?.postcode ?? null,
+      city: row.contactAddress?.data?.city ?? null,
+    }));
 }
 
-export async function getAssetsWithModulesForRelation(relationId: string | number) {
-  const assets = await getAssetsForRelation(relationId);
-
-  return Promise.all(
-    assets.map(async (asset) => {
-      const detail = (await getAssetWithContractAgreements(asset.id).catch(() => asset)) ?? asset;
-      const agreements = detail.contractAgreements ?? [];
-
-      return {
-        id: String(detail.id),
-        name: detail.name || detail.description || `Asset ${detail.id}`,
-        description: detail.description ?? null,
-        serialNumber: detail.serialNumber ?? null,
-        modules: agreements.map((agreement) => ({
-          id: String(agreement.id ?? `${detail.id}-${articleName(agreement)}`),
-          name: articleName(agreement),
-          code: agreement.article?.code ?? null,
-          startsAt: agreement.startsAt ?? null,
-          endsAt: agreement.endsAt ?? null,
-          active: isActive(agreement),
-        })),
-      };
-    }),
-  );
+export async function getAssetsWithModulesForRelation(_relationId: string | number) {
+  return [] as AssetWithModules[];
 }

@@ -27,7 +27,7 @@ type AssetWithModules = {
   modules: AssetModule[];
 };
 
-type SmartTradeConfig = {
+export type SmartTradeConfig = {
   baseUrl: string;
   company: string;
   user: string;
@@ -86,7 +86,7 @@ function requiredEnv(name: string) {
   return value;
 }
 
-function normalizeBaseUrl(value?: string | null) {
+export function normalizeBaseUrl(value?: string | null) {
   const fallback = "https://retail.troublefree.nl/v3/api";
   const raw = value?.trim() || fallback;
   const withoutDocs = raw.replace(/\/documentation\/?$/i, "");
@@ -116,6 +116,21 @@ function getConfig(): SmartTradeConfig {
   };
 }
 
+
+
+export function resolveSmartTradeConfig(overrides?: Partial<Pick<SmartTradeConfig, "baseUrl" | "company" | "user" | "password" | "timeoutMs">>) {
+  if (overrides?.user && overrides?.password) {
+    return {
+      baseUrl: normalizeBaseUrl(overrides.baseUrl),
+      company: overrides.company?.trim() || "troublefree",
+      user: overrides.user.trim(),
+      password: overrides.password.trim(),
+      timeoutMs: Number(overrides.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    } as SmartTradeConfig;
+  }
+
+  return getConfig();
+}
 function getHeaders(config: SmartTradeConfig) {
   const credentials = Buffer.from(`${config.user}:${config.password}`).toString("base64");
 
@@ -288,4 +303,30 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
       serialNumber: asset.serialNumber ?? null,
       modules: mapAssetModules(asset),
     }));
+}
+
+
+export async function getRelationById(relationId: string | number, overrides?: Partial<Pick<SmartTradeConfig, "baseUrl" | "company" | "user" | "password" | "timeoutMs">>) {
+  const id = String(relationId).trim();
+  if (!id) throw new Error("relationId is verplicht.");
+
+  const config = resolveSmartTradeConfig(overrides);
+  const headers = getHeaders(config);
+
+  const primaryUrl = new URL(`${config.baseUrl}/relations/${encodeURIComponent(id)}`);
+  let response = await fetchWithTimeout(primaryUrl.toString(), headers, config.timeoutMs);
+
+  if (response.status === 505) {
+    const fallbackUrl = new URL(`${config.baseUrl}/api/relations/${encodeURIComponent(id)}`);
+    response = await fetchWithTimeout(fallbackUrl.toString(), headers, config.timeoutMs);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Smart Trade API fout ${response.status}: ${(await response.text()).slice(0, 700)}`);
+  }
+
+  const json = (await response.json()) as { data?: SmartTradeRelation | null };
+  if (!json.data) throw new Error(`Relatie ${id} niet gevonden.`);
+
+  return json.data;
 }

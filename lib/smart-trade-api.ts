@@ -73,6 +73,7 @@ type SmartTradeAssetsApiResponse = {
     } | null;
   }>;
 };
+type SmartTradeAssetRow = NonNullable<SmartTradeAssetsApiResponse["data"]>[number];
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
@@ -212,7 +213,7 @@ function isModuleActive(endsAt: string | null | undefined) {
   return endDate.getTime() >= Date.now();
 }
 
-function mapAssetModules(asset: NonNullable<SmartTradeAssetsApiResponse["data"]>[number]) {
+function mapAssetModules(asset: SmartTradeAssetRow) {
   const agreements = asset.contractAgreements?.data ?? [];
 
   return agreements
@@ -260,7 +261,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
       const detailResponse = await fetchWithTimeout(detailUrl.toString(), headers, config.timeoutMs);
       if (!detailResponse.ok) continue;
 
-      const detailJson = (await detailResponse.json()) as { data?: SmartTradeAssetsApiResponse["data"] extends Array<infer T> ? T : never };
+      const detailJson = (await detailResponse.json()) as { data?: SmartTradeAssetRow };
       const detailAsset = detailJson.data;
       if (!detailAsset || detailAsset.id === undefined || detailAsset.id === null) continue;
 

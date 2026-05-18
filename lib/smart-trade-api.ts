@@ -289,3 +289,29 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
       modules: mapAssetModules(asset),
     }));
 }
+
+
+export async function getRelationById(relationId: string | number) {
+  const id = String(relationId).trim();
+  if (!id) throw new Error("relationId is verplicht.");
+
+  const config = getConfig();
+  const headers = getHeaders(config);
+
+  const primaryUrl = new URL(`${config.baseUrl}/relations/${encodeURIComponent(id)}`);
+  let response = await fetchWithTimeout(primaryUrl.toString(), headers, config.timeoutMs);
+
+  if (response.status === 505) {
+    const fallbackUrl = new URL(`${config.baseUrl}/api/relations/${encodeURIComponent(id)}`);
+    response = await fetchWithTimeout(fallbackUrl.toString(), headers, config.timeoutMs);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Smart Trade API fout ${response.status}: ${(await response.text()).slice(0, 700)}`);
+  }
+
+  const json = (await response.json()) as { data?: SmartTradeRelation | null };
+  if (!json.data) throw new Error(`Relatie ${id} niet gevonden.`);
+
+  return json.data;
+}

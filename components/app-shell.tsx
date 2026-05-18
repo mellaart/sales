@@ -54,11 +54,8 @@ export function AppShellHeader() {
             Assets
           </Link>
 
-          <Link
-            href="/api-koppeling-test"
-            className={`nav-button ${pathname.startsWith("/api-koppeling-test") ? "active" : ""}`}
-          >
-            API test
+          <Link href="/testen" className={`nav-button ${pathname.startsWith("/testen") ? "active" : ""}`}>
+            Testen
           </Link>
 
           <Link href="/admin" className={`nav-button ${pathname.startsWith("/admin") ? "active" : ""}`}>

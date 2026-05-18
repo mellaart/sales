@@ -3,6 +3,7 @@ import { getRelationById } from "@/lib/smart-trade-api";
 
 export async function GET(
   request: Request,
+  _request: Request,
   context: { params: Promise<{ relationId: string }> },
 ) {
   try {
@@ -21,6 +22,7 @@ export async function GET(
       password: url.searchParams.get("password") ?? undefined,
     });
 
+    const relation = await getRelationById(id);
     return NextResponse.json(
       { relation },
       { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } },

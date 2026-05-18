@@ -311,6 +311,11 @@ export async function getRelationById(relationId: string | number, overrides?: P
   if (!id) throw new Error("relationId is verplicht.");
 
   const config = resolveSmartTradeConfig(overrides);
+export async function getRelationById(relationId: string | number) {
+  const id = String(relationId).trim();
+  if (!id) throw new Error("relationId is verplicht.");
+
+  const config = getConfig();
   const headers = getHeaders(config);
 
   const primaryUrl = new URL(`${config.baseUrl}/relations/${encodeURIComponent(id)}`);

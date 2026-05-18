@@ -15,6 +15,8 @@ type AssetModule = {
   id: string;
   name: string;
   active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
 };
 
 type AssetWithModules = {
@@ -48,6 +50,30 @@ type SmartTradeRelationsApiResponse = {
     } | null;
   }>;
 };
+
+type SmartTradeAssetsApiResponse = {
+  data?: Array<{
+    id?: number | string;
+    name?: string | null;
+    description?: string | null;
+    serialNumber?: string | null;
+    contractAgreements?: {
+      data?: Array<{
+        id?: number | string;
+        startsAt?: string | null;
+        endsAt?: string | null;
+        article?: {
+          data?: {
+            id?: number | string;
+            name?: string | null;
+            description?: string | null;
+          } | null;
+        } | null;
+      }>;
+    } | null;
+  }>;
+};
+type SmartTradeAssetRow = NonNullable<SmartTradeAssetsApiResponse["data"]>[number];
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
@@ -138,12 +164,14 @@ export function getRelationName(relation: SmartTradeRelation) {
   return company || person || `Relatie ${relation.id}`;
 }
 
-export async function searchRelations(_term?: string) {
-  void _term;
+export async function searchRelations(term?: string) {
   const config = getConfig();
   const headers = getHeaders(config);
 
   const primaryUrl = buildRelationsUrl(config.baseUrl, "/relations");
+  if (term?.trim()) {
+    primaryUrl.searchParams.set("search", term.trim());
+  }
   let response = await fetchWithTimeout(primaryUrl.toString(), headers, config.timeoutMs);
 
   if (response.status === 505) {
@@ -178,7 +206,86 @@ export async function searchRelations(_term?: string) {
     }));
 }
 
+function isModuleActive(endsAt: string | null | undefined) {
+  if (!endsAt) return true;
+  const endDate = new Date(endsAt);
+  if (Number.isNaN(endDate.getTime())) return true;
+  return endDate.getTime() >= Date.now();
+}
+
+function mapAssetModules(asset: SmartTradeAssetRow) {
+  const agreements = asset.contractAgreements?.data ?? [];
+
+  return agreements
+    .filter((agreement) => agreement.id !== undefined && agreement.id !== null)
+    .map((agreement) => {
+      const article = agreement.article?.data;
+      const moduleName = article?.name?.trim() || article?.description?.trim() || `Module ${agreement.id}`;
+
+      return {
+        id: String(agreement.id),
+        name: moduleName,
+        startsAt: agreement.startsAt ?? null,
+        endsAt: agreement.endsAt ?? null,
+        active: isModuleActive(agreement.endsAt ?? null),
+      };
+    });
+}
+
 export async function getAssetsWithModulesForRelation(_relationId: string | number) {
-  void _relationId;
-  return [] as AssetWithModules[];
+  const relationId = String(_relationId).trim();
+  const config = getConfig();
+  const headers = getHeaders(config);
+
+  const assetsUrl = new URL(`${config.baseUrl}/assets`);
+  assetsUrl.searchParams.set("owner", relationId);
+  assetsUrl.searchParams.set("include", "contractAgreements");
+  assetsUrl.searchParams.set("per_page", "500");
+
+  const response = await fetchWithTimeout(assetsUrl.toString(), headers, config.timeoutMs);
+  if (!response.ok) {
+    throw new Error(`Smart Trade API fout ${response.status}: ${(await response.text()).slice(0, 700)}`);
+  }
+
+  const json = (await response.json()) as SmartTradeAssetsApiResponse;
+  const assets = Array.isArray(json.data) ? json.data : [];
+
+  const shouldFallback = assets.some((asset) => !asset.contractAgreements);
+  if (shouldFallback) {
+    const fallbackAssets: AssetWithModules[] = [];
+
+    for (const asset of assets) {
+      if (asset.id === undefined || asset.id === null) continue;
+      const detailUrl = new URL(`${config.baseUrl}/assets/${asset.id}`);
+      detailUrl.searchParams.set("include", "contractAgreements");
+      const detailResponse = await fetchWithTimeout(detailUrl.toString(), headers, config.timeoutMs);
+      if (!detailResponse.ok) continue;
+
+      const detailJson = (await detailResponse.json()) as { data?: SmartTradeAssetRow };
+      const detailAsset = detailJson.data;
+      if (!detailAsset || detailAsset.id === undefined || detailAsset.id === null) continue;
+
+      fallbackAssets.push({
+        id: String(detailAsset.id),
+        name: detailAsset.name?.trim() || `Asset ${detailAsset.id}`,
+        description: detailAsset.description ?? null,
+        serialNumber: detailAsset.serialNumber ?? null,
+        modules: mapAssetModules(detailAsset),
+      });
+    }
+
+    return fallbackAssets;
+  }
+
+  return assets
+    .filter((asset): asset is (typeof assets)[number] & { id: number | string } =>
+      asset.id !== undefined && asset.id !== null,
+    )
+    .map((asset) => ({
+      id: String(asset.id),
+      name: asset.name?.trim() || `Asset ${asset.id}`,
+      description: asset.description ?? null,
+      serialNumber: asset.serialNumber ?? null,
+      modules: mapAssetModules(asset),
+    }));
 }

@@ -11,15 +11,39 @@ export type SmartTradeRelation = {
   city?: string | null;
 };
 
-export type SmartTradeContractAgreement = {
+type AssetModule = {
+  id: string;
+  name: string;
+  active: boolean;
+};
+
+type AssetWithModules = {
+  id: string;
+  name: string;
+  description: string | null;
+  serialNumber: string | null;
+  modules: AssetModule[];
+};
+
+type SmartTradeConfig = {
+  baseUrl: string;
+  company: string;
+  user: string;
+  password: string;
+  timeoutMs: number;
+};
+
+type SmartTradeRelationApiItem = {
   id?: number | string;
-  startsAt?: string | null;
-  endsAt?: string | null;
-  article?: {
-    id?: number | string;
-    code?: string | null;
-    name?: string | null;
-    description?: string | null;
+  company?: string | null;
+  email?: string | null;
+  debtorNumber?: string | number | null;
+  contactAddress?: {
+    data?: {
+      street?: string | null;
+      postcode?: string | null;
+      city?: string | null;
+    } | null;
   } | null;
 };
 

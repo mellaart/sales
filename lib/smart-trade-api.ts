@@ -33,22 +33,20 @@ type SmartTradeConfig = {
   timeoutMs: number;
 };
 
-type SmartTradeRelationApiItem = {
-  id?: number | string;
-  company?: string | null;
-  email?: string | null;
-  debtorNumber?: string | number | null;
-  contactAddress?: {
-    data?: {
-      street?: string | null;
-      postcode?: string | null;
-      city?: string | null;
-    } | null;
-  } | null;
-};
-
 type SmartTradeRelationsApiResponse = {
-  data?: SmartTradeRelationApiItem[];
+  data?: Array<{
+    id?: number | string;
+    company?: string | null;
+    email?: string | null;
+    debtorNumber?: string | number | null;
+    contactAddress?: {
+      data?: {
+        street?: string | null;
+        postcode?: string | null;
+        city?: string | null;
+      } | null;
+    } | null;
+  }>;
 };
 
 const DEFAULT_TIMEOUT_MS = 15000;
@@ -168,7 +166,7 @@ export async function searchRelations(_term?: string) {
   const rows = Array.isArray(json.data) ? json.data : [];
 
   return rows
-    .filter((row): row is SmartTradeRelationApiItem & { id: number | string } => row.id !== undefined && row.id !== null)
+    .filter((row): row is (typeof rows)[number] & { id: number | string } => row.id !== undefined && row.id !== null)
     .map((row) => ({
       id: row.id,
       company: row.company ?? null,

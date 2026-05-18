@@ -5,6 +5,7 @@ import { FormEvent, useMemo, useState } from "react";
 type RelationResult = { id: string; name: string; email: string | null; debtorNumber: string | number | null };
 type ModuleResult = { id: string; name: string; active: boolean; startsAt: string | null; endsAt: string | null };
 type AssetResult = { id: string; name: string; description: string | null; serialNumber: string | null; modules: ModuleResult[] };
+type DirectRelationResult = Record<string, unknown>;
 
 export default function ApiKoppelingTestPage() {
   const [term, setTerm] = useState("");
@@ -14,6 +15,12 @@ export default function ApiKoppelingTestPage() {
   const [loadingRelations, setLoadingRelations] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [status, setStatus] = useState("");
+  const [directRelation, setDirectRelation] = useState<DirectRelationResult | null>(null);
+  const [loadingDirectRelation, setLoadingDirectRelation] = useState(false);
+  const [directBaseUrl, setDirectBaseUrl] = useState("https://my.troublefree.nl/v3/api");
+  const [directCompany, setDirectCompany] = useState("troublefree");
+  const [directUser, setDirectUser] = useState("calculator");
+  const [directPassword, setDirectPassword] = useState("4q8u9HrAsVPq");
 
   const totals = useMemo(() => {
     const allModules = assets.flatMap((asset) => asset.modules);
@@ -38,6 +45,29 @@ export default function ApiKoppelingTestPage() {
     } finally { setLoadingRelations(false); }
   };
 
+  const loadDirectRelation = async () => {
+    setLoadingDirectRelation(true);
+    setStatus("");
+    try {
+      const params = new URLSearchParams({
+        baseUrl: directBaseUrl,
+        company: directCompany,
+        user: directUser,
+        password: directPassword,
+      });
+      const response = await fetch(`/api/smart-trade/relations/2425?${params.toString()}`, { cache: "no-store" });
+      const json = (await response.json()) as { relation?: DirectRelationResult; error?: string };
+      if (!response.ok) throw new Error(json.error ?? "Directe relation-call mislukt.");
+      setDirectRelation(json.relation ?? null);
+      setStatus("Directe API call voor relation 2425 geslaagd.");
+    } catch (error) {
+      setDirectRelation(null);
+      setStatus(error instanceof Error ? error.message : "Directe relation-call mislukt.");
+    } finally {
+      setLoadingDirectRelation(false);
+    }
+  };
+
   const loadAssets = async () => {
     if (!relationId) return;
     setLoadingAssets(true);
@@ -54,5 +84,5 @@ export default function ApiKoppelingTestPage() {
     } finally { setLoadingAssets(false); }
   };
 
-  return <div className="page-shell"><div className="container stack-4"><section className="card panel stack-3"><div><div className="eyebrow">API test</div><h1 className="headline">Troublefree API koppeling testen</h1><p className="subtext">Flow: zoek debiteur → kies relation-id → laad assets → toon actieve modules uit contractAgreements.</p></div><form onSubmit={searchRelations} className="grid-two" style={{ gap: 12 }}><input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Zoek op bedrijfsnaam, e-mail of debiteurnummer" /><button type="submit" className="primary-button" disabled={loadingRelations}>{loadingRelations ? "Zoeken..." : "Debiteur zoeken"}</button></form>{relations.length > 0 ? <div className="stack-2"><label htmlFor="relationId">Relation kiezen</label><select id="relationId" value={relationId} onChange={(e) => setRelationId(e.target.value)}><option value="">Kies relation-id</option>{relations.map((relation) => <option key={relation.id} value={relation.id}>{relation.id} - {relation.name}</option>)}</select><button type="button" className="secondary-button" disabled={!relationId || loadingAssets} onClick={loadAssets}>{loadingAssets ? "Assets laden..." : "Assets + modules ophalen"}</button></div> : null}{status ? <div className="save-status">{status}</div> : null}</section><section className="card panel stack-3"><div className="top-row"><h2 className="headline">Resultaat</h2><div className="subtext">Assets: {totals.assets} · Actieve modules: {totals.active} · Inactieve modules: {totals.inactive}</div></div>{assets.length === 0 ? <div className="save-status">Nog geen assets geladen.</div> : null}<div className="deal-list">{assets.map((asset) => <article key={asset.id} className="deal-row" style={{ alignItems: "flex-start", flexDirection: "column" }}><div><strong>{asset.name}</strong> <span className="muted">(#{asset.id})</span></div>{asset.modules.length === 0 ? <div className="muted">Geen contractAgreements gevonden.</div> : null}{asset.modules.map((module) => <div key={module.id} className="muted small-gap">{module.active ? "🟢" : "⚪"} {module.name} · start: {module.startsAt ?? "-"} · einde: {module.endsAt ?? "-"}</div>)}</article>)}</div></section></div></div>;
+  return <div className="page-shell"><div className="container stack-4"><section className="card panel stack-3"><div><div className="eyebrow">API test</div><h1 className="headline">Troublefree API koppeling testen</h1><p className="subtext">Flow: zoek debiteur → kies relation-id → laad assets → toon actieve modules uit contractAgreements.</p></div><div className="stack-2"><div className="grid-two" style={{ gap: 8 }}><input value={directBaseUrl} onChange={(e) => setDirectBaseUrl(e.target.value)} placeholder="Base URL" /><input value={directCompany} onChange={(e) => setDirectCompany(e.target.value)} placeholder="Company" /><input value={directUser} onChange={(e) => setDirectUser(e.target.value)} placeholder="User" /><input value={directPassword} onChange={(e) => setDirectPassword(e.target.value)} placeholder="Password" /></div><button type="button" className="secondary-button" onClick={loadDirectRelation} disabled={loadingDirectRelation}>{loadingDirectRelation ? "Relation 2425 ophalen..." : "Test directe call: /relations/2425"}</button>{directRelation ? <pre className="muted" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{JSON.stringify(directRelation, null, 2)}</pre> : null}</div><form onSubmit={searchRelations} className="grid-two" style={{ gap: 12 }}><input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Zoek op bedrijfsnaam, e-mail of debiteurnummer" /><button type="submit" className="primary-button" disabled={loadingRelations}>{loadingRelations ? "Zoeken..." : "Debiteur zoeken"}</button></form>{relations.length > 0 ? <div className="stack-2"><label htmlFor="relationId">Relation kiezen</label><select id="relationId" value={relationId} onChange={(e) => setRelationId(e.target.value)}><option value="">Kies relation-id</option>{relations.map((relation) => <option key={relation.id} value={relation.id}>{relation.id} - {relation.name}</option>)}</select><button type="button" className="secondary-button" disabled={!relationId || loadingAssets} onClick={loadAssets}>{loadingAssets ? "Assets laden..." : "Assets + modules ophalen"}</button></div> : null}{status ? <div className="save-status">{status}</div> : null}</section><section className="card panel stack-3"><div className="top-row"><h2 className="headline">Resultaat</h2><div className="subtext">Assets: {totals.assets} · Actieve modules: {totals.active} · Inactieve modules: {totals.inactive}</div></div>{assets.length === 0 ? <div className="save-status">Nog geen assets geladen.</div> : null}<div className="deal-list">{assets.map((asset) => <article key={asset.id} className="deal-row" style={{ alignItems: "flex-start", flexDirection: "column" }}><div><strong>{asset.name}</strong> <span className="muted">(#{asset.id})</span></div>{asset.modules.length === 0 ? <div className="muted">Geen contractAgreements gevonden.</div> : null}{asset.modules.map((module) => <div key={module.id} className="muted small-gap">{module.active ? "🟢" : "⚪"} {module.name} · start: {module.startsAt ?? "-"} · einde: {module.endsAt ?? "-"}</div>)}</article>)}</div></section></div></div>;
 }

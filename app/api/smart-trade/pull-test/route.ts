@@ -93,6 +93,10 @@ function safeHeaders(headers: Headers) {
   );
 }
 
+function isVersionDetectionError(status: number, bodyText: string) {
+  return status === 505 || /Error while determining version/i.test(bodyText);
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as PullBody;
@@ -117,18 +121,29 @@ export async function POST(request: Request) {
 
     const headers = getSmartTradePullHeaders(extraHeaders);
     const startedAt = Date.now();
-    const attempts: Array<{ url: string; status: number }> = [];
+    const attempts: Array<{ url: string; status: number; versionError: boolean; bodyPreview: string }> = [];
     let response: Response | null = null;
+    let responseBuffer = Buffer.from("");
     let targetUrl = targetUrls[0];
 
     for (const candidateUrl of targetUrls) {
       const candidateResponse = await fetchWithSmartTradeTimeout(candidateUrl.toString(), headers);
-      attempts.push({ url: candidateUrl.toString(), status: candidateResponse.status });
+      const candidateBuffer = Buffer.from(await candidateResponse.arrayBuffer());
+      const candidateText = candidateBuffer.toString("utf8");
+      const versionError = isVersionDetectionError(candidateResponse.status, candidateText);
+
+      attempts.push({
+        url: candidateUrl.toString(),
+        status: candidateResponse.status,
+        versionError,
+        bodyPreview: candidateText.slice(0, 160),
+      });
 
       response = candidateResponse;
+      responseBuffer = candidateBuffer;
       targetUrl = candidateUrl;
 
-      if (candidateResponse.status !== 505) {
+      if (!versionError) {
         break;
       }
     }
@@ -137,7 +152,6 @@ export async function POST(request: Request) {
       throw new Error("Geen API response ontvangen.");
     }
 
-    const responseBuffer = Buffer.from(await response.arrayBuffer());
     const contentType = response.headers.get("content-type") ?? "";
     const isJson = /(^|[/+])json($|;)/i.test(contentType);
     const isText = /^text\//i.test(contentType) || /xml|csv|html/i.test(contentType);

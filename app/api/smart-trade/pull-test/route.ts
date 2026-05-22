@@ -33,7 +33,20 @@ function matchingBasePathOverlap(baseSegments: string[], swaggerSegments: string
   return 0;
 }
 
-function buildTargetUrl(endpointPath: string, queryString?: string) {
+function applyQuery(target: URL, queryString?: string) {
+  target.search = "";
+
+  if (queryString?.trim()) {
+    const params = new URLSearchParams(queryString.trim().replace(/^\?/, ""));
+    params.forEach((value, key) => {
+      if (key.trim() && value.trim()) target.searchParams.append(key, value);
+    });
+  }
+
+  return target;
+}
+
+function buildPrimaryUrl(endpointPath: string, queryString?: string) {
   const config = getSmartTradePullConfig();
   const target = new URL(config.baseUrl);
   const baseSegments = pathSegments(target.pathname);
@@ -45,16 +58,31 @@ function buildTargetUrl(endpointPath: string, queryString?: string) {
     ...swaggerSegments.slice(overlap),
     ...pathSegments(endpointPath),
   ].join("/")}`;
-  target.search = "";
 
-  if (queryString?.trim()) {
-    const params = new URLSearchParams(queryString.trim().replace(/^\?/, ""));
-    params.forEach((value, key) => {
-      if (key.trim() && value.trim()) target.searchParams.append(key, value);
-    });
-  }
+  return applyQuery(target, queryString);
+}
 
-  return target;
+function buildTargetUrls(endpointPath: string, queryString?: string) {
+  const config = getSmartTradePullConfig();
+  const primary = buildPrimaryUrl(endpointPath, queryString);
+  const cleanEndpointPath = `/${pathSegments(endpointPath).join("/")}`;
+  const baseUrl = config.baseUrl.replace(/\/$/, "");
+  const withoutApiSuffix = baseUrl.replace(/\/api$/i, "");
+  const origin = new URL(config.baseUrl).origin;
+  const candidates = [
+    primary,
+    new URL(`${baseUrl}/api${cleanEndpointPath}`),
+    new URL(`${withoutApiSuffix}${cleanEndpointPath}`),
+    new URL(`${origin}/v3/api${cleanEndpointPath}`),
+  ].map((url) => applyQuery(url, queryString));
+  const seen = new Set<string>();
+
+  return candidates.filter((url) => {
+    const key = url.toString();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function safeHeaders(headers: Headers) {
@@ -76,7 +104,7 @@ export async function POST(request: Request) {
     }
 
     const endpointPath = fillPathTemplate(pathTemplate, body.pathParams ?? {});
-    const targetUrl = buildTargetUrl(endpointPath, body.queryString);
+    const targetUrls = buildTargetUrls(endpointPath, body.queryString);
     const extraHeaders: Record<string, string> = {};
 
     if (body.ifModifiedSince?.trim()) {
@@ -87,8 +115,28 @@ export async function POST(request: Request) {
       extraHeaders["If-None-Match"] = body.ifNoneMatch.trim();
     }
 
+    const headers = getSmartTradePullHeaders(extraHeaders);
     const startedAt = Date.now();
-    const response = await fetchWithSmartTradeTimeout(targetUrl.toString(), getSmartTradePullHeaders(extraHeaders));
+    const attempts: Array<{ url: string; status: number }> = [];
+    let response: Response | null = null;
+    let targetUrl = targetUrls[0];
+
+    for (const candidateUrl of targetUrls) {
+      const candidateResponse = await fetchWithSmartTradeTimeout(candidateUrl.toString(), headers);
+      attempts.push({ url: candidateUrl.toString(), status: candidateResponse.status });
+
+      response = candidateResponse;
+      targetUrl = candidateUrl;
+
+      if (candidateResponse.status !== 505) {
+        break;
+      }
+    }
+
+    if (!response) {
+      throw new Error("Geen API response ontvangen.");
+    }
+
     const responseBuffer = Buffer.from(await response.arrayBuffer());
     const contentType = response.headers.get("content-type") ?? "";
     const isJson = /(^|[/+])json($|;)/i.test(contentType);
@@ -120,6 +168,7 @@ export async function POST(request: Request) {
       headers: safeHeaders(response.headers),
       body: responseBody,
       bodyText: responseText,
+      attempts,
     });
   } catch (error) {
     return NextResponse.json(

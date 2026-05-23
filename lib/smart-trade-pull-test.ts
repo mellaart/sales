@@ -28,31 +28,21 @@ function basicAuthorization(user: string, password: string) {
 }
 
 export function getSmartTradePullConfig(): SmartTradePullConfig {
-  const company = env("SMART_TRADE_COMPANY_KEY") || env("SMART_TRADE_COMPANY") || "troublefree";
-  const user = env("SMART_TRADE_API_USER");
-  const password = env("SMART_TRADE_API_PASSWORD");
-  const token = env("SMART_TRADE_API_TOKEN");
-  const authMode = (env("SMART_TRADE_AUTH_MODE") || "basic").toLowerCase();
+  const company = env("SMART_TRADE_COMPANY_KEY") || env("SMART_TRADE_COMPANY");
+  const user = env("SMART_TRADE_USER");
+  const password = env("SMART_TRADE_PASSWORD");
   const timeoutMs = Number(env("SMART_TRADE_API_TIMEOUT_MS") || DEFAULT_TIMEOUT_MS);
 
-  let authorization = "";
-
-  if (user && password) {
-    authorization = basicAuthorization(user, password);
-  } else if (token && authMode === "bearer") {
-    authorization = `Bearer ${token}`;
-  } else if (token) {
-    authorization = `Basic ${Buffer.from(token).toString("base64")}`;
-  }
-
-  if (!authorization || !company) {
-    throw new Error("Smart Trade API is niet geconfigureerd. Vul API user/password of token en Company in bij de environment variables.");
+  if (!company || !user || !password) {
+    throw new Error(
+      "Smart Trade API is niet geconfigureerd. Vul SMART_TRADE_COMPANY_KEY, SMART_TRADE_USER en SMART_TRADE_PASSWORD in bij de environment variables.",
+    );
   }
 
   return {
     baseUrl: normalizeRetailApiBaseUrl(process.env.SMART_TRADE_API_BASE_URL),
     company,
-    authorization,
+    authorization: basicAuthorization(user, password),
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS,
   };
 }

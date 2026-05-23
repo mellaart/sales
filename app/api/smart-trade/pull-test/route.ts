@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fillPathTemplate, getApiTestEndpoint, retailApiBasePath } from "@/lib/retail-api-endpoints";
+import { fillPathTemplate, getApiTestEndpoint } from "@/lib/retail-api-endpoints";
 import {
   fetchWithSmartTradeTimeout,
   getSmartTradePullConfig,
@@ -20,19 +20,6 @@ function pathSegments(path: string) {
   return path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
 }
 
-function matchingBasePathOverlap(baseSegments: string[], swaggerSegments: string[]) {
-  const max = Math.min(baseSegments.length, swaggerSegments.length);
-
-  for (let size = max; size > 0; size -= 1) {
-    const baseTail = baseSegments.slice(baseSegments.length - size).join("/");
-    const swaggerHead = swaggerSegments.slice(0, size).join("/");
-
-    if (baseTail === swaggerHead) return size;
-  }
-
-  return 0;
-}
-
 function applyQuery(target: URL, queryString?: string) {
   target.search = "";
 
@@ -46,43 +33,15 @@ function applyQuery(target: URL, queryString?: string) {
   return target;
 }
 
-function buildPrimaryUrl(endpointPath: string, queryString?: string) {
+function buildTargetUrl(endpointPath: string, queryString?: string) {
   const config = getSmartTradePullConfig();
   const target = new URL(config.baseUrl);
-  const baseSegments = pathSegments(target.pathname);
-  const swaggerSegments = pathSegments(retailApiBasePath);
-  const overlap = matchingBasePathOverlap(baseSegments, swaggerSegments);
+  const basePath = target.pathname.replace(/\/+$/, "");
+  const endpoint = pathSegments(endpointPath).join("/");
 
-  target.pathname = `/${[
-    ...baseSegments,
-    ...swaggerSegments.slice(overlap),
-    ...pathSegments(endpointPath),
-  ].join("/")}`;
+  target.pathname = `${basePath}/${endpoint}`.replace(/\/{2,}/g, "/");
 
   return applyQuery(target, queryString);
-}
-
-function buildTargetUrls(endpointPath: string, queryString?: string) {
-  const config = getSmartTradePullConfig();
-  const primary = buildPrimaryUrl(endpointPath, queryString);
-  const cleanEndpointPath = `/${pathSegments(endpointPath).join("/")}`;
-  const baseUrl = config.baseUrl.replace(/\/$/, "");
-  const withoutApiSuffix = baseUrl.replace(/\/api$/i, "");
-  const origin = new URL(config.baseUrl).origin;
-  const candidates = [
-    primary,
-    new URL(`${baseUrl}/api${cleanEndpointPath}`),
-    new URL(`${withoutApiSuffix}${cleanEndpointPath}`),
-    new URL(`${origin}/v3/api${cleanEndpointPath}`),
-  ].map((url) => applyQuery(url, queryString));
-  const seen = new Set<string>();
-
-  return candidates.filter((url) => {
-    const key = url.toString();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function safeHeaders(headers: Headers) {
@@ -108,7 +67,7 @@ export async function POST(request: Request) {
     }
 
     const endpointPath = fillPathTemplate(pathTemplate, body.pathParams ?? {});
-    const targetUrls = buildTargetUrls(endpointPath, body.queryString);
+    const targetUrl = buildTargetUrl(endpointPath, body.queryString);
     const extraHeaders: Record<string, string> = {};
 
     if (body.ifModifiedSince?.trim()) {
@@ -121,37 +80,9 @@ export async function POST(request: Request) {
 
     const headers = getSmartTradePullHeaders(extraHeaders);
     const startedAt = Date.now();
-    const attempts: Array<{ url: string; status: number; versionError: boolean; bodyPreview: string }> = [];
-    let response: Response | null = null;
-    let responseBuffer = Buffer.from("");
-    let targetUrl = targetUrls[0];
-
-    for (const candidateUrl of targetUrls) {
-      const candidateResponse = await fetchWithSmartTradeTimeout(candidateUrl.toString(), headers);
-      const candidateBuffer = Buffer.from(await candidateResponse.arrayBuffer());
-      const candidateText = candidateBuffer.toString("utf8");
-      const versionError = isVersionDetectionError(candidateResponse.status, candidateText);
-
-      attempts.push({
-        url: candidateUrl.toString(),
-        status: candidateResponse.status,
-        versionError,
-        bodyPreview: candidateText.slice(0, 160),
-      });
-
-      response = candidateResponse;
-      responseBuffer = candidateBuffer;
-      targetUrl = candidateUrl;
-
-      if (!versionError) {
-        break;
-      }
-    }
-
-    if (!response) {
-      throw new Error("Geen API response ontvangen.");
-    }
-
+    const response = await fetchWithSmartTradeTimeout(targetUrl.toString(), headers);
+    const responseBuffer = Buffer.from(await response.arrayBuffer());
+    const rawResponseText = responseBuffer.toString("utf8");
     const contentType = response.headers.get("content-type") ?? "";
     const isJson = /(^|[/+])json($|;)/i.test(contentType);
     const isText = /^text\//i.test(contentType) || /xml|csv|html/i.test(contentType);
@@ -159,7 +90,7 @@ export async function POST(request: Request) {
     let responseText = "";
 
     if (responseBuffer.length && (isJson || isText || responseBuffer.length < 300000)) {
-      responseText = responseBuffer.toString("utf8");
+      responseText = rawResponseText;
       responseBody = responseText;
 
       if (isJson) {
@@ -182,7 +113,14 @@ export async function POST(request: Request) {
       headers: safeHeaders(response.headers),
       body: responseBody,
       bodyText: responseText,
-      attempts,
+      attempts: [
+        {
+          url: targetUrl.toString(),
+          status: response.status,
+          versionError: isVersionDetectionError(response.status, rawResponseText),
+          bodyPreview: rawResponseText.slice(0, 160),
+        },
+      ],
     });
   } catch (error) {
     return NextResponse.json(

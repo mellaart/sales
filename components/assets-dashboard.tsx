@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, Search, Sparkles } from "lucide-react";
+import { useMemo, useState, type FormEvent } from "react";
+import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 import styles from "./assets-dashboard.module.css";
 
@@ -38,8 +38,8 @@ type ContractRecord = {
   assetCount: number;
 };
 
-function formatDate(value: string | null) {
-  if (!value) return "Geen einddatum";
+function formatDate(value: string | null, emptyLabel = "Geen einddatum") {
+  if (!value) return emptyLabel;
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -49,11 +49,19 @@ function formatDate(value: string | null) {
   }).format(date);
 }
 
+function getContractEndLabel(contract: ContractRecord) {
+  if (contract.active) {
+    return contract.endsAt ? `Eindigt: ${formatDate(contract.endsAt)}` : "Actief zonder einddatum";
+  }
+
+  return `Eindigde: ${formatDate(contract.endsAt)}`;
+}
+
 export default function AssetsDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
-  const [selectedContract, setSelectedContract] = useState<ContractRecord | null>(null);
+  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [searchStatus, setSearchStatus] = useState("");
   const [contractStatus, setContractStatus] = useState("");
@@ -64,39 +72,38 @@ export default function AssetsDashboard() {
     const contractMap = new Map<string, ContractRecord>();
 
     for (const asset of assets) {
-      for (const module of asset.modules) {
-        const existing = contractMap.get(module.id);
+      for (const assetModule of asset.modules) {
+        const existing = contractMap.get(assetModule.id);
 
-        if (existing) {
-          contractMap.set(module.id, {
-            ...existing,
-            active: existing.active || module.active,
-            assetCount: existing.assetCount + 1,
-          });
-          continue;
-        }
-
-        contractMap.set(module.id, {
-          id: module.id,
-          name: module.name,
-          startsAt: module.startsAt,
-          endsAt: module.endsAt,
-          active: module.active,
-          assetCount: 1,
+        contractMap.set(assetModule.id, {
+          id: assetModule.id,
+          name: existing?.name ?? assetModule.name,
+          startsAt: existing?.startsAt ?? assetModule.startsAt,
+          endsAt: existing?.endsAt ?? assetModule.endsAt,
+          active: Boolean(existing?.active || assetModule.active),
+          assetCount: (existing?.assetCount ?? 0) + 1,
         });
       }
     }
 
     return Array.from(contractMap.values()).sort((left, right) => {
       if (left.active !== right.active) return left.active ? -1 : 1;
-      return left.name.localeCompare(right.name, "nl");
+      return left.name.localeCompare(right.name);
     });
   }, [assets]);
 
+  const selectedContract = useMemo(
+    () => contracts.find((contract) => contract.id === selectedContractId) ?? null,
+    [contracts, selectedContractId],
+  );
+
   const selectedContractAssets = useMemo(() => {
-    if (!selectedContract) return [];
-    return assets.filter((asset) => asset.modules.some((module) => module.id === selectedContract.id));
-  }, [assets, selectedContract]);
+    if (!selectedContractId) return [];
+
+    return assets.filter((asset) =>
+      asset.modules.some((assetModule) => assetModule.id === selectedContractId),
+    );
+  }, [assets, selectedContractId]);
 
   const activeContractCount = useMemo(
     () => contracts.filter((contract) => contract.active).length,
@@ -108,14 +115,14 @@ export default function AssetsDashboard() {
     [contracts],
   );
 
-  async function handleSearchRelations(event: React.FormEvent) {
+  async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
 
     setSearchStatus("");
     setContractStatus("");
     setSearching(true);
     setSelectedRelation(null);
-    setSelectedContract(null);
+    setSelectedContractId(null);
     setAssets([]);
 
     try {
@@ -141,7 +148,7 @@ export default function AssetsDashboard() {
 
   async function handleSelectRelation(relation: RelationOption) {
     setSelectedRelation(relation);
-    setSelectedContract(null);
+    setSelectedContractId(null);
     setContractStatus("");
     setLoadingContracts(true);
     setAssets([]);
@@ -167,8 +174,8 @@ export default function AssetsDashboard() {
     }
   }
 
-  function handleSelectContract(contract: ContractRecord) {
-    setSelectedContract(contract);
+  function handleSelectContract(contractId: string) {
+    setSelectedContractId(contractId);
   }
 
   return (
@@ -227,7 +234,9 @@ export default function AssetsDashboard() {
                   <button
                     key={relation.id}
                     type="button"
-                    className={`${styles.relationResultCard} ${selectedRelation?.id === relation.id ? styles.active : ""}`}
+                    className={`${styles.relationResultCard} ${
+                      selectedRelation?.id === relation.id ? styles.selectedResultCard : ""
+                    }`}
                     onClick={() => void handleSelectRelation(relation)}
                   >
                     <span className={styles.relationResultIcon}>
@@ -272,11 +281,11 @@ export default function AssetsDashboard() {
                 {selectedRelation ? `Contracten voor ${selectedRelation.name}` : "Contracten"}
               </h2>
               <p className="subtext">
-                Kies eerst een contract. Daarna tonen we in stap 3 alleen de assets die bij dat contract horen.
+                Kies een contract. Daarna tonen we in stap 3 alleen de assets die bij dat contract horen.
               </p>
             </div>
             <div className="icon-badge">
-              <FileText size={26} />
+              <Boxes size={26} />
             </div>
           </div>
 
@@ -294,11 +303,13 @@ export default function AssetsDashboard() {
                 <button
                   key={contract.id}
                   type="button"
-                  className={`${styles.relationResultCard} ${selectedContract?.id === contract.id ? styles.active : ""}`}
-                  onClick={() => handleSelectContract(contract)}
+                  className={`${styles.relationResultCard} ${
+                    selectedContractId === contract.id ? styles.selectedResultCard : ""
+                  }`}
+                  onClick={() => handleSelectContract(contract.id)}
                 >
                   <span className={styles.relationResultIcon}>
-                    <FileText size={18} />
+                    <Boxes size={18} />
                   </span>
 
                   <span className={styles.relationResultContent}>
@@ -309,12 +320,13 @@ export default function AssetsDashboard() {
                         Contract {contract.id}
                       </span>
                       <span>{contract.assetCount} assets</span>
-                      <span>{contract.active ? "Actief" : `Eindigde: ${formatDate(contract.endsAt)}`}</span>
+                      <span>Start: {formatDate(contract.startsAt, "Geen startdatum")}</span>
+                      <span>{getContractEndLabel(contract)}</span>
                     </span>
                   </span>
 
                   <span className={styles.relationResultAction}>
-                    {selectedContract?.id === contract.id ? "Geselecteerd" : "Bekijk assets"}
+                    {selectedContractId === contract.id ? "Geselecteerd" : "Bekijk assets"}
                     <ChevronRight size={16} />
                   </span>
                 </button>
@@ -330,9 +342,7 @@ export default function AssetsDashboard() {
               <h2 className="headline">
                 {selectedContract ? `Assets in ${selectedContract.name}` : "Assets per contract"}
               </h2>
-              <p className="subtext">
-                Deze lijst is gefilterd op het contract dat je in stap 2 kiest.
-              </p>
+              <p className="subtext">Deze lijst is gefilterd op het contract dat je in stap 2 kiest.</p>
             </div>
             <div className="icon-badge">
               <Boxes size={26} />
@@ -348,7 +358,7 @@ export default function AssetsDashboard() {
           ) : (
             <div className={styles.assetGrid}>
               {selectedContractAssets.map((asset) => {
-                const matchingModules = asset.modules.filter((module) => module.id === selectedContract.id);
+                const matchingModules = asset.modules.filter((assetModule) => assetModule.id === selectedContract.id);
 
                 return (
                   <article key={asset.id} className={styles.assetCard}>
@@ -366,16 +376,22 @@ export default function AssetsDashboard() {
                     {asset.description ? <p className={styles.assetDescription}>{asset.description}</p> : null}
 
                     <div className={styles.assetModules}>
-                      {matchingModules.map((module) => (
+                      {matchingModules.map((assetModule) => (
                         <div
-                          key={module.id}
-                          className={`${styles.assetModule} ${module.active ? styles.assetModuleActive : styles.assetModuleInactive}`}
+                          key={assetModule.id}
+                          className={`${styles.assetModule} ${
+                            assetModule.active ? styles.assetModuleActive : styles.assetModuleInactive
+                          }`}
                         >
                           <div>
-                            <strong>{module.name}</strong>
-                            {module.code ? <span>Code: {module.code}</span> : null}
+                            <strong>{assetModule.name}</strong>
+                            {assetModule.code ? <span>Code: {assetModule.code}</span> : null}
                           </div>
-                          <span>{module.active ? "Actief" : `Eindigde: ${formatDate(module.endsAt)}`}</span>
+                          <span>
+                            {assetModule.active
+                              ? getContractEndLabel({ ...selectedContract, active: true, endsAt: assetModule.endsAt })
+                              : `Eindigde: ${formatDate(assetModule.endsAt)}`}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -391,7 +407,9 @@ export default function AssetsDashboard() {
             <div>
               <div className="eyebrow">Stap 4</div>
               <h2 className="headline">Upsell-signalen</h2>
-              <p className="subtext">Deze stap toont nog geen automatische adviezen. Eerst valideren we of de contract- en assetdata klopt.</p>
+              <p className="subtext">
+                Deze stap toont nog geen automatische adviezen. Eerst valideren we of de contract- en assetdata klopt.
+              </p>
             </div>
             <div className="icon-badge">
               <Sparkles size={26} />

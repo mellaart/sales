@@ -5,6 +5,8 @@ import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lu
 import { StatusPill } from "@/components/ui";
 import styles from "./assets-dashboard.module.css";
 
+const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
+
 type RelationOption = {
   id: string;
   name: string;
@@ -15,7 +17,7 @@ type RelationOption = {
 type AssetModule = {
   id: string;
   name: string;
-  code: string | null;
+  code?: string | null;
   startsAt: string | null;
   endsAt: string | null;
   active: boolean;
@@ -29,17 +31,8 @@ type AssetRecord = {
   modules: AssetModule[];
 };
 
-type ContractRecord = {
-  id: string;
-  name: string;
-  startsAt: string | null;
-  endsAt: string | null;
-  active: boolean;
-  assetCount: number;
-};
-
-function formatDate(value: string | null, emptyLabel = "Geen einddatum") {
-  if (!value) return emptyLabel;
+function formatDate(value: string | null) {
+  if (!value) return "Geen einddatum";
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -49,80 +42,39 @@ function formatDate(value: string | null, emptyLabel = "Geen einddatum") {
   }).format(date);
 }
 
-function getContractEndLabel(contract: ContractRecord) {
-  if (contract.active) {
-    return contract.endsAt ? `Eindigt: ${formatDate(contract.endsAt)}` : "Actief zonder einddatum";
-  }
-
-  return `Eindigde: ${formatDate(contract.endsAt)}`;
+function isSmartTradeAsset(asset: AssetRecord) {
+  return asset.name.trimStart().startsWith(SMART_TRADE_ASSET_PREFIX);
 }
 
 export default function AssetsDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
-  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [searchStatus, setSearchStatus] = useState("");
-  const [contractStatus, setContractStatus] = useState("");
+  const [assetStatus, setAssetStatus] = useState("");
   const [searching, setSearching] = useState(false);
-  const [loadingContracts, setLoadingContracts] = useState(false);
+  const [loadingAssets, setLoadingAssets] = useState(false);
 
-  const contracts = useMemo(() => {
-    const contractMap = new Map<string, ContractRecord>();
+  const smartTradeAssets = useMemo(() => assets.filter(isSmartTradeAsset), [assets]);
 
-    for (const asset of assets) {
-      for (const assetModule of asset.modules) {
-        const existing = contractMap.get(assetModule.id);
-
-        contractMap.set(assetModule.id, {
-          id: assetModule.id,
-          name: existing?.name ?? assetModule.name,
-          startsAt: existing?.startsAt ?? assetModule.startsAt,
-          endsAt: existing?.endsAt ?? assetModule.endsAt,
-          active: Boolean(existing?.active || assetModule.active),
-          assetCount: (existing?.assetCount ?? 0) + 1,
-        });
-      }
-    }
-
-    return Array.from(contractMap.values()).sort((left, right) => {
-      if (left.active !== right.active) return left.active ? -1 : 1;
-      return left.name.localeCompare(right.name);
-    });
-  }, [assets]);
-
-  const selectedContract = useMemo(
-    () => contracts.find((contract) => contract.id === selectedContractId) ?? null,
-    [contracts, selectedContractId],
+  const activeModuleCount = useMemo(
+    () => smartTradeAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => assetModule.active).length, 0),
+    [smartTradeAssets],
   );
 
-  const selectedContractAssets = useMemo(() => {
-    if (!selectedContractId) return [];
-
-    return assets.filter((asset) =>
-      asset.modules.some((assetModule) => assetModule.id === selectedContractId),
-    );
-  }, [assets, selectedContractId]);
-
-  const activeContractCount = useMemo(
-    () => contracts.filter((contract) => contract.active).length,
-    [contracts],
-  );
-
-  const inactiveContractCount = useMemo(
-    () => contracts.filter((contract) => !contract.active).length,
-    [contracts],
+  const inactiveModuleCount = useMemo(
+    () => smartTradeAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => !assetModule.active).length, 0),
+    [smartTradeAssets],
   );
 
   async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
 
     setSearchStatus("");
-    setContractStatus("");
+    setAssetStatus("");
     setSearching(true);
     setSelectedRelation(null);
-    setSelectedContractId(null);
     setAssets([]);
 
     try {
@@ -148,9 +100,8 @@ export default function AssetsDashboard() {
 
   async function handleSelectRelation(relation: RelationOption) {
     setSelectedRelation(relation);
-    setSelectedContractId(null);
-    setContractStatus("");
-    setLoadingContracts(true);
+    setAssetStatus("");
+    setLoadingAssets(true);
     setAssets([]);
 
     try {
@@ -158,24 +109,20 @@ export default function AssetsDashboard() {
       const json = await response.json();
 
       if (!response.ok) {
-        setContractStatus(json.error ?? "Contracten ophalen mislukt.");
+        setAssetStatus(json.error ?? "Assets ophalen mislukt.");
         return;
       }
 
       setAssets(json.assets ?? []);
 
       if ((json.assets ?? []).length === 0) {
-        setContractStatus(`Geen contracten of assets gevonden voor ${relation.name}.`);
+        setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
       }
     } catch (error) {
-      setContractStatus(error instanceof Error ? error.message : "Contracten ophalen mislukt.");
+      setAssetStatus(error instanceof Error ? error.message : "Assets ophalen mislukt.");
     } finally {
-      setLoadingContracts(false);
+      setLoadingAssets(false);
     }
-  }
-
-  function handleSelectContract(contractId: string) {
-    setSelectedContractId(contractId);
   }
 
   return (
@@ -186,13 +133,13 @@ export default function AssetsDashboard() {
             <div className="brand-mark">Assets</div>
             <h1>Assets en upsell-kansen</h1>
             <p>
-              Zoek een debiteur, bekijk de contracten en open daarna de assets die bij het gekozen contract horen.
+              Zoek een debiteur en bekijk alleen de assets waarvan de naam met Smart Trade begint.
             </p>
           </div>
 
           <div className="brand-actions">
-            <StatusPill tone="success">{assets.length} assets</StatusPill>
-            <StatusPill tone="warning">{contracts.length} contracten</StatusPill>
+            <StatusPill tone="success">{smartTradeAssets.length} Smart Trade assets</StatusPill>
+            <StatusPill tone="warning">{assets.length} ontvangen assets</StatusPill>
           </div>
         </header>
 
@@ -278,10 +225,10 @@ export default function AssetsDashboard() {
             <div>
               <div className="eyebrow">Stap 2</div>
               <h2 className="headline">
-                {selectedRelation ? `Contracten voor ${selectedRelation.name}` : "Contracten"}
+                {selectedRelation ? `Smart Trade assets voor ${selectedRelation.name}` : "Smart Trade assets"}
               </h2>
               <p className="subtext">
-                Kies een contract. Daarna tonen we in stap 3 alleen de assets die bij dat contract horen.
+                De lijst toont alleen assets die beginnen met "Smart Trade ".
               </p>
             </div>
             <div className="icon-badge">
@@ -289,94 +236,40 @@ export default function AssetsDashboard() {
             </div>
           </div>
 
-          {loadingContracts ? (
-            <div className="save-status">Contracten en assets worden opgehaald...</div>
+          {loadingAssets ? (
+            <div className="save-status">Assets worden opgehaald...</div>
           ) : !selectedRelation ? (
-            <div className="empty-state">Kies eerst een relatie om contracten te bekijken.</div>
-          ) : contractStatus ? (
-            <div className="empty-state">{contractStatus}</div>
-          ) : contracts.length === 0 ? (
-            <div className="empty-state">Geen contracten gevonden voor {selectedRelation.name}.</div>
-          ) : (
-            <div className={styles.relationResultList}>
-              {contracts.map((contract) => (
-                <button
-                  key={contract.id}
-                  type="button"
-                  className={`${styles.relationResultCard} ${
-                    selectedContractId === contract.id ? styles.selectedResultCard : ""
-                  }`}
-                  onClick={() => handleSelectContract(contract.id)}
-                >
-                  <span className={styles.relationResultIcon}>
-                    <Boxes size={18} />
-                  </span>
-
-                  <span className={styles.relationResultContent}>
-                    <strong>{contract.name}</strong>
-                    <span className={styles.relationResultMeta}>
-                      <span>
-                        <Hash size={13} />
-                        Contract {contract.id}
-                      </span>
-                      <span>{contract.assetCount} assets</span>
-                      <span>Start: {formatDate(contract.startsAt, "Geen startdatum")}</span>
-                      <span>{getContractEndLabel(contract)}</span>
-                    </span>
-                  </span>
-
-                  <span className={styles.relationResultAction}>
-                    {selectedContractId === contract.id ? "Geselecteerd" : "Bekijk assets"}
-                    <ChevronRight size={16} />
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="card panel">
-          <div className="top-row">
-            <div>
-              <div className="eyebrow">Stap 3</div>
-              <h2 className="headline">
-                {selectedContract ? `Assets in ${selectedContract.name}` : "Assets per contract"}
-              </h2>
-              <p className="subtext">Deze lijst is gefilterd op het contract dat je in stap 2 kiest.</p>
-            </div>
-            <div className="icon-badge">
-              <Boxes size={26} />
-            </div>
-          </div>
-
-          {!selectedRelation ? (
-            <div className="empty-state">Kies eerst een relatie en daarna een contract.</div>
-          ) : !selectedContract ? (
-            <div className="empty-state">Kies een contract om de gekoppelde assets te bekijken.</div>
-          ) : selectedContractAssets.length === 0 ? (
-            <div className="empty-state">Geen assets gevonden binnen {selectedContract.name}.</div>
+            <div className="empty-state">Kies eerst een relatie om assets te bekijken.</div>
+          ) : assetStatus ? (
+            <div className="empty-state">{assetStatus}</div>
+          ) : smartTradeAssets.length === 0 ? (
+            <div className="empty-state">Geen Smart Trade assets gevonden voor {selectedRelation.name}.</div>
           ) : (
             <div className={styles.assetGrid}>
-              {selectedContractAssets.map((asset) => {
-                const matchingModules = asset.modules.filter((assetModule) => assetModule.id === selectedContract.id);
+              {smartTradeAssets.map((asset) => (
+                <article key={asset.id} className={styles.assetCard}>
+                  <div className={styles.assetCardHeader}>
+                    <div>
+                      <div className={styles.assetTitle}>{asset.name}</div>
+                      <div className={styles.assetMeta}>
+                        Asset ID: {asset.id}
+                        {asset.serialNumber ? ` - Serienummer: ${asset.serialNumber}` : ""}
+                      </div>
+                    </div>
+                    <StatusPill tone="success">{asset.modules.filter((assetModule) => assetModule.active).length} actief</StatusPill>
+                  </div>
 
-                return (
-                  <article key={asset.id} className={styles.assetCard}>
-                    <div className={styles.assetCardHeader}>
-                      <div>
-                        <div className={styles.assetTitle}>{asset.name}</div>
-                        <div className={styles.assetMeta}>
-                          Asset ID: {asset.id}
-                          {asset.serialNumber ? ` - Serienummer: ${asset.serialNumber}` : ""}
+                  {asset.description ? <p className={styles.assetDescription}>{asset.description}</p> : null}
+
+                  <div className={styles.assetModules}>
+                    {asset.modules.length === 0 ? (
+                      <div className={styles.assetModule}>
+                        <div>
+                          <strong>Geen gekoppelde diensten ontvangen</strong>
                         </div>
                       </div>
-                      <StatusPill tone="success">{matchingModules.length} match</StatusPill>
-                    </div>
-
-                    {asset.description ? <p className={styles.assetDescription}>{asset.description}</p> : null}
-
-                    <div className={styles.assetModules}>
-                      {matchingModules.map((assetModule) => (
+                    ) : (
+                      asset.modules.map((assetModule) => (
                         <div
                           key={assetModule.id}
                           className={`${styles.assetModule} ${
@@ -387,17 +280,13 @@ export default function AssetsDashboard() {
                             <strong>{assetModule.name}</strong>
                             {assetModule.code ? <span>Code: {assetModule.code}</span> : null}
                           </div>
-                          <span>
-                            {assetModule.active
-                              ? getContractEndLabel({ ...selectedContract, active: true, endsAt: assetModule.endsAt })
-                              : `Eindigde: ${formatDate(assetModule.endsAt)}`}
-                          </span>
+                          <span>{assetModule.active ? "Actief" : `Eindigde: ${formatDate(assetModule.endsAt)}`}</span>
                         </div>
-                      ))}
-                    </div>
-                  </article>
-                );
-              })}
+                      ))
+                    )}
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </section>
@@ -405,10 +294,10 @@ export default function AssetsDashboard() {
         <section className="card panel">
           <div className="top-row">
             <div>
-              <div className="eyebrow">Stap 4</div>
+              <div className="eyebrow">Stap 3</div>
               <h2 className="headline">Upsell-signalen</h2>
               <p className="subtext">
-                Deze stap toont nog geen automatische adviezen. Eerst valideren we of de contract- en assetdata klopt.
+                Deze stap toont nog geen automatische adviezen. Eerst valideren we of de Smart Trade assetdata klopt.
               </p>
             </div>
             <div className="icon-badge">
@@ -418,20 +307,20 @@ export default function AssetsDashboard() {
 
           <div className="stats-grid">
             <div className="soft-card">
-              <div className="kpi-title">Assets</div>
+              <div className="kpi-title">Smart Trade assets</div>
+              <div className="big-number">{smartTradeAssets.length}</div>
+            </div>
+            <div className="soft-card">
+              <div className="kpi-title">Ontvangen assets</div>
               <div className="big-number">{assets.length}</div>
             </div>
             <div className="soft-card">
-              <div className="kpi-title">Contracten</div>
-              <div className="big-number">{contracts.length}</div>
+              <div className="kpi-title">Actieve diensten</div>
+              <div className="big-number">{activeModuleCount}</div>
             </div>
             <div className="soft-card">
-              <div className="kpi-title">Actieve contracten</div>
-              <div className="big-number">{activeContractCount}</div>
-            </div>
-            <div className="soft-card">
-              <div className="kpi-title">Inactieve contracten</div>
-              <div className="big-number">{inactiveContractCount}</div>
+              <div className="kpi-title">Inactieve diensten</div>
+              <div className="big-number">{inactiveModuleCount}</div>
             </div>
           </div>
         </section>

@@ -78,22 +78,37 @@ function hasHigherAssetId(candidate: AssetRecord, current: AssetRecord) {
 
 function getVisibleSmartTradeAssets(allAssets: AssetRecord[]) {
   const extraOptionAssets: AssetRecord[] = [];
-  let newestPackageAsset: AssetRecord | null = null;
+  const packageAssets = new Map<string, AssetRecord[]>();
 
   for (const asset of allAssets) {
     if (!isSmartTradeAsset(asset)) continue;
 
-    if (getSmartTradePackageName(asset)) {
-      if (!newestPackageAsset || hasHigherAssetId(asset, newestPackageAsset)) {
-        newestPackageAsset = asset;
-      }
+    const packageName = getSmartTradePackageName(asset);
+    if (packageName) {
+      const packageGroup = packageAssets.get(packageName) ?? [];
+      packageGroup.push(asset);
+      packageAssets.set(packageName, packageGroup);
       continue;
     }
 
     extraOptionAssets.push(asset);
   }
 
-  const visibleAssets = newestPackageAsset ? [newestPackageAsset, ...extraOptionAssets] : extraOptionAssets;
+  let newestPackageAssets: AssetRecord[] = [];
+  let newestPackageMaxAsset: AssetRecord | null = null;
+
+  for (const packageGroup of packageAssets.values()) {
+    const packageMaxAsset = packageGroup.reduce((newest, asset) =>
+      hasHigherAssetId(asset, newest) ? asset : newest,
+    );
+
+    if (!newestPackageMaxAsset || hasHigherAssetId(packageMaxAsset, newestPackageMaxAsset)) {
+      newestPackageMaxAsset = packageMaxAsset;
+      newestPackageAssets = packageGroup;
+    }
+  }
+
+  const visibleAssets = [...newestPackageAssets, ...extraOptionAssets];
   return visibleAssets.sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -279,7 +294,7 @@ export default function AssetsDashboard() {
                 {selectedRelation ? `Smart Trade assets voor ${selectedRelation.name}` : "Smart Trade assets"}
               </h2>
               <p className="subtext">
-                Bij meerdere pakketten tonen we tijdelijk alleen het pakket met het hoogste asset-ID.
+                Bij meerdere pakketten tonen we tijdelijk alleen de pakketgroep met het hoogste asset-ID.
               </p>
             </div>
             <div className="icon-badge">

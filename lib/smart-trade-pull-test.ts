@@ -29,13 +29,13 @@ function basicAuthorization(user: string, password: string) {
 
 export function getSmartTradePullConfig(): SmartTradePullConfig {
   const company = env("SMART_TRADE_COMPANY_KEY") || env("SMART_TRADE_COMPANY");
-  const user = env("SMART_TRADE_USER");
-  const password = env("SMART_TRADE_PASSWORD");
+  const user = env("SMART_TRADE_API_USER");
+  const password = env("SMART_TRADE_API_PASSWORD");
   const timeoutMs = Number(env("SMART_TRADE_API_TIMEOUT_MS") || DEFAULT_TIMEOUT_MS);
 
   if (!company || !user || !password) {
     throw new Error(
-      "Smart Trade API is niet geconfigureerd. Vul SMART_TRADE_COMPANY_KEY, SMART_TRADE_USER en SMART_TRADE_PASSWORD in bij de environment variables.",
+      "Smart Trade API is niet geconfigureerd. Vul SMART_TRADE_COMPANY_KEY, SMART_TRADE_API_USER en SMART_TRADE_API_PASSWORD in bij de environment variables.",
     );
   }
 

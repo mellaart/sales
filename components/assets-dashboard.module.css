@@ -186,12 +186,12 @@
   font-size: 13px;
 }
 
-.assetModule.active {
+.assetModuleActive {
   border-color: rgba(16, 185, 129, 0.32);
   background: rgba(16, 185, 129, 0.08);
 }
 
-.assetModule.inactive {
+.assetModuleInactive {
   border-color: rgba(245, 158, 11, 0.28);
   background: rgba(245, 158, 11, 0.07);
 }

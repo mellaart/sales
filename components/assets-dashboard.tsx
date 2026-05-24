@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
+import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 import styles from "./assets-dashboard.module.css";
 
@@ -29,6 +29,15 @@ type AssetRecord = {
   modules: AssetModule[];
 };
 
+type ContractRecord = {
+  id: string;
+  name: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  active: boolean;
+  assetCount: number;
+};
+
 function formatDate(value: string | null) {
   if (!value) return "Geen einddatum";
 
@@ -44,29 +53,66 @@ export default function AssetsDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
+  const [selectedContract, setSelectedContract] = useState<ContractRecord | null>(null);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [searchStatus, setSearchStatus] = useState("");
-  const [assetStatus, setAssetStatus] = useState("");
+  const [contractStatus, setContractStatus] = useState("");
   const [searching, setSearching] = useState(false);
-  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [loadingContracts, setLoadingContracts] = useState(false);
 
-  const activeModuleCount = useMemo(
-    () => assets.reduce((sum, asset) => sum + asset.modules.filter((module) => module.active).length, 0),
-    [assets],
+  const contracts = useMemo(() => {
+    const contractMap = new Map<string, ContractRecord>();
+
+    for (const asset of assets) {
+      for (const module of asset.modules) {
+        const existing = contractMap.get(module.id);
+
+        if (existing) {
+          existing.assetCount += 1;
+          existing.active = existing.active || module.active;
+          continue;
+        }
+
+        contractMap.set(module.id, {
+          id: module.id,
+          name: module.name,
+          startsAt: module.startsAt,
+          endsAt: module.endsAt,
+          active: module.active,
+          assetCount: 1,
+        });
+      }
+    }
+
+    return Array.from(contractMap.values()).sort((left, right) => {
+      if (left.active !== right.active) return left.active ? -1 : 1;
+      return left.name.localeCompare(right.name, "nl");
+    });
+  }, [assets]);
+
+  const selectedContractAssets = useMemo(() => {
+    if (!selectedContract) return [];
+    return assets.filter((asset) => asset.modules.some((module) => module.id === selectedContract.id));
+  }, [assets, selectedContract]);
+
+  const activeContractCount = useMemo(
+    () => contracts.filter((contract) => contract.active).length,
+    [contracts],
   );
 
-  const inactiveModuleCount = useMemo(
-    () => assets.reduce((sum, asset) => sum + asset.modules.filter((module) => !module.active).length, 0),
-    [assets],
+  const inactiveContractCount = useMemo(
+    () => contracts.filter((contract) => !contract.active).length,
+    [contracts],
   );
 
   async function handleSearchRelations(event: React.FormEvent) {
     event.preventDefault();
 
     setSearchStatus("");
-    setAssetStatus("");
+    setContractStatus("");
     setSearching(true);
     setSelectedRelation(null);
+    setSelectedContract(null);
     setAssets([]);
 
     try {
@@ -92,8 +138,9 @@ export default function AssetsDashboard() {
 
   async function handleSelectRelation(relation: RelationOption) {
     setSelectedRelation(relation);
-    setAssetStatus("");
-    setLoadingAssets(true);
+    setSelectedContract(null);
+    setContractStatus("");
+    setLoadingContracts(true);
     setAssets([]);
 
     try {
@@ -101,20 +148,24 @@ export default function AssetsDashboard() {
       const json = await response.json();
 
       if (!response.ok) {
-        setAssetStatus(json.error ?? "Assets ophalen mislukt.");
+        setContractStatus(json.error ?? "Contracten ophalen mislukt.");
         return;
       }
 
       setAssets(json.assets ?? []);
 
       if ((json.assets ?? []).length === 0) {
-        setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
+        setContractStatus(`Geen contracten of assets gevonden voor ${relation.name}.`);
       }
     } catch (error) {
-      setAssetStatus(error instanceof Error ? error.message : "Assets ophalen mislukt.");
+      setContractStatus(error instanceof Error ? error.message : "Contracten ophalen mislukt.");
     } finally {
-      setLoadingAssets(false);
+      setLoadingContracts(false);
     }
+  }
+
+  function handleSelectContract(contract: ContractRecord) {
+    setSelectedContract(contract);
   }
 
   return (
@@ -125,13 +176,13 @@ export default function AssetsDashboard() {
             <div className="brand-mark">Assets</div>
             <h1>Assets en upsell-kansen</h1>
             <p>
-              Zoek een debiteur, haal assets op en bekijk per asset de actieve modules/diensten uit contractAgreements.
+              Zoek een debiteur, bekijk de contracten en open daarna de assets die bij het gekozen contract horen.
             </p>
           </div>
 
           <div className="brand-actions">
             <StatusPill tone="success">{assets.length} assets</StatusPill>
-            <StatusPill tone="warning">{activeModuleCount} actieve modules</StatusPill>
+            <StatusPill tone="warning">{contracts.length} contracten</StatusPill>
           </div>
         </header>
 
@@ -215,58 +266,55 @@ export default function AssetsDashboard() {
             <div>
               <div className="eyebrow">Stap 2</div>
               <h2 className="headline">
-                {selectedRelation ? `Assets voor ${selectedRelation.name}` : "Assets"}
+                {selectedRelation ? `Contracten voor ${selectedRelation.name}` : "Contracten"}
               </h2>
               <p className="subtext">
-                Contractregels worden getoond als modules/diensten. Actief = geen einddatum of einddatum in de toekomst.
+                Kies eerst een contract. Daarna tonen we in stap 3 alleen de assets die bij dat contract horen.
               </p>
             </div>
             <div className="icon-badge">
-              <Boxes size={26} />
+              <FileText size={26} />
             </div>
           </div>
 
-          {loadingAssets ? (
-            <div className="save-status">Assets en contractAgreements worden opgehaald...</div>
+          {loadingContracts ? (
+            <div className="save-status">Contracten en assets worden opgehaald...</div>
           ) : !selectedRelation ? (
-            <div className="empty-state">Kies eerst een relatie om assets te bekijken.</div>
-          ) : assetStatus ? (
-            <div className="empty-state">{assetStatus}</div>
-          ) : assets.length === 0 ? (
-            <div className="empty-state">Geen assets gevonden voor {selectedRelation.name}.</div>
+            <div className="empty-state">Kies eerst een relatie om contracten te bekijken.</div>
+          ) : contractStatus ? (
+            <div className="empty-state">{contractStatus}</div>
+          ) : contracts.length === 0 ? (
+            <div className="empty-state">Geen contracten gevonden voor {selectedRelation.name}.</div>
           ) : (
-            <div className="asset-grid">
-              {assets.map((asset) => (
-                <article key={asset.id} className="asset-card">
-                  <div className="asset-card-header">
-                    <div>
-                      <div className="asset-title">{asset.name}</div>
-                      <div className="asset-meta">
-                        Asset ID: {asset.id}
-                        {asset.serialNumber ? ` - Serienummer: ${asset.serialNumber}` : ""}
-                      </div>
-                    </div>
-                    <StatusPill tone="success">{asset.modules.filter((module) => module.active).length} actief</StatusPill>
-                  </div>
+            <div className={styles.relationResultList}>
+              {contracts.map((contract) => (
+                <button
+                  key={contract.id}
+                  type="button"
+                  className={`${styles.relationResultCard} ${selectedContract?.id === contract.id ? styles.active : ""}`}
+                  onClick={() => handleSelectContract(contract)}
+                >
+                  <span className={styles.relationResultIcon}>
+                    <FileText size={18} />
+                  </span>
 
-                  {asset.description ? <p className="asset-description">{asset.description}</p> : null}
+                  <span className={styles.relationResultContent}>
+                    <strong>{contract.name}</strong>
+                    <span className={styles.relationResultMeta}>
+                      <span>
+                        <Hash size={13} />
+                        Contract {contract.id}
+                      </span>
+                      <span>{contract.assetCount} assets</span>
+                      <span>{contract.active ? "Actief" : `Eindigde: ${formatDate(contract.endsAt)}`}</span>
+                    </span>
+                  </span>
 
-                  <div className="asset-modules">
-                    {asset.modules.length === 0 ? (
-                      <span className="asset-module muted">Geen contractAgreements gevonden</span>
-                    ) : (
-                      asset.modules.map((module) => (
-                        <div key={module.id} className={`asset-module ${module.active ? "active" : "inactive"}`}>
-                          <div>
-                            <strong>{module.name}</strong>
-                            {module.code ? <span>Code: {module.code}</span> : null}
-                          </div>
-                          <span>{module.active ? "Actief" : `Eindigde: ${formatDate(module.endsAt)}`}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </article>
+                  <span className={styles.relationResultAction}>
+                    {selectedContract?.id === contract.id ? "Geselecteerd" : "Bekijk assets"}
+                    <ChevronRight size={16} />
+                  </span>
+                </button>
               ))}
             </div>
           )}
@@ -275,9 +323,72 @@ export default function AssetsDashboard() {
         <section className="card panel">
           <div className="top-row">
             <div>
-              <div className="eyebrow">Upsell</div>
-              <h2 className="headline">Signalen</h2>
-              <p className="subtext">Deze stap toont nog geen automatische adviezen. Eerst valideren we of de asset/module-data klopt.</p>
+              <div className="eyebrow">Stap 3</div>
+              <h2 className="headline">
+                {selectedContract ? `Assets in ${selectedContract.name}` : "Assets per contract"}
+              </h2>
+              <p className="subtext">
+                Deze lijst is gefilterd op het contract dat je in stap 2 kiest.
+              </p>
+            </div>
+            <div className="icon-badge">
+              <Boxes size={26} />
+            </div>
+          </div>
+
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie en daarna een contract.</div>
+          ) : !selectedContract ? (
+            <div className="empty-state">Kies een contract om de gekoppelde assets te bekijken.</div>
+          ) : selectedContractAssets.length === 0 ? (
+            <div className="empty-state">Geen assets gevonden binnen {selectedContract.name}.</div>
+          ) : (
+            <div className={styles.assetGrid}>
+              {selectedContractAssets.map((asset) => {
+                const matchingModules = asset.modules.filter((module) => module.id === selectedContract.id);
+
+                return (
+                  <article key={asset.id} className={styles.assetCard}>
+                    <div className={styles.assetCardHeader}>
+                      <div>
+                        <div className={styles.assetTitle}>{asset.name}</div>
+                        <div className={styles.assetMeta}>
+                          Asset ID: {asset.id}
+                          {asset.serialNumber ? ` - Serienummer: ${asset.serialNumber}` : ""}
+                        </div>
+                      </div>
+                      <StatusPill tone="success">{matchingModules.length} match</StatusPill>
+                    </div>
+
+                    {asset.description ? <p className={styles.assetDescription}>{asset.description}</p> : null}
+
+                    <div className={styles.assetModules}>
+                      {matchingModules.map((module) => (
+                        <div
+                          key={module.id}
+                          className={`${styles.assetModule} ${module.active ? styles.active : styles.inactive}`}
+                        >
+                          <div>
+                            <strong>{module.name}</strong>
+                            {module.code ? <span>Code: {module.code}</span> : null}
+                          </div>
+                          <span>{module.active ? "Actief" : `Eindigde: ${formatDate(module.endsAt)}`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Stap 4</div>
+              <h2 className="headline">Upsell-signalen</h2>
+              <p className="subtext">Deze stap toont nog geen automatische adviezen. Eerst valideren we of de contract- en assetdata klopt.</p>
             </div>
             <div className="icon-badge">
               <Sparkles size={26} />
@@ -290,16 +401,16 @@ export default function AssetsDashboard() {
               <div className="big-number">{assets.length}</div>
             </div>
             <div className="soft-card">
-              <div className="kpi-title">Actieve modules</div>
-              <div className="big-number">{activeModuleCount}</div>
+              <div className="kpi-title">Contracten</div>
+              <div className="big-number">{contracts.length}</div>
             </div>
             <div className="soft-card">
-              <div className="kpi-title">Inactieve modules</div>
-              <div className="big-number">{inactiveModuleCount}</div>
+              <div className="kpi-title">Actieve contracten</div>
+              <div className="big-number">{activeContractCount}</div>
             </div>
             <div className="soft-card">
-              <div className="kpi-title">Volgende stap</div>
-              <div className="big-number">Advies</div>
+              <div className="kpi-title">Inactieve contracten</div>
+              <div className="big-number">{inactiveContractCount}</div>
             </div>
           </div>
         </section>

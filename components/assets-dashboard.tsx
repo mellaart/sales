@@ -228,7 +228,7 @@ export default function AssetsDashboard() {
                 {selectedRelation ? `Smart Trade assets voor ${selectedRelation.name}` : "Smart Trade assets"}
               </h2>
               <p className="subtext">
-                De lijst toont alleen assets die beginnen met "Smart Trade ".
+                De lijst toont alleen assets die beginnen met Smart Trade.
               </p>
             </div>
             <div className="icon-badge">

@@ -51,10 +51,9 @@ export function getSmartTradePullHeaders(extraHeaders: Record<string, string> = 
   const config = getSmartTradePullConfig();
 
   return {
-    Authorization: config.authorization,
-    Company: config.company,
+    accept: "application/json, text/plain, */*",
+    authorization: config.authorization,
     company: config.company,
-    Accept: "application/json, text/plain, */*",
     ...extraHeaders,
   };
 }
@@ -69,6 +68,7 @@ export async function fetchWithSmartTradeTimeout(url: string, headers: Record<st
       method: "GET",
       headers,
       cache: "no-store",
+      redirect: "follow",
       signal: controller.signal,
     });
   } catch (error) {

@@ -6,6 +6,10 @@ export type SmartTradeRelation = {
   lastname?: string | null;
   email?: string | null;
   debtorNumber?: string | number | null;
+  externalCode?: string | number | null;
+  phone?: string | null;
+  phoneMobile?: string | null;
+  phoneWork?: string | null;
   street?: string | null;
   postcode?: string | null;
   city?: string | null;
@@ -39,8 +43,15 @@ type SmartTradeRelationsApiResponse = {
   data?: Array<{
     id?: number | string;
     company?: string | null;
+    companyPrefix?: string | null;
+    firstname?: string | null;
+    lastname?: string | null;
     email?: string | null;
     debtorNumber?: string | number | null;
+    externalCode?: string | number | null;
+    phone?: string | null;
+    phoneMobile?: string | null;
+    phoneWork?: string | null;
     contactAddress?: {
       data?: {
         street?: string | null;
@@ -76,14 +87,22 @@ type SmartTradeAssetsApiResponse = {
 type SmartTradeAssetRow = NonNullable<SmartTradeAssetsApiResponse["data"]>[number];
 
 const DEFAULT_TIMEOUT_MS = 15000;
+const RELATION_PAGE_SIZE = 1000;
+const RELATION_MAX_PAGES = 5;
+const RELATION_MAX_RESULTS = 50;
 
 export const SMART_TRADE_CONFIG_ERROR =
-  "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_API_USER en SMART_TRADE_API_PASSWORD toe aan je environment variables.";
+  "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_COMPANY_KEY, SMART_TRADE_API_USER en SMART_TRADE_API_PASSWORD toe aan je environment variables.";
 
 function requiredEnv(name: string) {
   const value = process.env[name]?.trim();
   if (!value) return null;
   return value;
+}
+
+function asString(value: unknown) {
+  if (value === undefined || value === null) return "";
+  return String(value).trim();
 }
 
 export function normalizeBaseUrl(value?: string | null) {
@@ -99,11 +118,11 @@ export function normalizeBaseUrl(value?: string | null) {
 }
 
 function getConfig(): SmartTradeConfig {
+  const company = requiredEnv("SMART_TRADE_COMPANY_KEY") ?? requiredEnv("SMART_TRADE_COMPANY");
   const user = requiredEnv("SMART_TRADE_API_USER");
   const password = requiredEnv("SMART_TRADE_API_PASSWORD");
-  const company = requiredEnv("SMART_TRADE_COMPANY_KEY") ?? requiredEnv("SMART_TRADE_COMPANY") ?? "troublefree";
 
-  if (!user || !password || !company) {
+  if (!company || !user || !password) {
     throw new Error(SMART_TRADE_CONFIG_ERROR);
   }
 
@@ -115,8 +134,6 @@ function getConfig(): SmartTradeConfig {
     timeoutMs: Number(process.env.SMART_TRADE_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
   };
 }
-
-
 
 export function resolveSmartTradeConfig(overrides?: Partial<Pick<SmartTradeConfig, "baseUrl" | "company" | "user" | "password" | "timeoutMs">>) {
   if (overrides?.user && overrides?.password) {
@@ -131,14 +148,14 @@ export function resolveSmartTradeConfig(overrides?: Partial<Pick<SmartTradeConfi
 
   return getConfig();
 }
+
 function getHeaders(config: SmartTradeConfig) {
   const credentials = Buffer.from(`${config.user}:${config.password}`).toString("base64");
 
   return {
-    Authorization: `Basic ${credentials}`,
-    Company: config.company,
+    accept: "application/json, text/plain, */*",
+    authorization: `Basic ${credentials}`,
     company: config.company,
-    Accept: "application/json",
   };
 }
 
@@ -152,6 +169,7 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>, ti
       method: "GET",
       headers,
       cache: "no-store",
+      redirect: "follow",
       signal: controller.signal,
     });
   } catch (error) {
@@ -165,12 +183,35 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>, ti
   }
 }
 
-function buildRelationsUrl(baseUrl: string, path: "/relations" | "/api/relations") {
-  const url = new URL(`${baseUrl}${path}`);
-  url.searchParams.set("customFields.smart trade (auto)[exact]", "1");
+function buildRelationsUrl(baseUrl: string, page: number) {
+  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/relations`);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(RELATION_PAGE_SIZE));
   url.searchParams.set("include", "contactAddress");
-  url.searchParams.set("per_page", "5000");
   return url;
+}
+
+function relationSearchText(relation: SmartTradeRelation) {
+  return [
+    relation.id,
+    relation.company,
+    relation.companyPrefix,
+    relation.firstname,
+    relation.lastname,
+    relation.email,
+    relation.debtorNumber,
+    relation.externalCode,
+    relation.phone,
+    relation.phoneMobile,
+    relation.phoneWork,
+    relation.street,
+    relation.postcode,
+    relation.city,
+  ]
+    .map(asString)
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 export function getRelationName(relation: SmartTradeRelation) {
@@ -179,46 +220,67 @@ export function getRelationName(relation: SmartTradeRelation) {
   return company || person || `Relatie ${relation.id}`;
 }
 
-export async function searchRelations(term?: string) {
-  const config = getConfig();
-  const headers = getHeaders(config);
-
-  const primaryUrl = buildRelationsUrl(config.baseUrl, "/relations");
-  if (term?.trim()) {
-    primaryUrl.searchParams.set("search", term.trim());
-  }
-  let response = await fetchWithTimeout(primaryUrl.toString(), headers, config.timeoutMs);
-
-  if (response.status === 505) {
-    const fallbackUrl = buildRelationsUrl(config.baseUrl, "/api/relations");
-    response = await fetchWithTimeout(fallbackUrl.toString(), headers, config.timeoutMs);
-  }
+async function readSmartTradeJson<T>(response: Response) {
+  const body = await response.text();
 
   if (!response.ok) {
-    const body = await response.text();
     if (response.status === 505 && /Error while determining version/i.test(body)) {
       throw new Error(
-        "Smart Trade API fout 505: Error while determining version. Gebruik https://retail.troublefree.nl/v3/api, Basic Auth met SMART_TRADE_API_USER/SMART_TRADE_API_PASSWORD, en header company=troublefree.",
+        "Smart Trade API fout 505: Error while determining version. De assets-pagina gebruikt nu exact /v3/api met lowercase authorization/company headers.",
       );
     }
 
     throw new Error(`Smart Trade API fout ${response.status}: ${body.slice(0, 700)}`);
   }
 
-  const json = (await response.json()) as SmartTradeRelationsApiResponse;
-  const rows = Array.isArray(json.data) ? json.data : [];
+  try {
+    return (body ? JSON.parse(body) : {}) as T;
+  } catch {
+    throw new Error(`Smart Trade API gaf geen geldige JSON terug: ${body.slice(0, 300)}`);
+  }
+}
 
-  return rows
-    .filter((row): row is (typeof rows)[number] & { id: number | string } => row.id !== undefined && row.id !== null)
-    .map((row) => ({
-      id: row.id,
-      company: row.company ?? null,
-      email: row.email ?? null,
-      debtorNumber: row.debtorNumber ?? null,
-      street: row.contactAddress?.data?.street ?? null,
-      postcode: row.contactAddress?.data?.postcode ?? null,
-      city: row.contactAddress?.data?.city ?? null,
-    }));
+export async function searchRelations(term?: string) {
+  const config = getConfig();
+  const headers = getHeaders(config);
+  const normalizedTerm = term?.trim().toLowerCase() ?? "";
+  const matches = new Map<string, SmartTradeRelation>();
+
+  for (let page = 1; page <= RELATION_MAX_PAGES && matches.size < RELATION_MAX_RESULTS; page += 1) {
+    const relationsUrl = buildRelationsUrl(config.baseUrl, page);
+    const response = await fetchWithTimeout(relationsUrl.toString(), headers, config.timeoutMs);
+    const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
+    const rows = Array.isArray(json.data) ? json.data : [];
+
+    for (const row of rows) {
+      if (row.id === undefined || row.id === null) continue;
+
+      const relation: SmartTradeRelation = {
+        id: row.id,
+        company: row.company ?? null,
+        companyPrefix: row.companyPrefix ?? null,
+        firstname: row.firstname ?? null,
+        lastname: row.lastname ?? null,
+        email: row.email ?? null,
+        debtorNumber: row.debtorNumber ?? row.externalCode ?? null,
+        externalCode: row.externalCode ?? null,
+        phone: row.phone ?? null,
+        phoneMobile: row.phoneMobile ?? null,
+        phoneWork: row.phoneWork ?? null,
+        street: row.contactAddress?.data?.street ?? null,
+        postcode: row.contactAddress?.data?.postcode ?? null,
+        city: row.contactAddress?.data?.city ?? null,
+      };
+
+      if (normalizedTerm && !relationSearchText(relation).includes(normalizedTerm)) continue;
+      matches.set(String(relation.id), relation);
+      if (matches.size >= RELATION_MAX_RESULTS) break;
+    }
+
+    if (rows.length < RELATION_PAGE_SIZE) break;
+  }
+
+  return Array.from(matches.values());
 }
 
 function isModuleActive(endsAt: string | null | undefined) {
@@ -252,17 +314,13 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
   const config = getConfig();
   const headers = getHeaders(config);
 
-  const assetsUrl = new URL(`${config.baseUrl}/assets`);
+  const assetsUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/assets`);
   assetsUrl.searchParams.set("owner", relationId);
   assetsUrl.searchParams.set("include", "contractAgreements");
   assetsUrl.searchParams.set("per_page", "500");
 
   const response = await fetchWithTimeout(assetsUrl.toString(), headers, config.timeoutMs);
-  if (!response.ok) {
-    throw new Error(`Smart Trade API fout ${response.status}: ${(await response.text()).slice(0, 700)}`);
-  }
-
-  const json = (await response.json()) as SmartTradeAssetsApiResponse;
+  const json = await readSmartTradeJson<SmartTradeAssetsApiResponse>(response);
   const assets = Array.isArray(json.data) ? json.data : [];
 
   const shouldFallback = assets.some((asset) => !asset.contractAgreements);
@@ -271,12 +329,12 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
 
     for (const asset of assets) {
       if (asset.id === undefined || asset.id === null) continue;
-      const detailUrl = new URL(`${config.baseUrl}/assets/${asset.id}`);
+      const detailUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/assets/${asset.id}`);
       detailUrl.searchParams.set("include", "contractAgreements");
       const detailResponse = await fetchWithTimeout(detailUrl.toString(), headers, config.timeoutMs);
       if (!detailResponse.ok) continue;
 
-      const detailJson = (await detailResponse.json()) as { data?: SmartTradeAssetRow };
+      const detailJson = await readSmartTradeJson<{ data?: SmartTradeAssetRow }>(detailResponse);
       const detailAsset = detailJson.data;
       if (!detailAsset || detailAsset.id === undefined || detailAsset.id === null) continue;
 
@@ -305,7 +363,6 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
     }));
 }
 
-
 export async function getRelationById(relationId: string | number, overrides?: Partial<Pick<SmartTradeConfig, "baseUrl" | "company" | "user" | "password" | "timeoutMs">>) {
   const id = String(relationId).trim();
   if (!id) throw new Error("relationId is verplicht.");
@@ -313,19 +370,10 @@ export async function getRelationById(relationId: string | number, overrides?: P
   const config = resolveSmartTradeConfig(overrides);
   const headers = getHeaders(config);
 
-  const primaryUrl = new URL(`${config.baseUrl}/relations/${encodeURIComponent(id)}`);
-  let response = await fetchWithTimeout(primaryUrl.toString(), headers, config.timeoutMs);
+  const relationUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/relations/${encodeURIComponent(id)}`);
+  const response = await fetchWithTimeout(relationUrl.toString(), headers, config.timeoutMs);
+  const json = await readSmartTradeJson<{ data?: SmartTradeRelation | null }>(response);
 
-  if (response.status === 505) {
-    const fallbackUrl = new URL(`${config.baseUrl}/api/relations/${encodeURIComponent(id)}`);
-    response = await fetchWithTimeout(fallbackUrl.toString(), headers, config.timeoutMs);
-  }
-
-  if (!response.ok) {
-    throw new Error(`Smart Trade API fout ${response.status}: ${(await response.text()).slice(0, 700)}`);
-  }
-
-  const json = (await response.json()) as { data?: SmartTradeRelation | null };
   if (!json.data) throw new Error(`Relatie ${id} niet gevonden.`);
 
   return json.data;

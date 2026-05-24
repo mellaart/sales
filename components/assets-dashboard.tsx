@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { StatusPill } from "@/components/ui";
+import styles from "./assets-dashboard.module.css";
 
 type RelationOption = {
   id: string;
@@ -132,7 +133,7 @@ export default function AssetsDashboard() {
           </div>
         </header>
 
-        <section className="card panel assets-search-panel">
+        <section className={`card panel ${styles.assetsSearchPanel}`}>
           <div className="top-row">
             <div>
               <div className="eyebrow">Stap 1</div>
@@ -144,42 +145,42 @@ export default function AssetsDashboard() {
             </div>
           </div>
 
-          <form onSubmit={handleSearchRelations} className="asset-search-form">
+          <form onSubmit={handleSearchRelations} className={styles.assetSearchForm}>
             <input
-              className="input asset-search-input"
+              className={`input ${styles.assetSearchInput}`}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Bijv. Mellaart, Jansen, e-mail of ID..."
               required
             />
-            <button type="submit" className="primary-button asset-search-button" disabled={searching}>
+            <button type="submit" className={`primary-button ${styles.assetSearchButton}`} disabled={searching}>
               <Search size={16} />
               {searching ? "Zoeken..." : "Zoeken"}
             </button>
           </form>
 
           {relations.length > 0 ? (
-            <div className="relation-results">
-              <div className="relation-results-header">
+            <div className={styles.relationResults}>
+              <div className={styles.relationResultsHeader}>
                 <span>Gevonden relaties</span>
                 <span>{relations.length} resultaten</span>
               </div>
 
-              <div className="relation-result-list">
+              <div className={styles.relationResultList}>
                 {relations.map((relation) => (
                   <button
                     key={relation.id}
                     type="button"
-                    className={`relation-result-card ${selectedRelation?.id === relation.id ? "active" : ""}`}
+                    className={`${styles.relationResultCard} ${selectedRelation?.id === relation.id ? styles.active : ""}`}
                     onClick={() => void handleSelectRelation(relation)}
                   >
-                    <span className="relation-result-icon">
+                    <span className={styles.relationResultIcon}>
                       <Building2 size={18} />
                     </span>
 
-                    <span className="relation-result-content">
+                    <span className={styles.relationResultContent}>
                       <strong>{relation.name}</strong>
-                      <span className="relation-result-meta">
+                      <span className={styles.relationResultMeta}>
                         <span>
                           <Hash size={13} />
                           ID {relation.id}
@@ -194,7 +195,7 @@ export default function AssetsDashboard() {
                       </span>
                     </span>
 
-                    <span className="relation-result-action">
+                    <span className={styles.relationResultAction}>
                       Selecteer
                       <ChevronRight size={16} />
                     </span>
@@ -204,7 +205,7 @@ export default function AssetsDashboard() {
             </div>
           ) : null}
 
-          {status ? <div className="save-status assets-status">{status}</div> : null}
+          {status ? <div className={`save-status ${styles.assetsStatus}`}>{status}</div> : null}
         </section>
 
         <section className="card panel">

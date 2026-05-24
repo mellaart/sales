@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Boxes, Search, Sparkles } from "lucide-react";
+import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 
 type RelationOption = {
@@ -132,12 +132,12 @@ export default function AssetsDashboard() {
           </div>
         </header>
 
-        <section className="card panel">
+        <section className="card panel assets-search-panel">
           <div className="top-row">
             <div>
               <div className="eyebrow">Stap 1</div>
               <h2 className="headline">Debiteur zoeken</h2>
-              <p className="subtext">Zoek op bedrijfsnaam of deel van de naam, bijvoorbeeld &quot;Acme&quot;.</p>
+              <p className="subtext">Zoek op bedrijfsnaam, contactnaam, e-mail of relatienummer.</p>
             </div>
             <div className="icon-badge">
               <Search size={26} />
@@ -146,36 +146,65 @@ export default function AssetsDashboard() {
 
           <form onSubmit={handleSearchRelations} className="asset-search-form">
             <input
-              className="input"
+              className="input asset-search-input"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Bijv. Acme, Jansen, Sierbestrating..."
+              placeholder="Bijv. Mellaart, Jansen, e-mail of ID..."
               required
             />
-            <button type="submit" className="primary-button" disabled={searching}>
+            <button type="submit" className="primary-button asset-search-button" disabled={searching}>
               <Search size={16} />
               {searching ? "Zoeken..." : "Zoeken"}
             </button>
           </form>
 
           {relations.length > 0 ? (
-            <div className="relation-result-grid">
-              {relations.map((relation) => (
-                <button
-                  key={relation.id}
-                  type="button"
-                  className={`relation-result-card ${selectedRelation?.id === relation.id ? "active" : ""}`}
-                  onClick={() => void handleSelectRelation(relation)}
-                >
-                  <strong>{relation.name}</strong>
-                  <span>ID: {relation.id}</span>
-                  {relation.email ? <span>{relation.email}</span> : null}
-                </button>
-              ))}
+            <div className="relation-results">
+              <div className="relation-results-header">
+                <span>Gevonden relaties</span>
+                <span>{relations.length} resultaten</span>
+              </div>
+
+              <div className="relation-result-list">
+                {relations.map((relation) => (
+                  <button
+                    key={relation.id}
+                    type="button"
+                    className={`relation-result-card ${selectedRelation?.id === relation.id ? "active" : ""}`}
+                    onClick={() => void handleSelectRelation(relation)}
+                  >
+                    <span className="relation-result-icon">
+                      <Building2 size={18} />
+                    </span>
+
+                    <span className="relation-result-content">
+                      <strong>{relation.name}</strong>
+                      <span className="relation-result-meta">
+                        <span>
+                          <Hash size={13} />
+                          ID {relation.id}
+                        </span>
+                        {relation.debtorNumber ? <span>Debiteur {relation.debtorNumber}</span> : null}
+                        {relation.email ? (
+                          <span>
+                            <Mail size={13} />
+                            {relation.email}
+                          </span>
+                        ) : null}
+                      </span>
+                    </span>
+
+                    <span className="relation-result-action">
+                      Selecteer
+                      <ChevronRight size={16} />
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
 
-          {status ? <div className="save-status">{status}</div> : null}
+          {status ? <div className="save-status assets-status">{status}</div> : null}
         </section>
 
         <section className="card panel">
@@ -207,7 +236,7 @@ export default function AssetsDashboard() {
                       <div className="asset-title">{asset.name}</div>
                       <div className="asset-meta">
                         Asset ID: {asset.id}
-                        {asset.serialNumber ? ` · Serienummer: ${asset.serialNumber}` : ""}
+                        {asset.serialNumber ? ` - Serienummer: ${asset.serialNumber}` : ""}
                       </div>
                     </div>
                     <StatusPill tone="success">{asset.modules.filter((module) => module.active).length} actief</StatusPill>

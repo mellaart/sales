@@ -1,0 +1,165 @@
+.assetsSearchPanel {
+  display: grid;
+  gap: 18px;
+}
+
+.assetSearchForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.assetSearchInput {
+  min-height: 56px;
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.24);
+}
+
+.assetSearchButton {
+  min-width: 150px;
+  min-height: 56px;
+  white-space: nowrap;
+}
+
+.relationResults {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.relationResultsHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.relationResultsHeader span:last-child {
+  color: #93c5fd;
+}
+
+.relationResultList {
+  display: grid;
+  gap: 10px;
+}
+
+.relationResultCard {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.relationResultCard:hover,
+.relationResultCard.active {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(37, 99, 235, 0.16);
+  transform: translateY(-1px);
+}
+
+.relationResultIcon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+}
+
+.relationResultContent {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.relationResultContent strong {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 820;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relationResultMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.relationResultMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.relationResultAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: #bfdbfe;
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.assetsStatus {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .assetSearchForm {
+    grid-template-columns: 1fr;
+  }
+
+  .assetSearchButton {
+    width: 100%;
+  }
+
+  .relationResultsHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .relationResultCard {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .relationResultAction {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .relationResultCard {
+    align-items: flex-start;
+    padding: 14px;
+  }
+
+  .relationResultContent strong {
+    white-space: normal;
+  }
+}

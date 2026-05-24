@@ -56,7 +56,10 @@ export default function AssetsDashboard() {
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
 
-  const smartTradeAssets = useMemo(() => assets.filter(isSmartTradeAsset), [assets]);
+  const smartTradeAssets = useMemo(
+    () => assets.filter(isSmartTradeAsset).sort((left, right) => left.name.localeCompare(right.name)),
+    [assets],
+  );
 
   const activeModuleCount = useMemo(
     () => smartTradeAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => assetModule.active).length, 0),
@@ -261,15 +264,9 @@ export default function AssetsDashboard() {
 
                   {asset.description ? <p className={styles.assetDescription}>{asset.description}</p> : null}
 
-                  <div className={styles.assetModules}>
-                    {asset.modules.length === 0 ? (
-                      <div className={styles.assetModule}>
-                        <div>
-                          <strong>Geen gekoppelde diensten ontvangen</strong>
-                        </div>
-                      </div>
-                    ) : (
-                      asset.modules.map((assetModule) => (
+                  {asset.modules.length > 0 ? (
+                    <div className={styles.assetModules}>
+                      {asset.modules.map((assetModule) => (
                         <div
                           key={assetModule.id}
                           className={`${styles.assetModule} ${
@@ -282,9 +279,9 @@ export default function AssetsDashboard() {
                           </div>
                           <span>{assetModule.active ? "Actief" : `Eindigde: ${formatDate(assetModule.endsAt)}`}</span>
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

@@ -70,6 +70,15 @@
   transform: translateY(-1px);
 }
 
+.relationResultCard:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.relationResultCard:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.75);
+  outline-offset: 2px;
+}
+
 .relationResultIcon {
   width: 42px;
   height: 42px;

@@ -71,11 +71,11 @@ export async function POST(request: Request) {
     const extraHeaders: Record<string, string> = {};
 
     if (body.ifModifiedSince?.trim()) {
-      extraHeaders["If-Modified-Since"] = body.ifModifiedSince.trim();
+      extraHeaders["if-modified-since"] = body.ifModifiedSince.trim();
     }
 
     if (body.ifNoneMatch?.trim()) {
-      extraHeaders["If-None-Match"] = body.ifNoneMatch.trim();
+      extraHeaders["if-none-match"] = body.ifNoneMatch.trim();
     }
 
     const headers = getSmartTradePullHeaders(extraHeaders);

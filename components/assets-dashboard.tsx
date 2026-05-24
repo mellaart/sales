@@ -68,8 +68,11 @@ export default function AssetsDashboard() {
         const existing = contractMap.get(module.id);
 
         if (existing) {
-          existing.assetCount += 1;
-          existing.active = existing.active || module.active;
+          contractMap.set(module.id, {
+            ...existing,
+            active: existing.active || module.active,
+            assetCount: existing.assetCount + 1,
+          });
           continue;
         }
 
@@ -366,7 +369,7 @@ export default function AssetsDashboard() {
                       {matchingModules.map((module) => (
                         <div
                           key={module.id}
-                          className={`${styles.assetModule} ${module.active ? styles.active : styles.inactive}`}
+                          className={`${styles.assetModule} ${module.active ? styles.assetModuleActive : styles.assetModuleInactive}`}
                         >
                           <div>
                             <strong>{module.name}</strong>

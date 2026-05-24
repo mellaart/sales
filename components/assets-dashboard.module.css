@@ -129,6 +129,86 @@
   margin-top: 0;
 }
 
+.assetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.assetCard {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.assetCardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.assetTitle {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 820;
+  line-height: 1.25;
+}
+
+.assetMeta,
+.assetDescription {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.assetDescription {
+  margin: 0;
+}
+
+.assetModules {
+  display: grid;
+  gap: 10px;
+}
+
+.assetModule {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.assetModule.active {
+  border-color: rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.assetModule.inactive {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.assetModule div {
+  display: grid;
+  gap: 4px;
+}
+
+.assetModule strong {
+  color: #f8fafc;
+}
+
+.assetModule span {
+  color: #94a3b8;
+}
+
 @media (max-width: 760px) {
   .assetSearchForm {
     grid-template-columns: 1fr;
@@ -150,6 +230,11 @@
   .relationResultAction {
     grid-column: 2;
     justify-content: flex-start;
+  }
+
+  .assetCardHeader,
+  .assetModule {
+    flex-direction: column;
   }
 }
 

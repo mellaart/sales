@@ -45,7 +45,8 @@ export default function AssetsDashboard() {
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
-  const [status, setStatus] = useState("");
+  const [searchStatus, setSearchStatus] = useState("");
+  const [assetStatus, setAssetStatus] = useState("");
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
 
@@ -62,7 +63,8 @@ export default function AssetsDashboard() {
   async function handleSearchRelations(event: React.FormEvent) {
     event.preventDefault();
 
-    setStatus("");
+    setSearchStatus("");
+    setAssetStatus("");
     setSearching(true);
     setSelectedRelation(null);
     setAssets([]);
@@ -72,17 +74,17 @@ export default function AssetsDashboard() {
       const json = await response.json();
 
       if (!response.ok) {
-        setStatus(json.error ?? "Relaties zoeken mislukt.");
+        setSearchStatus(json.error ?? "Relaties zoeken mislukt.");
         return;
       }
 
       setRelations(json.relations ?? []);
 
       if ((json.relations ?? []).length === 0) {
-        setStatus("Geen relaties gevonden.");
+        setSearchStatus("Geen relaties gevonden.");
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Relaties zoeken mislukt.");
+      setSearchStatus(error instanceof Error ? error.message : "Relaties zoeken mislukt.");
     } finally {
       setSearching(false);
     }
@@ -90,7 +92,7 @@ export default function AssetsDashboard() {
 
   async function handleSelectRelation(relation: RelationOption) {
     setSelectedRelation(relation);
-    setStatus("");
+    setAssetStatus("");
     setLoadingAssets(true);
     setAssets([]);
 
@@ -99,17 +101,17 @@ export default function AssetsDashboard() {
       const json = await response.json();
 
       if (!response.ok) {
-        setStatus(json.error ?? "Assets ophalen mislukt.");
+        setAssetStatus(json.error ?? "Assets ophalen mislukt.");
         return;
       }
 
       setAssets(json.assets ?? []);
 
       if ((json.assets ?? []).length === 0) {
-        setStatus("Geen assets gevonden voor deze relatie.");
+        setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Assets ophalen mislukt.");
+      setAssetStatus(error instanceof Error ? error.message : "Assets ophalen mislukt.");
     } finally {
       setLoadingAssets(false);
     }
@@ -196,7 +198,7 @@ export default function AssetsDashboard() {
                     </span>
 
                     <span className={styles.relationResultAction}>
-                      Selecteer
+                      {selectedRelation?.id === relation.id ? "Geselecteerd" : "Selecteer"}
                       <ChevronRight size={16} />
                     </span>
                   </button>
@@ -205,7 +207,7 @@ export default function AssetsDashboard() {
             </div>
           ) : null}
 
-          {status ? <div className={`save-status ${styles.assetsStatus}`}>{status}</div> : null}
+          {searchStatus ? <div className={`save-status ${styles.assetsStatus}`}>{searchStatus}</div> : null}
         </section>
 
         <section className="card panel">
@@ -226,8 +228,12 @@ export default function AssetsDashboard() {
 
           {loadingAssets ? (
             <div className="save-status">Assets en contractAgreements worden opgehaald...</div>
-          ) : assets.length === 0 ? (
+          ) : !selectedRelation ? (
             <div className="empty-state">Kies eerst een relatie om assets te bekijken.</div>
+          ) : assetStatus ? (
+            <div className="empty-state">{assetStatus}</div>
+          ) : assets.length === 0 ? (
+            <div className="empty-state">Geen assets gevonden voor {selectedRelation.name}.</div>
           ) : (
             <div className="asset-grid">
               {assets.map((asset) => (

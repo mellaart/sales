@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/ui";
 import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
+const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
 
 type RelationOption = {
   id: string;
@@ -46,6 +47,56 @@ function isSmartTradeAsset(asset: AssetRecord) {
   return asset.name.trimStart().startsWith(SMART_TRADE_ASSET_PREFIX);
 }
 
+function getSmartTradePackageName(asset: AssetRecord) {
+  const assetName = asset.name.trimStart();
+  return SMART_TRADE_PACKAGE_NAMES.find((packageName) =>
+    assetName.startsWith(`${SMART_TRADE_ASSET_PREFIX}${packageName}`),
+  ) ?? null;
+}
+
+function getAssetIdNumber(asset: AssetRecord) {
+  const directNumber = Number(asset.id);
+  if (Number.isFinite(directNumber)) return directNumber;
+
+  const matches = String(asset.id).match(/\d+/g);
+  const lastMatch = matches ? matches[matches.length - 1] : null;
+  const fallbackNumber = lastMatch ? Number(lastMatch) : Number.NaN;
+
+  return Number.isFinite(fallbackNumber) ? fallbackNumber : null;
+}
+
+function hasHigherAssetId(candidate: AssetRecord, current: AssetRecord) {
+  const candidateNumber = getAssetIdNumber(candidate);
+  const currentNumber = getAssetIdNumber(current);
+
+  if (candidateNumber !== null && currentNumber !== null) {
+    return candidateNumber > currentNumber;
+  }
+
+  return candidate.id.localeCompare(current.id, undefined, { numeric: true }) > 0;
+}
+
+function getVisibleSmartTradeAssets(allAssets: AssetRecord[]) {
+  const extraOptionAssets: AssetRecord[] = [];
+  let newestPackageAsset: AssetRecord | null = null;
+
+  for (const asset of allAssets) {
+    if (!isSmartTradeAsset(asset)) continue;
+
+    if (getSmartTradePackageName(asset)) {
+      if (!newestPackageAsset || hasHigherAssetId(asset, newestPackageAsset)) {
+        newestPackageAsset = asset;
+      }
+      continue;
+    }
+
+    extraOptionAssets.push(asset);
+  }
+
+  const visibleAssets = newestPackageAsset ? [newestPackageAsset, ...extraOptionAssets] : extraOptionAssets;
+  return visibleAssets.sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export default function AssetsDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
@@ -56,10 +107,7 @@ export default function AssetsDashboard() {
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
 
-  const smartTradeAssets = useMemo(
-    () => assets.filter(isSmartTradeAsset).sort((left, right) => left.name.localeCompare(right.name)),
-    [assets],
-  );
+  const smartTradeAssets = useMemo(() => getVisibleSmartTradeAssets(assets), [assets]);
 
   const activeModuleCount = useMemo(
     () => smartTradeAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => assetModule.active).length, 0),
@@ -231,7 +279,7 @@ export default function AssetsDashboard() {
                 {selectedRelation ? `Smart Trade assets voor ${selectedRelation.name}` : "Smart Trade assets"}
               </h2>
               <p className="subtext">
-                De lijst toont alleen assets die beginnen met Smart Trade.
+                Bij meerdere pakketten tonen we tijdelijk alleen het pakket met het hoogste asset-ID.
               </p>
             </div>
             <div className="icon-badge">

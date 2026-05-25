@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/ui";
 import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
+const SERVICE_COST_ASSET_PREFIXES = ["Worldline servicekosten", "CCV servicekosten"];
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
 
 type RelationOption = {
@@ -43,8 +44,16 @@ function formatDate(value: string | null) {
   }).format(date);
 }
 
+function startsWithPrefix(value: string, prefix: string) {
+  return value.trimStart().toLowerCase().startsWith(prefix.toLowerCase());
+}
+
 function isSmartTradeAsset(asset: AssetRecord) {
-  return asset.name.trimStart().startsWith(SMART_TRADE_ASSET_PREFIX);
+  return startsWithPrefix(asset.name, SMART_TRADE_ASSET_PREFIX);
+}
+
+function isServiceCostAsset(asset: AssetRecord) {
+  return SERVICE_COST_ASSET_PREFIXES.some((prefix) => startsWithPrefix(asset.name, prefix));
 }
 
 function getSmartTradePackageName(asset: AssetRecord) {
@@ -76,22 +85,27 @@ function hasHigherAssetId(candidate: AssetRecord, current: AssetRecord) {
   return candidate.id.localeCompare(current.id, undefined, { numeric: true }) > 0;
 }
 
-function getVisibleSmartTradeAssets(allAssets: AssetRecord[]) {
+function getVisibleAssets(allAssets: AssetRecord[]) {
   const extraOptionAssets: AssetRecord[] = [];
   const packageAssets = new Map<string, AssetRecord[]>();
 
   for (const asset of allAssets) {
-    if (!isSmartTradeAsset(asset)) continue;
+    if (isSmartTradeAsset(asset)) {
+      const packageName = getSmartTradePackageName(asset);
+      if (packageName) {
+        const packageGroup = packageAssets.get(packageName) ?? [];
+        packageGroup.push(asset);
+        packageAssets.set(packageName, packageGroup);
+        continue;
+      }
 
-    const packageName = getSmartTradePackageName(asset);
-    if (packageName) {
-      const packageGroup = packageAssets.get(packageName) ?? [];
-      packageGroup.push(asset);
-      packageAssets.set(packageName, packageGroup);
+      extraOptionAssets.push(asset);
       continue;
     }
 
-    extraOptionAssets.push(asset);
+    if (isServiceCostAsset(asset)) {
+      extraOptionAssets.push(asset);
+    }
   }
 
   let newestPackageAssets: AssetRecord[] = [];
@@ -122,16 +136,16 @@ export default function AssetsDashboard() {
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
 
-  const smartTradeAssets = useMemo(() => getVisibleSmartTradeAssets(assets), [assets]);
+  const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
 
   const activeModuleCount = useMemo(
-    () => smartTradeAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => assetModule.active).length, 0),
-    [smartTradeAssets],
+    () => visibleAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => assetModule.active).length, 0),
+    [visibleAssets],
   );
 
   const inactiveModuleCount = useMemo(
-    () => smartTradeAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => !assetModule.active).length, 0),
-    [smartTradeAssets],
+    () => visibleAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => !assetModule.active).length, 0),
+    [visibleAssets],
   );
 
   async function handleSearchRelations(event: FormEvent) {
@@ -199,12 +213,12 @@ export default function AssetsDashboard() {
             <div className="brand-mark">Assets</div>
             <h1>Assets en upsell-kansen</h1>
             <p>
-              Zoek een debiteur en bekijk alleen de assets waarvan de naam met Smart Trade begint.
+              Zoek een debiteur en bekijk Smart Trade assets, Worldline servicekosten en CCV servicekosten.
             </p>
           </div>
 
           <div className="brand-actions">
-            <StatusPill tone="success">{smartTradeAssets.length} Smart Trade assets</StatusPill>
+            <StatusPill tone="success">{visibleAssets.length} relevante assets</StatusPill>
             <StatusPill tone="warning">{assets.length} ontvangen assets</StatusPill>
           </div>
         </header>
@@ -291,10 +305,10 @@ export default function AssetsDashboard() {
             <div>
               <div className="eyebrow">Stap 2</div>
               <h2 className="headline">
-                {selectedRelation ? `Smart Trade assets voor ${selectedRelation.name}` : "Smart Trade assets"}
+                {selectedRelation ? `Assets voor ${selectedRelation.name}` : "Assets"}
               </h2>
               <p className="subtext">
-                Bij meerdere pakketten tonen we tijdelijk alleen de pakketgroep met het hoogste asset-ID.
+                Bij meerdere Smart Trade pakketten tonen we tijdelijk alleen de pakketgroep met het hoogste asset-ID.
               </p>
             </div>
             <div className="icon-badge">
@@ -308,11 +322,11 @@ export default function AssetsDashboard() {
             <div className="empty-state">Kies eerst een relatie om assets te bekijken.</div>
           ) : assetStatus ? (
             <div className="empty-state">{assetStatus}</div>
-          ) : smartTradeAssets.length === 0 ? (
-            <div className="empty-state">Geen Smart Trade assets gevonden voor {selectedRelation.name}.</div>
+          ) : visibleAssets.length === 0 ? (
+            <div className="empty-state">Geen relevante assets gevonden voor {selectedRelation.name}.</div>
           ) : (
             <div className={styles.assetGrid}>
-              {smartTradeAssets.map((asset) => (
+              {visibleAssets.map((asset) => (
                 <article key={asset.id} className={styles.assetCard}>
                   <div className={styles.assetCardHeader}>
                     <div>
@@ -357,7 +371,7 @@ export default function AssetsDashboard() {
               <div className="eyebrow">Stap 3</div>
               <h2 className="headline">Upsell-signalen</h2>
               <p className="subtext">
-                Deze stap toont nog geen automatische adviezen. Eerst valideren we of de Smart Trade assetdata klopt.
+                Deze stap toont nog geen automatische adviezen. Eerst valideren we of de assetdata klopt.
               </p>
             </div>
             <div className="icon-badge">
@@ -367,8 +381,8 @@ export default function AssetsDashboard() {
 
           <div className="stats-grid">
             <div className="soft-card">
-              <div className="kpi-title">Smart Trade assets</div>
-              <div className="big-number">{smartTradeAssets.length}</div>
+              <div className="kpi-title">Relevante assets</div>
+              <div className="big-number">{visibleAssets.length}</div>
             </div>
             <div className="soft-card">
               <div className="kpi-title">Ontvangen assets</div>

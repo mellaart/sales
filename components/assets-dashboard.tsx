@@ -18,6 +18,11 @@ import styles from "./assets-dashboard.module.css";
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
 const SERVICE_COST_ASSET_PREFIXES = ["Worldline servicekosten", "CCV servicekosten"];
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
+const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi"]);
+const MODULE_DEPENDENCIES: Record<string, string[]> = {
+  partijregistratie: ["voorraad"],
+  hoveniersapp: ["ticketing"],
+};
 
 type RelationOption = {
   id: string;
@@ -201,20 +206,79 @@ function getModulesByKeys(moduleKeys: string[]) {
   return MODULES.filter((moduleConfig) => moduleKeys.includes(moduleConfig.key));
 }
 
-function getPaidModuleCount(moduleKeys: string[]) {
-  return getModulesByKeys(moduleKeys).filter((moduleConfig) => moduleConfig.monthlyPrice > 0).length;
+function getModuleName(moduleKey: string) {
+  return MODULES.find((moduleConfig) => moduleConfig.key === moduleKey)?.name ?? moduleKey;
+}
+
+function applyModuleDependencies(moduleKeys: string[]) {
+  const expandedKeys = new Set(moduleKeys);
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const moduleKey of Array.from(expandedKeys)) {
+      for (const requiredKey of MODULE_DEPENDENCIES[moduleKey] ?? []) {
+        if (!expandedKeys.has(requiredKey)) {
+          expandedKeys.add(requiredKey);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return getSortedModuleKeys(Array.from(expandedKeys));
+}
+
+function removeModuleAndDependents(moduleKey: string, moduleKeys: string[]) {
+  const remainingKeys = new Set(moduleKeys);
+  const queue = [moduleKey];
+
+  while (queue.length > 0) {
+    const nextKey = queue.shift();
+    if (!nextKey || !remainingKeys.delete(nextKey)) continue;
+
+    for (const [dependentKey, requiredKeys] of Object.entries(MODULE_DEPENDENCIES)) {
+      if (requiredKeys.includes(nextKey)) queue.push(dependentKey);
+    }
+  }
+
+  return getSortedModuleKeys(Array.from(remainingKeys));
+}
+
+function getPackageRelevantModules(moduleKeys: string[]) {
+  return getModulesByKeys(moduleKeys).filter(
+    (moduleConfig) => moduleConfig.monthlyPrice > 0 && !NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key),
+  );
+}
+
+function getStandaloneModules(moduleKeys: string[]) {
+  return getModulesByKeys(moduleKeys).filter(
+    (moduleConfig) => moduleConfig.monthlyPrice > 0 && NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key),
+  );
+}
+
+function getPackageRelevantModuleCount(moduleKeys: string[]) {
+  return getPackageRelevantModules(moduleKeys).length;
 }
 
 function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: PackageConfig) {
-  const paidModules = getModulesByKeys(moduleKeys).filter((moduleConfig) => moduleConfig.monthlyPrice > 0);
-  const grossModuleMonthly = paidModules.reduce((sum, moduleConfig) => sum + moduleConfig.monthlyPrice, 0);
-  const includedModuleDiscount = paidModules
+  const packageRelevantModules = getPackageRelevantModules(moduleKeys);
+  const standaloneModuleMonthly = getStandaloneModules(moduleKeys).reduce(
+    (sum, moduleConfig) => sum + moduleConfig.monthlyPrice,
+    0,
+  );
+  const packageRelevantMonthly = packageRelevantModules.reduce(
+    (sum, moduleConfig) => sum + moduleConfig.monthlyPrice,
+    0,
+  );
+  const includedModuleDiscount = packageRelevantModules
     .slice()
     .sort((left, right) => right.monthlyPrice - left.monthlyPrice)
     .slice(0, packageConfig.includedModules)
     .reduce((sum, moduleConfig) => sum + moduleConfig.monthlyPrice, 0);
 
-  return Math.max(0, grossModuleMonthly - includedModuleDiscount);
+  return standaloneModuleMonthly + Math.max(0, packageRelevantMonthly - includedModuleDiscount);
 }
 
 function isSameModuleSelection(left: string[], right: string[]) {
@@ -231,6 +295,16 @@ function formatModuleList(modules: ModuleConfig[]) {
 
 function getPackageIndex(packageConfig: PackageConfig) {
   return PACKAGES.findIndex((candidate) => candidate.key === packageConfig.key);
+}
+
+function getModuleRuleNotes(moduleConfig: ModuleConfig) {
+  const notes: string[] = [];
+  const dependencies = MODULE_DEPENDENCIES[moduleConfig.key] ?? [];
+
+  if (NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key)) notes.push("Geen pakketwissel nodig");
+  if (dependencies.length > 0) notes.push(`Vereist: ${dependencies.map(getModuleName).join(", ")}`);
+
+  return notes;
 }
 
 export default function AssetsDashboard() {
@@ -257,7 +331,7 @@ export default function AssetsDashboard() {
     [selectedPackageName],
   );
 
-  const currentModuleKeys = useMemo(() => getModuleKeysFromAssets(visibleAssets), [visibleAssets]);
+  const currentModuleKeys = useMemo(() => applyModuleDependencies(getModuleKeysFromAssets(visibleAssets)), [visibleAssets]);
   const selectedModules = useMemo(() => getModulesByKeys(selectedModuleKeys), [selectedModuleKeys]);
   const addedModules = useMemo(
     () => selectedModules.filter((moduleConfig) => !currentModuleKeys.includes(moduleConfig.key)),
@@ -267,10 +341,10 @@ export default function AssetsDashboard() {
     () => getModulesByKeys(currentModuleKeys).filter((moduleConfig) => !selectedModuleKeys.includes(moduleConfig.key)),
     [currentModuleKeys, selectedModuleKeys],
   );
-  const selectedPaidModuleCount = useMemo(() => getPaidModuleCount(selectedModuleKeys), [selectedModuleKeys]);
+  const selectedPackageModuleCount = useMemo(() => getPackageRelevantModuleCount(selectedModuleKeys), [selectedModuleKeys]);
   const targetPackage = useMemo(
-    () => getMinimumPackageForPaidModules(selectedPaidModuleCount),
-    [selectedPaidModuleCount],
+    () => getMinimumPackageForPaidModules(selectedPackageModuleCount),
+    [selectedPackageModuleCount],
   );
 
   const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
@@ -306,10 +380,10 @@ export default function AssetsDashboard() {
   function handleToggleModule(moduleKey: string) {
     setSelectedModuleKeys((currentKeys) => {
       if (currentKeys.includes(moduleKey)) {
-        return getSortedModuleKeys(currentKeys.filter((key) => key !== moduleKey));
+        return removeModuleAndDependents(moduleKey, currentKeys);
       }
 
-      return getSortedModuleKeys([...currentKeys, moduleKey]);
+      return applyModuleDependencies([...currentKeys, moduleKey]);
     });
   }
 
@@ -366,7 +440,7 @@ export default function AssetsDashboard() {
 
       const nextAssets = json.assets ?? [];
       setAssets(nextAssets);
-      setSelectedModuleKeys(getModuleKeysFromAssets(getVisibleAssets(nextAssets)));
+      setSelectedModuleKeys(applyModuleDependencies(getModuleKeysFromAssets(getVisibleAssets(nextAssets))));
 
       if (nextAssets.length === 0) {
         setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
@@ -695,6 +769,7 @@ export default function AssetsDashboard() {
                 {MODULES.map((moduleConfig) => {
                   const selected = selectedModuleKeys.includes(moduleConfig.key);
                   const current = currentModuleKeys.includes(moduleConfig.key);
+                  const moduleRuleNotes = getModuleRuleNotes(moduleConfig);
 
                   return (
                     <label
@@ -709,6 +784,9 @@ export default function AssetsDashboard() {
                       <span>
                         <strong>{moduleConfig.name}</strong>
                         <small>{moduleConfig.monthlyPrice > 0 ? `${euro.format(moduleConfig.monthlyPrice)} p/m` : "Gratis module"}</small>
+                        {moduleRuleNotes.map((note) => (
+                          <small key={note}>{note}</small>
+                        ))}
                       </span>
                       {current ? <em>huidig</em> : null}
                     </label>
@@ -775,8 +853,8 @@ export default function AssetsDashboard() {
                     ) : null}
 
                     <div className={styles.quoteRow}>
-                      <span>{selectedPaidModuleCount}x</span>
-                      <strong>Modules buiten inbegrepen pakketruimte</strong>
+                      <span>{selectedPackageModuleCount}x</span>
+                      <strong>Modules binnen pakketadvies</strong>
                       <span>{targetPackage.includedModules} inbegrepen</span>
                       <strong>{euro.format(targetModuleMonthly)} p/m</strong>
                     </div>
@@ -820,7 +898,7 @@ export default function AssetsDashboard() {
                     <div className={styles.quoteRow}>
                       <span>=</span>
                       <strong>Modulebedrag verschil binnen {selectedPackage.name}</strong>
-                      <span>{selectedPackage.includedModules} inbegrepen</span>
+                      <span>{selectedPackage.includedModules} pakketmodules inbegrepen</span>
                       <strong>{euro.format(moduleMonthlyDelta)} p/m</strong>
                     </div>
 

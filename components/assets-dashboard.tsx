@@ -3,7 +3,16 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { StatusPill } from "@/components/ui";
-import { PACKAGES, euro } from "@/lib/pricing";
+import {
+  IMPLEMENTATION_DAY_RATE,
+  MODULES,
+  PACKAGES,
+  euro,
+  getMinimumPackageForPaidModules,
+  getVisitsForUsers,
+  type ModuleConfig,
+  type PackageConfig,
+} from "@/lib/pricing";
 import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
@@ -152,6 +161,78 @@ function formatUserCount(count: number) {
   return count === 1 ? "1 bestaande gebruiker" : `${count} bestaande gebruikers`;
 }
 
+function normalizeModuleLabel(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " en ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getSortedModuleKeys(moduleKeys: string[]) {
+  const moduleOrder = new Map(MODULES.map((module, index) => [module.key, index]));
+  return Array.from(new Set(moduleKeys)).sort(
+    (left, right) => (moduleOrder.get(left) ?? 0) - (moduleOrder.get(right) ?? 0),
+  );
+}
+
+function getModuleKeysFromAssets(assets: AssetRecord[]) {
+  const moduleKeys = new Set<string>();
+
+  for (const asset of assets) {
+    const assetName = asset.name.trimStart();
+    const normalizedAssetName = normalizeModuleLabel(assetName);
+
+    if (!isSmartTradeAsset(asset) || !assetName.toLowerCase().includes(" module - ")) continue;
+
+    for (const moduleConfig of MODULES) {
+      if (normalizedAssetName.includes(normalizeModuleLabel(moduleConfig.name))) {
+        moduleKeys.add(moduleConfig.key);
+      }
+    }
+  }
+
+  return getSortedModuleKeys(Array.from(moduleKeys));
+}
+
+function getModulesByKeys(moduleKeys: string[]) {
+  return MODULES.filter((moduleConfig) => moduleKeys.includes(moduleConfig.key));
+}
+
+function getPaidModuleCount(moduleKeys: string[]) {
+  return getModulesByKeys(moduleKeys).filter((moduleConfig) => moduleConfig.monthlyPrice > 0).length;
+}
+
+function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: PackageConfig) {
+  const paidModules = getModulesByKeys(moduleKeys).filter((moduleConfig) => moduleConfig.monthlyPrice > 0);
+  const grossModuleMonthly = paidModules.reduce((sum, moduleConfig) => sum + moduleConfig.monthlyPrice, 0);
+  const includedModuleDiscount = paidModules
+    .slice()
+    .sort((left, right) => right.monthlyPrice - left.monthlyPrice)
+    .slice(0, packageConfig.includedModules)
+    .reduce((sum, moduleConfig) => sum + moduleConfig.monthlyPrice, 0);
+
+  return Math.max(0, grossModuleMonthly - includedModuleDiscount);
+}
+
+function isSameModuleSelection(left: string[], right: string[]) {
+  const sortedLeft = getSortedModuleKeys(left);
+  const sortedRight = getSortedModuleKeys(right);
+
+  return sortedLeft.length === sortedRight.length && sortedLeft.every((key, index) => key === sortedRight[index]);
+}
+
+function formatModuleList(modules: ModuleConfig[]) {
+  if (modules.length === 0) return "Geen modules";
+  return modules.map((moduleConfig) => moduleConfig.name).join(", ");
+}
+
+function getPackageIndex(packageConfig: PackageConfig) {
+  return PACKAGES.findIndex((candidate) => candidate.key === packageConfig.key);
+}
+
 export default function AssetsDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
@@ -162,6 +243,7 @@ export default function AssetsDashboard() {
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [extraUsersToOffer, setExtraUsersToOffer] = useState(1);
+  const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
 
@@ -173,6 +255,22 @@ export default function AssetsDashboard() {
   const selectedPackage = useMemo(
     () => PACKAGES.find((packageConfig) => packageConfig.name === selectedPackageName) ?? null,
     [selectedPackageName],
+  );
+
+  const currentModuleKeys = useMemo(() => getModuleKeysFromAssets(visibleAssets), [visibleAssets]);
+  const selectedModules = useMemo(() => getModulesByKeys(selectedModuleKeys), [selectedModuleKeys]);
+  const addedModules = useMemo(
+    () => selectedModules.filter((moduleConfig) => !currentModuleKeys.includes(moduleConfig.key)),
+    [currentModuleKeys, selectedModules],
+  );
+  const removedModules = useMemo(
+    () => getModulesByKeys(currentModuleKeys).filter((moduleConfig) => !selectedModuleKeys.includes(moduleConfig.key)),
+    [currentModuleKeys, selectedModuleKeys],
+  );
+  const selectedPaidModuleCount = useMemo(() => getPaidModuleCount(selectedModuleKeys), [selectedModuleKeys]);
+  const targetPackage = useMemo(
+    () => getMinimumPackageForPaidModules(selectedPaidModuleCount),
+    [selectedPaidModuleCount],
   );
 
   const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
@@ -189,6 +287,36 @@ export default function AssetsDashboard() {
   const missingSupportExtraTotal = selectedPackage ? existingExtraUserCount * selectedPackage.supportExtra : 0;
   const missingSupportMonthlyTotal = missingSupportBaseTotal + missingSupportExtraTotal;
 
+  const hasModuleSelectionChanges = !isSameModuleSelection(currentModuleKeys, selectedModuleKeys);
+  const hasPackageChange = Boolean(selectedPackage && targetPackage && selectedPackage.key !== targetPackage.key);
+  const packageChangeDirection = selectedPackage && targetPackage && getPackageIndex(targetPackage) > getPackageIndex(selectedPackage)
+    ? "upgrade nodig"
+    : "downgrade mogelijk";
+  const currentModuleMonthly = selectedPackage ? getModuleMonthlyForPackage(currentModuleKeys, selectedPackage) : 0;
+  const targetModuleMonthly = targetPackage ? getModuleMonthlyForPackage(selectedModuleKeys, targetPackage) : 0;
+  const moduleMonthlyDelta = targetModuleMonthly - currentModuleMonthly;
+  const targetLicenseMonthly = targetPackage ? targetPackage.licenseFirst + existingExtraUserCount * targetPackage.licenseExtra : 0;
+  const targetSupportMonthly = targetPackage && shouldIncludeSupport
+    ? targetPackage.supportFirst + existingExtraUserCount * targetPackage.supportExtra
+    : 0;
+  const targetRecurringMonthly = targetLicenseMonthly + targetSupportMonthly + targetModuleMonthly;
+  const targetImplementationVisits = targetPackage ? getVisitsForUsers(targetPackage, existingUserCount) : 0;
+  const targetImplementationTotal = targetImplementationVisits * IMPLEMENTATION_DAY_RATE;
+
+  function handleToggleModule(moduleKey: string) {
+    setSelectedModuleKeys((currentKeys) => {
+      if (currentKeys.includes(moduleKey)) {
+        return getSortedModuleKeys(currentKeys.filter((key) => key !== moduleKey));
+      }
+
+      return getSortedModuleKeys([...currentKeys, moduleKey]);
+    });
+  }
+
+  function handleResetModules() {
+    setSelectedModuleKeys(currentModuleKeys);
+  }
+
   async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
 
@@ -197,6 +325,7 @@ export default function AssetsDashboard() {
     setSearching(true);
     setSelectedRelation(null);
     setAssets([]);
+    setSelectedModuleKeys([]);
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -224,6 +353,7 @@ export default function AssetsDashboard() {
     setAssetStatus("");
     setLoadingAssets(true);
     setAssets([]);
+    setSelectedModuleKeys([]);
 
     try {
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
@@ -234,9 +364,11 @@ export default function AssetsDashboard() {
         return;
       }
 
-      setAssets(json.assets ?? []);
+      const nextAssets = json.assets ?? [];
+      setAssets(nextAssets);
+      setSelectedModuleKeys(getModuleKeysFromAssets(getVisibleAssets(nextAssets)));
 
-      if ((json.assets ?? []).length === 0) {
+      if (nextAssets.length === 0) {
         setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
       }
     } catch (error) {
@@ -510,6 +642,202 @@ export default function AssetsDashboard() {
                   </div>
                 </div>
               ) : null}
+            </div>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Stap 4</div>
+              <h2 className="headline">Modules</h2>
+              <p className="subtext">
+                Selecteer de gewenste module-eindstand. De offerte bepaalt daarna of het huidige pakket blijft passen.
+              </p>
+            </div>
+            <div className="icon-badge">
+              <Boxes size={26} />
+            </div>
+          </div>
+
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie om modules te adviseren.</div>
+          ) : !selectedPackageName ? (
+            <div className="empty-state">Geen Smart Trade pakket gevonden voor deze relatie.</div>
+          ) : !selectedPackage || !targetPackage ? (
+            <div className="empty-state">Geen pakketadvies beschikbaar.</div>
+          ) : (
+            <div className={styles.modulePlanner}>
+              <div className={styles.moduleSteps}>
+                <div>
+                  <span>1</span>
+                  <strong>Alle modules</strong>
+                  <small>{MODULES.length} opties</small>
+                </div>
+                <div>
+                  <span>2</span>
+                  <strong>Selectie</strong>
+                  <small>{selectedModules.length} geselecteerd</small>
+                </div>
+                <div>
+                  <span>3</span>
+                  <strong>Pakketadvies</strong>
+                  <small>{hasPackageChange ? `${selectedPackage.name} naar ${targetPackage.name}` : selectedPackage.name}</small>
+                </div>
+                <div>
+                  <span>4</span>
+                  <strong>Implementatie</strong>
+                  <small>{euro.format(targetImplementationTotal)}</small>
+                </div>
+              </div>
+
+              <div className={styles.moduleGrid}>
+                {MODULES.map((moduleConfig) => {
+                  const selected = selectedModuleKeys.includes(moduleConfig.key);
+                  const current = currentModuleKeys.includes(moduleConfig.key);
+
+                  return (
+                    <label
+                      key={moduleConfig.key}
+                      className={`${styles.moduleOption} ${selected ? styles.moduleOptionSelected : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => handleToggleModule(moduleConfig.key)}
+                      />
+                      <span>
+                        <strong>{moduleConfig.name}</strong>
+                        <small>{moduleConfig.monthlyPrice > 0 ? `${euro.format(moduleConfig.monthlyPrice)} p/m` : "Gratis module"}</small>
+                      </span>
+                      {current ? <em>huidig</em> : null}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className={styles.moduleAdvice}>
+                <div className={styles.moduleAdviceHeader}>
+                  <div>
+                    <div className={styles.assetTitle}>Module-offerte</div>
+                    <div className={styles.assetMeta}>
+                      Huidig: Smart Trade {selectedPackage.name}. Advies: Smart Trade {targetPackage.name}.
+                    </div>
+                  </div>
+                  <div className={styles.moduleAdviceActions}>
+                    <StatusPill tone={hasPackageChange ? "warning" : "success"}>
+                      {hasPackageChange ? packageChangeDirection : "blijft binnen pakket"}
+                    </StatusPill>
+                    {hasModuleSelectionChanges ? (
+                      <button type="button" className={styles.resetModulesButton} onClick={handleResetModules}>
+                        Reset selectie
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className={styles.moduleSelectionSummary}>
+                  <div>
+                    <span>Toevoegen</span>
+                    <strong>{formatModuleList(addedModules)}</strong>
+                  </div>
+                  <div>
+                    <span>Ruilen/verwijderen</span>
+                    <strong>{formatModuleList(removedModules)}</strong>
+                  </div>
+                </div>
+
+                {hasPackageChange ? (
+                  <div className={styles.quoteRows}>
+                    <div className={styles.quoteRow}>
+                      <span>1x</span>
+                      <strong>Smart Trade {targetPackage.name} licentie</strong>
+                      <span>{euro.format(targetPackage.licenseFirst)} p/m</span>
+                      <strong>{euro.format(targetPackage.licenseFirst)} p/m</strong>
+                    </div>
+
+                    {existingExtraUserCount > 0 ? (
+                      <div className={styles.quoteRow}>
+                        <span>{existingExtraUserCount}x</span>
+                        <strong>Smart Trade {targetPackage.name} licentie extra gebruiker</strong>
+                        <span>{euro.format(targetPackage.licenseExtra)} p/m</span>
+                        <strong>{euro.format(existingExtraUserCount * targetPackage.licenseExtra)} p/m</strong>
+                      </div>
+                    ) : null}
+
+                    {shouldIncludeSupport ? (
+                      <div className={styles.quoteRow}>
+                        <span>{existingUserCount}x</span>
+                        <strong>Supportcontract Smart Trade {targetPackage.name}</strong>
+                        <span>incl. extra gebruikers</span>
+                        <strong>{euro.format(targetSupportMonthly)} p/m</strong>
+                      </div>
+                    ) : null}
+
+                    <div className={styles.quoteRow}>
+                      <span>{selectedPaidModuleCount}x</span>
+                      <strong>Modules buiten inbegrepen pakketruimte</strong>
+                      <span>{targetPackage.includedModules} inbegrepen</span>
+                      <strong>{euro.format(targetModuleMonthly)} p/m</strong>
+                    </div>
+
+                    <div className={styles.quoteRow}>
+                      <span>{targetImplementationVisits}x</span>
+                      <strong>Implementatie Smart Trade {targetPackage.name}</strong>
+                      <span>{euro.format(IMPLEMENTATION_DAY_RATE)} per bezoek</span>
+                      <strong>{euro.format(targetImplementationTotal)}</strong>
+                    </div>
+
+                    <div className={styles.quoteTotal}>
+                      <span>Nieuwe maandprijs</span>
+                      <strong>{euro.format(targetRecurringMonthly)} p/m</strong>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.quoteRows}>
+                    {addedModules.map((moduleConfig) => (
+                      <div key={`add-${moduleConfig.key}`} className={styles.quoteRow}>
+                        <span>+</span>
+                        <strong>{moduleConfig.name}</strong>
+                        <span>{moduleConfig.monthlyPrice > 0 ? `${euro.format(moduleConfig.monthlyPrice)} p/m` : "gratis"}</span>
+                        <strong>{moduleConfig.monthlyPrice > 0 ? `${euro.format(moduleConfig.monthlyPrice)} p/m` : euro.format(0)}</strong>
+                      </div>
+                    ))}
+
+                    {removedModules.map((moduleConfig) => (
+                      <div key={`remove-${moduleConfig.key}`} className={styles.quoteRow}>
+                        <span>-</span>
+                        <strong>{moduleConfig.name}</strong>
+                        <span>uit selectie</span>
+                        <strong>{moduleConfig.monthlyPrice > 0 ? `-${euro.format(moduleConfig.monthlyPrice)} p/m` : euro.format(0)}</strong>
+                      </div>
+                    ))}
+
+                    {!hasModuleSelectionChanges ? (
+                      <div className="empty-state">Selecteer een extra module of ruil een bestaande module.</div>
+                    ) : null}
+
+                    <div className={styles.quoteRow}>
+                      <span>=</span>
+                      <strong>Modulebedrag verschil binnen {selectedPackage.name}</strong>
+                      <span>{selectedPackage.includedModules} inbegrepen</span>
+                      <strong>{euro.format(moduleMonthlyDelta)} p/m</strong>
+                    </div>
+
+                    <div className={styles.quoteRow}>
+                      <span>{targetImplementationVisits}x</span>
+                      <strong>Implementatie volgens pakketnorm</strong>
+                      <span>{euro.format(IMPLEMENTATION_DAY_RATE)} per bezoek</span>
+                      <strong>{euro.format(targetImplementationTotal)}</strong>
+                    </div>
+
+                    <div className={styles.quoteTotal}>
+                      <span>Offerte modulewijziging</span>
+                      <strong>{euro.format(moduleMonthlyDelta)} p/m</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </section>

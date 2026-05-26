@@ -160,16 +160,6 @@ export default function AssetsDashboard() {
   const extraUserSupportTotal = selectedPackage && shouldIncludeSupport ? safeExtraUsersToOffer * selectedPackage.supportExtra : 0;
   const upsellMonthlyTotal = extraUserLicenseTotal + extraUserSupportTotal;
 
-  const activeModuleCount = useMemo(
-    () => visibleAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => assetModule.active).length, 0),
-    [visibleAssets],
-  );
-
-  const inactiveModuleCount = useMemo(
-    () => visibleAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => !assetModule.active).length, 0),
-    [visibleAssets],
-  );
-
   async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
 
@@ -406,7 +396,7 @@ export default function AssetsDashboard() {
           ) : !selectedPackageName ? (
             <div className="empty-state">Geen Smart Trade pakket gevonden voor deze relatie.</div>
           ) : !selectedPackage ? (
-            <div className="empty-state">Lite wordt voorlopig overgeslagen voor upsell-offertes.</div>
+            <div className="empty-state">Geen prijsregel gevonden voor Smart Trade {selectedPackageName}.</div>
           ) : (
             <div className={styles.upsellPanel}>
               <div className={styles.upsellSummary}>

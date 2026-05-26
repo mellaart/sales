@@ -218,6 +218,11 @@
   color: #94a3b8;
 }
 
+.upsellStack {
+  display: grid;
+  gap: 14px;
+}
+
 .upsellPanel {
   display: grid;
   gap: 16px;
@@ -225,6 +230,11 @@
   border: 1px solid rgba(96, 165, 250, 0.22);
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.58);
+}
+
+.supportOfferPanel {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(120, 53, 15, 0.16);
 }
 
 .upsellSummary {
@@ -293,6 +303,10 @@
   color: #cbd5e1;
   font-size: 14px;
   font-weight: 760;
+}
+
+.supportOfferPanel .quoteTotal {
+  background: rgba(245, 158, 11, 0.14);
 }
 
 .quoteTotal strong {

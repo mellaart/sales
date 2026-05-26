@@ -314,6 +314,192 @@
   font-size: 18px;
 }
 
+.modulePlanner {
+  display: grid;
+  gap: 16px;
+}
+
+.moduleSteps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.moduleSteps div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.moduleSteps span {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.moduleSteps strong {
+  min-width: 0;
+  color: #ffffff;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moduleSteps small {
+  min-width: 0;
+  color: #94a3b8;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moduleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.moduleOption {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f8fafc;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.moduleOption:hover,
+.moduleOptionSelected {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(37, 99, 235, 0.14);
+  transform: translateY(-1px);
+}
+
+.moduleOption input {
+  width: 18px;
+  height: 18px;
+  accent-color: #60a5fa;
+}
+
+.moduleOption span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.moduleOption strong {
+  min-width: 0;
+  color: #ffffff;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.moduleOption small,
+.moduleOption em {
+  color: #94a3b8;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.moduleOption em {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #a7f3d0;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.moduleAdvice {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.moduleAdviceHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.moduleAdviceActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.resetModulesButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #bfdbfe;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.moduleSelectionSummary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.moduleSelectionSummary div {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.moduleSelectionSummary span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.moduleSelectionSummary strong {
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 980px) {
+  .moduleSteps,
+  .moduleGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .assetSearchForm {
     grid-template-columns: 1fr;
@@ -340,9 +526,18 @@
   .assetCardHeader,
   .assetModule,
   .upsellSummary,
-  .quoteTotal {
+  .quoteTotal,
+  .moduleAdviceHeader {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .moduleAdviceActions {
+    justify-content: flex-start;
+  }
+
+  .moduleSelectionSummary {
+    grid-template-columns: 1fr;
   }
 
   .quoteRow {
@@ -352,6 +547,13 @@
   .quoteRow span:not(:first-child),
   .quoteRow strong:last-child {
     grid-column: 2;
+  }
+}
+
+@media (max-width: 560px) {
+  .moduleSteps,
+  .moduleGrid {
+    grid-template-columns: 1fr;
   }
 }
 

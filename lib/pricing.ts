@@ -20,6 +20,26 @@ export const VAT_RATE = 0.21;
 
 export const PACKAGES: PackageConfig[] = [
   {
+    key: "lite",
+    name: "Lite",
+    licenseFirst: 39.4,
+    licenseExtra: 12.9,
+    supportFirst: 27.3,
+    supportExtra: 3.8,
+    includedModules: 0,
+    implementationVisits: [
+      { maxUsers: 4, visits: 2 },
+      { maxUsers: 9, visits: 3 },
+      { maxUsers: 14, visits: 4 },
+      { maxUsers: 19, visits: 5 },
+      { maxUsers: 24, visits: 6 },
+      { maxUsers: 29, visits: 7 },
+      { maxUsers: 34, visits: 8 },
+      { maxUsers: 39, visits: 9 },
+      { maxUsers: Infinity, visits: 10 },
+    ],
+  },
+  {
     key: "starter",
     name: "Starter",
     licenseFirst: 65.15,

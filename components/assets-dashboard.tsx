@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { StatusPill } from "@/components/ui";
+import { PACKAGES, euro } from "@/lib/pricing";
 import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
@@ -126,6 +127,10 @@ function getVisibleAssets(allAssets: AssetRecord[]) {
   return visibleAssets.sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function hasSupportAsset(assets: AssetRecord[]) {
+  return assets.some((asset) => asset.name.toLowerCase().includes("support"));
+}
+
 export default function AssetsDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
@@ -135,8 +140,25 @@ export default function AssetsDashboard() {
   const [assetStatus, setAssetStatus] = useState("");
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [extraUsersToOffer, setExtraUsersToOffer] = useState(1);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
+
+  const selectedPackageName = useMemo(
+    () => visibleAssets.map(getSmartTradePackageName).find((packageName): packageName is string => Boolean(packageName)) ?? null,
+    [visibleAssets],
+  );
+
+  const selectedPackage = useMemo(
+    () => PACKAGES.find((packageConfig) => packageConfig.name === selectedPackageName) ?? null,
+    [selectedPackageName],
+  );
+
+  const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
+  const safeExtraUsersToOffer = Math.max(1, extraUsersToOffer);
+  const extraUserLicenseTotal = selectedPackage ? safeExtraUsersToOffer * selectedPackage.licenseExtra : 0;
+  const extraUserSupportTotal = selectedPackage && shouldIncludeSupport ? safeExtraUsersToOffer * selectedPackage.supportExtra : 0;
+  const upsellMonthlyTotal = extraUserLicenseTotal + extraUserSupportTotal;
 
   const activeModuleCount = useMemo(
     () => visibleAssets.reduce((sum, asset) => sum + asset.modules.filter((assetModule) => assetModule.active).length, 0),
@@ -371,7 +393,7 @@ export default function AssetsDashboard() {
               <div className="eyebrow">Stap 3</div>
               <h2 className="headline">Upsell-signalen</h2>
               <p className="subtext">
-                Deze stap toont nog geen automatische adviezen. Eerst valideren we of de assetdata klopt.
+                Maak een eenvoudig voorstel voor extra gebruikers op basis van het pakket en support in de assets.
               </p>
             </div>
             <div className="icon-badge">
@@ -379,24 +401,59 @@ export default function AssetsDashboard() {
             </div>
           </div>
 
-          <div className="stats-grid">
-            <div className="soft-card">
-              <div className="kpi-title">Relevante assets</div>
-              <div className="big-number">{visibleAssets.length}</div>
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie om een voorstel te maken.</div>
+          ) : !selectedPackageName ? (
+            <div className="empty-state">Geen Smart Trade pakket gevonden voor deze relatie.</div>
+          ) : !selectedPackage ? (
+            <div className="empty-state">Lite wordt voorlopig overgeslagen voor upsell-offertes.</div>
+          ) : (
+            <div className={styles.upsellPanel}>
+              <div className={styles.upsellSummary}>
+                <div>
+                  <div className={styles.assetTitle}>Extra gebruiker offerte</div>
+                  <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackage.name}</div>
+                </div>
+                <StatusPill tone={shouldIncludeSupport ? "success" : "warning"}>
+                  {shouldIncludeSupport ? "met support" : "zonder support"}
+                </StatusPill>
+              </div>
+
+              <label className={styles.upsellUserInput}>
+                <span>Aantal extra gebruikers</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={extraUsersToOffer}
+                  onChange={(event) => setExtraUsersToOffer(Math.max(1, Number(event.target.value || 1)))}
+                />
+              </label>
+
+              <div className={styles.quoteRows}>
+                <div className={styles.quoteRow}>
+                  <span>{safeExtraUsersToOffer}x</span>
+                  <strong>Smart Trade {selectedPackage.name} Extra gebruiker</strong>
+                  <span>{euro.format(selectedPackage.licenseExtra)} p/m</span>
+                  <strong>{euro.format(extraUserLicenseTotal)} p/m</strong>
+                </div>
+
+                {shouldIncludeSupport ? (
+                  <div className={styles.quoteRow}>
+                    <span>{safeExtraUsersToOffer}x</span>
+                    <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
+                    <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                    <strong>{euro.format(extraUserSupportTotal)} p/m</strong>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className={styles.quoteTotal}>
+                <span>Maandelijkse uitbreiding</span>
+                <strong>{euro.format(upsellMonthlyTotal)} p/m</strong>
+              </div>
             </div>
-            <div className="soft-card">
-              <div className="kpi-title">Ontvangen assets</div>
-              <div className="big-number">{assets.length}</div>
-            </div>
-            <div className="soft-card">
-              <div className="kpi-title">Actieve diensten</div>
-              <div className="big-number">{activeModuleCount}</div>
-            </div>
-            <div className="soft-card">
-              <div className="kpi-title">Inactieve diensten</div>
-              <div className="big-number">{inactiveModuleCount}</div>
-            </div>
-          </div>
+          )}
         </section>
       </div>
     </div>

@@ -131,6 +131,27 @@ function hasSupportAsset(assets: AssetRecord[]) {
   return assets.some((asset) => asset.name.toLowerCase().includes("support"));
 }
 
+function isExtraUserLicenseAsset(asset: AssetRecord, packageName: string) {
+  const assetName = asset.name.trimStart().toLowerCase();
+  const packagePrefix = `${SMART_TRADE_ASSET_PREFIX}${packageName}`.toLowerCase();
+
+  return (
+    assetName.startsWith(packagePrefix) &&
+    assetName.includes("licentie") &&
+    assetName.includes("extra gebruiker") &&
+    !assetName.includes("support")
+  );
+}
+
+function getExtraUserLicenseCount(assets: AssetRecord[], packageName: string | null) {
+  if (!packageName) return 0;
+  return assets.filter((asset) => isExtraUserLicenseAsset(asset, packageName)).length;
+}
+
+function formatUserCount(count: number) {
+  return count === 1 ? "1 bestaande gebruiker" : `${count} bestaande gebruikers`;
+}
+
 export default function AssetsDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
@@ -155,10 +176,18 @@ export default function AssetsDashboard() {
   );
 
   const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
+  const existingExtraUserCount = useMemo(
+    () => getExtraUserLicenseCount(visibleAssets, selectedPackageName),
+    [selectedPackageName, visibleAssets],
+  );
+  const existingUserCount = existingExtraUserCount + 1;
   const safeExtraUsersToOffer = Math.max(1, extraUsersToOffer);
   const extraUserLicenseTotal = selectedPackage ? safeExtraUsersToOffer * selectedPackage.licenseExtra : 0;
   const extraUserSupportTotal = selectedPackage && shouldIncludeSupport ? safeExtraUsersToOffer * selectedPackage.supportExtra : 0;
   const upsellMonthlyTotal = extraUserLicenseTotal + extraUserSupportTotal;
+  const missingSupportBaseTotal = selectedPackage ? selectedPackage.supportFirst : 0;
+  const missingSupportExtraTotal = selectedPackage ? existingExtraUserCount * selectedPackage.supportExtra : 0;
+  const missingSupportMonthlyTotal = missingSupportBaseTotal + missingSupportExtraTotal;
 
   async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
@@ -383,7 +412,7 @@ export default function AssetsDashboard() {
               <div className="eyebrow">Stap 3</div>
               <h2 className="headline">Upsell-signalen</h2>
               <p className="subtext">
-                Maak een eenvoudig voorstel voor extra gebruikers op basis van het pakket en support in de assets.
+                Maak eenvoudige voorstellen op basis van het pakket, bestaande gebruikers en support in de assets.
               </p>
             </div>
             <div className="icon-badge">
@@ -398,50 +427,89 @@ export default function AssetsDashboard() {
           ) : !selectedPackage ? (
             <div className="empty-state">Geen prijsregel gevonden voor Smart Trade {selectedPackageName}.</div>
           ) : (
-            <div className={styles.upsellPanel}>
-              <div className={styles.upsellSummary}>
-                <div>
-                  <div className={styles.assetTitle}>Extra gebruiker offerte</div>
-                  <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackage.name}</div>
-                </div>
-                <StatusPill tone={shouldIncludeSupport ? "success" : "warning"}>
-                  {shouldIncludeSupport ? "met support" : "zonder support"}
-                </StatusPill>
-              </div>
-
-              <label className={styles.upsellUserInput}>
-                <span>Aantal extra gebruikers</span>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  value={extraUsersToOffer}
-                  onChange={(event) => setExtraUsersToOffer(Math.max(1, Number(event.target.value || 1)))}
-                />
-              </label>
-
-              <div className={styles.quoteRows}>
-                <div className={styles.quoteRow}>
-                  <span>{safeExtraUsersToOffer}x</span>
-                  <strong>Smart Trade {selectedPackage.name} Extra gebruiker</strong>
-                  <span>{euro.format(selectedPackage.licenseExtra)} p/m</span>
-                  <strong>{euro.format(extraUserLicenseTotal)} p/m</strong>
+            <div className={styles.upsellStack}>
+              <div className={styles.upsellPanel}>
+                <div className={styles.upsellSummary}>
+                  <div>
+                    <div className={styles.assetTitle}>Extra gebruiker offerte</div>
+                    <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackage.name}</div>
+                  </div>
+                  <StatusPill tone={shouldIncludeSupport ? "success" : "warning"}>
+                    {shouldIncludeSupport ? "met support" : "zonder support"}
+                  </StatusPill>
                 </div>
 
-                {shouldIncludeSupport ? (
+                <label className={styles.upsellUserInput}>
+                  <span>Aantal extra gebruikers</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    value={extraUsersToOffer}
+                    onChange={(event) => setExtraUsersToOffer(Math.max(1, Number(event.target.value || 1)))}
+                  />
+                </label>
+
+                <div className={styles.quoteRows}>
                   <div className={styles.quoteRow}>
                     <span>{safeExtraUsersToOffer}x</span>
-                    <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
-                    <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
-                    <strong>{euro.format(extraUserSupportTotal)} p/m</strong>
+                    <strong>Smart Trade {selectedPackage.name} Extra gebruiker</strong>
+                    <span>{euro.format(selectedPackage.licenseExtra)} p/m</span>
+                    <strong>{euro.format(extraUserLicenseTotal)} p/m</strong>
                   </div>
-                ) : null}
+
+                  {shouldIncludeSupport ? (
+                    <div className={styles.quoteRow}>
+                      <span>{safeExtraUsersToOffer}x</span>
+                      <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
+                      <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                      <strong>{euro.format(extraUserSupportTotal)} p/m</strong>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={styles.quoteTotal}>
+                  <span>Maandelijkse uitbreiding</span>
+                  <strong>{euro.format(upsellMonthlyTotal)} p/m</strong>
+                </div>
               </div>
 
-              <div className={styles.quoteTotal}>
-                <span>Maandelijkse uitbreiding</span>
-                <strong>{euro.format(upsellMonthlyTotal)} p/m</strong>
-              </div>
+              {!shouldIncludeSupport ? (
+                <div className={`${styles.upsellPanel} ${styles.supportOfferPanel}`}>
+                  <div className={styles.upsellSummary}>
+                    <div>
+                      <div className={styles.assetTitle}>Supportcontract toevoegen</div>
+                      <div className={styles.assetMeta}>
+                        Gebaseerd op Smart Trade {selectedPackage.name} en {formatUserCount(existingUserCount)}.
+                      </div>
+                    </div>
+                    <StatusPill tone="warning">support ontbreekt</StatusPill>
+                  </div>
+
+                  <div className={styles.quoteRows}>
+                    <div className={styles.quoteRow}>
+                      <span>1x</span>
+                      <strong>Smart Trade {selectedPackage.name} Supportcontract</strong>
+                      <span>{euro.format(selectedPackage.supportFirst)} p/m</span>
+                      <strong>{euro.format(missingSupportBaseTotal)} p/m</strong>
+                    </div>
+
+                    {existingExtraUserCount > 0 ? (
+                      <div className={styles.quoteRow}>
+                        <span>{existingExtraUserCount}x</span>
+                        <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
+                        <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                        <strong>{euro.format(missingSupportExtraTotal)} p/m</strong>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className={styles.quoteTotal}>
+                    <span>Support uitbreiding</span>
+                    <strong>{euro.format(missingSupportMonthlyTotal)} p/m</strong>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </section>

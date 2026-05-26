@@ -90,6 +90,13 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
+const RELATION_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let relationCache: {
+  cacheKey: string;
+  expiresAt: number;
+  relations: SmartTradeRelation[];
+} | null = null;
 
 export const SMART_TRADE_CONFIG_ERROR =
   "Smart Trade API is niet geconfigureerd. Voeg SMART_TRADE_COMPANY_KEY, SMART_TRADE_API_USER en SMART_TRADE_API_PASSWORD toe aan je environment variables.";
@@ -187,7 +194,6 @@ function buildRelationsUrl(baseUrl: string, page: number) {
   const url = new URL(`${baseUrl.replace(/\/+$/, "")}/relations`);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(RELATION_PAGE_SIZE));
-  url.searchParams.set("include", "contactAddress");
   return url;
 }
 
@@ -201,17 +207,70 @@ function relationSearchText(relation: SmartTradeRelation) {
     relation.email,
     relation.debtorNumber,
     relation.externalCode,
-    relation.phone,
-    relation.phoneMobile,
-    relation.phoneWork,
-    relation.street,
-    relation.postcode,
-    relation.city,
   ]
     .map(asString)
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function mapRelationRow(row: NonNullable<SmartTradeRelationsApiResponse["data"]>[number]) {
+  if (row.id === undefined || row.id === null) return null;
+
+  return {
+    id: row.id,
+    company: row.company ?? null,
+    companyPrefix: row.companyPrefix ?? null,
+    firstname: row.firstname ?? null,
+    lastname: row.lastname ?? null,
+    email: row.email ?? null,
+    debtorNumber: row.debtorNumber ?? row.externalCode ?? null,
+    externalCode: row.externalCode ?? null,
+    phone: row.phone ?? null,
+    phoneMobile: row.phoneMobile ?? null,
+    phoneWork: row.phoneWork ?? null,
+    street: row.contactAddress?.data?.street ?? null,
+    postcode: row.contactAddress?.data?.postcode ?? null,
+    city: row.contactAddress?.data?.city ?? null,
+  } satisfies SmartTradeRelation;
+}
+
+function getRelationCacheKey(config: SmartTradeConfig) {
+  return `${config.baseUrl}|${config.company}`;
+}
+
+async function getCachedRelations(config: SmartTradeConfig, headers: Record<string, string>) {
+  const cacheKey = getRelationCacheKey(config);
+  const now = Date.now();
+
+  if (relationCache?.cacheKey === cacheKey && relationCache.expiresAt > now) {
+    return relationCache.relations;
+  }
+
+  const relations = new Map<string, SmartTradeRelation>();
+
+  for (let page = 1; page <= RELATION_MAX_PAGES; page += 1) {
+    const relationsUrl = buildRelationsUrl(config.baseUrl, page);
+    const response = await fetchWithTimeout(relationsUrl.toString(), headers, config.timeoutMs);
+    const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
+    const rows = Array.isArray(json.data) ? json.data : [];
+
+    for (const row of rows) {
+      const relation = mapRelationRow(row);
+      if (!relation) continue;
+      relations.set(String(relation.id), relation);
+    }
+
+    if (rows.length < RELATION_PAGE_SIZE) break;
+  }
+
+  relationCache = {
+    cacheKey,
+    expiresAt: now + RELATION_CACHE_TTL_MS,
+    relations: Array.from(relations.values()),
+  };
+
+  return relationCache.relations;
 }
 
 export function getRelationName(relation: SmartTradeRelation) {
@@ -244,43 +303,21 @@ export async function searchRelations(term?: string) {
   const config = getConfig();
   const headers = getHeaders(config);
   const normalizedTerm = term?.trim().toLowerCase() ?? "";
-  const matches = new Map<string, SmartTradeRelation>();
 
-  for (let page = 1; page <= RELATION_MAX_PAGES && matches.size < RELATION_MAX_RESULTS; page += 1) {
-    const relationsUrl = buildRelationsUrl(config.baseUrl, page);
-    const response = await fetchWithTimeout(relationsUrl.toString(), headers, config.timeoutMs);
-    const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
-    const rows = Array.isArray(json.data) ? json.data : [];
-
-    for (const row of rows) {
-      if (row.id === undefined || row.id === null) continue;
-
-      const relation: SmartTradeRelation = {
-        id: row.id,
-        company: row.company ?? null,
-        companyPrefix: row.companyPrefix ?? null,
-        firstname: row.firstname ?? null,
-        lastname: row.lastname ?? null,
-        email: row.email ?? null,
-        debtorNumber: row.debtorNumber ?? row.externalCode ?? null,
-        externalCode: row.externalCode ?? null,
-        phone: row.phone ?? null,
-        phoneMobile: row.phoneMobile ?? null,
-        phoneWork: row.phoneWork ?? null,
-        street: row.contactAddress?.data?.street ?? null,
-        postcode: row.contactAddress?.data?.postcode ?? null,
-        city: row.contactAddress?.data?.city ?? null,
-      };
-
-      if (normalizedTerm && !relationSearchText(relation).includes(normalizedTerm)) continue;
-      matches.set(String(relation.id), relation);
-      if (matches.size >= RELATION_MAX_RESULTS) break;
+  if (/^\d+$/.test(normalizedTerm)) {
+    try {
+      return [await getRelationById(normalizedTerm)];
+    } catch {
+      // Als het nummer geen relatie-ID is, zoeken we alsnog in de opgehaalde lijst.
     }
-
-    if (rows.length < RELATION_PAGE_SIZE) break;
   }
 
-  return Array.from(matches.values());
+  const relations = await getCachedRelations(config, headers);
+  if (!normalizedTerm) return relations.slice(0, RELATION_MAX_RESULTS);
+
+  return relations
+    .filter((relation) => relationSearchText(relation).includes(normalizedTerm))
+    .slice(0, RELATION_MAX_RESULTS);
 }
 
 function isModuleActive(endsAt: string | null | undefined) {

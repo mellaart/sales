@@ -17,7 +17,12 @@ const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
 const SERVICE_COST_ASSET_PREFIXES = ["Worldline servicekosten", "CCV servicekosten"];
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
 const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi"]);
-const CUSTOMER_PORTAL_MONTHLY_PRICE = 55;
+const CUSTOMER_PORTAL_OPTIONS = [
+  { key: "facturenBetalen", name: "Facturen betalen", monthlyPrice: 30.15 },
+  { key: "offertesOrdersMaken", name: "Offertes en orders maken", monthlyPrice: 60.3 },
+  { key: "offertesInzienGoedkeuren", name: "Offertes inzien en goedkeuren", monthlyPrice: 12.05 },
+  { key: "assortiment", name: "Assortiment", monthlyPrice: 36.15 },
+];
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   partijregistratie: ["voorraad"],
   hoveniersapp: ["ticketing"],
@@ -305,11 +310,6 @@ function getModuleImplementationCost(moduleKey: string) {
   return MODULE_IMPLEMENTATION_COSTS[moduleKey] ?? 0;
 }
 
-function getPositiveNumberInput(value: string, fallback: number) {
-  const numberValue = Number(value.replace(",", "."));
-  return Number.isFinite(numberValue) ? Math.max(0, numberValue) : fallback;
-}
-
 function formatImplementationBasis(cost: number) {
   if (cost === 360) return "halve dag";
   if (cost === 720) return "hele dag";
@@ -356,8 +356,7 @@ export default function AssetsDashboard() {
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [extraUsersToOffer, setExtraUsersToOffer] = useState(1);
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
-  const [includeCustomerPortal, setIncludeCustomerPortal] = useState(false);
-  const [customerPortalMonthlyPrice, setCustomerPortalMonthlyPrice] = useState(CUSTOMER_PORTAL_MONTHLY_PRICE);
+  const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
 
@@ -386,6 +385,10 @@ export default function AssetsDashboard() {
     () => getMinimumPackageForPaidModules(selectedPackageModuleCount),
     [selectedPackageModuleCount],
   );
+  const selectedCustomerPortalOptions = useMemo(
+    () => CUSTOMER_PORTAL_OPTIONS.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
+    [selectedCustomerPortalOptionKeys],
+  );
 
   const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
   const existingExtraUserCount = useMemo(
@@ -400,7 +403,10 @@ export default function AssetsDashboard() {
   const missingSupportBaseTotal = selectedPackage ? selectedPackage.supportFirst : 0;
   const missingSupportExtraTotal = selectedPackage ? existingExtraUserCount * selectedPackage.supportExtra : 0;
   const missingSupportMonthlyTotal = missingSupportBaseTotal + missingSupportExtraTotal;
-  const customerPortalMonthlyTotal = includeCustomerPortal ? customerPortalMonthlyPrice : 0;
+  const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce(
+    (sum, option) => sum + option.monthlyPrice,
+    0,
+  );
 
   const hasModuleSelectionChanges = !isSameModuleSelection(currentModuleKeys, selectedModuleKeys);
   const hasPackageChange = Boolean(selectedPackage && targetPackage && selectedPackage.key !== targetPackage.key);
@@ -427,6 +433,13 @@ export default function AssetsDashboard() {
       }
 
       return applyModuleDependencies([...currentKeys, moduleKey]);
+    });
+  }
+
+  function handleToggleCustomerPortalOption(optionKey: string) {
+    setSelectedCustomerPortalOptionKeys((currentKeys) => {
+      if (currentKeys.includes(optionKey)) return currentKeys.filter((key) => key !== optionKey);
+      return [...currentKeys, optionKey];
     });
   }
 
@@ -469,6 +482,7 @@ export default function AssetsDashboard() {
     setSelectedRelation(null);
     setAssets([]);
     setSelectedModuleKeys([]);
+    setSelectedCustomerPortalOptionKeys([]);
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -497,6 +511,7 @@ export default function AssetsDashboard() {
     setLoadingAssets(true);
     setAssets([]);
     setSelectedModuleKeys([]);
+    setSelectedCustomerPortalOptionKeys([]);
 
     try {
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
@@ -995,7 +1010,7 @@ export default function AssetsDashboard() {
               <div className="eyebrow">Stap 5</div>
               <h2 className="headline">Klantenportaal</h2>
               <p className="subtext">
-                Maak een losse offerte voor het klantenportaal met maandbedrag.
+                Selecteer de gewenste klantenportaal-onderdelen voor de offerte.
               </p>
             </div>
             <div className="icon-badge">
@@ -1009,20 +1024,29 @@ export default function AssetsDashboard() {
             <div className="empty-state">Geen Smart Trade pakket gevonden voor deze relatie.</div>
           ) : (
             <div className={styles.upsellStack}>
-              <label
-                className={`${styles.moduleOption} ${includeCustomerPortal ? styles.moduleOptionSelected : ""}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={includeCustomerPortal}
-                  onChange={(event) => setIncludeCustomerPortal(event.target.checked)}
-                />
-                <span>
-                  <strong>Klantenportaal toevoegen</strong>
-                  <small>Losse uitbreiding voor Smart Trade {selectedPackageName}</small>
-                </span>
-                {includeCustomerPortal ? <em>geselecteerd</em> : null}
-              </label>
+              <div className={styles.moduleGrid}>
+                {CUSTOMER_PORTAL_OPTIONS.map((option) => {
+                  const selected = selectedCustomerPortalOptionKeys.includes(option.key);
+
+                  return (
+                    <label
+                      key={option.key}
+                      className={`${styles.moduleOption} ${selected ? styles.moduleOptionSelected : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => handleToggleCustomerPortalOption(option.key)}
+                      />
+                      <span>
+                        <strong>{option.name}</strong>
+                        <small>{euro.format(option.monthlyPrice)} p/m</small>
+                      </span>
+                      {selected ? <em>geselecteerd</em> : null}
+                    </label>
+                  );
+                })}
+              </div>
 
               <div className={styles.upsellPanel}>
                 <div className={styles.upsellSummary}>
@@ -1030,34 +1054,26 @@ export default function AssetsDashboard() {
                     <div className={styles.assetTitle}>Klantenportaal offerte</div>
                     <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackageName}</div>
                   </div>
-                  <StatusPill tone={includeCustomerPortal ? "success" : "warning"}>
-                    {includeCustomerPortal ? "geselecteerd" : "nog niet geselecteerd"}
+                  <StatusPill tone={selectedCustomerPortalOptions.length > 0 ? "success" : "warning"}>
+                    {selectedCustomerPortalOptions.length > 0
+                      ? `${selectedCustomerPortalOptions.length} geselecteerd`
+                      : "nog niets geselecteerd"}
                   </StatusPill>
                 </div>
 
-                <label className={styles.upsellUserInput}>
-                  <span>Maandbedrag</span>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={customerPortalMonthlyPrice}
-                    onChange={(event) =>
-                      setCustomerPortalMonthlyPrice(
-                        getPositiveNumberInput(event.target.value, CUSTOMER_PORTAL_MONTHLY_PRICE),
-                      )
-                    }
-                  />
-                </label>
-
                 <div className={styles.quoteRows}>
-                  <div className={styles.quoteRow}>
-                    <span>{includeCustomerPortal ? "1x" : "0x"}</span>
-                    <strong>Smart Trade Klantenportaal</strong>
-                    <span>{euro.format(customerPortalMonthlyPrice)} p/m</span>
-                    <strong>{euro.format(customerPortalMonthlyTotal)} p/m</strong>
-                  </div>
+                  {selectedCustomerPortalOptions.length > 0 ? (
+                    selectedCustomerPortalOptions.map((option) => (
+                      <div key={`portal-${option.key}`} className={styles.quoteRow}>
+                        <span>1x</span>
+                        <strong>Klantenportaal - {option.name}</strong>
+                        <span>{euro.format(option.monthlyPrice)} p/m</span>
+                        <strong>{euro.format(option.monthlyPrice)} p/m</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-state">Selecteer een klantenportaal-onderdeel.</div>
+                  )}
                 </div>
 
                 <div className={styles.quoteTotal}>

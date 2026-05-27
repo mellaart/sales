@@ -18,7 +18,6 @@ const SERVICE_COST_ASSET_PREFIXES = ["Worldline servicekosten", "CCV servicekost
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
 const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi"]);
 const CUSTOMER_PORTAL_MONTHLY_PRICE = 55;
-const CUSTOMER_PORTAL_IMPLEMENTATION_COST = 720;
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   partijregistratie: ["voorraad"],
   hoveniersapp: ["ticketing"],
@@ -359,9 +358,6 @@ export default function AssetsDashboard() {
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
   const [includeCustomerPortal, setIncludeCustomerPortal] = useState(false);
   const [customerPortalMonthlyPrice, setCustomerPortalMonthlyPrice] = useState(CUSTOMER_PORTAL_MONTHLY_PRICE);
-  const [customerPortalImplementationCost, setCustomerPortalImplementationCost] = useState(
-    CUSTOMER_PORTAL_IMPLEMENTATION_COST,
-  );
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
 
@@ -405,7 +401,6 @@ export default function AssetsDashboard() {
   const missingSupportExtraTotal = selectedPackage ? existingExtraUserCount * selectedPackage.supportExtra : 0;
   const missingSupportMonthlyTotal = missingSupportBaseTotal + missingSupportExtraTotal;
   const customerPortalMonthlyTotal = includeCustomerPortal ? customerPortalMonthlyPrice : 0;
-  const customerPortalImplementationTotal = includeCustomerPortal ? customerPortalImplementationCost : 0;
 
   const hasModuleSelectionChanges = !isSameModuleSelection(currentModuleKeys, selectedModuleKeys);
   const hasPackageChange = Boolean(selectedPackage && targetPackage && selectedPackage.key !== targetPackage.key);
@@ -1000,7 +995,7 @@ export default function AssetsDashboard() {
               <div className="eyebrow">Stap 5</div>
               <h2 className="headline">Klantenportaal</h2>
               <p className="subtext">
-                Maak een losse offerte voor het klantenportaal met maandbedrag en implementatie.
+                Maak een losse offerte voor het klantenportaal met maandbedrag.
               </p>
             </div>
             <div className="icon-badge">
@@ -1040,38 +1035,21 @@ export default function AssetsDashboard() {
                   </StatusPill>
                 </div>
 
-                <div className={styles.moduleSelectionSummary}>
-                  <label className={styles.upsellUserInput}>
-                    <span>Maandbedrag</span>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={customerPortalMonthlyPrice}
-                      onChange={(event) =>
-                        setCustomerPortalMonthlyPrice(
-                          getPositiveNumberInput(event.target.value, CUSTOMER_PORTAL_MONTHLY_PRICE),
-                        )
-                      }
-                    />
-                  </label>
-                  <label className={styles.upsellUserInput}>
-                    <span>Implementatie</span>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={customerPortalImplementationCost}
-                      onChange={(event) =>
-                        setCustomerPortalImplementationCost(
-                          getPositiveNumberInput(event.target.value, CUSTOMER_PORTAL_IMPLEMENTATION_COST),
-                        )
-                      }
-                    />
-                  </label>
-                </div>
+                <label className={styles.upsellUserInput}>
+                  <span>Maandbedrag</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={customerPortalMonthlyPrice}
+                    onChange={(event) =>
+                      setCustomerPortalMonthlyPrice(
+                        getPositiveNumberInput(event.target.value, CUSTOMER_PORTAL_MONTHLY_PRICE),
+                      )
+                    }
+                  />
+                </label>
 
                 <div className={styles.quoteRows}>
                   <div className={styles.quoteRow}>
@@ -1080,23 +1058,11 @@ export default function AssetsDashboard() {
                     <span>{euro.format(customerPortalMonthlyPrice)} p/m</span>
                     <strong>{euro.format(customerPortalMonthlyTotal)} p/m</strong>
                   </div>
-
-                  <div className={styles.quoteRow}>
-                    <span>{includeCustomerPortal ? "1x" : "0x"}</span>
-                    <strong>Implementatie klantenportaal</strong>
-                    <span>{formatImplementationBasis(customerPortalImplementationCost)}</span>
-                    <strong>{euro.format(customerPortalImplementationTotal)}</strong>
-                  </div>
                 </div>
 
                 <div className={styles.quoteTotal}>
                   <span>Klantenportaal uitbreiding</span>
                   <strong>{euro.format(customerPortalMonthlyTotal)} p/m</strong>
-                </div>
-
-                <div className={styles.quoteTotal}>
-                  <span>Implementatie klantenportaal</span>
-                  <strong>{euro.format(customerPortalImplementationTotal)}</strong>
                 </div>
               </div>
             </div>

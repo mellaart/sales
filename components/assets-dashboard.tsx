@@ -4,12 +4,10 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 import {
-  IMPLEMENTATION_DAY_RATE,
   MODULES,
   PACKAGES,
   euro,
   getMinimumPackageForPaidModules,
-  getVisitsForUsers,
   type ModuleConfig,
   type PackageConfig,
 } from "@/lib/pricing";
@@ -22,6 +20,27 @@ const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb"
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   partijregistratie: ["voorraad"],
   hoveniersapp: ["ticketing"],
+};
+const MODULE_IMPLEMENTATION_COSTS: Record<string, number> = {
+  mailchimp: 360,
+  rapportage: 360,
+  scanHerken: 720,
+  statistiekenPlus: 360,
+  digitaleOndertekening: 360,
+  postnl: 360,
+  suiteMkb: 400,
+  powerbi: 720,
+  kassa: 720,
+  terrein: 720,
+  voorraad: 720,
+  partijregistratie: 1440,
+  chauffeurs: 720,
+  assets: 720,
+  ticketing: 1440,
+  contracten: 720,
+  verhuur: 720,
+  prijsstaffels: 720,
+  hoveniersapp: 720,
 };
 
 type RelationOption = {
@@ -281,6 +300,19 @@ function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: Package
   return standaloneModuleMonthly + Math.max(0, packageRelevantMonthly - includedModuleDiscount);
 }
 
+function getModuleImplementationCost(moduleKey: string) {
+  return MODULE_IMPLEMENTATION_COSTS[moduleKey] ?? 0;
+}
+
+function formatImplementationBasis(cost: number) {
+  if (cost === 360) return "halve dag";
+  if (cost === 720) return "hele dag";
+  if (cost === 1440) return "2 dagen";
+  if (cost === 400) return "setup";
+  if (cost === 0) return "geen setup";
+  return "setup";
+}
+
 function isSameModuleSelection(left: string[], right: string[]) {
   const sortedLeft = getSortedModuleKeys(left);
   const sortedRight = getSortedModuleKeys(right);
@@ -369,13 +401,15 @@ export default function AssetsDashboard() {
   const currentModuleMonthly = selectedPackage ? getModuleMonthlyForPackage(currentModuleKeys, selectedPackage) : 0;
   const targetModuleMonthly = targetPackage ? getModuleMonthlyForPackage(selectedModuleKeys, targetPackage) : 0;
   const moduleMonthlyDelta = targetModuleMonthly - currentModuleMonthly;
+  const moduleImplementationTotal = addedModules.reduce(
+    (sum, moduleConfig) => sum + getModuleImplementationCost(moduleConfig.key),
+    0,
+  );
   const targetLicenseMonthly = targetPackage ? targetPackage.licenseFirst + existingExtraUserCount * targetPackage.licenseExtra : 0;
   const targetSupportMonthly = targetPackage && shouldIncludeSupport
     ? targetPackage.supportFirst + existingExtraUserCount * targetPackage.supportExtra
     : 0;
   const targetRecurringMonthly = targetLicenseMonthly + targetSupportMonthly + targetModuleMonthly;
-  const targetImplementationVisits = targetPackage ? getVisitsForUsers(targetPackage, existingUserCount) : 0;
-  const targetImplementationTotal = targetImplementationVisits * IMPLEMENTATION_DAY_RATE;
 
   function handleToggleModule(moduleKey: string) {
     setSelectedModuleKeys((currentKeys) => {
@@ -389,6 +423,32 @@ export default function AssetsDashboard() {
 
   function handleResetModules() {
     setSelectedModuleKeys(currentModuleKeys);
+  }
+
+  function renderModuleImplementationRows() {
+    if (addedModules.length === 0) {
+      return (
+        <div className={styles.quoteRow}>
+          <span>0x</span>
+          <strong>Implementatie modules</strong>
+          <span>geen toegevoegde modules</span>
+          <strong>{euro.format(0)}</strong>
+        </div>
+      );
+    }
+
+    return addedModules.map((moduleConfig) => {
+      const implementationCost = getModuleImplementationCost(moduleConfig.key);
+
+      return (
+        <div key={`implementation-${moduleConfig.key}`} className={styles.quoteRow}>
+          <span>1x</span>
+          <strong>Implementatie {moduleConfig.name}</strong>
+          <span>{formatImplementationBasis(implementationCost)}</span>
+          <strong>{euro.format(implementationCost)}</strong>
+        </div>
+      );
+    });
   }
 
   async function handleSearchRelations(event: FormEvent) {
@@ -761,7 +821,7 @@ export default function AssetsDashboard() {
                 <div>
                   <span>4</span>
                   <strong>Implementatie</strong>
-                  <small>{euro.format(targetImplementationTotal)}</small>
+                  <small>{euro.format(moduleImplementationTotal)}</small>
                 </div>
               </div>
 
@@ -859,11 +919,11 @@ export default function AssetsDashboard() {
                       <strong>{euro.format(targetModuleMonthly)} p/m</strong>
                     </div>
 
-                    <div className={styles.quoteRow}>
-                      <span>{targetImplementationVisits}x</span>
-                      <strong>Implementatie Smart Trade {targetPackage.name}</strong>
-                      <span>{euro.format(IMPLEMENTATION_DAY_RATE)} per bezoek</span>
-                      <strong>{euro.format(targetImplementationTotal)}</strong>
+                    {renderModuleImplementationRows()}
+
+                    <div className={styles.quoteTotal}>
+                      <span>Implementatie modules</span>
+                      <strong>{euro.format(moduleImplementationTotal)}</strong>
                     </div>
 
                     <div className={styles.quoteTotal}>
@@ -902,16 +962,16 @@ export default function AssetsDashboard() {
                       <strong>{euro.format(moduleMonthlyDelta)} p/m</strong>
                     </div>
 
-                    <div className={styles.quoteRow}>
-                      <span>{targetImplementationVisits}x</span>
-                      <strong>Implementatie volgens pakketnorm</strong>
-                      <span>{euro.format(IMPLEMENTATION_DAY_RATE)} per bezoek</span>
-                      <strong>{euro.format(targetImplementationTotal)}</strong>
-                    </div>
+                    {renderModuleImplementationRows()}
 
                     <div className={styles.quoteTotal}>
                       <span>Offerte modulewijziging</span>
                       <strong>{euro.format(moduleMonthlyDelta)} p/m</strong>
+                    </div>
+
+                    <div className={styles.quoteTotal}>
+                      <span>Implementatie modules</span>
+                      <strong>{euro.format(moduleImplementationTotal)}</strong>
                     </div>
                   </div>
                 )}

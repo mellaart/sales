@@ -203,7 +203,18 @@ function formatConnectionCount(count: number) {
 }
 
 function getSmartConnectPricing(connectionCount: number) {
-  const safeConnectionCount = Math.max(1, Math.floor(connectionCount));
+  const safeConnectionCount = Math.max(0, Math.floor(connectionCount));
+
+  if (safeConnectionCount === 0) {
+    return {
+      connectionCount: 0,
+      baseTier: null,
+      extraConnections: 0,
+      extraMonthly: 0,
+      monthlyTotal: 0,
+    };
+  }
+
   const baseTier = SMART_CONNECT_TIERS.find((tier) => safeConnectionCount <= tier.connections)
     ?? SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1];
   const extraConnections = Math.max(0, safeConnectionCount - SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1].connections);
@@ -381,10 +392,11 @@ export default function AssetsDashboard() {
   const [assetStatus, setAssetStatus] = useState("");
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
-  const [extraUsersToOffer, setExtraUsersToOffer] = useState(1);
+  const [extraUsersToOffer, setExtraUsersToOffer] = useState(0);
+  const [includeMissingSupportOffer, setIncludeMissingSupportOffer] = useState(false);
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
-  const [smartConnectConnections, setSmartConnectConnections] = useState(1);
+  const [smartConnectConnections, setSmartConnectConnections] = useState(0);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
 
@@ -428,12 +440,12 @@ export default function AssetsDashboard() {
     [selectedPackageName, visibleAssets],
   );
   const existingUserCount = existingExtraUserCount + 1;
-  const safeExtraUsersToOffer = Math.max(1, extraUsersToOffer);
+  const safeExtraUsersToOffer = Math.max(0, Math.floor(extraUsersToOffer));
   const extraUserLicenseTotal = selectedPackage ? safeExtraUsersToOffer * selectedPackage.licenseExtra : 0;
   const extraUserSupportTotal = selectedPackage && shouldIncludeSupport ? safeExtraUsersToOffer * selectedPackage.supportExtra : 0;
   const upsellMonthlyTotal = extraUserLicenseTotal + extraUserSupportTotal;
-  const missingSupportBaseTotal = selectedPackage ? selectedPackage.supportFirst : 0;
-  const missingSupportExtraTotal = selectedPackage ? existingExtraUserCount * selectedPackage.supportExtra : 0;
+  const missingSupportBaseTotal = selectedPackage && includeMissingSupportOffer ? selectedPackage.supportFirst : 0;
+  const missingSupportExtraTotal = selectedPackage && includeMissingSupportOffer ? existingExtraUserCount * selectedPackage.supportExtra : 0;
   const missingSupportMonthlyTotal = missingSupportBaseTotal + missingSupportExtraTotal;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce(
     (sum, option) => sum + option.monthlyPrice,
@@ -514,8 +526,9 @@ export default function AssetsDashboard() {
     setSelectedRelation(null);
     setAssets([]);
     setSelectedModuleKeys([]);
+    setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
-    setSmartConnectConnections(1);
+    setSmartConnectConnections(0);
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -544,8 +557,9 @@ export default function AssetsDashboard() {
     setLoadingAssets(true);
     setAssets([]);
     setSelectedModuleKeys([]);
+    setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
-    setSmartConnectConnections(1);
+    setSmartConnectConnections(0);
 
     try {
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
@@ -768,9 +782,9 @@ export default function AssetsDashboard() {
                   <input
                     className="input"
                     type="number"
-                    min={1}
+                    min={0}
                     value={extraUsersToOffer}
-                    onChange={(event) => setExtraUsersToOffer(Math.max(1, Number(event.target.value || 1)))}
+                    onChange={(event) => setExtraUsersToOffer(Math.max(0, Math.floor(Number(event.target.value || 0))))}
                   />
                 </label>
 
@@ -807,25 +821,48 @@ export default function AssetsDashboard() {
                         Gebaseerd op Smart Trade {selectedPackage.name} en {formatUserCount(existingUserCount)}.
                       </div>
                     </div>
-                    <StatusPill tone="warning">support ontbreekt</StatusPill>
+                    <StatusPill tone={includeMissingSupportOffer ? "success" : "warning"}>
+                      {includeMissingSupportOffer ? "geselecteerd" : "niet geselecteerd"}
+                    </StatusPill>
                   </div>
 
-                  <div className={styles.quoteRows}>
-                    <div className={styles.quoteRow}>
-                      <span>1x</span>
-                      <strong>Smart Trade {selectedPackage.name} Supportcontract</strong>
-                      <span>{euro.format(selectedPackage.supportFirst)} p/m</span>
-                      <strong>{euro.format(missingSupportBaseTotal)} p/m</strong>
-                    </div>
+                  <label
+                    className={`${styles.moduleOption} ${includeMissingSupportOffer ? styles.moduleOptionSelected : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={includeMissingSupportOffer}
+                      onChange={(event) => setIncludeMissingSupportOffer(event.target.checked)}
+                    />
+                    <span>
+                      <strong>Supportcontract toevoegen</strong>
+                      <small>Geen aantal veld nodig</small>
+                    </span>
+                    {includeMissingSupportOffer ? <em>geselecteerd</em> : null}
+                  </label>
 
-                    {existingExtraUserCount > 0 ? (
-                      <div className={styles.quoteRow}>
-                        <span>{existingExtraUserCount}x</span>
-                        <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
-                        <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
-                        <strong>{euro.format(missingSupportExtraTotal)} p/m</strong>
-                      </div>
-                    ) : null}
+                  <div className={styles.quoteRows}>
+                    {includeMissingSupportOffer ? (
+                      <>
+                        <div className={styles.quoteRow}>
+                          <span>1x</span>
+                          <strong>Smart Trade {selectedPackage.name} Supportcontract</strong>
+                          <span>{euro.format(selectedPackage.supportFirst)} p/m</span>
+                          <strong>{euro.format(missingSupportBaseTotal)} p/m</strong>
+                        </div>
+
+                        {existingExtraUserCount > 0 ? (
+                          <div className={styles.quoteRow}>
+                            <span>{existingExtraUserCount}x</span>
+                            <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
+                            <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                            <strong>{euro.format(missingSupportExtraTotal)} p/m</strong>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <div className="empty-state">Vink supportcontract aan om dit mee te nemen.</div>
+                    )}
                   </div>
 
                   <div className={styles.quoteTotal}>
@@ -1144,7 +1181,9 @@ export default function AssetsDashboard() {
                   <div className={styles.assetTitle}>Smart Connect offerte</div>
                   <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackageName}</div>
                 </div>
-                <StatusPill tone="success">{formatConnectionCount(smartConnectPricing.connectionCount)}</StatusPill>
+                <StatusPill tone={smartConnectPricing.connectionCount > 0 ? "success" : "warning"}>
+                  {formatConnectionCount(smartConnectPricing.connectionCount)}
+                </StatusPill>
               </div>
 
               <label className={styles.upsellUserInput}>
@@ -1152,28 +1191,34 @@ export default function AssetsDashboard() {
                 <input
                   className="input"
                   type="number"
-                  min={1}
+                  min={0}
                   value={smartConnectConnections}
-                  onChange={(event) => setSmartConnectConnections(Math.max(1, Number(event.target.value || 1)))}
+                  onChange={(event) => setSmartConnectConnections(Math.max(0, Math.floor(Number(event.target.value || 0))))}
                 />
               </label>
 
               <div className={styles.quoteRows}>
-                <div className={styles.quoteRow}>
-                  <span>1x</span>
-                  <strong>Smart Connect - {formatConnectionCount(smartConnectPricing.baseTier.connections)}</strong>
-                  <span>staffel voor {formatConnectionCount(smartConnectPricing.connectionCount)}</span>
-                  <strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong>
-                </div>
+                {smartConnectPricing.baseTier ? (
+                  <>
+                    <div className={styles.quoteRow}>
+                      <span>1x</span>
+                      <strong>Smart Connect - {formatConnectionCount(smartConnectPricing.baseTier.connections)}</strong>
+                      <span>staffel voor {formatConnectionCount(smartConnectPricing.connectionCount)}</span>
+                      <strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong>
+                    </div>
 
-                {smartConnectPricing.extraConnections > 0 ? (
-                  <div className={styles.quoteRow}>
-                    <span>{smartConnectPricing.extraConnections}x</span>
-                    <strong>Smart Connect extra connectie</strong>
-                    <span>{euro.format(SMART_CONNECT_EXTRA_CONNECTION_PRICE)} p/m vanaf 11e</span>
-                    <strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong>
-                  </div>
-                ) : null}
+                    {smartConnectPricing.extraConnections > 0 ? (
+                      <div className={styles.quoteRow}>
+                        <span>{smartConnectPricing.extraConnections}x</span>
+                        <strong>Smart Connect extra connectie</strong>
+                        <span>{euro.format(SMART_CONNECT_EXTRA_CONNECTION_PRICE)} p/m vanaf 11e</span>
+                        <strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="empty-state">Vul een aantal connecties in.</div>
+                )}
               </div>
 
               <div className={styles.quoteTotal}>

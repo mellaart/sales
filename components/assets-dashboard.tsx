@@ -23,6 +23,13 @@ const CUSTOMER_PORTAL_OPTIONS = [
   { key: "offertesInzienGoedkeuren", name: "Offertes inzien en goedkeuren", monthlyPrice: 12.05 },
   { key: "assortiment", name: "Assortiment", monthlyPrice: 36.15 },
 ];
+const SMART_CONNECT_TIERS = [
+  { connections: 1, monthlyPrice: 30.15 },
+  { connections: 3, monthlyPrice: 60.3 },
+  { connections: 5, monthlyPrice: 78.4 },
+  { connections: 10, monthlyPrice: 120.6 },
+];
+const SMART_CONNECT_EXTRA_CONNECTION_PRICE = 6;
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   partijregistratie: ["voorraad"],
   hoveniersapp: ["ticketing"],
@@ -191,6 +198,26 @@ function formatUserCount(count: number) {
   return count === 1 ? "1 bestaande gebruiker" : `${count} bestaande gebruikers`;
 }
 
+function formatConnectionCount(count: number) {
+  return count === 1 ? "1 connectie" : `${count} connecties`;
+}
+
+function getSmartConnectPricing(connectionCount: number) {
+  const safeConnectionCount = Math.max(1, Math.floor(connectionCount));
+  const baseTier = SMART_CONNECT_TIERS.find((tier) => safeConnectionCount <= tier.connections)
+    ?? SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1];
+  const extraConnections = Math.max(0, safeConnectionCount - SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1].connections);
+  const extraMonthly = extraConnections * SMART_CONNECT_EXTRA_CONNECTION_PRICE;
+
+  return {
+    connectionCount: safeConnectionCount,
+    baseTier,
+    extraConnections,
+    extraMonthly,
+    monthlyTotal: baseTier.monthlyPrice + extraMonthly,
+  };
+}
+
 function normalizeModuleLabel(value: string) {
   return value
     .toLowerCase()
@@ -357,6 +384,7 @@ export default function AssetsDashboard() {
   const [extraUsersToOffer, setExtraUsersToOffer] = useState(1);
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
+  const [smartConnectConnections, setSmartConnectConnections] = useState(1);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
 
@@ -388,6 +416,10 @@ export default function AssetsDashboard() {
   const selectedCustomerPortalOptions = useMemo(
     () => CUSTOMER_PORTAL_OPTIONS.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
     [selectedCustomerPortalOptionKeys],
+  );
+  const smartConnectPricing = useMemo(
+    () => getSmartConnectPricing(smartConnectConnections),
+    [smartConnectConnections],
   );
 
   const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
@@ -483,6 +515,7 @@ export default function AssetsDashboard() {
     setAssets([]);
     setSelectedModuleKeys([]);
     setSelectedCustomerPortalOptionKeys([]);
+    setSmartConnectConnections(1);
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -512,6 +545,7 @@ export default function AssetsDashboard() {
     setAssets([]);
     setSelectedModuleKeys([]);
     setSelectedCustomerPortalOptionKeys([]);
+    setSmartConnectConnections(1);
 
     try {
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
@@ -1080,6 +1114,71 @@ export default function AssetsDashboard() {
                   <span>Klantenportaal uitbreiding</span>
                   <strong>{euro.format(customerPortalMonthlyTotal)} p/m</strong>
                 </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Stap 6</div>
+              <h2 className="headline">Smart Connect</h2>
+              <p className="subtext">
+                Vul het aantal connecties in. De staffel wordt automatisch gekozen.
+              </p>
+            </div>
+            <div className="icon-badge">
+              <Boxes size={26} />
+            </div>
+          </div>
+
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie om een Smart Connect-offerte te maken.</div>
+          ) : !selectedPackageName ? (
+            <div className="empty-state">Geen Smart Trade pakket gevonden voor deze relatie.</div>
+          ) : (
+            <div className={styles.upsellPanel}>
+              <div className={styles.upsellSummary}>
+                <div>
+                  <div className={styles.assetTitle}>Smart Connect offerte</div>
+                  <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackageName}</div>
+                </div>
+                <StatusPill tone="success">{formatConnectionCount(smartConnectPricing.connectionCount)}</StatusPill>
+              </div>
+
+              <label className={styles.upsellUserInput}>
+                <span>Aantal connecties</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={smartConnectConnections}
+                  onChange={(event) => setSmartConnectConnections(Math.max(1, Number(event.target.value || 1)))}
+                />
+              </label>
+
+              <div className={styles.quoteRows}>
+                <div className={styles.quoteRow}>
+                  <span>1x</span>
+                  <strong>Smart Connect - {formatConnectionCount(smartConnectPricing.baseTier.connections)}</strong>
+                  <span>staffel voor {formatConnectionCount(smartConnectPricing.connectionCount)}</span>
+                  <strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong>
+                </div>
+
+                {smartConnectPricing.extraConnections > 0 ? (
+                  <div className={styles.quoteRow}>
+                    <span>{smartConnectPricing.extraConnections}x</span>
+                    <strong>Smart Connect extra connectie</strong>
+                    <span>{euro.format(SMART_CONNECT_EXTRA_CONNECTION_PRICE)} p/m vanaf 11e</span>
+                    <strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className={styles.quoteTotal}>
+                <span>Smart Connect uitbreiding</span>
+                <strong>{euro.format(smartConnectPricing.monthlyTotal)} p/m</strong>
               </div>
             </div>
           )}

@@ -4,13 +4,6 @@ import type { UserRole } from "@/lib/supabase";
 
 const allowedRoles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
 
-type ServiceClient = ReturnType<typeof createClient>;
-type AuthUser = {
-  id: string;
-  email?: string | null;
-  user_metadata?: Record<string, unknown> | null;
-};
-
 function isMissingFullNameColumnError(message: string) {
   return (
     message.includes("Could not find the 'full_name' column of 'profiles' in the schema cache") ||
@@ -33,7 +26,9 @@ function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceRoleKey) return null;
+  if (!url || !serviceRoleKey) {
+    throw new Error("Supabase server keys ontbreken.");
+  }
 
   return createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -44,24 +39,21 @@ function getAnonClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !anonKey) return null;
+  if (!url || !anonKey) {
+    throw new Error("Supabase client keys ontbreken.");
+  }
 
   return createClient(url, anonKey);
 }
 
 async function verifyAdmin(request: Request) {
-  const service = getServiceClient();
-  const anon = getAnonClient();
-
-  if (!service || !anon) {
-    return { ok: false, message: "Server configuratie ontbreekt." } as const;
-  }
-
-  const authHeader = request.headers.get("authorization") || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
   if (!token) return { ok: false, message: "Niet ingelogd." } as const;
 
+  const service = getServiceClient();
+  const anon = getAnonClient();
   const { data: userData, error: userError } = await anon.auth.getUser(token);
 
   if (userError || !userData.user) return { ok: false, message: "Ongeldige sessie." } as const;
@@ -79,89 +71,27 @@ async function verifyAdmin(request: Request) {
   return { ok: true, service } as const;
 }
 
-async function findUserByEmail(service: ServiceClient, email: string) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const perPage = 1000;
-
-  for (let page = 1; page <= 50; page += 1) {
-    const { data, error } = await service.auth.admin.listUsers({ page, perPage });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const users = ((data?.users ?? []) as AuthUser[]);
-    const match = users.find((user) => user.email?.trim().toLowerCase() === normalizedEmail);
-
-    if (match) return match;
-    if (users.length < perPage) return null;
-  }
-
-  return null;
-}
-
 async function upsertProfile(
-  service: ServiceClient,
+  service: ReturnType<typeof getServiceClient>,
   profile: { id: string; email: string; role: UserRole; fullName: string | null },
 ) {
-  const profilePayload: { id: string; email: string; role: UserRole; full_name?: string } = {
+  let { error: profileError } = await service.from("profiles").upsert({
     id: profile.id,
     email: profile.email,
     role: profile.role,
-  };
+    full_name: profile.fullName,
+  });
 
-  if (profile.fullName) {
-    profilePayload.full_name = profile.fullName;
-  }
-
-  let { error } = await service.from("profiles").upsert(profilePayload);
-
-  if (error && isMissingFullNameColumnError(error.message)) {
+  if (profileError && isMissingFullNameColumnError(profileError.message)) {
     const fallbackResult = await service.from("profiles").upsert({
       id: profile.id,
       email: profile.email,
       role: profile.role,
     });
-    error = fallbackResult.error;
+    profileError = fallbackResult.error;
   }
 
-  return error;
-}
-
-async function syncExistingUser(
-  service: ServiceClient,
-  user: AuthUser,
-  values: { email: string; role: UserRole; fullName: string | null },
-) {
-  const profileError = await upsertProfile(service, {
-    id: user.id,
-    email: values.email,
-    role: values.role,
-    fullName: values.fullName,
-  });
-
-  if (profileError) {
-    return `Profiel bijwerken mislukt: ${profileError.message}`;
-  }
-
-  const nextMetadata: Record<string, unknown> = {
-    ...(user.user_metadata ?? {}),
-    role: values.role,
-  };
-
-  if (values.fullName) {
-    nextMetadata.full_name = values.fullName;
-  }
-
-  const { error: metadataError } = await service.auth.admin.updateUserById(user.id, {
-    user_metadata: nextMetadata,
-  });
-
-  if (metadataError) {
-    return `Gebruikersgegevens bijwerken mislukt: ${metadataError.message}`;
-  }
-
-  return null;
+  return profileError;
 }
 
 export async function POST(request: Request) {
@@ -184,22 +114,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ongeldige rol." }, { status: 400 });
     }
 
-    let existingUser: AuthUser | null = null;
+    const { data: existingUsers, error: existingUsersError } = await verified.service.auth.admin.listUsers();
 
-    try {
-      existingUser = await findUserByEmail(verified.service, email);
-    } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : "Bestaande gebruikers controleren mislukt." },
-        { status: 500 },
-      );
+    if (existingUsersError) {
+      return NextResponse.json({ error: "Bestaande gebruikers controleren mislukt." }, { status: 500 });
     }
 
-    if (existingUser) {
-      const syncError = await syncExistingUser(verified.service, existingUser, { email, fullName, role });
+    const existingUser = (existingUsers?.users ?? []).find(
+      (user) => user.email?.trim().toLowerCase() === email,
+    );
 
-      if (syncError) {
-        return NextResponse.json({ error: syncError }, { status: 500 });
+    if (existingUser) {
+      const profileError = await upsertProfile(verified.service, {
+        id: existingUser.id,
+        email,
+        role,
+        fullName,
+      });
+
+      if (profileError) {
+        return NextResponse.json({ error: `Profiel bijwerken mislukt: ${profileError.message}` }, { status: 500 });
+      }
+
+      const nextMetadata = {
+        ...(existingUser.user_metadata ?? {}),
+        role,
+        ...(fullName ? { full_name: fullName } : {}),
+      };
+
+      const { error: metadataError } = await verified.service.auth.admin.updateUserById(existingUser.id, {
+        user_metadata: nextMetadata,
+      });
+
+      if (metadataError) {
+        return NextResponse.json({ error: metadataError.message }, { status: 500 });
       }
 
       return NextResponse.json({ id: existingUser.id, existing: true });
@@ -214,17 +162,7 @@ export async function POST(request: Request) {
 
     if (error || !data.user) {
       if (error && isUserAlreadyExistsError(error.message)) {
-        const fallbackUser = await findUserByEmail(verified.service, email);
-
-        if (fallbackUser) {
-          const syncError = await syncExistingUser(verified.service, fallbackUser, { email, fullName, role });
-
-          if (syncError) {
-            return NextResponse.json({ error: syncError }, { status: 500 });
-          }
-
-          return NextResponse.json({ id: fallbackUser.id, existing: true });
-        }
+        return NextResponse.json({ error: "Gebruiker bestaat al" }, { status: 409 });
       }
 
       return NextResponse.json({ error: error?.message ?? "Gebruiker aanmaken mislukt." }, { status: 400 });
@@ -238,10 +176,7 @@ export async function POST(request: Request) {
     });
 
     if (profileError) {
-      return NextResponse.json(
-        { error: `Gebruiker aangemaakt, profiel bijwerken mislukt: ${profileError.message}` },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: `Gebruiker aangemaakt, profiel bijwerken mislukt: ${profileError.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ id: data.user.id, existing: false });

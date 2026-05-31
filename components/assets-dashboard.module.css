@@ -183,6 +183,11 @@
   gap: 10px;
 }
 
+.assetCardHeader .assetMeta,
+.assetCard .assetModules {
+  display: none;
+}
+
 .assetModule {
   display: flex;
   justify-content: space-between;

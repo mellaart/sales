@@ -75,21 +75,23 @@ type AssetModule = {
 type AssetRecord = {
   id: string;
   name: string;
+  assetClass: string | null;
   description: string | null;
   serialNumber: string | null;
+  quantity?: number | null;
   modules: AssetModule[];
 };
 
-function formatDate(value: string | null) {
-  if (!value) return "Geen einddatum";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat("nl-NL", {
-    dateStyle: "medium",
-  }).format(date);
-}
+type AssetClassTotal = {
+  key: string;
+  label: string;
+  quantity: number;
+  assetCount: number;
+  activeModuleCount: number;
+  inactiveModuleCount: number;
+  latestAsset: AssetRecord;
+  serialNumbers: string[];
+};
 
 function startsWithPrefix(value: string, prefix: string) {
   return value.trimStart().toLowerCase().startsWith(prefix.toLowerCase());
@@ -173,6 +175,57 @@ function getVisibleAssets(allAssets: AssetRecord[]) {
   return visibleAssets.sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function getAssetQuantity(asset: AssetRecord) {
+  const quantity = Number(asset.quantity ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function getAssetClassLabel(asset: AssetRecord) {
+  const assetClass = asset.assetClass?.trim();
+  return assetClass || asset.name;
+}
+
+function getAssetClassTotals(assets: AssetRecord[]) {
+  const totalsByKey = new Map<string, AssetClassTotal>();
+
+  for (const asset of assets) {
+    const label = getAssetClassLabel(asset);
+    const key = label.toLowerCase();
+    const quantity = getAssetQuantity(asset);
+    const activeModuleCount = asset.modules.filter((assetModule) => assetModule.active).length;
+    const inactiveModuleCount = asset.modules.length - activeModuleCount;
+    const serialNumber = asset.serialNumber?.trim();
+    const existing = totalsByKey.get(key);
+
+    if (!existing) {
+      totalsByKey.set(key, {
+        key,
+        label,
+        quantity,
+        assetCount: 1,
+        activeModuleCount,
+        inactiveModuleCount,
+        latestAsset: asset,
+        serialNumbers: serialNumber ? [serialNumber] : [],
+      });
+      continue;
+    }
+
+    existing.quantity += quantity;
+    existing.assetCount += 1;
+    existing.activeModuleCount += activeModuleCount;
+    existing.inactiveModuleCount += inactiveModuleCount;
+    if (serialNumber && !existing.serialNumbers.includes(serialNumber)) existing.serialNumbers.push(serialNumber);
+    if (hasHigherAssetId(asset, existing.latestAsset)) existing.latestAsset = asset;
+  }
+
+  return Array.from(totalsByKey.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function formatAssetQuantity(quantity: number) {
+  return quantity === 1 ? "1 asset" : `${quantity} assets`;
+}
+
 function hasSupportAsset(assets: AssetRecord[]) {
   return assets.some((asset) => asset.name.toLowerCase().includes("support"));
 }
@@ -191,7 +244,11 @@ function isExtraUserLicenseAsset(asset: AssetRecord, packageName: string) {
 
 function getExtraUserLicenseCount(assets: AssetRecord[], packageName: string | null) {
   if (!packageName) return 0;
-  return assets.filter((asset) => isExtraUserLicenseAsset(asset, packageName)).length;
+
+  return assets.reduce((sum, asset) => {
+    if (!isExtraUserLicenseAsset(asset, packageName)) return sum;
+    return sum + getAssetQuantity(asset);
+  }, 0);
 }
 
 function formatUserCount(count: number) {
@@ -399,6 +456,7 @@ export default function AssetsDashboard() {
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
+  const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);
 
   const selectedPackageName = useMemo(
     () => visibleAssets.map(getSmartTradePackageName).find((packageName): packageName is string => Boolean(packageName)) ?? null,
@@ -597,7 +655,7 @@ export default function AssetsDashboard() {
           </div>
 
           <div className="brand-actions">
-            <StatusPill tone="success">{visibleAssets.length} relevante assets</StatusPill>
+            <StatusPill tone="success">{assetClassTotals.length} assetclass totalen</StatusPill>
             <StatusPill tone="warning">{assets.length} ontvangen assets</StatusPill>
           </div>
         </header>
@@ -687,7 +745,7 @@ export default function AssetsDashboard() {
                 {selectedRelation ? `Assets voor ${selectedRelation.name}` : "Assets"}
               </h2>
               <p className="subtext">
-                Bij meerdere Smart Trade pakketten tonen we tijdelijk alleen de pakketgroep met het hoogste asset-ID.
+                We tonen totalen per assetclass. Bij meerdere Smart Trade pakketten blijft alleen de pakketgroep met het hoogste asset-ID zichtbaar.
               </p>
             </div>
             <div className="icon-badge">
@@ -705,39 +763,38 @@ export default function AssetsDashboard() {
             <div className="empty-state">Geen relevante assets gevonden voor {selectedRelation.name}.</div>
           ) : (
             <div className={styles.assetGrid}>
-              {visibleAssets.map((asset) => (
-                <article key={asset.id} className={styles.assetCard}>
+              {assetClassTotals.map((assetTotal) => (
+                <article key={assetTotal.key} className={styles.assetCard}>
                   <div className={styles.assetCardHeader}>
                     <div>
-                      <div className={styles.assetTitle}>{asset.name}</div>
+                      <div className={styles.assetTitle}>{assetTotal.label}</div>
                       <div className={styles.assetMeta}>
-                        Asset ID: {asset.id}
-                        {asset.serialNumber ? ` - Serienummer: ${asset.serialNumber}` : ""}
+                        Assetclass totaal - nieuwste asset ID: {assetTotal.latestAsset.id}
+                        {assetTotal.serialNumbers.length > 0
+                          ? ` - Serienummers: ${assetTotal.serialNumbers.slice(0, 3).join(", ")}`
+                          : ""}
                       </div>
                     </div>
-                    <StatusPill tone="success">{asset.modules.filter((assetModule) => assetModule.active).length} actief</StatusPill>
+                    <StatusPill tone="success">{assetTotal.quantity}x</StatusPill>
                   </div>
 
-                  {asset.description ? <p className={styles.assetDescription}>{asset.description}</p> : null}
-
-                  {asset.modules.length > 0 ? (
-                    <div className={styles.assetModules}>
-                      {asset.modules.map((assetModule) => (
-                        <div
-                          key={assetModule.id}
-                          className={`${styles.assetModule} ${
-                            assetModule.active ? styles.assetModuleActive : styles.assetModuleInactive
-                          }`}
-                        >
-                          <div>
-                            <strong>{assetModule.name}</strong>
-                            {assetModule.code ? <span>Code: {assetModule.code}</span> : null}
-                          </div>
-                          <span>{assetModule.active ? "Actief" : `Eindigde: ${formatDate(assetModule.endsAt)}`}</span>
-                        </div>
-                      ))}
+                  <div className={styles.assetModules}>
+                    <div className={`${styles.assetModule} ${styles.assetModuleActive}`}>
+                      <div>
+                        <strong>{formatAssetQuantity(assetTotal.quantity)}</strong>
+                        <span>{assetTotal.assetCount} ontvangen assetregels in deze groep</span>
+                      </div>
+                      <span>assetclass</span>
                     </div>
-                  ) : null}
+
+                    <div className={styles.assetModule}>
+                      <div>
+                        <strong>{assetTotal.activeModuleCount} actieve contractregels</strong>
+                        <span>{assetTotal.inactiveModuleCount} inactieve contractregels</span>
+                      </div>
+                      <span>contracten</span>
+                    </div>
+                  </div>
                 </article>
               ))}
             </div>

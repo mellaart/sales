@@ -26,6 +26,7 @@ type AssetModule = {
 type AssetWithModules = {
   id: string;
   name: string;
+  assetClass: string | null;
   description: string | null;
   serialNumber: string | null;
   modules: AssetModule[];
@@ -66,6 +67,13 @@ type SmartTradeAssetsApiResponse = {
   data?: Array<{
     id?: number | string;
     name?: string | null;
+    assetclass?: unknown;
+    assetClass?: unknown;
+    asset_class?: unknown;
+    assetClassName?: unknown;
+    class?: unknown;
+    classification?: unknown;
+    type?: unknown;
     description?: string | null;
     serialNumber?: string | null;
     contractAgreements?: {
@@ -110,6 +118,46 @@ function requiredEnv(name: string) {
 function asString(value: unknown) {
   if (value === undefined || value === null) return "";
   return String(value).trim();
+}
+
+function readableText(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string" || typeof value === "number") {
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+  }
+
+  if (typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  return (
+    readableText(record.data) ??
+    readableText(record.name) ??
+    readableText(record.description) ??
+    readableText(record.label) ??
+    readableText(record.title) ??
+    null
+  );
+}
+
+function getAssetClassName(asset: SmartTradeAssetRow) {
+  const record = asset as Record<string, unknown>;
+  const candidates = [
+    record.assetclass,
+    record.assetClass,
+    record.asset_class,
+    record.assetClassName,
+    record.class,
+    record.classification,
+    record.type,
+  ];
+
+  for (const candidate of candidates) {
+    const text = readableText(candidate);
+    if (text) return text;
+  }
+
+  return null;
 }
 
 export function normalizeBaseUrl(value?: string | null) {
@@ -346,6 +394,19 @@ function mapAssetModules(asset: SmartTradeAssetRow) {
     });
 }
 
+function mapAssetRow(asset: SmartTradeAssetRow): AssetWithModules | null {
+  if (asset.id === undefined || asset.id === null) return null;
+
+  return {
+    id: String(asset.id),
+    name: asset.name?.trim() || `Asset ${asset.id}`,
+    assetClass: getAssetClassName(asset),
+    description: asset.description ?? null,
+    serialNumber: asset.serialNumber ?? null,
+    modules: mapAssetModules(asset),
+  };
+}
+
 export async function getAssetsWithModulesForRelation(_relationId: string | number) {
   const relationId = String(_relationId).trim();
   const config = getConfig();
@@ -373,31 +434,18 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
 
       const detailJson = await readSmartTradeJson<{ data?: SmartTradeAssetRow }>(detailResponse);
       const detailAsset = detailJson.data;
-      if (!detailAsset || detailAsset.id === undefined || detailAsset.id === null) continue;
+      if (!detailAsset) continue;
 
-      fallbackAssets.push({
-        id: String(detailAsset.id),
-        name: detailAsset.name?.trim() || `Asset ${detailAsset.id}`,
-        description: detailAsset.description ?? null,
-        serialNumber: detailAsset.serialNumber ?? null,
-        modules: mapAssetModules(detailAsset),
-      });
+      const mappedAsset = mapAssetRow(detailAsset);
+      if (mappedAsset) fallbackAssets.push(mappedAsset);
     }
 
     return fallbackAssets;
   }
 
   return assets
-    .filter((asset): asset is (typeof assets)[number] & { id: number | string } =>
-      asset.id !== undefined && asset.id !== null,
-    )
-    .map((asset) => ({
-      id: String(asset.id),
-      name: asset.name?.trim() || `Asset ${asset.id}`,
-      description: asset.description ?? null,
-      serialNumber: asset.serialNumber ?? null,
-      modules: mapAssetModules(asset),
-    }));
+    .map(mapAssetRow)
+    .filter((asset): asset is AssetWithModules => asset !== null);
 }
 
 export async function getRelationById(relationId: string | number, overrides?: Partial<Pick<SmartTradeConfig, "baseUrl" | "company" | "user" | "password" | "timeoutMs">>) {

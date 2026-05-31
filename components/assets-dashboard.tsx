@@ -31,6 +31,7 @@ const SMART_CONNECT_TIERS = [
 ];
 const SMART_CONNECT_EXTRA_CONNECTION_PRICE = 6;
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
+  suiteMkb: ["rapportage"],
   partijregistratie: ["voorraad"],
   hoveniersapp: ["ticketing"],
 };

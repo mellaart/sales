@@ -10,6 +10,12 @@ function isMissingColumnError(message: string, column: "full_name" | "created_at
   );
 }
 
+function normalizeText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -64,6 +70,44 @@ async function verifyAdmin(request: Request) {
   return { ok: true as const };
 }
 
+type AuthMetadata = {
+  email: string | null;
+  fullName: string | null;
+};
+
+async function loadAuthMetadata(
+  service: NonNullable<ReturnType<typeof getServiceClient>>,
+  profileRows: unknown[],
+) {
+  const metadataEntries = await Promise.all(
+    profileRows.map(async (profileRow) => {
+      const profile = profileRow as { id?: string | null };
+      if (!profile.id) return null;
+
+      const { data, error } = await service.auth.admin.getUserById(profile.id);
+      if (error || !data.user) return null;
+
+      const metadata = data.user.user_metadata ?? {};
+      const fullName =
+        normalizeText(metadata.full_name) ??
+        normalizeText(metadata.display_name) ??
+        normalizeText(metadata.name);
+
+      return [
+        profile.id,
+        {
+          email: normalizeText(data.user.email),
+          fullName,
+        },
+      ] as [string, AuthMetadata];
+    }),
+  );
+
+  return new Map(
+    metadataEntries.filter((entry): entry is [string, AuthMetadata] => entry !== null),
+  );
+}
+
 export async function GET(request: Request) {
   try {
     const verified = await verifyAdmin(request);
@@ -111,14 +155,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
+    const rows = profileRows ?? [];
+    const authMetadataById = await loadAuthMetadata(service, rows);
 
-    const normalizeText = (value: unknown): string | null => {
-      if (typeof value !== "string") return null;
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    };
-
-    const users = (profileRows ?? []).map((profileRow) => {
+    const users = rows.map((profileRow) => {
       const profile = profileRow as {
         id: string;
         role?: UserRole;
@@ -127,12 +167,17 @@ export async function GET(request: Request) {
         created_at?: string | null;
       };
 
-      const email = normalizeText(profile.email);
+      const authMetadata = authMetadataById.get(profile.id);
+      const email = normalizeText(profile.email) ?? authMetadata?.email ?? null;
+      const fullName =
+        normalizeText(profile.full_name) ??
+        authMetadata?.fullName ??
+        (email ? email.split("@")[0] : null);
 
       return {
         id: profile.id,
         email,
-        full_name: normalizeText(profile.full_name) ?? (email ? email.split("@")[0] : null),
+        full_name: fullName,
         role: profile.role ?? "sales",
         created_at: profile.created_at ?? null,
         updated_at: null,

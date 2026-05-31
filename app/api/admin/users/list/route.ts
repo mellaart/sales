@@ -170,8 +170,8 @@ export async function GET(request: Request) {
       const authMetadata = authMetadataById.get(profile.id);
       const email = normalizeText(profile.email) ?? authMetadata?.email ?? null;
       const fullName =
-        normalizeText(profile.full_name) ??
         authMetadata?.fullName ??
+        normalizeText(profile.full_name) ??
         (email ? email.split("@")[0] : null);
 
       return {

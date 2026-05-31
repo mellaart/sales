@@ -14,6 +14,10 @@ import { StatusPill } from "@/components/ui";
 
 const roles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
 
+type LoadProfilesOptions = {
+  keepStatus?: boolean;
+};
+
 export default function AdminDashboard() {
   const { role, refreshProfile } = useAuth();
   const router = useRouter();
@@ -22,15 +26,18 @@ export default function AdminDashboard() {
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  const [createStatus, setCreateStatus] = useState("");
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("sales");
   const [busy, setBusy] = useState(false);
 
-  const loadProfiles = useCallback(async () => {
+  const loadProfiles = useCallback(async (options: LoadProfilesOptions = {}) => {
     setLoading(true);
-    setStatus("");
+    if (!options.keepStatus) {
+      setStatus("");
+    }
     try {
       if (!supabase) {
         setStatus("Supabase client ontbreekt.");
@@ -82,11 +89,11 @@ export default function AdminDashboard() {
   async function createUser(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setStatus("");
+    setCreateStatus("Gebruiker wordt aangemaakt...");
 
     try {
       if (!supabase) {
-        setStatus("Supabase client ontbreekt.");
+        setCreateStatus("Supabase client ontbreekt.");
         return;
       }
 
@@ -94,7 +101,7 @@ export default function AdminDashboard() {
       const accessToken = sessionData.session?.access_token;
 
       if (!accessToken) {
-        setStatus("Je sessie is verlopen. Log opnieuw in.");
+        setCreateStatus("Je sessie is verlopen. Log opnieuw in.");
         return;
       }
 
@@ -107,21 +114,25 @@ export default function AdminDashboard() {
         body: JSON.stringify({ email, fullName, role: newRole }),
       });
 
-      const json = (await response.json().catch(() => ({}))) as { error?: string };
+      const json = (await response.json().catch(() => ({}))) as { error?: string; existing?: boolean };
 
       if (!response.ok) {
-        setStatus(json.error || "Gebruiker aanmaken mislukt.");
+        setCreateStatus(json.error || `Gebruiker aanmaken mislukt (${response.status}).`);
         return;
       }
 
       setEmail("");
       setFullName("");
       setNewRole("sales");
-      setStatus("Gebruiker uitgenodigd. Er is een activatiemail verstuurd.");
-      await loadProfiles();
+      setCreateStatus(
+        json.existing
+          ? "Gebruiker bestond al. Profiel en rol zijn bijgewerkt."
+          : "Gebruiker uitgenodigd. Er is een activatiemail verstuurd.",
+      );
+      await loadProfiles({ keepStatus: true });
       router.refresh();
     } catch {
-      setStatus("Er ging iets mis bij het aanmaken van de gebruiker.");
+      setCreateStatus("Er ging iets mis bij het aanmaken van de gebruiker.");
     } finally {
       setBusy(false);
     }
@@ -155,7 +166,7 @@ export default function AdminDashboard() {
     }
 
     setStatus("Rol bijgewerkt.");
-    await loadProfiles();
+    await loadProfiles({ keepStatus: true });
     await refreshProfile();
   }
 
@@ -190,7 +201,7 @@ export default function AdminDashboard() {
     }
 
     setStatus("Gebruiker verwijderd.");
-    await loadProfiles();
+    await loadProfiles({ keepStatus: true });
   }
 
   if (!canManageRoles(role)) {
@@ -213,12 +224,12 @@ export default function AdminDashboard() {
           <div>
             <div className="brand-mark">Smart Trade</div>
             <h1>Admin en rollen</h1>
-            <p>Voeg collega’s toe en beheer hun toegang binnen Smart Trade.</p>
+            <p>Voeg collega&apos;s toe en beheer hun toegang binnen Smart Trade.</p>
           </div>
 
           <div className="brand-actions">
             <StatusPill tone="success">Rollen actief</StatusPill>
-            <button type="button" className="primary-button" onClick={loadProfiles}>
+            <button type="button" className="primary-button" onClick={() => loadProfiles()}>
               <RefreshCw size={16} />
               Vernieuwen
             </button>
@@ -249,7 +260,6 @@ export default function AdminDashboard() {
               />
             </label>
 
-
             <label className="input-wrap">
               <span className="input-label">Naam</span>
               <input
@@ -278,10 +288,8 @@ export default function AdminDashboard() {
             </button>
           </form>
 
-          {status ? <div className="save-status">{status}</div> : null}
+          {createStatus ? <div className="save-status">{createStatus}</div> : null}
         </section>
-
-
 
         <section className="card panel">
           <div className="top-row">
@@ -291,7 +299,6 @@ export default function AdminDashboard() {
               <p className="subtext">Gebruik dit als snelle referentie voor rechten in de app.</p>
             </div>
           </div>
-
 
           <div className="admin-user-list">
             <div className="admin-user-card"><div><div className="package-name">sales</div><div className="subtext">Eigen deals bekijken en beheren.</div></div></div>

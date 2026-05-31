@@ -4,6 +4,15 @@ import type { UserRole } from "@/lib/supabase";
 
 const allowedRoles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
 
+type ServiceClient = ReturnType<typeof getServiceClient>;
+
+type ProfileLookup = {
+  id: string;
+  email?: string | null;
+  full_name?: string | null;
+  role?: UserRole | null;
+};
+
 function isMissingFullNameColumnError(message: string) {
   return (
     message.includes("Could not find the 'full_name' column of 'profiles' in the schema cache") ||
@@ -71,16 +80,52 @@ async function verifyAdmin(request: Request) {
   return { ok: true, service } as const;
 }
 
-async function upsertProfile(
-  service: ReturnType<typeof getServiceClient>,
+function normalizeText(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function findProfileByEmail(service: ServiceClient, email: string) {
+  const { data, error } = await service
+    .from("profiles")
+    .select("id,email,full_name,role")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (!error) {
+    return (data as ProfileLookup | null) ?? null;
+  }
+
+  if (!isMissingFullNameColumnError(error.message)) {
+    throw new Error(error.message);
+  }
+
+  const fallbackResult = await service
+    .from("profiles")
+    .select("id,email,role")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (fallbackResult.error) {
+    throw new Error(fallbackResult.error.message);
+  }
+
+  return (fallbackResult.data as ProfileLookup | null) ?? null;
+}
+
+async function writeProfile(
+  service: ServiceClient,
   profile: { id: string; email: string; role: UserRole; fullName: string | null },
 ) {
-  let { error: profileError } = await service.from("profiles").upsert({
+  const profilePayload = {
     id: profile.id,
     email: profile.email,
     role: profile.role,
     full_name: profile.fullName,
-  });
+  };
+
+  let { error: profileError } = await service.from("profiles").upsert(profilePayload);
 
   if (profileError && isMissingFullNameColumnError(profileError.message)) {
     const fallbackResult = await service.from("profiles").upsert({
@@ -94,6 +139,49 @@ async function upsertProfile(
   return profileError;
 }
 
+async function updateExistingProfile(
+  service: ServiceClient,
+  profile: { id: string; email: string; role: UserRole; fullName: string | null },
+) {
+  const updatePayload = profile.fullName
+    ? { email: profile.email, role: profile.role, full_name: profile.fullName }
+    : { email: profile.email, role: profile.role };
+
+  let { error: profileError } = await service
+    .from("profiles")
+    .update(updatePayload)
+    .eq("id", profile.id);
+
+  if (profileError && isMissingFullNameColumnError(profileError.message)) {
+    const fallbackResult = await service
+      .from("profiles")
+      .update({ email: profile.email, role: profile.role })
+      .eq("id", profile.id);
+    profileError = fallbackResult.error;
+  }
+
+  return profileError;
+}
+
+async function updateUserMetadata(
+  service: ServiceClient,
+  userId: string,
+  values: { fullName: string | null; role: UserRole },
+) {
+  const { data: userData } = await service.auth.admin.getUserById(userId);
+  const nextMetadata = {
+    ...(userData.user?.user_metadata ?? {}),
+    role: values.role,
+    ...(values.fullName ? { full_name: values.fullName } : {}),
+  };
+
+  const { error } = await service.auth.admin.updateUserById(userId, {
+    user_metadata: nextMetadata,
+  });
+
+  return error;
+}
+
 export async function POST(request: Request) {
   try {
     const verified = await verifyAdmin(request);
@@ -103,7 +191,7 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as { email?: string; fullName?: string; role?: UserRole };
     const email = body.email?.trim().toLowerCase();
-    const fullName = body.fullName?.trim() || null;
+    const fullName = normalizeText(body.fullName);
     const role = body.role;
 
     if (!email || !role) {
@@ -114,19 +202,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ongeldige rol." }, { status: 400 });
     }
 
-    const { data: existingUsers, error: existingUsersError } = await verified.service.auth.admin.listUsers();
+    const existingProfile = await findProfileByEmail(verified.service, email);
 
-    if (existingUsersError) {
-      return NextResponse.json({ error: "Bestaande gebruikers controleren mislukt." }, { status: 500 });
-    }
-
-    const existingUser = (existingUsers?.users ?? []).find(
-      (user) => user.email?.trim().toLowerCase() === email,
-    );
-
-    if (existingUser) {
-      const profileError = await upsertProfile(verified.service, {
-        id: existingUser.id,
+    if (existingProfile) {
+      const profileError = await updateExistingProfile(verified.service, {
+        id: existingProfile.id,
         email,
         role,
         fullName,
@@ -136,21 +216,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Profiel bijwerken mislukt: ${profileError.message}` }, { status: 500 });
       }
 
-      const nextMetadata = {
-        ...(existingUser.user_metadata ?? {}),
-        role,
-        ...(fullName ? { full_name: fullName } : {}),
-      };
+      const metadataError = await updateUserMetadata(verified.service, existingProfile.id, { fullName, role });
 
-      const { error: metadataError } = await verified.service.auth.admin.updateUserById(existingUser.id, {
-        user_metadata: nextMetadata,
+      return NextResponse.json({
+        id: existingProfile.id,
+        existing: true,
+        metadataWarning: metadataError?.message ?? null,
       });
-
-      if (metadataError) {
-        return NextResponse.json({ error: metadataError.message }, { status: 500 });
-      }
-
-      return NextResponse.json({ id: existingUser.id, existing: true });
     }
 
     const redirectTo = `${new URL(request.url).origin}/reset-password`;
@@ -162,13 +234,13 @@ export async function POST(request: Request) {
 
     if (error || !data.user) {
       if (error && isUserAlreadyExistsError(error.message)) {
-        return NextResponse.json({ error: "Gebruiker bestaat al" }, { status: 409 });
+        return NextResponse.json({ error: "Gebruiker bestaat al, maar er is nog geen profiel gevonden." }, { status: 409 });
       }
 
       return NextResponse.json({ error: error?.message ?? "Gebruiker aanmaken mislukt." }, { status: 400 });
     }
 
-    const profileError = await upsertProfile(verified.service, {
+    const profileError = await writeProfile(verified.service, {
       id: data.user.id,
       email,
       role,

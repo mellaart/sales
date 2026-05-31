@@ -14,7 +14,6 @@ import {
 import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
-const SERVICE_COST_ASSET_PREFIXES = ["Worldline servicekosten", "CCV servicekosten"];
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
 const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi"]);
 const CUSTOMER_PORTAL_OPTIONS = [
@@ -30,6 +29,11 @@ const SMART_CONNECT_TIERS = [
   { connections: 10, monthlyPrice: 120.6 },
 ];
 const SMART_CONNECT_EXTRA_CONNECTION_PRICE = 6;
+const SERVICE_COST_ANNUAL_PRICE = 175.8;
+const SERVICE_COST_OPTIONS = [
+  { key: "ccv", name: "CCV servicekosten", assetClassIds: ["114"] },
+  { key: "worldline", name: "Worldline servicekosten", assetClassIds: ["113", "401"] },
+];
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   suiteMkb: ["rapportage"],
   partijregistratie: ["voorraad"],
@@ -76,6 +80,7 @@ type AssetModule = {
 type AssetRecord = {
   id: string;
   name: string;
+  assetClassId?: string | null;
   assetClass: string | null;
   description: string | null;
   serialNumber: string | null;
@@ -102,8 +107,18 @@ function isSmartTradeAsset(asset: AssetRecord) {
   return startsWithPrefix(asset.name, SMART_TRADE_ASSET_PREFIX);
 }
 
+function getServiceCostOptionForAsset(asset: AssetRecord) {
+  const assetClassId = asset.assetClassId?.trim();
+  if (assetClassId) {
+    const optionByAssetClass = SERVICE_COST_OPTIONS.find((option) => option.assetClassIds.includes(assetClassId));
+    if (optionByAssetClass) return optionByAssetClass;
+  }
+
+  return SERVICE_COST_OPTIONS.find((option) => startsWithPrefix(asset.name, option.name)) ?? null;
+}
+
 function isServiceCostAsset(asset: AssetRecord) {
-  return SERVICE_COST_ASSET_PREFIXES.some((prefix) => startsWithPrefix(asset.name, prefix));
+  return getServiceCostOptionForAsset(asset) !== null;
 }
 
 function getSmartTradePackageName(asset: AssetRecord) {
@@ -183,7 +198,7 @@ function getAssetQuantity(asset: AssetRecord) {
 
 function getAssetClassLabel(asset: AssetRecord) {
   const assetClass = asset.assetClass?.trim();
-  return assetClass || asset.name;
+  return assetClass || getServiceCostOptionForAsset(asset)?.name || asset.name;
 }
 
 function getAssetClassTotals(assets: AssetRecord[]) {
@@ -258,6 +273,31 @@ function formatUserCount(count: number) {
 
 function formatConnectionCount(count: number) {
   return count === 1 ? "1 connectie" : `${count} connecties`;
+}
+
+function getSafeQuantity(value: string | number) {
+  return Math.max(0, Math.floor(Number(value || 0)));
+}
+
+function getInitialServiceCostQuantities() {
+  return SERVICE_COST_OPTIONS.reduce<Record<string, number>>((quantities, option) => {
+    quantities[option.key] = 0;
+    return quantities;
+  }, {});
+}
+
+function getServiceCostCounts(assets: AssetRecord[]) {
+  return assets.reduce<Record<string, number>>((counts, asset) => {
+    const option = getServiceCostOptionForAsset(asset);
+    if (!option) return counts;
+
+    counts[option.key] = (counts[option.key] ?? 0) + getAssetQuantity(asset);
+    return counts;
+  }, getInitialServiceCostQuantities());
+}
+
+function formatAssetClassIds(assetClassIds: string[]) {
+  return assetClassIds.length === 1 ? `asset_class ${assetClassIds[0]}` : `asset_classes ${assetClassIds.join(", ")}`;
 }
 
 function getSmartConnectPricing(connectionCount: number) {
@@ -455,9 +495,11 @@ export default function AssetsDashboard() {
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
+  const [serviceCostQuantities, setServiceCostQuantities] = useState<Record<string, number>>(getInitialServiceCostQuantities);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
   const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);
+  const existingServiceCostCounts = useMemo(() => getServiceCostCounts(assets), [assets]);
 
   const selectedPackageName = useMemo(
     () => visibleAssets.map(getSmartTradePackageName).find((packageName): packageName is string => Boolean(packageName)) ?? null,
@@ -492,6 +534,27 @@ export default function AssetsDashboard() {
     () => getSmartConnectPricing(smartConnectConnections),
     [smartConnectConnections],
   );
+  const serviceCostRows = useMemo(
+    () =>
+      SERVICE_COST_OPTIONS.map((option) => {
+        const existingQuantity = existingServiceCostCounts[option.key] ?? 0;
+        const offerQuantity = serviceCostQuantities[option.key] ?? 0;
+
+        return {
+          ...option,
+          existingQuantity,
+          existingAnnualTotal: existingQuantity * SERVICE_COST_ANNUAL_PRICE,
+          offerQuantity,
+          offerAnnualTotal: offerQuantity * SERVICE_COST_ANNUAL_PRICE,
+        };
+      }),
+    [existingServiceCostCounts, serviceCostQuantities],
+  );
+  const existingServiceCostRows = serviceCostRows.filter((option) => option.existingQuantity > 0);
+  const selectedServiceCostRows = serviceCostRows.filter((option) => option.offerQuantity > 0);
+  const existingServiceCostTotal = existingServiceCostRows.reduce((sum, option) => sum + option.existingQuantity, 0);
+  const existingServiceCostAnnualTotal = existingServiceCostRows.reduce((sum, option) => sum + option.existingAnnualTotal, 0);
+  const serviceCostAnnualTotal = selectedServiceCostRows.reduce((sum, option) => sum + option.offerAnnualTotal, 0);
 
   const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
   const existingExtraUserCount = useMemo(
@@ -546,6 +609,13 @@ export default function AssetsDashboard() {
     });
   }
 
+  function handleServiceCostQuantityChange(optionKey: string, value: string) {
+    setServiceCostQuantities((currentQuantities) => ({
+      ...currentQuantities,
+      [optionKey]: getSafeQuantity(value),
+    }));
+  }
+
   function handleResetModules() {
     setSelectedModuleKeys(currentModuleKeys);
   }
@@ -588,6 +658,7 @@ export default function AssetsDashboard() {
     setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
     setSmartConnectConnections(0);
+    setServiceCostQuantities(getInitialServiceCostQuantities());
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -619,6 +690,7 @@ export default function AssetsDashboard() {
     setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
     setSmartConnectConnections(0);
+    setServiceCostQuantities(getInitialServiceCostQuantities());
 
     try {
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
@@ -1282,6 +1354,97 @@ export default function AssetsDashboard() {
               <div className={styles.quoteTotal}>
                 <span>Smart Connect uitbreiding</span>
                 <strong>{euro.format(smartConnectPricing.monthlyTotal)} p/m</strong>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Stap 7</div>
+              <h2 className="headline">Servicekosten</h2>
+              <p className="subtext">
+                CCV en Worldline worden herkend op assetclass. Offerte-aantallen starten op 0.
+              </p>
+            </div>
+            <div className="icon-badge">
+              <Boxes size={26} />
+            </div>
+          </div>
+
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie om servicekosten te bekijken.</div>
+          ) : (
+            <div className={styles.upsellPanel}>
+              <div className={styles.upsellSummary}>
+                <div>
+                  <div className={styles.assetTitle}>Servicekosten offerte</div>
+                  <div className={styles.assetMeta}>{euro.format(SERVICE_COST_ANNUAL_PRICE)} per jaar per stuk</div>
+                </div>
+                <StatusPill tone={existingServiceCostTotal > 0 ? "success" : "warning"}>
+                  {existingServiceCostTotal > 0 ? `${existingServiceCostTotal} huidig` : "geen huidige servicekosten"}
+                </StatusPill>
+              </div>
+
+              <div className={styles.moduleSelectionSummary}>
+                {serviceCostRows.map((option) => (
+                  <div key={option.key}>
+                    <span>{option.name}</span>
+                    <strong>{option.existingQuantity} huidig</strong>
+                    <span>{formatAssetClassIds(option.assetClassIds)}</span>
+                    <label className={styles.upsellUserInput}>
+                      <span>Extra aantal voor offerte</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min={0}
+                        value={option.offerQuantity}
+                        onChange={(event) => handleServiceCostQuantityChange(option.key, event.target.value)}
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              <div className={styles.quoteRows}>
+                {existingServiceCostRows.length > 0 ? (
+                  existingServiceCostRows.map((option) => (
+                    <div key={`existing-service-${option.key}`} className={styles.quoteRow}>
+                      <span>{option.existingQuantity}x</span>
+                      <strong>Huidig: {option.name}</strong>
+                      <span>{euro.format(SERVICE_COST_ANNUAL_PRICE)} p/j</span>
+                      <strong>{euro.format(option.existingAnnualTotal)} p/j</strong>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">Geen bestaande CCV of Worldline servicekosten gevonden.</div>
+                )}
+              </div>
+
+              <div className={styles.quoteTotal}>
+                <span>Bestaande servicekosten per jaar</span>
+                <strong>{euro.format(existingServiceCostAnnualTotal)} p/j</strong>
+              </div>
+
+              <div className={styles.quoteRows}>
+                {selectedServiceCostRows.length > 0 ? (
+                  selectedServiceCostRows.map((option) => (
+                    <div key={`service-${option.key}`} className={styles.quoteRow}>
+                      <span>{option.offerQuantity}x</span>
+                      <strong>{option.name}</strong>
+                      <span>{euro.format(SERVICE_COST_ANNUAL_PRICE)} p/j</span>
+                      <strong>{euro.format(option.offerAnnualTotal)} p/j</strong>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">Vul een extra aantal in voor CCV of Worldline.</div>
+                )}
+              </div>
+
+              <div className={styles.quoteTotal}>
+                <span>Servicekosten offerte per jaar</span>
+                <strong>{euro.format(serviceCostAnnualTotal)} p/j</strong>
               </div>
             </div>
           )}

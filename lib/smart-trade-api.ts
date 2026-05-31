@@ -26,6 +26,7 @@ type AssetModule = {
 type AssetWithModules = {
   id: string;
   name: string;
+  assetClassId: string | null;
   assetClass: string | null;
   description: string | null;
   serialNumber: string | null;
@@ -94,16 +95,33 @@ type SmartTradeAssetsApiResponse = {
 };
 type SmartTradeAssetRow = NonNullable<SmartTradeAssetsApiResponse["data"]>[number];
 
+type SmartTradeAssetClassesApiResponse = {
+  data?: Array<{
+    id?: number | string;
+    name?: string | null;
+    assetNameTemplate?: string | null;
+  }>;
+};
+
 const DEFAULT_TIMEOUT_MS = 15000;
 const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
 const RELATION_CACHE_TTL_MS = 5 * 60 * 1000;
+const ASSET_CLASS_PAGE_SIZE = 1000;
+const ASSET_CLASS_MAX_PAGES = 5;
+const ASSET_CLASS_CACHE_TTL_MS = 10 * 60 * 1000;
 
 let relationCache: {
   cacheKey: string;
   expiresAt: number;
   relations: SmartTradeRelation[];
+} | null = null;
+
+let assetClassCache: {
+  cacheKey: string;
+  expiresAt: number;
+  classes: Map<string, string>;
 } | null = null;
 
 export const SMART_TRADE_CONFIG_ERROR =
@@ -140,13 +158,42 @@ function readableText(value: unknown): string | null {
   );
 }
 
-function getAssetClassName(asset: SmartTradeAssetRow) {
+function readableId(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string" || typeof value === "number") {
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+  }
+
+  if (typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  return readableId(record.id) ?? readableId(record.data) ?? null;
+}
+
+function isNumericText(value: string) {
+  return /^\d+$/.test(value.trim());
+}
+
+function getAssetClassId(asset: SmartTradeAssetRow) {
+  const record = asset as Record<string, unknown>;
+  const candidates = [record.assetClass, record.assetclass, record.asset_class];
+
+  for (const candidate of candidates) {
+    const id = readableId(candidate);
+    if (id) return id;
+  }
+
+  return null;
+}
+
+function getInlineAssetClassName(asset: SmartTradeAssetRow) {
   const record = asset as Record<string, unknown>;
   const candidates = [
+    record.assetClassName,
     record.assetclass,
     record.assetClass,
     record.asset_class,
-    record.assetClassName,
     record.class,
     record.classification,
     record.type,
@@ -154,10 +201,20 @@ function getAssetClassName(asset: SmartTradeAssetRow) {
 
   for (const candidate of candidates) {
     const text = readableText(candidate);
-    if (text) return text;
+    if (text && !isNumericText(text)) return text;
   }
 
   return null;
+}
+
+function getAssetClassName(asset: SmartTradeAssetRow, assetClasses: Map<string, string>) {
+  const assetClassId = getAssetClassId(asset);
+  if (assetClassId) {
+    const mappedName = assetClasses.get(assetClassId);
+    if (mappedName) return mappedName;
+  }
+
+  return getInlineAssetClassName(asset);
 }
 
 export function normalizeBaseUrl(value?: string | null) {
@@ -245,6 +302,13 @@ function buildRelationsUrl(baseUrl: string, page: number) {
   return url;
 }
 
+function buildAssetClassesUrl(baseUrl: string, page: number) {
+  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/asset_classes`);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(ASSET_CLASS_PAGE_SIZE));
+  return url;
+}
+
 function relationSearchText(relation: SmartTradeRelation) {
   return [
     relation.id,
@@ -287,6 +351,10 @@ function getRelationCacheKey(config: SmartTradeConfig) {
   return `${config.baseUrl}|${config.company}`;
 }
 
+function getAssetClassCacheKey(config: SmartTradeConfig) {
+  return `${config.baseUrl}|${config.company}`;
+}
+
 async function getCachedRelations(config: SmartTradeConfig, headers: Record<string, string>) {
   const cacheKey = getRelationCacheKey(config);
   const now = Date.now();
@@ -319,6 +387,41 @@ async function getCachedRelations(config: SmartTradeConfig, headers: Record<stri
   };
 
   return relationCache.relations;
+}
+
+async function getCachedAssetClasses(config: SmartTradeConfig, headers: Record<string, string>) {
+  const cacheKey = getAssetClassCacheKey(config);
+  const now = Date.now();
+
+  if (assetClassCache?.cacheKey === cacheKey && assetClassCache.expiresAt > now) {
+    return assetClassCache.classes;
+  }
+
+  const classes = new Map<string, string>();
+
+  for (let page = 1; page <= ASSET_CLASS_MAX_PAGES; page += 1) {
+    const assetClassesUrl = buildAssetClassesUrl(config.baseUrl, page);
+    const response = await fetchWithTimeout(assetClassesUrl.toString(), headers, config.timeoutMs);
+    const json = await readSmartTradeJson<SmartTradeAssetClassesApiResponse>(response);
+    const rows = Array.isArray(json.data) ? json.data : [];
+
+    for (const row of rows) {
+      if (row.id === undefined || row.id === null) continue;
+      const name = row.name?.trim();
+      if (!name) continue;
+      classes.set(String(row.id), name);
+    }
+
+    if (rows.length < ASSET_CLASS_PAGE_SIZE) break;
+  }
+
+  assetClassCache = {
+    cacheKey,
+    expiresAt: now + ASSET_CLASS_CACHE_TTL_MS,
+    classes,
+  };
+
+  return assetClassCache.classes;
 }
 
 export function getRelationName(relation: SmartTradeRelation) {
@@ -394,13 +497,14 @@ function mapAssetModules(asset: SmartTradeAssetRow) {
     });
 }
 
-function mapAssetRow(asset: SmartTradeAssetRow): AssetWithModules | null {
+function mapAssetRow(asset: SmartTradeAssetRow, assetClasses: Map<string, string>): AssetWithModules | null {
   if (asset.id === undefined || asset.id === null) return null;
 
   return {
     id: String(asset.id),
     name: asset.name?.trim() || `Asset ${asset.id}`,
-    assetClass: getAssetClassName(asset),
+    assetClassId: getAssetClassId(asset),
+    assetClass: getAssetClassName(asset, assetClasses),
     description: asset.description ?? null,
     serialNumber: asset.serialNumber ?? null,
     modules: mapAssetModules(asset),
@@ -411,6 +515,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
   const relationId = String(_relationId).trim();
   const config = getConfig();
   const headers = getHeaders(config);
+  const assetClasses = await getCachedAssetClasses(config, headers).catch(() => new Map<string, string>());
 
   const assetsUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/assets`);
   assetsUrl.searchParams.set("owner", relationId);
@@ -436,7 +541,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
       const detailAsset = detailJson.data;
       if (!detailAsset) continue;
 
-      const mappedAsset = mapAssetRow(detailAsset);
+      const mappedAsset = mapAssetRow(detailAsset, assetClasses);
       if (mappedAsset) fallbackAssets.push(mappedAsset);
     }
 
@@ -444,7 +549,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
   }
 
   return assets
-    .map(mapAssetRow)
+    .map((asset) => mapAssetRow(asset, assetClasses))
     .filter((asset): asset is AssetWithModules => asset !== null);
 }
 

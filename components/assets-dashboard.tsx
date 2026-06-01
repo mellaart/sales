@@ -275,6 +275,50 @@ function formatConnectionCount(count: number) {
   return count === 1 ? "1 connectie" : `${count} connecties`;
 }
 
+function getSmartConnectConnectionsFromText(value?: string | null) {
+  const match = value?.match(/smart\s*connect\D*(\d+)/i);
+  const connections = match ? Number(match[1]) : Number.NaN;
+  return Number.isFinite(connections) && connections > 0 ? Math.floor(connections) : null;
+}
+
+function getSmartConnectConnectionsFromAsset(asset: AssetRecord) {
+  return (
+    getSmartConnectConnectionsFromText(asset.name) ??
+    getSmartConnectConnectionsFromText(asset.assetClass) ??
+    getSmartConnectConnectionsFromText(asset.description)
+  );
+}
+
+function getSmartConnectRows(assets: AssetRecord[]) {
+  const rowsByConnections = new Map<
+    number,
+    { key: string; connections: number; quantity: number; totalConnections: number }
+  >();
+
+  for (const asset of assets) {
+    const connections = getSmartConnectConnectionsFromAsset(asset);
+    if (!connections) continue;
+
+    const quantity = getAssetQuantity(asset);
+    const existing = rowsByConnections.get(connections);
+
+    if (!existing) {
+      rowsByConnections.set(connections, {
+        key: String(connections),
+        connections,
+        quantity,
+        totalConnections: quantity * connections,
+      });
+      continue;
+    }
+
+    existing.quantity += quantity;
+    existing.totalConnections += quantity * connections;
+  }
+
+  return Array.from(rowsByConnections.values()).sort((left, right) => left.connections - right.connections);
+}
+
 function getSafeQuantity(value: string | number) {
   return Math.max(0, Math.floor(Number(value || 0)));
 }
@@ -500,6 +544,7 @@ export default function AssetsDashboard() {
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
   const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);
   const existingServiceCostCounts = useMemo(() => getServiceCostCounts(assets), [assets]);
+  const existingSmartConnectRows = useMemo(() => getSmartConnectRows(assets), [assets]);
 
   const selectedPackageName = useMemo(
     () => visibleAssets.map(getSmartTradePackageName).find((packageName): packageName is string => Boolean(packageName)) ?? null,
@@ -534,6 +579,8 @@ export default function AssetsDashboard() {
     () => getSmartConnectPricing(smartConnectConnections),
     [smartConnectConnections],
   );
+  const existingSmartConnectAssetTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.quantity, 0);
+  const existingSmartConnectTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.totalConnections, 0);
   const serviceCostRows = useMemo(
     () =>
       SERVICE_COST_OPTIONS.map((option) => {
@@ -1292,7 +1339,7 @@ export default function AssetsDashboard() {
               <div className="eyebrow">Stap 6</div>
               <h2 className="headline">Smart Connect</h2>
               <p className="subtext">
-                Vul het aantal connecties in. De staffel wordt automatisch gekozen.
+                Het aantal connecties wordt uit de Smart Connect tekst gehaald. Offerte-aantal start op 0.
               </p>
             </div>
             <div className="icon-badge">
@@ -1302,22 +1349,35 @@ export default function AssetsDashboard() {
 
           {!selectedRelation ? (
             <div className="empty-state">Kies eerst een relatie om een Smart Connect-offerte te maken.</div>
-          ) : !selectedPackageName ? (
-            <div className="empty-state">Geen Smart Trade pakket gevonden voor deze relatie.</div>
           ) : (
             <div className={styles.upsellPanel}>
               <div className={styles.upsellSummary}>
                 <div>
                   <div className={styles.assetTitle}>Smart Connect offerte</div>
-                  <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackageName}</div>
+                  <div className={styles.assetMeta}>
+                    {selectedPackageName ? `Pakket: Smart Trade ${selectedPackageName}` : "Geen Smart Trade pakket gevonden"}
+                  </div>
                 </div>
-                <StatusPill tone={smartConnectPricing.connectionCount > 0 ? "success" : "warning"}>
-                  {formatConnectionCount(smartConnectPricing.connectionCount)}
+                <StatusPill tone={existingSmartConnectTotal > 0 ? "success" : "warning"}>
+                  {existingSmartConnectTotal > 0 ? `${formatConnectionCount(existingSmartConnectTotal)} huidig` : "geen huidige connecties"}
                 </StatusPill>
               </div>
 
+              <div className={styles.moduleSelectionSummary}>
+                <div>
+                  <span>Huidige Smart Connect assets</span>
+                  <strong>{formatAssetQuantity(existingSmartConnectAssetTotal)}</strong>
+                  <span>{formatConnectionCount(existingSmartConnectTotal)} totaal</span>
+                </div>
+                <div>
+                  <span>Offerte</span>
+                  <strong>{formatConnectionCount(smartConnectPricing.connectionCount)}</strong>
+                  <span>Extra aantal start op 0</span>
+                </div>
+              </div>
+
               <label className={styles.upsellUserInput}>
-                <span>Aantal connecties</span>
+                <span>Extra aantal connecties voor offerte</span>
                 <input
                   className="input"
                   type="number"
@@ -1326,6 +1386,26 @@ export default function AssetsDashboard() {
                   onChange={(event) => setSmartConnectConnections(Math.max(0, Math.floor(Number(event.target.value || 0))))}
                 />
               </label>
+
+              <div className={styles.quoteRows}>
+                {existingSmartConnectRows.length > 0 ? (
+                  existingSmartConnectRows.map((row) => (
+                    <div key={`existing-smart-connect-${row.key}`} className={styles.quoteRow}>
+                      <span>{row.quantity}x</span>
+                      <strong>Huidig: Smart Connect {row.connections}</strong>
+                      <span>{formatConnectionCount(row.connections)} per stuk</span>
+                      <strong>{formatConnectionCount(row.totalConnections)}</strong>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">Geen bestaande Smart Connect assets gevonden.</div>
+                )}
+              </div>
+
+              <div className={styles.quoteTotal}>
+                <span>Bestaande Smart Connect connecties</span>
+                <strong>{formatConnectionCount(existingSmartConnectTotal)}</strong>
+              </div>
 
               <div className={styles.quoteRows}>
                 {smartConnectPricing.baseTier ? (
@@ -1347,12 +1427,12 @@ export default function AssetsDashboard() {
                     ) : null}
                   </>
                 ) : (
-                  <div className="empty-state">Vul een aantal connecties in.</div>
+                  <div className="empty-state">Vul een extra aantal connecties in voor de offerte.</div>
                 )}
               </div>
 
               <div className={styles.quoteTotal}>
-                <span>Smart Connect uitbreiding</span>
+                <span>Smart Connect offerte</span>
                 <strong>{euro.format(smartConnectPricing.monthlyTotal)} p/m</strong>
               </div>
             </div>

@@ -106,13 +106,18 @@ type SmartTradeAssetClassesApiResponse = {
   }>;
 };
 
+type SmartTradeRelationAssetIncludeResponse = {
+  data?: {
+    assets?: { data?: SmartTradeAssetRow[] | null } | SmartTradeAssetRow[] | null;
+  } | null;
+};
+
 const DEFAULT_TIMEOUT_MS = 15000;
 const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
 const RELATION_CACHE_TTL_MS = 5 * 60 * 1000;
 const ASSET_PAGE_SIZE = 500;
-const ASSET_SCAN_MAX_PAGES = 20;
 const ASSET_CLASS_PAGE_SIZE = 1000;
 const ASSET_CLASS_MAX_PAGES = 5;
 const ASSET_CLASS_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -222,14 +227,6 @@ function getAssetClassName(asset: SmartTradeAssetRow, assetClasses: Map<string, 
   return getInlineAssetClassName(asset);
 }
 
-function getAssetOwnerId(asset: SmartTradeAssetRow) {
-  return readableId((asset as Record<string, unknown>).owner);
-}
-
-function belongsToRelation(asset: SmartTradeAssetRow, relationId: string) {
-  return getAssetOwnerId(asset) === relationId;
-}
-
 function getAssetQuantity(asset: SmartTradeAssetRow) {
   const quantity = Number((asset as Record<string, unknown>).quantity ?? 1);
   return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
@@ -327,16 +324,21 @@ function buildAssetClassesUrl(baseUrl: string, page: number) {
   return url;
 }
 
-function buildAssetsUrl(baseUrl: string, options: { owner?: string; page?: number; include?: string } = {}) {
+function buildAssetsUrl(baseUrl: string, options: { owner?: string; include?: string } = {}) {
   const url = new URL(`${baseUrl.replace(/\/+$/, "")}/assets`);
 
   if (options.owner) url.searchParams.set("owner", options.owner);
-  if (options.page) url.searchParams.set("page", String(options.page));
   if (options.include) url.searchParams.set("include", options.include);
 
   url.searchParams.set("onlyRoot", "0");
   url.searchParams.set("per_page", String(ASSET_PAGE_SIZE));
 
+  return url;
+}
+
+function buildRelationAssetsUrl(baseUrl: string, relationId: string) {
+  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/relations/${encodeURIComponent(relationId)}`);
+  url.searchParams.set("include", "assets");
   return url;
 }
 
@@ -487,23 +489,17 @@ async function fetchAssetRows(url: URL, headers: Record<string, string>, timeout
   return Array.isArray(json.data) ? json.data : [];
 }
 
-async function findAssetsForRelationByScanning(config: SmartTradeConfig, headers: Record<string, string>, relationId: string) {
-  const matchedAssets = new Map<string, SmartTradeAssetRow>();
+function readIncludedAssets(json: SmartTradeRelationAssetIncludeResponse) {
+  const assets = json.data?.assets;
+  if (Array.isArray(assets)) return assets;
+  if (assets && Array.isArray(assets.data)) return assets.data;
+  return [];
+}
 
-  for (let page = 1; page <= ASSET_SCAN_MAX_PAGES; page += 1) {
-    const assetsUrl = buildAssetsUrl(config.baseUrl, { page });
-    const assets = await fetchAssetRows(assetsUrl, headers, config.timeoutMs);
-
-    for (const asset of assets) {
-      if (asset.id === undefined || asset.id === null) continue;
-      if (!belongsToRelation(asset, relationId)) continue;
-      matchedAssets.set(String(asset.id), asset);
-    }
-
-    if (assets.length < ASSET_PAGE_SIZE) break;
-  }
-
-  return Array.from(matchedAssets.values());
+async function fetchRelationIncludedAssets(config: SmartTradeConfig, headers: Record<string, string>, relationId: string) {
+  const response = await fetchWithTimeout(buildRelationAssetsUrl(config.baseUrl, relationId).toString(), headers, config.timeoutMs);
+  const json = await readSmartTradeJson<SmartTradeRelationAssetIncludeResponse>(response);
+  return readIncludedAssets(json);
 }
 
 export async function searchRelations(term?: string) {
@@ -578,7 +574,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
   let assets = await fetchAssetRows(assetsUrl, headers, config.timeoutMs);
 
   if (assets.length === 0) {
-    assets = await findAssetsForRelationByScanning(config, headers, relationId);
+    assets = await fetchRelationIncludedAssets(config, headers, relationId).catch(() => []);
   }
 
   const shouldFallback = assets.some((asset) => !asset.contractAgreements);

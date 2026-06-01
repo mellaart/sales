@@ -519,7 +519,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
 
   const assetsUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/assets`);
   assetsUrl.searchParams.set("owner", relationId);
-  assetsUrl.searchParams.set("onlyRoot", "false");
+  assetsUrl.searchParams.set("onlyRoot", "0");
   assetsUrl.searchParams.set("include", "contractAgreements");
   assetsUrl.searchParams.set("per_page", "500");
 

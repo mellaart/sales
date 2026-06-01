@@ -30,6 +30,7 @@ type AssetWithModules = {
   assetClass: string | null;
   description: string | null;
   serialNumber: string | null;
+  quantity: number | null;
   modules: AssetModule[];
 };
 
@@ -68,6 +69,8 @@ type SmartTradeAssetsApiResponse = {
   data?: Array<{
     id?: number | string;
     name?: string | null;
+    owner?: unknown;
+    quantity?: number | string | null;
     assetclass?: unknown;
     assetClass?: unknown;
     asset_class?: unknown;
@@ -108,6 +111,8 @@ const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
 const RELATION_CACHE_TTL_MS = 5 * 60 * 1000;
+const ASSET_PAGE_SIZE = 500;
+const ASSET_SCAN_MAX_PAGES = 20;
 const ASSET_CLASS_PAGE_SIZE = 1000;
 const ASSET_CLASS_MAX_PAGES = 5;
 const ASSET_CLASS_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -217,6 +222,19 @@ function getAssetClassName(asset: SmartTradeAssetRow, assetClasses: Map<string, 
   return getInlineAssetClassName(asset);
 }
 
+function getAssetOwnerId(asset: SmartTradeAssetRow) {
+  return readableId((asset as Record<string, unknown>).owner);
+}
+
+function belongsToRelation(asset: SmartTradeAssetRow, relationId: string) {
+  return getAssetOwnerId(asset) === relationId;
+}
+
+function getAssetQuantity(asset: SmartTradeAssetRow) {
+  const quantity = Number((asset as Record<string, unknown>).quantity ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
+}
+
 export function normalizeBaseUrl(value?: string | null) {
   const fallback = "https://retail.troublefree.nl/v3/api";
   const raw = value?.trim() || fallback;
@@ -306,6 +324,19 @@ function buildAssetClassesUrl(baseUrl: string, page: number) {
   const url = new URL(`${baseUrl.replace(/\/+$/, "")}/asset_classes`);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(ASSET_CLASS_PAGE_SIZE));
+  return url;
+}
+
+function buildAssetsUrl(baseUrl: string, options: { owner?: string; page?: number; include?: string } = {}) {
+  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/assets`);
+
+  if (options.owner) url.searchParams.set("owner", options.owner);
+  if (options.page) url.searchParams.set("page", String(options.page));
+  if (options.include) url.searchParams.set("include", options.include);
+
+  url.searchParams.set("onlyRoot", "0");
+  url.searchParams.set("per_page", String(ASSET_PAGE_SIZE));
+
   return url;
 }
 
@@ -450,6 +481,31 @@ async function readSmartTradeJson<T>(response: Response) {
   }
 }
 
+async function fetchAssetRows(url: URL, headers: Record<string, string>, timeoutMs: number) {
+  const response = await fetchWithTimeout(url.toString(), headers, timeoutMs);
+  const json = await readSmartTradeJson<SmartTradeAssetsApiResponse>(response);
+  return Array.isArray(json.data) ? json.data : [];
+}
+
+async function findAssetsForRelationByScanning(config: SmartTradeConfig, headers: Record<string, string>, relationId: string) {
+  const matchedAssets = new Map<string, SmartTradeAssetRow>();
+
+  for (let page = 1; page <= ASSET_SCAN_MAX_PAGES; page += 1) {
+    const assetsUrl = buildAssetsUrl(config.baseUrl, { page });
+    const assets = await fetchAssetRows(assetsUrl, headers, config.timeoutMs);
+
+    for (const asset of assets) {
+      if (asset.id === undefined || asset.id === null) continue;
+      if (!belongsToRelation(asset, relationId)) continue;
+      matchedAssets.set(String(asset.id), asset);
+    }
+
+    if (assets.length < ASSET_PAGE_SIZE) break;
+  }
+
+  return Array.from(matchedAssets.values());
+}
+
 export async function searchRelations(term?: string) {
   const config = getConfig();
   const headers = getHeaders(config);
@@ -507,6 +563,7 @@ function mapAssetRow(asset: SmartTradeAssetRow, assetClasses: Map<string, string
     assetClass: getAssetClassName(asset, assetClasses),
     description: asset.description ?? null,
     serialNumber: asset.serialNumber ?? null,
+    quantity: getAssetQuantity(asset),
     modules: mapAssetModules(asset),
   };
 }
@@ -517,15 +574,12 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
   const headers = getHeaders(config);
   const assetClasses = await getCachedAssetClasses(config, headers).catch(() => new Map<string, string>());
 
-  const assetsUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/assets`);
-  assetsUrl.searchParams.set("owner", relationId);
-  assetsUrl.searchParams.set("onlyRoot", "0");
-  assetsUrl.searchParams.set("include", "contractAgreements");
-  assetsUrl.searchParams.set("per_page", "500");
+  const assetsUrl = buildAssetsUrl(config.baseUrl, { owner: relationId, include: "contractAgreements" });
+  let assets = await fetchAssetRows(assetsUrl, headers, config.timeoutMs);
 
-  const response = await fetchWithTimeout(assetsUrl.toString(), headers, config.timeoutMs);
-  const json = await readSmartTradeJson<SmartTradeAssetsApiResponse>(response);
-  const assets = Array.isArray(json.data) ? json.data : [];
+  if (assets.length === 0) {
+    assets = await findAssetsForRelationByScanning(config, headers, relationId);
+  }
 
   const shouldFallback = assets.some((asset) => !asset.contractAgreements);
   if (shouldFallback) {

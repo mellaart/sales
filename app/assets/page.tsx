@@ -1,11 +1,5 @@
-import AssetsDashboard from "@/components/assets-dashboard";
-import CustomerPortalCurrentSync from "@/components/customer-portal-current-sync";
+import AssetsDashboardPage from "@/components/assets-dashboard-page";
 
 export default function AssetsPage() {
-  return (
-    <>
-      <AssetsDashboard />
-      <CustomerPortalCurrentSync />
-    </>
-  );
+  return <AssetsDashboardPage />;
 }

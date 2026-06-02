@@ -115,7 +115,15 @@ export default function AssetsPage() {
       <iframe
         aria-hidden="true"
         srcDoc={customerPortalSyncFrame}
-        style={{ display: "none" }}
+        style={{
+          border: 0,
+          height: 0,
+          left: -1,
+          opacity: 0,
+          position: "absolute",
+          top: -1,
+          width: 0,
+        }}
         tabIndex={-1}
         title="customer-portal-current-sync"
       />

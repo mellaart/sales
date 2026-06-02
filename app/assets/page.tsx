@@ -117,12 +117,13 @@ export default function AssetsPage() {
         srcDoc={customerPortalSyncFrame}
         style={{
           border: 0,
-          height: 0,
+          height: 1,
           left: -1,
           opacity: 0,
+          pointerEvents: "none",
           position: "absolute",
           top: -1,
-          width: 0,
+          width: 1,
         }}
         tabIndex={-1}
         title="customer-portal-current-sync"

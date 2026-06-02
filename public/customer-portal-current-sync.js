@@ -1,4 +1,5 @@
 (() => {
+  if (!window.location.pathname.startsWith("/assets")) return;
   if (window.__customerPortalCurrentSyncLoaded) return;
   window.__customerPortalCurrentSyncLoaded = true;
 

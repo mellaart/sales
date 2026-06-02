@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Boxes, LogOut, UserRound, Users2 } from "lucide-react";
+import { getAccessibleTabs } from "@/lib/role-tabs";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 
@@ -11,6 +12,8 @@ export function AppShellHeader() {
   const pathname = usePathname();
 
   if (!user) return null;
+
+  const accessibleTabs = getAccessibleTabs(role ?? "sales");
 
   const handleLogout = async () => {
     const supabase = getSupabaseClient();
@@ -41,26 +44,16 @@ export function AppShellHeader() {
             Dashboard
           </Link>
 
-          <Link href="/calculator" className={`nav-button ${pathname.startsWith("/calculator") ? "active" : ""}`}>
-            Calculator
-          </Link>
-
-          <Link href="/deals" className={`nav-button ${pathname.startsWith("/deals") ? "active" : ""}`}>
-            Deals
-          </Link>
-
-          <Link href="/assets" className={`nav-button ${pathname.startsWith("/assets") ? "active" : ""}`}>
-            <Boxes size={15} />
-            Assets
-          </Link>
-
-          <Link href="/testen" className={`nav-button ${pathname.startsWith("/testen") ? "active" : ""}`}>
-            Testen
-          </Link>
-
-          <Link href="/admin" className={`nav-button ${pathname.startsWith("/admin") ? "active" : ""}`}>
-            Admin
-          </Link>
+          {accessibleTabs.map((tab) => (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              className={`nav-button ${pathname.startsWith(tab.pathPrefix) ? "active" : ""}`}
+            >
+              {tab.key === "assets" ? <Boxes size={15} /> : null}
+              {tab.label}
+            </Link>
+          ))}
 
           <span className="user-chip">
             <Users2 size={13} />

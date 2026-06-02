@@ -1,3 +1,5 @@
+import Script from "next/script";
+
 import AssetsDashboard from "@/components/assets-dashboard";
 
 const customerPortalSyncScript = `
@@ -24,10 +26,10 @@ const customerPortalSyncScript = `
   function getSelectedRelationKey() {
     const selectedButton = Array.from(document.querySelectorAll("button")).find((button) => {
       const text = button.textContent || "";
-      return text.includes("Geselecteerd") && /\\bID\\s+\\d+\\b/.test(text);
+      return text.includes("Geselecteerd") && /\bID\s+\d+\b/.test(text);
     });
 
-    const match = selectedButton && selectedButton.textContent && selectedButton.textContent.match(/\\bID\\s+(\\d+)\\b/);
+    const match = selectedButton && selectedButton.textContent && selectedButton.textContent.match(/\bID\s+(\d+)\b/);
     return match ? match[1] : null;
   }
 
@@ -105,7 +107,9 @@ export default function AssetsPage() {
   return (
     <>
       <AssetsDashboard />
-      <script dangerouslySetInnerHTML={{ __html: customerPortalSyncScript }} />
+      <Script id="customer-portal-current-sync" strategy="afterInteractive">
+        {customerPortalSyncScript}
+      </Script>
     </>
   );
 }

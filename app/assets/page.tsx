@@ -1,5 +1,10 @@
-import AssetsDashboardPage from "@/components/assets-dashboard-page";
+import AssetsDashboard from "@/components/assets-dashboard";
 
 export default function AssetsPage() {
-  return <AssetsDashboardPage />;
+  return (
+    <>
+      <AssetsDashboard />
+      <script src="/customer-portal-current-sync.js" defer />
+    </>
+  );
 }

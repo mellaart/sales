@@ -10,6 +10,7 @@ import {
   type UserRole,
 } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
+import { RoleTabAccessOverview } from "@/components/role-tab-access-overview";
 import { StatusPill } from "@/components/ui";
 
 const roles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
@@ -296,21 +297,14 @@ export default function AdminDashboard() {
             <div>
               <div className="brand-mark">Rollen overzicht</div>
               <h2>Wat mag je per rol?</h2>
-              <p className="subtext">Gebruik dit als snelle referentie voor rechten in de app.</p>
+              <p className="subtext">Aangevinkt betekent dat het tabblad zichtbaar is in de navigatie.</p>
             </div>
           </div>
 
-          <div className="admin-user-list">
-            <div className="admin-user-card"><div><div className="package-name">sales</div><div className="subtext">Eigen deals bekijken en beheren.</div></div></div>
-            <div className="admin-user-card"><div><div className="package-name">support</div><div className="subtext">Alle deals bekijken en supporttaken uitvoeren.</div></div></div>
-            <div className="admin-user-card"><div><div className="package-name">consultant</div><div className="subtext">Eigen deals beheren en advies voorbereiden.</div></div></div>
-            <div className="admin-user-card"><div><div className="package-name">manager</div><div className="subtext">Alle deals bekijken en teamoutput volgen.</div></div></div>
-            <div className="admin-user-card"><div><div className="package-name">admin</div><div className="subtext">Gebruikers en rollen beheren plus volledige toegang.</div></div></div>
-          </div>
+          <RoleTabAccessOverview roles={roles} />
 
           <div className="save-status">
-            Rechten samenvatting: sales/consultant zien alleen eigen deals, support/manager zien alle deals,
-            en admin beheert daarnaast ook gebruikers en rollen.
+            Deze selectie wordt gebruikt om de tabbladen Calculator, Deals, Assets, Testen en Admin per rol te tonen of te verbergen.
           </div>
         </section>
 

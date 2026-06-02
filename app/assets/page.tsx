@@ -117,12 +117,12 @@ export default function AssetsPage() {
         srcDoc={customerPortalSyncFrame}
         style={{
           border: 0,
+          bottom: 0,
           height: 1,
-          left: -1,
           opacity: 0,
           pointerEvents: "none",
-          position: "absolute",
-          top: -1,
+          position: "fixed",
+          right: 0,
           width: 1,
         }}
         tabIndex={-1}

@@ -9,6 +9,16 @@ const CUSTOMER_PORTAL_OPTIONS = [
   { key: "assortiment", name: "Assortiment" },
 ];
 
+type SyncWindow = Window &
+  typeof globalThis & {
+    __customerPortalCurrentSync?: {
+      runs: number;
+      relationKey: string | null;
+      currentKeys: string[];
+      lastSyncKey: string | null;
+    };
+  };
+
 function normalize(value: string | null | undefined) {
   return String(value || "")
     .toLowerCase()
@@ -64,10 +74,17 @@ export default function CustomerPortalCurrentSync() {
   useEffect(() => {
     function syncCurrentCustomerPortalOptions() {
       const relationKey = getSelectedRelationKey();
-      if (!relationKey) return;
-
       const currentKeys = getCurrentCustomerPortalKeys();
-      if (currentKeys.length === 0) return;
+      const syncWindow = window as SyncWindow;
+
+      syncWindow.__customerPortalCurrentSync = {
+        runs: (syncWindow.__customerPortalCurrentSync?.runs ?? 0) + 1,
+        relationKey,
+        currentKeys,
+        lastSyncKey: lastSyncKeyRef.current,
+      };
+
+      if (!relationKey || currentKeys.length === 0) return;
 
       const syncKey = `${relationKey}:${currentKeys.slice().sort().join(",")}`;
       if (lastSyncKeyRef.current === syncKey) return;
@@ -101,5 +118,5 @@ export default function CustomerPortalCurrentSync() {
     };
   }, []);
 
-  return null;
+  return <span data-customer-portal-current-sync="mounted" hidden />;
 }

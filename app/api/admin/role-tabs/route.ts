@@ -1,13 +1,13 @@
+import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ROLE_TAB_ACCESS, normalizeRoleTabAccess } from "@/lib/role-tabs";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const SETTINGS_BUCKET = "smart-trade-settings";
 const SETTINGS_FILE = "role-tab-access.json";
-
-type ServiceClient = ReturnType<typeof createClient>;
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,6 +19,8 @@ function getServiceClient() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
+
+type ServiceClient = NonNullable<ReturnType<typeof getServiceClient>>;
 
 async function verifyAdmin(request: Request, service: ServiceClient) {
   const authHeader = request.headers.get("authorization");
@@ -45,7 +47,7 @@ async function verifyAdmin(request: Request, service: ServiceClient) {
   return { ok: true as const };
 }
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
+function jsonResponse(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
     headers: { "Cache-Control": "no-store" },

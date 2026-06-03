@@ -9,15 +9,47 @@ import {
   type ProfileRecord,
   type UserRole,
 } from "@/lib/supabase";
+import {
+  ROLE_TAB_ACCESS,
+  USER_ROLES,
+  normalizeRoleTabAccess,
+  type AppTabKey,
+  type RoleTabAccessMap,
+} from "@/lib/role-tabs";
 import { useAuth } from "@/components/auth-provider";
 import { RoleTabAccessOverview } from "@/components/role-tab-access-overview";
 import { StatusPill } from "@/components/ui";
 
-const roles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
+const roles: UserRole[] = USER_ROLES;
 
 type LoadProfilesOptions = {
   keepStatus?: boolean;
 };
+
+type RoleTabsResponse = {
+  error?: string;
+  roleTabAccess?: unknown;
+  persisted?: boolean;
+};
+
+function toggleRoleTabAccess(
+  currentAccess: RoleTabAccessMap,
+  selectedRole: UserRole,
+  tabKey: AppTabKey,
+) {
+  const nextRoleTabs = new Set(currentAccess[selectedRole]);
+
+  if (nextRoleTabs.has(tabKey)) {
+    nextRoleTabs.delete(tabKey);
+  } else {
+    nextRoleTabs.add(tabKey);
+  }
+
+  return normalizeRoleTabAccess({
+    ...currentAccess,
+    [selectedRole]: Array.from(nextRoleTabs),
+  });
+}
 
 export default function AdminDashboard() {
   const { role, refreshProfile } = useAuth();
@@ -33,6 +65,11 @@ export default function AdminDashboard() {
   const [fullName, setFullName] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("sales");
   const [busy, setBusy] = useState(false);
+
+  const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
+  const [roleTabsLoading, setRoleTabsLoading] = useState(true);
+  const [roleTabStatus, setRoleTabStatus] = useState("");
+  const [roleTabSavingKey, setRoleTabSavingKey] = useState<string | null>(null);
 
   const loadProfiles = useCallback(async (options: LoadProfilesOptions = {}) => {
     setLoading(true);
@@ -81,11 +118,44 @@ export default function AdminDashboard() {
     }
   }, [supabase]);
 
+  const loadRoleTabs = useCallback(async () => {
+    setRoleTabsLoading(true);
+    setRoleTabStatus("");
+
+    try {
+      const response = await fetch("/api/admin/role-tabs", { cache: "no-store" });
+      const json = (await response.json().catch(() => ({}))) as RoleTabsResponse;
+
+      if (!response.ok) {
+        setRoleTabStatus(json.error || "Rolrechten laden mislukt.");
+        return;
+      }
+
+      const nextAccess = normalizeRoleTabAccess(json.roleTabAccess);
+      setRoleTabAccess(nextAccess);
+      window.dispatchEvent(new CustomEvent("role-tab-access-updated", { detail: nextAccess }));
+
+      if (!json.persisted) {
+        setRoleTabStatus("Standaardrechten geladen. Wijzig een vinkje om deze instellingen op te slaan.");
+      }
+    } catch {
+      setRoleTabAccess(ROLE_TAB_ACCESS);
+      setRoleTabStatus("Rolrechten laden mislukt; standaardrechten zijn actief.");
+    } finally {
+      setRoleTabsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (canManageRoles(role)) {
       void loadProfiles();
+      void loadRoleTabs();
     }
-  }, [role, loadProfiles]);
+  }, [role, loadProfiles, loadRoleTabs]);
+
+  async function refreshAdminData() {
+    await Promise.all([loadProfiles(), loadRoleTabs()]);
+  }
 
   async function createUser(event: React.FormEvent) {
     event.preventDefault();
@@ -171,6 +241,55 @@ export default function AdminDashboard() {
     await refreshProfile();
   }
 
+  async function updateRoleTab(selectedRole: UserRole, tabKey: AppTabKey) {
+    if (!supabase) {
+      setRoleTabStatus("Supabase client ontbreekt.");
+      return;
+    }
+
+    const previousAccess = roleTabAccess;
+    const nextAccess = toggleRoleTabAccess(roleTabAccess, selectedRole, tabKey);
+    const savingKey = `${selectedRole}:${tabKey}`;
+
+    setRoleTabAccess(nextAccess);
+    setRoleTabSavingKey(savingKey);
+    setRoleTabStatus("Rolrechten worden opgeslagen...");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Je sessie is verlopen. Log opnieuw in.");
+      }
+
+      const response = await fetch("/api/admin/role-tabs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ roleTabAccess: nextAccess }),
+      });
+
+      const json = (await response.json().catch(() => ({}))) as RoleTabsResponse;
+
+      if (!response.ok) {
+        throw new Error(json.error || "Rolrechten opslaan mislukt.");
+      }
+
+      const savedAccess = normalizeRoleTabAccess(json.roleTabAccess ?? nextAccess);
+      setRoleTabAccess(savedAccess);
+      window.dispatchEvent(new CustomEvent("role-tab-access-updated", { detail: savedAccess }));
+      setRoleTabStatus("Rolrechten opgeslagen. De navigatie is bijgewerkt.");
+    } catch (error) {
+      setRoleTabAccess(previousAccess);
+      setRoleTabStatus(error instanceof Error ? error.message : "Rolrechten opslaan mislukt.");
+    } finally {
+      setRoleTabSavingKey(null);
+    }
+  }
+
   async function deleteUser(profileId: string) {
     if (!supabase) return;
 
@@ -230,7 +349,7 @@ export default function AdminDashboard() {
 
           <div className="brand-actions">
             <StatusPill tone="success">Rollen actief</StatusPill>
-            <button type="button" className="primary-button" onClick={() => loadProfiles()}>
+            <button type="button" className="primary-button" onClick={() => void refreshAdminData()}>
               <RefreshCw size={16} />
               Vernieuwen
             </button>
@@ -301,10 +420,17 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <RoleTabAccessOverview roles={roles} />
+          <RoleTabAccessOverview
+            access={roleTabAccess}
+            disabled={roleTabsLoading || roleTabSavingKey !== null}
+            roles={roles}
+            savingKey={roleTabSavingKey}
+            onToggle={updateRoleTab}
+          />
 
           <div className="save-status">
-            Deze selectie wordt gebruikt om de tabbladen Calculator, Deals, Assets, Testen en Admin per rol te tonen of te verbergen.
+            {roleTabStatus ||
+              "Klik een vinkje aan of uit om de tabbladen Calculator, Deals, Assets, Testen en Admin per rol te beheren."}
           </div>
         </section>
 

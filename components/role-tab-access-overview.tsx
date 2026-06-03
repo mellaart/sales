@@ -1,4 +1,6 @@
-import { APP_TABS, ROLE_TAB_ACCESS } from "@/lib/role-tabs";
+"use client";
+
+import { APP_TABS, type AppTabKey, type RoleTabAccessMap } from "@/lib/role-tabs";
 import type { UserRole } from "@/lib/supabase";
 
 const roleDescriptions: Record<UserRole, string> = {
@@ -10,10 +12,20 @@ const roleDescriptions: Record<UserRole, string> = {
 };
 
 type RoleTabAccessOverviewProps = {
+  access: RoleTabAccessMap;
+  disabled?: boolean;
   roles: UserRole[];
+  savingKey?: string | null;
+  onToggle: (role: UserRole, tabKey: AppTabKey) => void;
 };
 
-export function RoleTabAccessOverview({ roles }: RoleTabAccessOverviewProps) {
+export function RoleTabAccessOverview({
+  access,
+  disabled = false,
+  roles,
+  savingKey,
+  onToggle,
+}: RoleTabAccessOverviewProps) {
   return (
     <div className="admin-user-list">
       {roles.map((role) => (
@@ -25,12 +37,20 @@ export function RoleTabAccessOverview({ roles }: RoleTabAccessOverviewProps) {
 
           <div className="button-row">
             {APP_TABS.map((tab) => {
-              const checked = ROLE_TAB_ACCESS[role].includes(tab.key);
+              const checked = access[role].includes(tab.key);
+              const isSaving = savingKey === `${role}:${tab.key}`;
 
               return (
                 <label key={`${role}-${tab.key}`} className={`secondary-button ${checked ? "active" : ""}`}>
-                  <input type="checkbox" checked={checked} readOnly aria-label={`${role} ${tab.label}`} />
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    aria-label={`${role} ${tab.label} toegang`}
+                    onChange={() => onToggle(role, tab.key)}
+                  />
                   {tab.label}
+                  {isSaving ? " opslaan..." : null}
                 </label>
               );
             })}

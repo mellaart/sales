@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
+import { NumberStepper } from "@/components/number-stepper";
 import { StatusPill } from "@/components/ui";
 import {
   MODULES,
@@ -879,12 +880,12 @@ export default function AssetsDashboardCurrent() {
 
                 <label className={styles.upsellUserInput}>
                   <span>Aantal extra gebruikers</span>
-                  <input className="input" type="number" min={0} value={extraUsersToOffer} onChange={(event) => setExtraUsersToOffer(getSafeQuantity(event.target.value))} />
+                  <NumberStepper ariaLabel="Aantal extra gebruikers" min={0} value={extraUsersToOffer} onChange={(nextValue) => setExtraUsersToOffer(Math.floor(nextValue))} />
                 </label>
 
                 <label className={styles.upsellUserInput}>
                   <span>Aantal extra gebruikers chauffeursmodule</span>
-                  <input className="input" type="number" min={0} value={chauffeurExtraUsersToOffer} onChange={(event) => setChauffeurExtraUsersToOffer(getSafeQuantity(event.target.value))} />
+                  <NumberStepper ariaLabel="Aantal extra gebruikers chauffeursmodule" min={0} value={chauffeurExtraUsersToOffer} onChange={(nextValue) => setChauffeurExtraUsersToOffer(Math.floor(nextValue))} />
                 </label>
 
                 <div className={styles.quoteRows}>
@@ -1107,7 +1108,7 @@ export default function AssetsDashboardCurrent() {
             <div className={styles.upsellPanel}>
               <div className={styles.upsellSummary}><div><div className={styles.assetTitle}>Smart Connect offerte</div><div className={styles.assetMeta}>{selectedPackageName ? `Pakket: Smart Trade ${selectedPackageName}` : "Geen Smart Trade pakket gevonden"}</div></div><StatusPill tone={existingSmartConnectTotal > 0 ? "success" : "warning"}>{existingSmartConnectTotal > 0 ? `${formatConnectionCount(existingSmartConnectTotal)} huidig` : "geen huidige connecties"}</StatusPill></div>
               <div className={styles.moduleSelectionSummary}><div><span>Huidige Smart Connect assets</span><strong>{formatAssetQuantity(existingSmartConnectAssetTotal)}</strong><span>{formatConnectionCount(existingSmartConnectTotal)} totaal</span></div><div><span>Offerte</span><strong>{formatConnectionCount(smartConnectPricing.connectionCount)}</strong><span>Extra aantal start op 0</span></div></div>
-              <label className={styles.upsellUserInput}><span>Extra aantal connecties voor offerte</span><input className="input" type="number" min={0} value={smartConnectConnections} onChange={(event) => setSmartConnectConnections(getSafeQuantity(event.target.value))} /></label>
+              <label className={styles.upsellUserInput}><span>Extra aantal connecties voor offerte</span><NumberStepper ariaLabel="Extra aantal connecties voor offerte" min={0} value={smartConnectConnections} onChange={(nextValue) => setSmartConnectConnections(Math.floor(nextValue))} /></label>
               <div className={styles.quoteRows}>{existingSmartConnectRows.length > 0 ? existingSmartConnectRows.map((row) => <div key={`existing-smart-connect-${row.key}`} className={styles.quoteRow}><span>{row.quantity}x</span><strong>Huidig: Smart Connect {row.connections}</strong><span>{formatConnectionCount(row.connections)} per stuk</span><strong>{formatConnectionCount(row.totalConnections)}</strong></div>) : <div className="empty-state">Geen bestaande Smart Connect assets gevonden.</div>}</div>
               <div className={styles.quoteTotal}><span>Bestaande Smart Connect connecties</span><strong>{formatConnectionCount(existingSmartConnectTotal)}</strong></div>
               <div className={styles.quoteRows}>{smartConnectPricing.baseTier ? <><div className={styles.quoteRow}><span>1x</span><strong>Smart Connect - {formatConnectionCount(smartConnectPricing.baseTier.connections)}</strong><span>staffel voor {formatConnectionCount(smartConnectPricing.connectionCount)}</span><strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong></div>{smartConnectPricing.extraConnections > 0 ? <div className={styles.quoteRow}><span>{smartConnectPricing.extraConnections}x</span><strong>Smart Connect extra connectie</strong><span>{euro.format(SMART_CONNECT_EXTRA_CONNECTION_PRICE)} p/m vanaf 11e</span><strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong></div> : null}</> : <div className="empty-state">Vul een extra aantal connecties in voor de offerte.</div>}</div>
@@ -1121,7 +1122,7 @@ export default function AssetsDashboardCurrent() {
           {!selectedRelation ? <div className="empty-state">Kies eerst een relatie om servicekosten te bekijken.</div> : (
             <div className={styles.upsellPanel}>
               <div className={styles.upsellSummary}><div><div className={styles.assetTitle}>Servicekosten offerte</div><div className={styles.assetMeta}>{euro.format(SERVICE_COST_ANNUAL_PRICE)} per jaar per stuk</div></div><StatusPill tone={existingServiceCostTotal > 0 ? "success" : "warning"}>{existingServiceCostTotal > 0 ? `${existingServiceCostTotal} huidig` : "geen huidige servicekosten"}</StatusPill></div>
-              <div className={styles.moduleSelectionSummary}>{serviceCostRows.map((option) => <div key={option.key}><span>{option.name}</span><strong>{option.existingQuantity} huidig</strong><span>{formatAssetClassIds(option.assetClassIds)}</span><label className={styles.upsellUserInput}><span>Extra aantal voor offerte</span><input className="input" type="number" min={0} value={option.offerQuantity} onChange={(event) => handleServiceCostQuantityChange(option.key, event.target.value)} /></label></div>)}</div>
+              <div className={styles.moduleSelectionSummary}>{serviceCostRows.map((option) => <div key={option.key}><span>{option.name}</span><strong>{option.existingQuantity} huidig</strong><span>{formatAssetClassIds(option.assetClassIds)}</span><label className={styles.upsellUserInput}><span>Extra aantal voor offerte</span><NumberStepper ariaLabel={`Extra aantal voor offerte ${option.name}`} min={0} value={option.offerQuantity} onChange={(nextValue) => handleServiceCostQuantityChange(option.key, String(Math.floor(nextValue)))} /></label></div>)}</div>
               <div className={styles.quoteRows}>{existingServiceCostRows.length > 0 ? existingServiceCostRows.map((option) => <div key={`existing-service-${option.key}`} className={styles.quoteRow}><span>{option.existingQuantity}x</span><strong>Huidig: {option.name}</strong><span>{euro.format(SERVICE_COST_ANNUAL_PRICE)} p/j</span><strong>{euro.format(option.existingAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Geen bestaande CCV of Worldline servicekosten gevonden.</div>}</div>
               <div className={styles.quoteTotal}><span>Bestaande servicekosten per jaar</span><strong>{euro.format(existingServiceCostAnnualTotal)} p/j</strong></div>
               <div className={styles.quoteRows}>{selectedServiceCostRows.length > 0 ? selectedServiceCostRows.map((option) => <div key={`service-${option.key}`} className={styles.quoteRow}><span>{option.offerQuantity}x</span><strong>{option.name}</strong><span>{euro.format(SERVICE_COST_ANNUAL_PRICE)} p/j</span><strong>{euro.format(option.offerAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Vul een extra aantal in voor CCV of Worldline.</div>}</div>

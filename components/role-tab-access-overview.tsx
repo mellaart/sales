@@ -3,14 +3,6 @@
 import { APP_TABS, type AppTabKey, type RoleTabAccessMap } from "@/lib/role-tabs";
 import type { UserRole } from "@/lib/supabase";
 
-const roleDescriptions: Record<UserRole, string> = {
-  sales: "Calculator, eigen deals en assets.",
-  support: "Deals, assets en testen.",
-  consultant: "Calculator, eigen deals en assets.",
-  manager: "Calculator, alle deals, assets en testen.",
-  admin: "Volledige toegang inclusief admin.",
-};
-
 type RoleTabAccessOverviewProps = {
   access: RoleTabAccessMap;
   disabled?: boolean;
@@ -18,6 +10,25 @@ type RoleTabAccessOverviewProps = {
   savingKey?: string | null;
   onToggle: (role: UserRole, tabKey: AppTabKey) => void;
 };
+
+function formatTabAccessDescription(tabKeys: AppTabKey[]) {
+  const selectedLabels = APP_TABS
+    .filter((tab) => tabKeys.includes(tab.key))
+    .map((tab) => tab.label);
+
+  if (selectedLabels.length === 0) {
+    return "Geen tabbladen geselecteerd.";
+  }
+
+  if (selectedLabels.length === 1) {
+    return `${selectedLabels[0]} geselecteerd.`;
+  }
+
+  const lastLabel = selectedLabels[selectedLabels.length - 1];
+  const leadingLabels = selectedLabels.slice(0, -1);
+
+  return `${leadingLabels.join(", ")} en ${lastLabel} geselecteerd.`;
+}
 
 export function RoleTabAccessOverview({
   access,
@@ -32,7 +43,7 @@ export function RoleTabAccessOverview({
         <div key={role} className="admin-user-card">
           <div>
             <div className="package-name">{role}</div>
-            <div className="subtext">{roleDescriptions[role]}</div>
+            <div className="subtext">{formatTabAccessDescription(access[role])}</div>
           </div>
 
           <div className="button-row">

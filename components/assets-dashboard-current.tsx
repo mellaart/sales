@@ -15,7 +15,7 @@ import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
-const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi"]);
+const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi", "leverschema"]);
 const CUSTOMER_PORTAL_OPTIONS = [
   { key: "facturenBetalen", name: "Facturen betalen", monthlyPrice: 30.15 },
   { key: "offertesOrdersMaken", name: "Offertes en orders maken", monthlyPrice: 60.3 },
@@ -45,6 +45,7 @@ const MODULE_IMPLEMENTATION_COSTS: Record<string, number> = {
   scanHerken: 720,
   statistiekenPlus: 360,
   digitaleOndertekening: 360,
+  leverschema: 360,
   postnl: 360,
   suiteMkb: 400,
   powerbi: 720,

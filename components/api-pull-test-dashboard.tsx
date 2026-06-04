@@ -278,7 +278,7 @@ export default function ApiPullTestDashboard() {
             <label className="input-wrap" style={{ marginBottom: 12 }}><span className="input-label">Zoeken</span><input className="input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="articles, orders, relations" /></label>
             <label className="input-wrap" style={{ marginBottom: 18 }}><span className="input-label">Groep</span><select className="input" value={tag} onChange={(event) => setTag(event.target.value)}><option value="">Alle groepen</option>{tags.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
             <div className="kpi-title" style={{ marginBottom: 10 }}>{filteredEndpoints.length} routes</div>
-            <div style={{ display: "grid", gap: 8, maxHeight: 520, overflow: "auto", paddingRight: 4 }}>
+            <div className="test-routes-list">
               {filteredEndpoints.map((endpoint) => (
                 <button key={endpoint.path} type="button" style={{ width: "100%", minHeight: 68, padding: 12, borderRadius: 16, border: selectedEndpoint?.path === endpoint.path ? "1px solid rgba(96,165,250,0.65)" : "1px solid rgba(148,163,184,0.16)", background: selectedEndpoint?.path === endpoint.path ? "rgba(37,99,235,0.2)" : "rgba(255,255,255,0.04)", color: "inherit", cursor: "pointer", textAlign: "left" }} onClick={() => selectEndpoint(endpoint)}>
                   <strong style={{ display: "block", color: "#dbeafe", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{endpoint.path}</strong>

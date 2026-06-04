@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Boxes, LogOut, UserRound, Users2 } from "lucide-react";
+import { LogOut, UserRound, Users2 } from "lucide-react";
 import {
   ROLE_TAB_ACCESS,
   getAccessibleTabs,
@@ -90,7 +90,6 @@ export function AppShellHeader() {
               href={tab.href}
               className={`nav-button ${pathname.startsWith(tab.pathPrefix) ? "active" : ""}`}
             >
-              {tab.key === "assets" ? <Boxes size={15} /> : null}
               {tab.label}
             </Link>
           ))}

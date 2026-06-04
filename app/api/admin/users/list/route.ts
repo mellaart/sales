@@ -5,6 +5,8 @@ import type { UserRole } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const AUTH_METADATA_TIMEOUT_MS = 2000;
+
 function isMissingColumnError(message: string, column: "full_name" | "created_at") {
   return (
     message.includes(`Could not find the '${column}' column of 'profiles' in the schema cache`) ||
@@ -109,7 +111,16 @@ async function loadAuthMetadata(
       if (!profile.id) return null;
 
       try {
-        const { data, error } = await service.auth.admin.getUserById(profile.id);
+        const result = await Promise.race([
+          service.auth.admin.getUserById(profile.id),
+          new Promise<null>((resolve) => {
+            setTimeout(() => resolve(null), AUTH_METADATA_TIMEOUT_MS);
+          }),
+        ]);
+
+        if (!result) return null;
+
+        const { data, error } = result;
         if (error || !data.user) return null;
 
         const metadata = data.user.user_metadata ?? {};
@@ -191,12 +202,8 @@ export async function GET(request: Request) {
 
     const profileClient = verified.service ?? verified.sessionClient;
     const rows = await loadProfiles(profileClient);
-    const rowsMissingEmail = rows.filter((profileRow) => {
-      const profile = profileRow as { email?: string | null };
-      return !normalizeText(profile.email);
-    });
     const authMetadataById = verified.service
-      ? await loadAuthMetadata(verified.service, rowsMissingEmail)
+      ? await loadAuthMetadata(verified.service, rows)
       : new Map<string, AuthMetadata>();
 
     const users = rows.map((profileRow) => {
@@ -209,10 +216,10 @@ export async function GET(request: Request) {
       };
 
       const authMetadata = authMetadataById.get(profile.id);
-      const email = normalizeText(profile.email) ?? authMetadata?.email ?? null;
+      const email = authMetadata?.email ?? normalizeText(profile.email) ?? null;
       const fullName =
-        normalizeText(profile.full_name) ??
         authMetadata?.fullName ??
+        normalizeText(profile.full_name) ??
         (email ? email.split("@")[0] : null);
 
       return {

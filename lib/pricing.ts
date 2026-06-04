@@ -127,6 +127,7 @@ export const MODULES: ModuleConfig[] = [
   { key: "scanHerken", name: "Scan & Herken", monthlyPrice: 55 },
   { key: "statistiekenPlus", name: "Statistieken plus", monthlyPrice: 27.5 },
   { key: "digitaleOndertekening", name: "Digitale ondertekening", monthlyPrice: 27.5 },
+  { key: "leverschema", name: "Leverschema", monthlyPrice: 27.5 },
   { key: "postnl", name: "PostNL", monthlyPrice: 0 },
   { key: "suiteMkb", name: "Suite MKB koppeling", monthlyPrice: 55 },
   { key: "powerbi", name: "Power BI", monthlyPrice: 55 },

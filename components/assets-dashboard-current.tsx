@@ -518,6 +518,8 @@ export default function AssetsDashboardCurrent() {
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [extraUsersToOffer, setExtraUsersToOffer] = useState(0);
+  const [chauffeurExtraUsersToOffer, setChauffeurExtraUsersToOffer] = useState(0);
+  const [includeChauffeurExtraUserSupport, setIncludeChauffeurExtraUserSupport] = useState(false);
   const [includeMissingSupportOffer, setIncludeMissingSupportOffer] = useState(false);
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
@@ -586,9 +588,20 @@ export default function AssetsDashboardCurrent() {
   );
   const existingUserCount = existingExtraUserCount + 1;
   const safeExtraUsersToOffer = Math.max(0, Math.floor(extraUsersToOffer));
+  const safeChauffeurExtraUsersToOffer = Math.max(0, Math.floor(chauffeurExtraUsersToOffer));
   const extraUserLicenseTotal = selectedPackage ? safeExtraUsersToOffer * selectedPackage.licenseExtra : 0;
   const extraUserSupportTotal = selectedPackage && shouldIncludeSupport ? safeExtraUsersToOffer * selectedPackage.supportExtra : 0;
-  const upsellMonthlyTotal = extraUserLicenseTotal + extraUserSupportTotal;
+  const chauffeurExtraUserLicenseTotal = selectedPackage
+    ? safeChauffeurExtraUsersToOffer * selectedPackage.licenseExtra
+    : 0;
+  const chauffeurExtraUserSupportTotal = selectedPackage && includeChauffeurExtraUserSupport
+    ? safeChauffeurExtraUsersToOffer * selectedPackage.supportExtra
+    : 0;
+  const upsellMonthlyTotal =
+    extraUserLicenseTotal +
+    extraUserSupportTotal +
+    chauffeurExtraUserLicenseTotal +
+    chauffeurExtraUserSupportTotal;
   const missingSupportBaseTotal = selectedPackage && includeMissingSupportOffer ? selectedPackage.supportFirst : 0;
   const missingSupportExtraTotal = selectedPackage && includeMissingSupportOffer ? existingExtraUserCount * selectedPackage.supportExtra : 0;
   const missingSupportMonthlyTotal = missingSupportBaseTotal + missingSupportExtraTotal;
@@ -669,6 +682,9 @@ export default function AssetsDashboardCurrent() {
     setSearching(true);
     setSelectedRelation(null);
     setAssets([]);
+    setExtraUsersToOffer(0);
+    setChauffeurExtraUsersToOffer(0);
+    setIncludeChauffeurExtraUserSupport(false);
     setSelectedModuleKeys([]);
     setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
@@ -698,6 +714,9 @@ export default function AssetsDashboardCurrent() {
     setAssetStatus("");
     setLoadingAssets(true);
     setAssets([]);
+    setExtraUsersToOffer(0);
+    setChauffeurExtraUsersToOffer(0);
+    setIncludeChauffeurExtraUserSupport(false);
     setSelectedModuleKeys([]);
     setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
@@ -866,6 +885,17 @@ export default function AssetsDashboardCurrent() {
                   <input className="input" type="number" min={0} value={extraUsersToOffer} onChange={(event) => setExtraUsersToOffer(getSafeQuantity(event.target.value))} />
                 </label>
 
+                <label className={styles.upsellUserInput}>
+                  <span>Aantal extra gebruikers chauffeursmodule</span>
+                  <input className="input" type="number" min={0} value={chauffeurExtraUsersToOffer} onChange={(event) => setChauffeurExtraUsersToOffer(getSafeQuantity(event.target.value))} />
+                </label>
+
+                <label className={`${styles.moduleOption} ${includeChauffeurExtraUserSupport ? styles.moduleOptionSelected : ""}`}>
+                  <input type="checkbox" checked={includeChauffeurExtraUserSupport} onChange={(event) => setIncludeChauffeurExtraUserSupport(event.target.checked)} />
+                  <span><strong>Supportcontract extra gebruiker (chauffeursmodule)</strong><small>Meenemen bij chauffeursmodule extra gebruikers</small></span>
+                  {includeChauffeurExtraUserSupport ? <em>geselecteerd</em> : null}
+                </label>
+
                 <div className={styles.quoteRows}>
                   <div className={styles.quoteRow}>
                     <span>{safeExtraUsersToOffer}x</span>
@@ -881,6 +911,18 @@ export default function AssetsDashboardCurrent() {
                       <strong>{euro.format(extraUserSupportTotal)} p/m</strong>
                     </div>
                   ) : null}
+                  <div className={styles.quoteRow}>
+                    <span>{safeChauffeurExtraUsersToOffer}x</span>
+                    <strong>Licentie extra gebruiker (chauffeursmodule)</strong>
+                    <span>{euro.format(selectedPackage.licenseExtra)} p/m</span>
+                    <strong>{euro.format(chauffeurExtraUserLicenseTotal)} p/m</strong>
+                  </div>
+                  <div className={styles.quoteRow}>
+                    <span>{includeChauffeurExtraUserSupport ? safeChauffeurExtraUsersToOffer : 0}x</span>
+                    <strong>Supportcontract extra gebruiker (chauffeursmodule)</strong>
+                    <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                    <strong>{euro.format(chauffeurExtraUserSupportTotal)} p/m</strong>
+                  </div>
                 </div>
                 <div className={styles.quoteTotal}><span>Maandelijkse uitbreiding</span><strong>{euro.format(upsellMonthlyTotal)} p/m</strong></div>
               </div>

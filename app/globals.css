@@ -194,6 +194,65 @@ select:focus {
   box-shadow: 0 0 0 4px rgba(37,99,235,0.16);
 }
 
+.number-stepper {
+  position: relative;
+  width: 100%;
+}
+
+.number-stepper-input {
+  padding-right: 54px;
+  appearance: textfield;
+}
+
+.number-stepper-input::-webkit-outer-spin-button,
+.number-stepper-input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.number-stepper-controls {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  bottom: 6px;
+  width: 36px;
+  display: grid;
+  gap: 4px;
+}
+
+.number-stepper-controls button {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  border: 1px solid rgba(148,163,184,0.18);
+  border-radius: 10px;
+  background: rgba(15,23,42,0.62);
+  color: #bfdbfe;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.number-stepper-controls button:hover {
+  border-color: rgba(96,165,250,0.5);
+  background: rgba(37,99,235,0.22);
+  color: #ffffff;
+}
+
+.number-stepper-controls button:active {
+  transform: translateY(1px);
+}
+
+.number-stepper-controls button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.number-stepper-controls button:disabled:hover {
+  border-color: rgba(148,163,184,0.18);
+  background: rgba(15,23,42,0.62);
+  color: #bfdbfe;
+}
+
 select option {
   color: #0f172a;
   background: #ffffff;

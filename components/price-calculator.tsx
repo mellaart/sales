@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Calculator, CheckCircle2, FileText, Package, SlidersHorizontal, Users } from "lucide-react";
 import { MODULES, euro } from "@/lib/pricing";
+import { NumberStepper } from "@/components/number-stepper";
 
 type PackageKey = "starter" | "basic" | "premium" | "enterprise";
 
@@ -158,22 +159,20 @@ export default function PriceCalculator() {
               <div className="field-grid-2">
                 <label className="input-wrap">
                   <span className="input-label">Extra gebruikers</span>
-                  <input
-                    className="input"
-                    type="number"
+                  <NumberStepper
+                    ariaLabel="Extra gebruikers"
                     min={0}
                     value={extraUsers}
-                    onChange={(e) => setExtraUsers(Math.max(0, Number(e.target.value || 0)))}
+                    onChange={(nextValue) => setExtraUsers(Math.max(0, Math.floor(nextValue)))}
                   />
                 </label>
 
                 <label className="input-wrap">
                   <span className="input-label">Correctie implementatie (€)</span>
-                  <input
-                    className="input"
-                    type="number"
+                  <NumberStepper
+                    ariaLabel="Correctie implementatie"
                     value={manualImplementationAdjustment}
-                    onChange={(e) => setManualImplementationAdjustment(Number(e.target.value || 0))}
+                    onChange={setManualImplementationAdjustment}
                   />
                 </label>
               </div>

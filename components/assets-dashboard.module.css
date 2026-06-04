@@ -477,7 +477,7 @@
   gap: 10px;
 }
 
-.moduleSelectionSummary div {
+.moduleSelectionSummary > div {
   display: grid;
   gap: 6px;
   padding: 12px;

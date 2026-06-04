@@ -451,6 +451,37 @@ select option {
   overflow-x: auto;
 }
 
+.test-routes-list {
+  display: grid;
+  gap: 8px;
+  max-height: 520px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-color: rgba(96,165,250,0.58) rgba(255,255,255,0.05);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.test-routes-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.test-routes-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255,255,255,0.05);
+}
+
+.test-routes-list::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(15,23,42,0.72);
+  border-radius: 999px;
+  background: rgba(96,165,250,0.62);
+}
+
+.test-routes-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(147,197,253,0.78);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

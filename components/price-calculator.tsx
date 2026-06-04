@@ -2,20 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { Calculator, CheckCircle2, FileText, Package, SlidersHorizontal, Users } from "lucide-react";
+import { MODULES, euro } from "@/lib/pricing";
 
 type PackageKey = "starter" | "basic" | "premium" | "enterprise";
-
-type ModuleItem = {
-  key: string;
-  name: string;
-  price: number;
-  free?: boolean;
-};
-
-const euro = new Intl.NumberFormat("nl-NL", {
-  style: "currency",
-  currency: "EUR",
-});
 
 const packages: Record<
   PackageKey,
@@ -57,20 +46,6 @@ const packages: Record<
   },
 };
 
-const modules: ModuleItem[] = [
-  { key: "postnl", name: "PostNL", price: 0, free: true },
-  { key: "statistieken-plus", name: "Statistieken plus", price: 27.5 },
-  { key: "digitale-ondertekening", name: "Digitale ondertekening", price: 55 },
-  { key: "suite-mkb", name: "Suite MKB koppeling", price: 55 },
-  { key: "power-bi", name: "Power BI", price: 55 },
-  { key: "kassa", name: "Kassa", price: 55 },
-  { key: "terrein-automatisering", name: "Terrein automatisering", price: 55 },
-  { key: "voorraad", name: "Voorraad", price: 55 },
-  { key: "partijregistratie", name: "Partijregistratie", price: 55 },
-  { key: "chauffeurs-automatisering", name: "Chauffeurs automatisering", price: 55 },
-  { key: "assets", name: "Assets", price: 55 },
-];
-
 function getRecommendedPackage(paidModuleCount: number): PackageKey {
   if (paidModuleCount <= 0) return "starter";
   if (paidModuleCount === 1) return "basic";
@@ -91,19 +66,19 @@ export default function PriceCalculator() {
   );
 
   const selectedModuleRows = useMemo(
-    () => modules.filter((module) => selectedModules[module.key]),
+    () => MODULES.filter((module) => selectedModules[module.key]),
     [selectedModules],
   );
 
-  const paidModuleCount = selectedModuleRows.filter((module) => !module.free && module.price > 0).length;
+  const paidModuleCount = selectedModuleRows.filter((module) => module.monthlyPrice > 0).length;
   const effectivePackage = getRecommendedPackage(paidModuleCount);
   const activePackage = packages[effectivePackage];
 
   const paidModuleTotal = selectedModuleRows
-    .filter((module) => !module.free && module.price > 0)
-    .sort((a, b) => b.price - a.price)
+    .filter((module) => module.monthlyPrice > 0)
+    .sort((a, b) => b.monthlyPrice - a.monthlyPrice)
     .slice(activePackage.includedPaidModules)
-    .reduce((sum, module) => sum + module.price, 0);
+    .reduce((sum, module) => sum + module.monthlyPrice, 0);
 
   const totalUsers = 1 + extraUsers;
   const monthlyTotal = activePackage.license + activePackage.support + paidModuleTotal;
@@ -247,7 +222,7 @@ export default function PriceCalculator() {
               </div>
 
               <div className="module-grid">
-                {modules.map((module) => {
+                {MODULES.map((module) => {
                   const active = Boolean(selectedModules[module.key]);
 
                   return (
@@ -255,7 +230,7 @@ export default function PriceCalculator() {
                       <input type="checkbox" checked={active} onChange={() => toggleModule(module.key)} />
                       <div className="module-list-main">
                         <span className="module-list-title">{module.name}</span>
-                        <span className="module-list-price">{euro.format(module.price)} p/m</span>
+                        <span className="module-list-price">{euro.format(module.monthlyPrice)} p/m</span>
                       </div>
                       <span className="module-list-state">{active ? "Aan" : "Uit"}</span>
                     </label>

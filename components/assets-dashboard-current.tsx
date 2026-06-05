@@ -6,6 +6,7 @@ import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, Search, Sparkles 
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
+import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { createDealWithFallback } from "@/lib/deal-storage";
 import {
   MODULES,
@@ -639,11 +640,17 @@ export default function AssetsDashboardCurrent() {
   const targetModuleMonthly = targetPackage ? getModuleMonthlyForPackage(selectedModuleKeys, targetPackage) : 0;
   const moduleMonthlyDelta = targetModuleMonthly - currentModuleMonthly;
   const moduleImplementationTotal = addedModules.reduce((sum, moduleConfig) => sum + getModuleImplementationCost(moduleConfig.key), 0);
+  const currentLicenseMonthly = selectedPackage ? selectedPackage.licenseFirst + existingExtraUserCount * selectedPackage.licenseExtra : 0;
+  const currentSupportMonthly = selectedPackage && shouldIncludeSupport
+    ? selectedPackage.supportFirst + existingExtraUserCount * selectedPackage.supportExtra
+    : 0;
+  const currentRecurringMonthly = currentLicenseMonthly + currentSupportMonthly + currentModuleMonthly;
   const targetLicenseMonthly = targetPackage ? targetPackage.licenseFirst + existingExtraUserCount * targetPackage.licenseExtra : 0;
   const targetSupportMonthly = targetPackage && shouldIncludeSupport
     ? targetPackage.supportFirst + existingExtraUserCount * targetPackage.supportExtra
     : 0;
   const targetRecurringMonthly = targetLicenseMonthly + targetSupportMonthly + targetModuleMonthly;
+  const recurringMonthlyDelta = targetRecurringMonthly - currentRecurringMonthly;
   const existingSmartConnectAssetTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.quantity, 0);
   const existingSmartConnectTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.totalConnections, 0);
   const customerPortalAddedOptions = useMemo(
@@ -703,26 +710,22 @@ export default function AssetsDashboardCurrent() {
       });
     }
 
-    if (selectedPackage && targetPackage && hasPackageChange) {
+    if (selectedPackage && targetPackage && hasModuleSelectionChanges && addedModules.length > 0) {
       lines.push({
-        group: "Pakket",
-        label: `Pakketadvies: Smart Trade ${selectedPackage.name} naar ${targetPackage.name}`,
+        group: hasPackageChange ? "Pakket" : "Modules",
+        label: hasPackageChange
+          ? `Pakketadvies: Smart Trade ${selectedPackage.name} naar ${targetPackage.name}`
+          : addedModules.length === 1
+            ? addedModules[0].name
+            : `Module-uitbreiding: ${formatModuleList(addedModules)}`,
         quantity: 1,
         cadence: "monthly",
-        amount: targetRecurringMonthly,
-        note: packageChangeDirection,
+        amount: Math.max(0, hasPackageChange ? recurringMonthlyDelta : moduleMonthlyDelta),
+        note: hasPackageChange ? `${packageChangeDirection}: ${formatModuleList(addedModules)}` : undefined,
       });
     }
 
     for (const moduleConfig of addedModules) {
-      lines.push({
-        group: "Modules",
-        label: moduleConfig.name,
-        quantity: 1,
-        cadence: "monthly",
-        amount: moduleConfig.monthlyPrice,
-      });
-
       const implementationCost = getModuleImplementationCost(moduleConfig.key);
       if (implementationCost > 0) {
         lines.push({
@@ -738,7 +741,7 @@ export default function AssetsDashboardCurrent() {
     for (const option of customerPortalAddedOptions) {
       lines.push({
         group: "Klantenportaal",
-        label: `Klantenportaal - ${option.name}`,
+        label: `Smart Trade - ${option.name}`,
         quantity: 1,
         cadence: "monthly",
         amount: option.monthlyPrice,
@@ -786,9 +789,12 @@ export default function AssetsDashboardCurrent() {
     extraUserLicenseTotal,
     extraUserSupportTotal,
     hasPackageChange,
+    hasModuleSelectionChanges,
     includeMissingSupportOffer,
     missingSupportMonthlyTotal,
+    moduleMonthlyDelta,
     packageChangeDirection,
+    recurringMonthlyDelta,
     safeChauffeurExtraUsersToOffer,
     safeExtraUsersToOffer,
     selectedPackage,
@@ -796,7 +802,6 @@ export default function AssetsDashboardCurrent() {
     shouldIncludeSupport,
     smartConnectPricing,
     targetPackage,
-    targetRecurringMonthly,
   ]);
   const transferHint = !selectedRelation
     ? "Kies eerst een relatie. Daarna kun je geselecteerde uitbreidingen doorzetten naar Deals."
@@ -856,11 +861,12 @@ export default function AssetsDashboardCurrent() {
 
     try {
       const finalPackage = targetPackage ?? selectedPackage ?? PACKAGES[PACKAGES.length - 1];
+      const expansionTotals = getAssetExpansionTotals(assetDealLines);
       const quantities = Object.fromEntries(
-        MODULES.map((moduleConfig) => [moduleConfig.key, selectedModuleKeys.includes(moduleConfig.key) ? 1 : 0]),
+        MODULES.map((moduleConfig) => [moduleConfig.key, addedModules.some((addedModule) => addedModule.key === moduleConfig.key) ? 1 : 0]),
       );
-      const extraUsersForDeal = existingExtraUserCount + safeExtraUsersToOffer + safeChauffeurExtraUsersToOffer;
-      const manualImplementationAdjustment = moduleImplementationTotal;
+      const extraUsersForDeal = safeExtraUsersToOffer + safeChauffeurExtraUsersToOffer;
+      const manualImplementationAdjustment = expansionTotals.once;
       const pricingResults = calculatePricing({
         extraUsers: extraUsersForDeal,
         manualImplementationAdjustment,
@@ -881,18 +887,18 @@ export default function AssetsDashboardCurrent() {
         contact_name: selectedRelation.email,
         sales_name: user.email?.split("@")[0] ?? null,
         package_key: activeResult.key,
-        package_name: activeResult.name,
-        total_users: extraUsersForDeal + 1,
+        package_name: "Uitbreiding",
+        total_users: Math.max(1, extraUsersForDeal + 1),
         contract_months: 1,
         discount_pct: 0,
         include_vat: false,
         manual_monthly_adjustment: 0,
         manual_implementation_adjustment: manualImplementationAdjustment,
-        monthly_base: activeResult.monthlyBase,
-        monthly_total: activeResult.monthlyAfterDiscount,
-        implementation_total: activeResult.implementationAfterAdjustment,
-        contract_value: activeResult.monthlyAfterDiscount + activeResult.implementationAfterAdjustment,
-        annual_recurring: activeResult.annualRecurring,
+        monthly_base: expansionTotals.monthly,
+        monthly_total: expansionTotals.monthly,
+        implementation_total: expansionTotals.once,
+        contract_value: expansionTotals.monthly + expansionTotals.annual + expansionTotals.once,
+        annual_recurring: expansionTotals.monthly * 12 + expansionTotals.annual,
         modules: selectedModuleRows,
         notes,
         calculator_inputs: {

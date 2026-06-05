@@ -9,6 +9,17 @@ import { canViewAllDeals, type DealRecord, getSupabaseClient } from "@/lib/supab
 import { StatusPill } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 
+function getDealMeta(deal: DealRecord) {
+  const expansionLines = deal.calculator_inputs?.assetsExpansion?.lines;
+
+  if (deal.calculator_inputs?.quoteLayout === "assets-expansion" && expansionLines?.length) {
+    const lineLabel = expansionLines.length === 1 ? "1 uitbreidingsregel" : `${expansionLines.length} uitbreidingsregels`;
+    return `${deal.quote_title} · Uitbreiding · ${lineLabel}`;
+  }
+
+  return `${deal.quote_title} · ${deal.package_name} · ${deal.total_users} gebruikers`;
+}
+
 export default function DealsDashboard() {
   const { user, role } = useAuth();
   const supabase = getSupabaseClient();
@@ -114,7 +125,7 @@ export default function DealsDashboard() {
               <div key={deal.id} className="deal-row">
                 <div>
                   <div className="package-name">{deal.customer_name || "Onbekende klant"}</div>
-                  <div className="muted small-gap">{deal.quote_title} · {deal.package_name} · {deal.total_users} gebruikers</div>
+                  <div className="muted small-gap">{getDealMeta(deal)}</div>
                   <div className="muted small-gap">Sales: {deal.sales_name || "-"} · Maand: {euro.format(Number(deal.monthly_total || 0))}</div>
                 </div>
                 <div className="button-row compact">

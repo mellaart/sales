@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { getAssetExpansionTotals, getAssetExpansionUnitAmount } from "@/lib/asset-expansions";
 import { euro } from "@/lib/pricing";
 import { getQuoteLayout } from "@/lib/quote-layouts";
 import {
@@ -10,6 +11,7 @@ import {
   getSupportRows,
   type OfferTemplateInput,
 } from "@/lib/offer-template";
+import type { AssetExpansionLine } from "@/lib/supabase";
 
 type PdfTableRow = {
   amount: string;
@@ -124,6 +126,134 @@ function addPriceTable(doc: jsPDF, title: string, rows: PdfTableRow[], y: number
   return y + 13;
 }
 
+function getExpansionSectionTitle(lines: AssetExpansionLine[]) {
+  const groups = Array.from(new Set(lines.map((line) => line.group).filter(Boolean)));
+
+  if (groups.length === 1) return groups[0];
+  return "Uitbreidingen";
+}
+
+function getExpansionWorkItems(lines: AssetExpansionLine[]) {
+  const groups = new Set(lines.map((line) => line.group));
+
+  if (groups.has("Klantenportaal")) {
+    return [
+      "Configuratie van het klantportaal en SSL-certificaat",
+      "Klantportaal instellen en koppeling maken met Smart Trade administratie",
+    ];
+  }
+
+  if (groups.has("Smart Connect")) {
+    return ["Smart Connect configureren", "Koppeling maken met de Smart Trade administratie"];
+  }
+
+  if (groups.has("Modules") || groups.has("Pakket")) {
+    return ["Geselecteerde uitbreiding activeren", "Koppeling en inrichting binnen Smart Trade controleren"];
+  }
+
+  if (groups.has("Servicekosten")) {
+    return ["Servicekosten registreren", "Administratieve verwerking controleren"];
+  }
+
+  return ["Geselecteerde uitbreiding verwerken", "Inrichting en activatie controleren"];
+}
+
+function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansionLine[], y: number) {
+  y = addSectionTitle(doc, title, y);
+
+  const x = 16;
+  const widths = [22, 92, 34, 34];
+
+  doc.setFillColor(244, 247, 251);
+  doc.setDrawColor(219, 228, 238);
+  doc.rect(x, y - 5, 178, 8, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(64, 80, 100);
+  doc.text("Aantal", x + 2, y);
+  doc.text("Pakket", x + widths[0] + 2, y);
+  doc.text("Prijs", x + widths[0] + widths[1] + 2, y);
+  doc.text("Totaal", x + widths[0] + widths[1] + widths[2] + 2, y);
+
+  y += 8;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(25, 40, 55);
+
+  lines.forEach((line) => {
+    y = ensurePage(doc, y, 10);
+
+    doc.setDrawColor(234, 239, 245);
+    doc.line(x, y + 2, x + 178, y + 2);
+
+    doc.text(`${line.quantity}x`, x + 2, y);
+    doc.text(doc.splitTextToSize(line.label, 88), x + widths[0] + 2, y);
+    doc.text(euro.format(getAssetExpansionUnitAmount(line)), x + widths[0] + widths[1] + 2, y);
+    doc.text(euro.format(line.amount), x + widths[0] + widths[1] + widths[2] + 2, y);
+
+    y += 9;
+  });
+
+  const totals = getAssetExpansionTotals(lines);
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(17, 58, 86);
+
+  if (totals.monthly > 0) {
+    doc.text("Totaal per maand", x + 2, y + 3);
+    doc.text(euro.format(totals.monthly), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+    y += 8;
+  }
+
+  if (totals.annual > 0) {
+    doc.text("Totaal per jaar", x + 2, y + 3);
+    doc.text(euro.format(totals.annual), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+    y += 8;
+  }
+
+  doc.text("Setupkosten:", x + 2, y + 3);
+  doc.text(euro.format(totals.once), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+
+  return y + 13;
+}
+
+function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number) {
+  y = ensurePage(doc, y, 38);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(25, 40, 55);
+  doc.text("Met vriendelijke groet,", 16, y);
+  y += 9;
+
+  doc.setFont("helvetica", "bold");
+  doc.text(input.salesName || "Smart Trade", 16, y);
+  y += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.text("IT Sales Consultant", 16, y);
+  y += 6;
+
+  if (input.salesPhone) {
+    doc.text(`M ${input.salesPhone}`, 16, y);
+    y += 6;
+  }
+
+  if (input.salesEmail) {
+    doc.text(`E ${input.salesEmail}`, 16, y);
+    y += 6;
+  }
+
+  doc.text("W www.smarttrade.nl", 16, y);
+  y += 9;
+
+  doc.setFontSize(8);
+  doc.setTextColor(95, 112, 131);
+  doc.text("Troublefree B.V. | Pletterij 1A | 2211 JT Noordwijkerhout | Nederland", 16, y);
+
+  return y;
+}
+
 function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhone?: string) {
   const pageCount = doc.getNumberOfPages();
 
@@ -147,6 +277,7 @@ export function exportQuotePdf(input: OfferTemplateInput) {
   const layout = getQuoteLayout(input.quoteLayout);
   const isCompactLayout = layout.key === "compact";
   const isAssetsExpansionLayout = layout.key === "assets-expansion";
+  const expansionLines = input.assetsExpansion?.lines ?? [];
   const text = getOfferTextBlocks(input);
   const licenseRows = getLicenseRows(input);
   const supportRows = getSupportRows(input);
@@ -178,7 +309,28 @@ export function exportQuotePdf(input: OfferTemplateInput) {
   let y = 90;
 
   y = addParagraph(doc, text.greeting, y);
-  y = addParagraph(doc, text.intro, y);
+  y = addParagraph(doc, isAssetsExpansionLayout ? "Zoals besproken hierbij een offerte over wat jullie besproken hebben:" : text.intro, y);
+
+  if (isAssetsExpansionLayout && expansionLines.length > 0) {
+    y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2);
+
+    y = addSectionTitle(doc, "Werkzaamheden", y + 2);
+    y = addBullets(doc, getExpansionWorkItems(expansionLines), y);
+
+    y = addSectionTitle(doc, "Tot slot", y + 2);
+    y = addParagraph(doc, text.closing, y);
+    y = addParagraph(doc, text.contact, y);
+
+    addSignature(doc, input, y);
+    addFooter(doc, input.salesName, input.salesEmail, input.salesPhone);
+
+    const fileName = `${(input.customerName || "offerte-uitbreiding-smart-trade")
+      .replace(/\s+/g, "-")
+      .toLowerCase()}-offerte-uitbreiding.pdf`;
+
+    doc.save(fileName);
+    return;
+  }
 
   y = addSectionTitle(doc, "Functionaliteiten / pakketkeuze", y + 2);
   y = addParagraph(doc, text.packageChoice, y);
@@ -254,37 +406,7 @@ export function exportQuotePdf(input: OfferTemplateInput) {
   y = addParagraph(doc, text.closing, y);
   y = addParagraph(doc, text.contact, y);
 
-  y = ensurePage(doc, y, 38);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(25, 40, 55);
-  doc.text("Met vriendelijke groet,", 16, y);
-  y += 9;
-
-  doc.setFont("helvetica", "bold");
-  doc.text(input.salesName || "Smart Trade", 16, y);
-  y += 6;
-
-  doc.setFont("helvetica", "normal");
-  doc.text("IT Sales Consultant", 16, y);
-  y += 6;
-
-  if (input.salesPhone) {
-    doc.text(`M ${input.salesPhone}`, 16, y);
-    y += 6;
-  }
-
-  if (input.salesEmail) {
-    doc.text(`E ${input.salesEmail}`, 16, y);
-    y += 6;
-  }
-
-  doc.text("W www.smarttrade.nl", 16, y);
-  y += 9;
-
-  doc.setFontSize(8);
-  doc.setTextColor(95, 112, 131);
-  doc.text("Troublefree B.V. | Pletterij 1A | 2211 JT Noordwijkerhout | Nederland", 16, y);
+  addSignature(doc, input, y);
 
   addFooter(doc, input.salesName, input.salesEmail, input.salesPhone);
 

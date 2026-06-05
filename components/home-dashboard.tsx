@@ -8,6 +8,17 @@ import { listDealsWithFallback } from "@/lib/deal-storage";
 import { canViewAllDeals, getSupabaseClient, type DealRecord } from "@/lib/supabase";
 import { euro } from "@/lib/pricing";
 
+function getRecentDealMeta(deal: DealRecord) {
+  const expansionLines = deal.calculator_inputs?.assetsExpansion?.lines;
+
+  if (deal.calculator_inputs?.quoteLayout === "assets-expansion" && expansionLines?.length) {
+    const lineLabel = expansionLines.length === 1 ? "1 regel" : `${expansionLines.length} regels`;
+    return `Uitbreiding · ${lineLabel}`;
+  }
+
+  return `${deal.package_name || "-"} · ${deal.total_users || 0} gebruikers`;
+}
+
 export default function HomeDashboard() {
   const { user, role } = useAuth();
   const supabase = getSupabaseClient();
@@ -93,7 +104,7 @@ export default function HomeDashboard() {
               <div key={deal.id} className="deal-row">
                 <div>
                   <div className="package-name">{deal.customer_name || "Onbekende klant"}</div>
-                  <div className="muted small-gap">{deal.package_name || "-"} · {deal.total_users || 0} gebruikers</div>
+                  <div className="muted small-gap">{getRecentDealMeta(deal)}</div>
                 </div>
                 <div className="muted">{euro.format(Number(deal.monthly_total || 0))} p/m</div>
               </div>

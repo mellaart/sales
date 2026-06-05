@@ -1,17 +1,21 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { Boxes, Building2, ChevronRight, Hash, Mail, Search, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { NumberStepper } from "@/components/number-stepper";
+import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 import {
   MODULES,
   PACKAGES,
+  calculatePricing,
   euro,
   getMinimumPackageForPaidModules,
   type ModuleConfig,
   type PackageConfig,
 } from "@/lib/pricing";
+import { type AssetExpansionLine, getSupabaseClient } from "@/lib/supabase";
 import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
@@ -509,7 +513,23 @@ function formatAssetClassIds(assetClassIds: string[]) {
   return assetClassIds.length === 1 ? `asset_class ${assetClassIds[0]}` : `asset_classes ${assetClassIds.join(", ")}`;
 }
 
+function formatLineAmount(line: AssetExpansionLine) {
+  const suffix = line.cadence === "monthly" ? " p/m" : line.cadence === "annual" ? " p/j" : "";
+  return `${euro.format(line.amount)}${suffix}`;
+}
+
+function buildAssetDealNotes(relation: RelationOption, lines: AssetExpansionLine[]) {
+  return [
+    `Assets-uitbreiding voor ${relation.name}.`,
+    "",
+    ...lines.map((line) => `${line.quantity}x ${line.label} - ${formatLineAmount(line)}${line.note ? ` (${line.note})` : ""}`),
+  ].join("\n");
+}
+
 export default function AssetsDashboardCurrent() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const supabase = getSupabaseClient();
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
@@ -525,6 +545,8 @@ export default function AssetsDashboardCurrent() {
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [serviceCostQuantities, setServiceCostQuantities] = useState<Record<string, number>>(getInitialServiceCostQuantities);
+  const [transferStatus, setTransferStatus] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
   const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);
@@ -623,6 +645,158 @@ export default function AssetsDashboardCurrent() {
   const targetRecurringMonthly = targetLicenseMonthly + targetSupportMonthly + targetModuleMonthly;
   const existingSmartConnectAssetTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.quantity, 0);
   const existingSmartConnectTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.totalConnections, 0);
+  const customerPortalAddedOptions = useMemo(
+    () => selectedCustomerPortalOptions.filter((option) => !currentCustomerPortalKeys.includes(option.key)),
+    [currentCustomerPortalKeys, selectedCustomerPortalOptions],
+  );
+  const assetDealLines = useMemo(() => {
+    const lines: AssetExpansionLine[] = [];
+
+    if (selectedPackage && safeExtraUsersToOffer > 0) {
+      lines.push({
+        group: "Gebruikers",
+        label: `Smart Trade ${selectedPackage.name} Extra gebruiker`,
+        quantity: safeExtraUsersToOffer,
+        cadence: "monthly",
+        amount: extraUserLicenseTotal,
+      });
+
+      if (shouldIncludeSupport && extraUserSupportTotal > 0) {
+        lines.push({
+          group: "Gebruikers",
+          label: `Smart Trade ${selectedPackage.name} Supportcontract Extra gebruiker`,
+          quantity: safeExtraUsersToOffer,
+          cadence: "monthly",
+          amount: extraUserSupportTotal,
+        });
+      }
+    }
+
+    if (selectedPackage && safeChauffeurExtraUsersToOffer > 0) {
+      lines.push({
+        group: "Chauffeursmodule",
+        label: "Licentie extra gebruiker (chauffeursmodule)",
+        quantity: safeChauffeurExtraUsersToOffer,
+        cadence: "monthly",
+        amount: chauffeurExtraUserLicenseTotal,
+      });
+
+      if (shouldIncludeSupport && chauffeurExtraUserSupportTotal > 0) {
+        lines.push({
+          group: "Chauffeursmodule",
+          label: "Supportcontract extra gebruiker (chauffeursmodule)",
+          quantity: safeChauffeurExtraUsersToOffer,
+          cadence: "monthly",
+          amount: chauffeurExtraUserSupportTotal,
+        });
+      }
+    }
+
+    if (selectedPackage && includeMissingSupportOffer && missingSupportMonthlyTotal > 0) {
+      lines.push({
+        group: "Support",
+        label: `Supportcontract Smart Trade ${selectedPackage.name}`,
+        quantity: existingUserCount,
+        cadence: "monthly",
+        amount: missingSupportMonthlyTotal,
+      });
+    }
+
+    if (selectedPackage && targetPackage && hasPackageChange) {
+      lines.push({
+        group: "Pakket",
+        label: `Pakketadvies: Smart Trade ${selectedPackage.name} naar ${targetPackage.name}`,
+        quantity: 1,
+        cadence: "monthly",
+        amount: targetRecurringMonthly,
+        note: packageChangeDirection,
+      });
+    }
+
+    for (const moduleConfig of addedModules) {
+      lines.push({
+        group: "Modules",
+        label: moduleConfig.name,
+        quantity: 1,
+        cadence: "monthly",
+        amount: moduleConfig.monthlyPrice,
+      });
+
+      const implementationCost = getModuleImplementationCost(moduleConfig.key);
+      if (implementationCost > 0) {
+        lines.push({
+          group: "Implementatie",
+          label: `Implementatie ${moduleConfig.name}`,
+          quantity: 1,
+          cadence: "once",
+          amount: implementationCost,
+        });
+      }
+    }
+
+    for (const option of customerPortalAddedOptions) {
+      lines.push({
+        group: "Klantenportaal",
+        label: `Klantenportaal - ${option.name}`,
+        quantity: 1,
+        cadence: "monthly",
+        amount: option.monthlyPrice,
+      });
+    }
+
+    if (smartConnectPricing.baseTier) {
+      lines.push({
+        group: "Smart Connect",
+        label: `Smart Connect - ${formatConnectionCount(smartConnectPricing.baseTier.connections)}`,
+        quantity: 1,
+        cadence: "monthly",
+        amount: smartConnectPricing.baseTier.monthlyPrice,
+        note: `staffel voor ${formatConnectionCount(smartConnectPricing.connectionCount)}`,
+      });
+
+      if (smartConnectPricing.extraConnections > 0) {
+        lines.push({
+          group: "Smart Connect",
+          label: "Smart Connect extra connectie",
+          quantity: smartConnectPricing.extraConnections,
+          cadence: "monthly",
+          amount: smartConnectPricing.extraMonthly,
+        });
+      }
+    }
+
+    for (const option of selectedServiceCostRows) {
+      lines.push({
+        group: "Servicekosten",
+        label: option.name,
+        quantity: option.offerQuantity,
+        cadence: "annual",
+        amount: option.offerAnnualTotal,
+      });
+    }
+
+    return lines;
+  }, [
+    addedModules,
+    chauffeurExtraUserLicenseTotal,
+    chauffeurExtraUserSupportTotal,
+    customerPortalAddedOptions,
+    existingUserCount,
+    extraUserLicenseTotal,
+    extraUserSupportTotal,
+    hasPackageChange,
+    includeMissingSupportOffer,
+    missingSupportMonthlyTotal,
+    packageChangeDirection,
+    safeChauffeurExtraUsersToOffer,
+    safeExtraUsersToOffer,
+    selectedPackage,
+    selectedServiceCostRows,
+    shouldIncludeSupport,
+    smartConnectPricing,
+    targetPackage,
+    targetRecurringMonthly,
+  ]);
 
   function handleToggleModule(moduleKey: string) {
     setSelectedModuleKeys((currentKeys) => {
@@ -647,6 +821,114 @@ export default function AssetsDashboardCurrent() {
 
   function handleResetModules() {
     setSelectedModuleKeys(currentModuleKeys);
+  }
+
+  async function handleSendExpansionsToDeals() {
+    setTransferStatus("");
+
+    if (!selectedRelation) {
+      setTransferStatus("Kies eerst een relatie.");
+      return;
+    }
+
+    if (assetDealLines.length === 0) {
+      setTransferStatus("Selecteer eerst minimaal één uitbreiding om door te zetten naar Deals.");
+      return;
+    }
+
+    if (!user) {
+      setTransferStatus("Je moet ingelogd zijn om een deal aan te maken.");
+      return;
+    }
+
+    if (!supabase) {
+      setTransferStatus("Supabase keys ontbreken.");
+      return;
+    }
+
+    setTransferBusy(true);
+
+    try {
+      const finalPackage = targetPackage ?? selectedPackage ?? PACKAGES[PACKAGES.length - 1];
+      const quantities = Object.fromEntries(
+        MODULES.map((moduleConfig) => [moduleConfig.key, selectedModuleKeys.includes(moduleConfig.key) ? 1 : 0]),
+      );
+      const extraUsersForDeal = existingExtraUserCount + safeExtraUsersToOffer + safeChauffeurExtraUsersToOffer;
+      const manualImplementationAdjustment = moduleImplementationTotal;
+      const pricingResults = calculatePricing({
+        extraUsers: extraUsersForDeal,
+        manualImplementationAdjustment,
+        quantities,
+      });
+      const activeResult = pricingResults.find((packageResult) => packageResult.key === finalPackage.key) ?? pricingResults[0];
+      const selectedModuleRows = MODULES.filter((moduleConfig) => (quantities[moduleConfig.key] ?? 0) > 0).map((moduleConfig) => ({
+        ...moduleConfig,
+        qty: quantities[moduleConfig.key] ?? 0,
+        total: moduleConfig.monthlyPrice * (quantities[moduleConfig.key] ?? 0),
+      }));
+      const notes = buildAssetDealNotes(selectedRelation, assetDealLines);
+
+      const payload = {
+        user_id: user.id,
+        customer_name: selectedRelation.name,
+        quote_title: `Uitbreidingen ${selectedRelation.name}`,
+        contact_name: selectedRelation.email,
+        sales_name: user.email?.split("@")[0] ?? null,
+        package_key: activeResult.key,
+        package_name: activeResult.name,
+        total_users: extraUsersForDeal + 1,
+        contract_months: 1,
+        discount_pct: 0,
+        include_vat: false,
+        manual_monthly_adjustment: 0,
+        manual_implementation_adjustment: manualImplementationAdjustment,
+        monthly_base: activeResult.monthlyBase,
+        monthly_total: activeResult.monthlyAfterDiscount,
+        implementation_total: activeResult.implementationAfterAdjustment,
+        contract_value: activeResult.monthlyAfterDiscount + activeResult.implementationAfterAdjustment,
+        annual_recurring: activeResult.annualRecurring,
+        modules: selectedModuleRows,
+        notes,
+        calculator_inputs: {
+          extraUsers: extraUsersForDeal,
+          selectedPackage: activeResult.key,
+          manualImplementationAdjustment,
+          includeVat: false,
+          quantities,
+          quoteLayout: "assets-expansion",
+          assetsExpansion: {
+            source: "assets",
+            relationId: selectedRelation.id,
+            relationName: selectedRelation.name,
+            currentPackageName: selectedPackageName,
+            targetPackageName: activeResult.name,
+            createdAt: new Date().toISOString(),
+            lines: assetDealLines,
+          },
+        },
+      };
+
+      const { data, error } = await supabase.from("deals").insert(payload as never).select("id").single();
+
+      if (error) {
+        setTransferStatus(`Deal aanmaken mislukt: ${error.message}`);
+        return;
+      }
+
+      const dealId = (data as { id?: string } | null)?.id;
+
+      if (!dealId) {
+        setTransferStatus("Deal aangemaakt, maar het dealnummer kon niet worden geopend.");
+        return;
+      }
+
+      setTransferStatus("Uitbreidingen zijn doorgestuurd naar Deals.");
+      router.push(`/deals/${dealId}`);
+    } catch (error) {
+      setTransferStatus(error instanceof Error ? error.message : "Deal aanmaken mislukt.");
+    } finally {
+      setTransferBusy(false);
+    }
   }
 
   function renderModuleImplementationRows() {
@@ -679,6 +961,7 @@ export default function AssetsDashboardCurrent() {
 
     setSearchStatus("");
     setAssetStatus("");
+    setTransferStatus("");
     setSearching(true);
     setSelectedRelation(null);
     setAssets([]);
@@ -711,6 +994,7 @@ export default function AssetsDashboardCurrent() {
   async function handleSelectRelation(relation: RelationOption) {
     setSelectedRelation(relation);
     setAssetStatus("");
+    setTransferStatus("");
     setLoadingAssets(true);
     setAssets([]);
     setExtraUsersToOffer(0);
@@ -756,8 +1040,19 @@ export default function AssetsDashboardCurrent() {
           <div className="brand-actions">
             <StatusPill tone="success">{assetClassTotals.length} assetclass totalen</StatusPill>
             <StatusPill tone="warning">{assets.length} ontvangen assets</StatusPill>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!selectedRelation || transferBusy}
+              onClick={() => void handleSendExpansionsToDeals()}
+            >
+              <FileText size={16} />
+              {transferBusy ? "Doorzetten..." : "Zet uitbreidingen door naar deals"}
+            </button>
           </div>
         </header>
+
+        {transferStatus ? <div className="save-status">{transferStatus}</div> : null}
 
         <section className={`card panel ${styles.assetsSearchPanel}`}>
           <div className="top-row">

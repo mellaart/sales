@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { euro } from "@/lib/pricing";
+import { getQuoteLayout } from "@/lib/quote-layouts";
 import {
   getImplementationText,
   getLicenseRows,
@@ -49,6 +50,17 @@ function addParagraph(doc: jsPDF, text: string, y: number) {
   doc.setFontSize(10);
   doc.setTextColor(25, 40, 55);
   return addWrappedText(doc, text, 16, y, 178, 5) + 3;
+}
+
+function addNotes(doc: jsPDF, notes: string | undefined, y: number) {
+  const lines = notes
+    ?.split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines || lines.length === 0) return y;
+
+  return addBullets(doc, lines, y);
 }
 
 function addBullets(doc: jsPDF, bullets: string[], y: number) {
@@ -132,6 +144,9 @@ function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhon
 
 export function exportQuotePdf(input: OfferTemplateInput) {
   const doc = new jsPDF();
+  const layout = getQuoteLayout(input.quoteLayout);
+  const isCompactLayout = layout.key === "compact";
+  const isAssetsExpansionLayout = layout.key === "assets-expansion";
   const text = getOfferTextBlocks(input);
   const licenseRows = getLicenseRows(input);
   const supportRows = getSupportRows(input);
@@ -155,11 +170,12 @@ export function exportQuotePdf(input: OfferTemplateInput) {
   doc.text(`Klant: ${valueOrDash(input.customerName)}`, 16, 54);
   doc.text(`Contactpersoon: ${valueOrDash(input.contactName)}`, 16, 60);
   doc.text(`Sales consultant: ${valueOrDash(input.salesName)}`, 16, 66);
+  doc.text(`Layout: ${layout.name}`, 16, 72);
 
   doc.setDrawColor(219, 228, 238);
-  doc.line(16, 74, 194, 74);
+  doc.line(16, 80, 194, 80);
 
-  let y = 84;
+  let y = 90;
 
   y = addParagraph(doc, text.greeting, y);
   y = addParagraph(doc, text.intro, y);
@@ -167,16 +183,23 @@ export function exportQuotePdf(input: OfferTemplateInput) {
   y = addSectionTitle(doc, "Functionaliteiten / pakketkeuze", y + 2);
   y = addParagraph(doc, text.packageChoice, y);
 
+  if (isAssetsExpansionLayout && input.notes?.trim()) {
+    y = addSectionTitle(doc, "Geselecteerde uitbreidingen", y + 1);
+    y = addNotes(doc, input.notes, y);
+  }
+
   const moduleSummary = getModuleSummaryText(input.selectedModules, input.result);
   if (input.selectedModules.length > 0) {
     y = addSectionTitle(doc, "Geselecteerde modules", y + 1);
     y = addBullets(doc, moduleSummary, y);
   }
 
-  y = addSectionTitle(doc, "Support", y + 1);
-  y = addParagraph(doc, text.supportIntro, y);
-  y = addParagraph(doc, "Met support bedoelen wij:", y);
-  y = addBullets(doc, text.supportBullets, y);
+  if (!isCompactLayout) {
+    y = addSectionTitle(doc, "Support", y + 1);
+    y = addParagraph(doc, text.supportIntro, y);
+    y = addParagraph(doc, "Met support bedoelen wij:", y);
+    y = addBullets(doc, text.supportBullets, y);
+  }
 
   y = addSectionTitle(doc, "Smart Trade maandtarief", y + 1);
   y = addPriceTable(doc, "Licentie", licenseRows, y);
@@ -205,23 +228,27 @@ export function exportQuotePdf(input: OfferTemplateInput) {
 
   y = addSectionTitle(doc, "Implementatie", y + 2);
   y = addParagraph(doc, text.implementation, y);
-  y = addParagraph(
-    doc,
-    "Om geen vervelende verrassingen of discussies te krijgen, maken we tijdens het eerste bezoek van de consultant altijd een plan van aanpak. Uit dit plan van aanpak zal blijken of het vooraf vastgestelde aantal bezoeken inderdaad voldoende is.",
-    y,
-  );
-  y = addBullets(doc, text.implementationOptions, y);
+  if (!isCompactLayout) {
+    y = addParagraph(
+      doc,
+      "Om geen vervelende verrassingen of discussies te krijgen, maken we tijdens het eerste bezoek van de consultant altijd een plan van aanpak. Uit dit plan van aanpak zal blijken of het vooraf vastgestelde aantal bezoeken inderdaad voldoende is.",
+      y,
+    );
+    y = addBullets(doc, text.implementationOptions, y);
+  }
   y = addParagraph(doc, getImplementationText(input), y);
   y = addParagraph(doc, "Reiskosten worden separaat afgestemd en zijn exclusief btw.", y);
 
-  y = addSectionTitle(doc, "Financieel pakket", y + 2);
-  y = addParagraph(doc, text.finance, y);
+  if (!isCompactLayout && !isAssetsExpansionLayout) {
+    y = addSectionTitle(doc, "Financieel pakket", y + 2);
+    y = addParagraph(doc, text.finance, y);
 
-  y = addSectionTitle(doc, "Ontwikkelwerk / consultancy", y + 2);
-  y = addParagraph(doc, text.consultancy, y);
+    y = addSectionTitle(doc, "Ontwikkelwerk / consultancy", y + 2);
+    y = addParagraph(doc, text.consultancy, y);
 
-  y = addSectionTitle(doc, "Hardware", y + 2);
-  y = addParagraph(doc, text.hardware, y);
+    y = addSectionTitle(doc, "Hardware", y + 2);
+    y = addParagraph(doc, text.hardware, y);
+  }
 
   y = addSectionTitle(doc, "Tot slot", y + 2);
   y = addParagraph(doc, text.closing, y);

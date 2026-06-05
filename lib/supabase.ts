@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 
 export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant";
 
@@ -11,12 +12,33 @@ export type ProfileRecord = {
   updated_at?: string | null;
 };
 
+export type AssetExpansionLine = {
+  group: string;
+  label: string;
+  quantity: number;
+  cadence: "monthly" | "annual" | "once";
+  amount: number;
+  note?: string | null;
+};
+
+export type AssetExpansionSummary = {
+  source: "assets";
+  relationId: string;
+  relationName: string;
+  currentPackageName?: string | null;
+  targetPackageName?: string | null;
+  createdAt: string;
+  lines: AssetExpansionLine[];
+};
+
 export type DealCalculatorInputs = {
   extraUsers: number;
   selectedPackage: string;
   manualImplementationAdjustment: number;
   includeVat: boolean;
   quantities: Record<string, number>;
+  quoteLayout?: QuoteLayoutKey;
+  assetsExpansion?: AssetExpansionSummary | null;
 };
 
 export type DealRecord = {

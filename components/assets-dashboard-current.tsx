@@ -6,6 +6,7 @@ import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, Search, Sparkles 
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
+import { createDealWithFallback } from "@/lib/deal-storage";
 import {
   MODULES,
   PACKAGES,
@@ -900,9 +901,9 @@ export default function AssetsDashboardCurrent() {
           manualImplementationAdjustment,
           includeVat: false,
           quantities,
-          quoteLayout: "assets-expansion",
+          quoteLayout: "assets-expansion" as const,
           assetsExpansion: {
-            source: "assets",
+            source: "assets" as const,
             relationId: selectedRelation.id,
             relationName: selectedRelation.name,
             currentPackageName: selectedPackageName,
@@ -913,22 +914,15 @@ export default function AssetsDashboardCurrent() {
         },
       };
 
-      const { data, error } = await supabase.from("deals").insert(payload as never).select("id").single();
+      const result = await createDealWithFallback(supabase, payload);
 
-      if (error) {
-        setTransferStatus(`Deal aanmaken mislukt: ${error.message}`);
+      if (result.error || !result.deal?.id) {
+        setTransferStatus(`Deal aanmaken mislukt: ${result.error ?? "het dealnummer kon niet worden geopend."}`);
         return;
       }
 
-      const dealId = (data as { id?: string } | null)?.id;
-
-      if (!dealId) {
-        setTransferStatus("Deal aangemaakt, maar het dealnummer kon niet worden geopend.");
-        return;
-      }
-
-      setTransferStatus("Uitbreidingen zijn doorgestuurd naar Deals.");
-      router.push(`/deals/${dealId}`);
+      setTransferStatus(result.warning ?? "Uitbreidingen zijn doorgestuurd naar Deals.");
+      router.push(`/deals/${result.deal.id}`);
     } catch (error) {
       setTransferStatus(error instanceof Error ? error.message : "Deal aanmaken mislukt.");
     } finally {

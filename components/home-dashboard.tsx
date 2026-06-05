@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, Calculator, Euro, FileText, Layers3, RefreshCw, Users } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { listDealsWithFallback } from "@/lib/deal-storage";
 import { canViewAllDeals, getSupabaseClient, type DealRecord } from "@/lib/supabase";
 import { euro } from "@/lib/pricing";
 
@@ -23,17 +24,17 @@ export default function HomeDashboard() {
     }
 
     setLoading(true);
-    const { data, error } = await supabase.from("deals").select("*").order("created_at", { ascending: false }).limit(250);
-    if (error) {
-      setStatus(`Dashboard laden mislukt: ${error.message}`);
+    const result = await listDealsWithFallback(supabase, user.id, canViewAllDeals(role), 250);
+    if (result.error) {
+      setStatus(`Dashboard laden mislukt: ${result.error}`);
       setLoading(false);
       return;
     }
 
-    setDeals((data ?? []) as DealRecord[]);
-    setStatus("");
+    setDeals(result.deals ?? []);
+    setStatus(result.warning ?? "");
     setLoading(false);
-  }, [user, supabase]);
+  }, [role, user, supabase]);
 
   useEffect(() => {
     void loadStats();

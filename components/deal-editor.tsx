@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, CloudUpload, Download, FileText, Package, SlidersHorizontal, Users } from "lucide-react";
 import { exportQuotePdf } from "@/lib/pdf";
+import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { calculatePricing, euro, getRecommendation, IMPLEMENTATION_DAY_RATE, MODULES, PACKAGES } from "@/lib/pricing";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient } from "@/lib/supabase";
@@ -66,20 +67,14 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         return;
       }
 
-      if (!supabase) {
-        setStatus("Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in.");
+      const result = await getDealWithFallback(supabase, dealId);
+      if (result.error || !result.deal) {
+        setStatus(`Deal laden mislukt: ${result.error ?? "Niet gevonden"}`);
         setLoading(false);
         return;
       }
 
-      const { data, error } = await supabase.from("deals").select("*").eq("id", dealId).single();
-      if (error || !data) {
-        setStatus(`Deal laden mislukt: ${error?.message || "Niet gevonden"}`);
-        setLoading(false);
-        return;
-      }
-
-      const deal = data as DealRecord;
+      const deal = result.deal;
       const inputs = normalizeInputs(deal);
 
       setCustomerName(deal.customer_name || "");
@@ -94,7 +89,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setQuantities(inputs.quantities);
       setQuoteLayout(normalizeQuoteLayout(inputs.quoteLayout));
       setAssetsExpansion(inputs.assetsExpansion ?? null);
-      setStatus("");
+      setStatus(result.warning ?? "");
       setLoading(false);
     }
 
@@ -119,8 +114,6 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setStatus("Je moet ingelogd zijn om deze deal op te slaan.");
       return;
     }
-    if (!supabase) return;
-
     const payload = {
       user_id: user.id,
       customer_name: customerName || null,
@@ -153,15 +146,12 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       },
     };
 
-    const { error } = await supabase
-      .from("deals")
-      .update(payload as never)
-      .eq("id", dealId);
-    if (error) {
-      setStatus(`Opslaan mislukt: ${error.message}`);
+    const result = await updateDealWithFallback(supabase, dealId, payload);
+    if (result.error) {
+      setStatus(`Opslaan mislukt: ${result.error}`);
       return;
     }
-    setStatus("Deal opnieuw berekend en opgeslagen.");
+    setStatus(result.warning ?? "Deal opnieuw berekend en opgeslagen.");
   }
 
   function handlePdfExport() {

@@ -797,6 +797,11 @@ export default function AssetsDashboardCurrent() {
     targetPackage,
     targetRecurringMonthly,
   ]);
+  const transferHint = !selectedRelation
+    ? "Kies eerst een relatie. Daarna kun je geselecteerde uitbreidingen doorzetten naar Deals."
+    : assetDealLines.length === 0
+      ? "Selecteer of vul minimaal één uitbreiding in voordat je een deal maakt."
+      : `${assetDealLines.length} uitbreidingsregels staan klaar om als deal op te slaan.`;
 
   function handleToggleModule(moduleKey: string) {
     setSelectedModuleKeys((currentKeys) => {
@@ -1028,6 +1033,54 @@ export default function AssetsDashboardCurrent() {
     }
   }
 
+  function renderTransferActionPanel() {
+    return (
+      <section className={`card panel ${styles.transferPanel}`}>
+        <div className={styles.transferPanelTop}>
+          <div>
+            <div className="eyebrow">Deals</div>
+            <h2 className="headline">Uitbreidingen doorzetten</h2>
+            <p className="subtext">{transferHint}</p>
+          </div>
+
+          <div className="brand-actions">
+            <StatusPill tone={assetDealLines.length > 0 ? "success" : "warning"}>
+              {assetDealLines.length} regels
+            </StatusPill>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={transferBusy}
+              onClick={() => void handleSendExpansionsToDeals()}
+            >
+              <FileText size={16} />
+              {transferBusy ? "Deal wordt gemaakt..." : "Maak deal van uitbreidingen"}
+            </button>
+          </div>
+        </div>
+
+        {assetDealLines.length > 0 ? (
+          <div className={styles.transferPreview}>
+            {assetDealLines.slice(0, 4).map((line, index) => (
+              <div key={`${line.group}-${line.label}-${index}`}>
+                <span>{line.quantity}x {line.label}</span>
+                <strong>{formatLineAmount(line)}</strong>
+              </div>
+            ))}
+            {assetDealLines.length > 4 ? (
+              <div>
+                <span>Extra regels</span>
+                <strong>+{assetDealLines.length - 4}</strong>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {transferStatus ? <div className="save-status">{transferStatus}</div> : null}
+      </section>
+    );
+  }
+
   return (
     <div className="page-shell">
       <div className="container stack-4">
@@ -1040,19 +1093,10 @@ export default function AssetsDashboardCurrent() {
           <div className="brand-actions">
             <StatusPill tone="success">{assetClassTotals.length} assetclass totalen</StatusPill>
             <StatusPill tone="warning">{assets.length} ontvangen assets</StatusPill>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!selectedRelation || transferBusy}
-              onClick={() => void handleSendExpansionsToDeals()}
-            >
-              <FileText size={16} />
-              {transferBusy ? "Doorzetten..." : "Zet uitbreidingen door naar deals"}
-            </button>
           </div>
         </header>
 
-        {transferStatus ? <div className="save-status">{transferStatus}</div> : null}
+        {renderTransferActionPanel()}
 
         <section className={`card panel ${styles.assetsSearchPanel}`}>
           <div className="top-row">
@@ -1425,6 +1469,8 @@ export default function AssetsDashboardCurrent() {
             </div>
           )}
         </section>
+
+        {renderTransferActionPanel()}
       </div>
     </div>
   );

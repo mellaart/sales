@@ -138,6 +138,50 @@
   margin-top: 0;
 }
 
+.transferPanel {
+  display: grid;
+  gap: 14px;
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.transferPanelTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+}
+
+.transferPanelTop p {
+  margin-bottom: 0;
+}
+
+.transferPreview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.transferPreview div {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.transferPreview span {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.transferPreview strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
 .assetGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -532,6 +576,7 @@
   .assetModule,
   .upsellSummary,
   .quoteTotal,
+  .transferPanelTop,
   .moduleAdviceHeader {
     flex-direction: column;
     align-items: flex-start;

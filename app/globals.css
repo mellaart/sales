@@ -695,6 +695,43 @@ td {
   text-align: center;
 }
 
+.quote-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quote-layout-option {
+  display: grid;
+  gap: 6px;
+  min-height: 104px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: 180ms ease;
+}
+
+.quote-layout-option strong {
+  color: #dbeafe;
+  font-size: 14px;
+}
+
+.quote-layout-option span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.quote-layout-option.active,
+.quote-layout-option:hover {
+  border-color: rgba(96,165,250,0.62);
+  background: rgba(37,99,235,0.18);
+}
+
 .comparison-grid {
   display: grid;
   grid-template-columns: repeat(4,1fr);
@@ -730,6 +767,7 @@ td {
   .package-grid,
   .comparison-grid,
   .kpi-grid,
+  .quote-layout-grid,
   .quote-price-strip,
   .quote-facts {
     grid-template-columns: 1fr;

@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, CloudUpload, Download, FileText, Package, SlidersHorizontal, Users } from "lucide-react";
 import { exportQuotePdf } from "@/lib/pdf";
 import { calculatePricing, euro, getRecommendation, IMPLEMENTATION_DAY_RATE, MODULES, PACKAGES } from "@/lib/pricing";
-import { type DealCalculatorInputs, type DealRecord, getSupabaseClient } from "@/lib/supabase";
+import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
+import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient } from "@/lib/supabase";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput, Toggle } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 
@@ -27,7 +28,14 @@ function normalizeInputs(deal: DealRecord): DealCalculatorInputs {
     manualImplementationAdjustment: Number(deal.calculator_inputs?.manualImplementationAdjustment ?? deal.manual_implementation_adjustment ?? 0),
     includeVat: Boolean(deal.calculator_inputs?.includeVat ?? deal.include_vat ?? false),
     quantities: deal.calculator_inputs?.quantities ?? toQuantities(deal.modules),
+    quoteLayout: normalizeQuoteLayout(deal.calculator_inputs?.quoteLayout),
+    assetsExpansion: deal.calculator_inputs?.assetsExpansion ?? null,
   };
+}
+
+function formatExpansionAmount(line: AssetExpansionLine) {
+  const suffix = line.cadence === "monthly" ? " p/m" : line.cadence === "annual" ? " p/j" : "";
+  return `${euro.format(line.amount)}${suffix}`;
 }
 
 export default function DealEditor({ dealId }: { dealId: string }) {
@@ -40,13 +48,15 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
   const [contactName, setContactName] = useState("");
   const [salesName, setSalesName] = useState("");
-    const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState("");
 
   const [extraUsers, setExtraUsers] = useState(1);
   const [selectedPackage, setSelectedPackage] = useState("enterprise");
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
   const [includeVat, setIncludeVat] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(MODULES.map((module) => [module.key, 0])));
+  const [quoteLayout, setQuoteLayout] = useState<QuoteLayoutKey>("standard");
+  const [assetsExpansion, setAssetsExpansion] = useState<AssetExpansionSummary | null>(null);
 
   useEffect(() => {
     async function loadDeal() {
@@ -76,12 +86,14 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
       setContactName(deal.contact_name || "");
       setSalesName(deal.sales_name || "");
-            setNotes(deal.notes || "");
+      setNotes(deal.notes || "");
       setExtraUsers(inputs.extraUsers);
       setSelectedPackage(inputs.selectedPackage);
       setManualImplementationAdjustment(inputs.manualImplementationAdjustment);
       setIncludeVat(inputs.includeVat);
       setQuantities(inputs.quantities);
+      setQuoteLayout(normalizeQuoteLayout(inputs.quoteLayout));
+      setAssetsExpansion(inputs.assetsExpansion ?? null);
       setStatus("");
       setLoading(false);
     }
@@ -115,7 +127,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       quote_title: quoteTitle,
       contact_name: contactName || null,
       sales_name: salesName || null,
-           package_key: activeResult.key,
+      package_key: activeResult.key,
       package_name: activeResult.name,
       total_users: totalUsers,
       contract_months: 1,
@@ -126,7 +138,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       monthly_base: activeResult.monthlyBase,
       monthly_total: activeResult.monthlyAfterDiscount,
       implementation_total: activeResult.implementationAfterAdjustment,
-      contract_value: 0,
+      contract_value: activeResult.contractValue,
       annual_recurring: activeResult.annualRecurring,
       modules: selectedModuleRows,
       notes,
@@ -136,13 +148,15 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         manualImplementationAdjustment,
         includeVat,
         quantities,
+        quoteLayout,
+        assetsExpansion,
       },
     };
 
     const { error } = await supabase
-  .from("deals")
-  .update(payload as never)
-  .eq("id", dealId);
+      .from("deals")
+      .update(payload as never)
+      .eq("id", dealId);
     if (error) {
       setStatus(`Opslaan mislukt: ${error.message}`);
       return;
@@ -156,11 +170,12 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       customerName,
       contactName,
       salesName,
-          notes,
+      notes,
       includeVat,
       totalUsers,
       selectedModules: selectedModuleRows,
       result: activeResult,
+      quoteLayout,
     });
   }
 
@@ -295,6 +310,41 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <div className="proposal-sub">Implementatie: {euro.format(includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)}</div>
                 </div>
               </div>
+
+              <div className="section">
+                <div className="section-title"><FileText size={16} /> Offerte layout</div>
+                <div className="quote-layout-grid">
+                  {QUOTE_LAYOUTS.map((layout) => {
+                    const active = layout.key === quoteLayout;
+
+                    return (
+                      <button
+                        key={layout.key}
+                        type="button"
+                        className={`quote-layout-option ${active ? "active" : ""}`}
+                        onClick={() => setQuoteLayout(layout.key)}
+                      >
+                        <strong>{layout.name}</strong>
+                        <span>{layout.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {assetsExpansion?.lines?.length ? (
+                <div className="section">
+                  <div className="section-title"><FileText size={16} /> Uitbreidingen vanuit Assets</div>
+                  <div className="summary-list">
+                    {assetsExpansion.lines.map((line, index) => (
+                      <div key={`${line.group}-${line.label}-${index}`}>
+                        <span>{line.quantity}x {line.label}</span>
+                        <strong>{formatExpansionAmount(line)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="section">
                 <TextArea label="Notities" value={notes} onChange={setNotes} placeholder="Interne of commerciële notities" />

@@ -1,5 +1,6 @@
 import type { PricingResult } from "@/lib/pricing";
 import { euro, IMPLEMENTATION_DAY_RATE } from "@/lib/pricing";
+import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 
 export type OfferModule = {
   key: string;
@@ -21,6 +22,7 @@ export type OfferTemplateInput = {
   totalUsers: number;
   selectedModules: OfferModule[];
   result: PricingResult;
+  quoteLayout?: QuoteLayoutKey;
 };
 
 export function getGreeting(contactName?: string) {

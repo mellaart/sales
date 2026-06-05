@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, RefreshCw, Search, Trash2 } from "lucide-react";
+import { deleteDealWithFallback, listDealsWithFallback } from "@/lib/deal-storage";
 import { euro } from "@/lib/pricing";
 import { canViewAllDeals, type DealRecord, getSupabaseClient } from "@/lib/supabase";
 import { StatusPill } from "@/components/ui";
@@ -30,17 +31,17 @@ export default function DealsDashboard() {
     }
 
     setLoading(true);
-    const { data, error } = await supabase.from("deals").select("*").order("created_at", { ascending: false });
-    if (error) {
-      setStatus(`Deals laden mislukt: ${error.message}`);
+    const result = await listDealsWithFallback(supabase, user.id, canViewAllDeals(role));
+    if (result.error) {
+      setStatus(`Deals laden mislukt: ${result.error}`);
       setLoading(false);
       return;
     }
 
-    setDeals((data ?? []) as DealRecord[]);
-    setStatus("");
+    setDeals(result.deals ?? []);
+    setStatus(result.warning ?? "");
     setLoading(false);
-  }, [user, supabase]);
+  }, [role, user, supabase]);
 
   useEffect(() => {
     void loadDeals();
@@ -57,13 +58,12 @@ export default function DealsDashboard() {
   }, [deals, query]);
 
   const handleDelete = async (deal: DealRecord) => {
-    if (!supabase) return;
     const confirmed = window.confirm(`Weet je zeker dat je deal van ${deal.customer_name || deal.quote_title} wilt verwijderen?`);
     if (!confirmed) return;
 
-    const { error } = await supabase.from("deals").delete().eq("id", deal.id);
-    if (error) {
-      setStatus(`Verwijderen mislukt: ${error.message}`);
+    const result = await deleteDealWithFallback(supabase, deal.id);
+    if (result.error) {
+      setStatus(`Verwijderen mislukt: ${result.error}`);
       return;
     }
 

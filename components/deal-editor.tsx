@@ -8,7 +8,7 @@ import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { calculatePricing, euro, getRecommendation, IMPLEMENTATION_DAY_RATE, MODULES, PACKAGES } from "@/lib/pricing";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
-import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient } from "@/lib/supabase";
+import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput, Toggle } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 
@@ -41,7 +41,7 @@ function formatExpansionAmount(line: AssetExpansionLine) {
 }
 
 export default function DealEditor({ dealId }: { dealId: string }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -59,6 +59,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(MODULES.map((module) => [module.key, 0])));
   const [quoteLayout, setQuoteLayout] = useState<QuoteLayoutKey>("standard");
   const [assetsExpansion, setAssetsExpansion] = useState<AssetExpansionSummary | null>(null);
+
+  const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
   useEffect(() => {
     async function loadDeal() {
@@ -81,7 +83,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setCustomerName(deal.customer_name || "");
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
       setContactName(deal.contact_name || "");
-      setSalesName(deal.sales_name || "");
+      setSalesName(deal.user_id === user.id && currentSalesName ? currentSalesName : deal.sales_name || "");
       setNotes(deal.notes || "");
       setExtraUsers(inputs.extraUsers);
       setSelectedPackage(inputs.selectedPackage);
@@ -95,7 +97,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     }
 
     void loadDeal();
-  }, [dealId, supabase, user]);
+  }, [currentSalesName, dealId, supabase, user]);
 
   const totalUsers = extraUsers + 1;
   const results = useMemo(
@@ -123,7 +125,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           customer_name: customerName || null,
           quote_title: quoteTitle,
           contact_name: contactName || null,
-          sales_name: salesName || null,
+          sales_name: salesName || currentSalesName || null,
           package_key: activeResult.key,
           package_name: "Uitbreiding",
           total_users: totalUsers,
@@ -154,7 +156,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       customer_name: customerName || null,
       quote_title: quoteTitle,
       contact_name: contactName || null,
-      sales_name: salesName || null,
+      sales_name: salesName || currentSalesName || null,
       package_key: activeResult.key,
       package_name: activeResult.name,
       total_users: totalUsers,

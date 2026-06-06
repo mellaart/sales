@@ -17,7 +17,7 @@ import {
   type ModuleConfig,
   type PackageConfig,
 } from "@/lib/pricing";
-import { type AssetExpansionLine, getSupabaseClient } from "@/lib/supabase";
+import { type AssetExpansionLine, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import styles from "./assets-dashboard.module.css";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
@@ -530,7 +530,7 @@ function buildAssetDealNotes(relation: RelationOption, lines: AssetExpansionLine
 
 export default function AssetsDashboardCurrent() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const supabase = getSupabaseClient();
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
@@ -885,7 +885,7 @@ export default function AssetsDashboardCurrent() {
         customer_name: selectedRelation.name,
         quote_title: `Uitbreidingen ${selectedRelation.name}`,
         contact_name: selectedRelation.email,
-        sales_name: user.email?.split("@")[0] ?? null,
+        sales_name: getUserDisplayName(user, profile),
         package_key: activeResult.key,
         package_name: "Uitbreiding",
         total_users: Math.max(1, extraUsersForDeal + 1),

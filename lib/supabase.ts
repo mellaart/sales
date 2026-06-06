@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type User } from "@supabase/supabase-js";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 
 export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant";
@@ -50,7 +50,7 @@ export type DealRecord = {
   quote_title?: string | null;
 
   sales_name?: string | null;
-notes?: string | null;
+  notes?: string | null;
 
   package_key?: string | null;
   package_name?: string | null;
@@ -97,6 +97,36 @@ export function canManageRoles(role: UserRole | null) {
 
 export function canViewAllDeals(role: UserRole | null) {
   return role === "admin" || role === "manager" || role === "support";
+}
+
+function normalizeText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function getEmailFallback(value: unknown) {
+  const email = normalizeText(value);
+  return email ? email.split("@")[0] : null;
+}
+
+export function getProfileDisplayName(profile: Pick<ProfileRecord, "email" | "full_name"> | null | undefined) {
+  return normalizeText(profile?.full_name) ?? getEmailFallback(profile?.email);
+}
+
+export function getUserDisplayName(
+  user: Pick<User, "email" | "user_metadata"> | null | undefined,
+  profile?: Pick<ProfileRecord, "email" | "full_name"> | null,
+) {
+  const metadata = user?.user_metadata ?? {};
+
+  return (
+    normalizeText(metadata.full_name) ??
+    normalizeText(metadata.display_name) ??
+    normalizeText(metadata.name) ??
+    normalizeText(profile?.full_name) ??
+    getEmailFallback(user?.email ?? profile?.email)
+  );
 }
 
 export async function fetchProfile(userId: string): Promise<ProfileRecord | null> {
@@ -151,5 +181,4 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
   }
 
   return null;
-
 }

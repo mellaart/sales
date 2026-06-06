@@ -40,6 +40,12 @@ function formatExpansionAmount(line: AssetExpansionLine) {
   return `${euro.format(line.amount)}${suffix}`;
 }
 
+function getExpansionCadenceLabel(line: AssetExpansionLine) {
+  if (line.cadence === "monthly") return "Per maand";
+  if (line.cadence === "annual") return "Per jaar";
+  return "Eenmalig";
+}
+
 export default function DealEditor({ dealId }: { dealId: string }) {
   const { user, profile } = useAuth();
   const supabase = getSupabaseClient();
@@ -251,10 +257,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             <div className="top-row">
               <div>
                 <div className="eyebrow">Deal detail</div>
-                <h2 className="headline">{isAssetsExpansionDeal ? "Uitbreiding invoer" : "Calculator invoer"}</h2>
+                <h2 className="headline">{isAssetsExpansionDeal ? "Offertegegevens" : "Calculator invoer"}</h2>
                 <div className="subtext">
                   {isAssetsExpansionDeal
-                    ? "Deze deal gebruikt alleen de gekozen uitbreidingsregels uit Assets."
+                    ? "Controleer klant, contactpersoon en sales consultant voor deze uitbreiding."
                     : "Je werkt hier weer vanuit de originele invoervelden, niet alleen op de eindbedragen."}
                 </div>
               </div>
@@ -267,22 +273,25 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <TextInput label="Titel voorstel" value={quoteTitle} onChange={setQuoteTitle} />
                 <TextInput label="Contactpersoon" value={contactName} onChange={setContactName} />
                 <TextInput label="Sales consultant" value={salesName} onChange={setSalesName} />
-                             </div>
+              </div>
             </div>
 
             {isAssetsExpansionDeal ? (
               <div className="section">
-                <div className="section-title"><FileText size={16} /> Geselecteerde uitbreiding</div>
-                <div className="summary-list">
+                <div className="section-title"><FileText size={16} /> Uitbreidingsregels</div>
+                <div className="expansion-line-list">
                   {assetsExpansion?.lines.map((line, index) => (
-                    <div key={`${line.group}-${line.label}-${index}`}>
-                      <span>{line.quantity}x {line.label}</span>
-                      <strong>{formatExpansionAmount(line)}</strong>
+                    <div key={`${line.group}-${line.label}-${index}`} className="expansion-line-row">
+                      <div className="expansion-line-main">
+                        <strong className="expansion-line-title">{line.quantity}x {line.label}</strong>
+                        <span className="expansion-line-meta">
+                          {line.group} · {getExpansionCadenceLabel(line)}
+                          {line.note ? ` · ${line.note}` : ""}
+                        </span>
+                      </div>
+                      <strong className="expansion-line-price">{formatExpansionAmount(line)}</strong>
                     </div>
                   ))}
-                  <div className="total-row"><span>Totaal per maand</span><strong>{euro.format(expansionTotals.monthly)}</strong></div>
-                  {expansionTotals.annual > 0 ? <div className="total-row"><span>Totaal per jaar</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
-                  <div className="total-row"><span>Setupkosten</span><strong>{euro.format(expansionTotals.once)}</strong></div>
                 </div>
               </div>
             ) : (
@@ -371,9 +380,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <div className="summary-list">
                     {isAssetsExpansionDeal ? (
                       <>
-                        <div className="total-row"><span>Totaal per maand</span><strong>{euro.format(expansionTotals.monthly)}</strong></div>
-                        {expansionTotals.annual > 0 ? <div><span>Totaal per jaar</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
-                        <div><span>Setupkosten</span><strong>{euro.format(expansionTotals.once)}</strong></div>
+                        <div className="total-row"><span>Maandbedrag</span><strong>{euro.format(expansionTotals.monthly)}</strong></div>
+                        {expansionTotals.annual > 0 ? <div><span>Jaarbedrag</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
+                        {expansionTotals.once > 0 ? <div><span>Eenmalig</span><strong>{euro.format(expansionTotals.once)}</strong></div> : null}
                       </>
                     ) : (
                       <>
@@ -389,11 +398,15 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 </div>
 
                 <div className="proposal-card">
-                  <div className="proposal-brand">{quoteTitle || "Prijsvoorstel"}</div>
-                  <div className="proposal-title">{isAssetsExpansionDeal ? "Geselecteerde uitbreiding" : activeResult.name}</div>
+                  <div className="proposal-brand">{isAssetsExpansionDeal ? "Offerte samenvatting" : quoteTitle || "Prijsvoorstel"}</div>
+                  <div className="proposal-title">{isAssetsExpansionDeal ? quoteTitle || "Uitbreiding" : activeResult.name}</div>
                   <div className="proposal-meta">{customerName || "Nog niet ingevuld"} · {contactName || "Geen contactpersoon"}</div>
                   <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionTotals.monthly : includeVat ? activeResult.monthlyInclVat : activeResult.monthlyAfterDiscount)} p/m</div>
-                  <div className="proposal-sub">Setup: {euro.format(isAssetsExpansionDeal ? expansionTotals.once : includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)}</div>
+                  {isAssetsExpansionDeal && expansionTotals.once === 0 ? (
+                    <div className="proposal-sub">{assetsExpansion?.lines.length ?? 0} uitbreidingsregel{assetsExpansion?.lines.length === 1 ? "" : "s"}</div>
+                  ) : (
+                    <div className="proposal-sub">Eenmalig: {euro.format(isAssetsExpansionDeal ? expansionTotals.once : includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)}</div>
+                  )}
                 </div>
               </div>
 

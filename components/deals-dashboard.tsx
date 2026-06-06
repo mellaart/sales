@@ -2,12 +2,28 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ExternalLink, RefreshCw, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink, FileText, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
 import { deleteDealWithFallback, listDealsWithFallback } from "@/lib/deal-storage";
 import { euro } from "@/lib/pricing";
 import { canViewAllDeals, type DealRecord, getSupabaseClient } from "@/lib/supabase";
 import { StatusPill } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
+
+type DealFilter = "all" | "expansion" | "calculator";
+
+const dealDateFormatter = new Intl.DateTimeFormat("nl-NL", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+function isExpansionDeal(deal: DealRecord) {
+  return deal.calculator_inputs?.quoteLayout === "assets-expansion" && Boolean(deal.calculator_inputs.assetsExpansion?.lines?.length);
+}
+
+function getDealTypeLabel(deal: DealRecord) {
+  return isExpansionDeal(deal) ? "Uitbreiding" : "Calculator";
+}
 
 function getDealMeta(deal: DealRecord) {
   const expansionLines = deal.calculator_inputs?.assetsExpansion?.lines;
@@ -20,12 +36,34 @@ function getDealMeta(deal: DealRecord) {
   return `${deal.quote_title} · ${deal.package_name} · ${deal.total_users} gebruikers`;
 }
 
+function getDealDateLabel(deal: DealRecord) {
+  if (!deal.created_at) return "Geen datum";
+
+  const date = new Date(deal.created_at);
+  if (Number.isNaN(date.getTime())) return "Geen datum";
+
+  return dealDateFormatter.format(date);
+}
+
+function getDealSearchValues(deal: DealRecord) {
+  return [
+    deal.customer_name,
+    deal.quote_title,
+    deal.contact_name,
+    deal.package_name,
+    deal.sales_name,
+    getDealTypeLabel(deal),
+    ...(deal.calculator_inputs?.assetsExpansion?.lines ?? []).map((line) => line.label),
+  ];
+}
+
 export default function DealsDashboard() {
   const { user, role } = useAuth();
   const supabase = getSupabaseClient();
   const [deals, setDeals] = useState<DealRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [dealFilter, setDealFilter] = useState<DealFilter>("all");
   const [status, setStatus] = useState("");
 
   const loadDeals = useCallback(async () => {
@@ -60,13 +98,36 @@ export default function DealsDashboard() {
 
   const filteredDeals = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return deals;
-    return deals.filter((deal) =>
-      [deal.customer_name, deal.quote_title, deal.contact_name, deal.package_name, deal.sales_name]
+    return deals.filter((deal) => {
+      if (dealFilter === "expansion" && !isExpansionDeal(deal)) return false;
+      if (dealFilter === "calculator" && isExpansionDeal(deal)) return false;
+      if (!q) return true;
+
+      return getDealSearchValues(deal)
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q)),
-    );
-  }, [deals, query]);
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [dealFilter, deals, query]);
+
+  const stats = useMemo(() => {
+    const expansionDeals = deals.filter(isExpansionDeal).length;
+    const monthlyTotal = deals.reduce((sum, deal) => sum + Number(deal.monthly_total || 0), 0);
+    const latestDeal = deals[0] ?? null;
+
+    return {
+      totalDeals: deals.length,
+      expansionDeals,
+      calculatorDeals: deals.length - expansionDeals,
+      monthlyTotal,
+      latestLabel: latestDeal ? getDealDateLabel(latestDeal) : "-",
+    };
+  }, [deals]);
+
+  const filterOptions: Array<{ key: DealFilter; label: string; count: number }> = [
+    { key: "all", label: "Alles", count: deals.length },
+    { key: "expansion", label: "Uitbreidingen", count: stats.expansionDeals },
+    { key: "calculator", label: "Calculator", count: stats.calculatorDeals },
+  ];
 
   const handleDelete = async (deal: DealRecord) => {
     const confirmed = window.confirm(`Weet je zeker dat je deal van ${deal.customer_name || deal.quote_title} wilt verwijderen?`);
@@ -84,15 +145,15 @@ export default function DealsDashboard() {
 
   return (
     <div className="page-shell">
-      <div className="container">
+      <div className="container deals-page">
         <header className="brand-hero card">
           <div>
             <div className="brand-mark">Smart Trade</div>
             <h1>Deal overzicht</h1>
             <p>
               {canViewAllDeals(role)
-                ? "Je ziet alle deals dankzij je manager/admin rol. Zoek op klant, pakket of sales consultant en open een deal voor herberekening."
-                : "Je ziet alleen je eigen opgeslagen deals. Zoek op klant of pakket en open elke deal als volledige calculator voor herberekening."}
+                ? "Alle deals, uitbreidingen en offertes overzichtelijk bij elkaar."
+                : "Jouw opgeslagen deals, uitbreidingen en offertes overzichtelijk bij elkaar."}
             </p>
           </div>
           <div className="brand-actions">
@@ -101,38 +162,108 @@ export default function DealsDashboard() {
           </div>
         </header>
 
-        <section className="card panel">
-          <div className="top-row">
+        <section className="deals-stat-grid">
+          <article className="deals-stat">
+            <div className="stat-icon"><FileText size={18} /></div>
             <div>
-              <div className="eyebrow">Deals</div>
-              <h2 className="headline">Overzicht</h2>
+              <span>Deals</span>
+              <strong>{stats.totalDeals}</strong>
             </div>
-            <StatusPill tone="neutral">{filteredDeals.length} resultaten</StatusPill>
-          </div>
+          </article>
+          <article className="deals-stat">
+            <div className="stat-icon"><WalletCards size={18} /></div>
+            <div>
+              <span>Maandwaarde</span>
+              <strong>{euro.format(stats.monthlyTotal)}</strong>
+            </div>
+          </article>
+          <article className="deals-stat">
+            <div className="stat-icon"><ExternalLink size={18} /></div>
+            <div>
+              <span>Uitbreidingen</span>
+              <strong>{stats.expansionDeals}</strong>
+            </div>
+          </article>
+          <article className="deals-stat">
+            <div className="stat-icon"><CalendarDays size={18} /></div>
+            <div>
+              <span>Laatste deal</span>
+              <strong>{stats.latestLabel}</strong>
+            </div>
+          </article>
+        </section>
 
-          <div className="search-row">
+        <section className="deals-toolbar card panel">
+          <div>
+            <div className="eyebrow">Zoeken en filteren</div>
+            <h2 className="headline">Deals vinden</h2>
+          </div>
+          <div className="deals-filter-bar">
+            {filterOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={`deals-filter-button ${dealFilter === option.key ? "active" : ""}`}
+                onClick={() => setDealFilter(option.key)}
+              >
+                <span>{option.label}</span>
+                <strong>{option.count}</strong>
+              </button>
+            ))}
+          </div>
+          <div className="search-row deals-search-row">
             <div className="search-box">
               <Search size={16} />
               <input className="search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Zoek op klant, voorstel, contact, pakket of sales" />
             </div>
+            {query ? (
+              <button type="button" className="secondary-button" onClick={() => setQuery("")}>
+                Wissen
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="deals-results card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Resultaten</div>
+              <h2 className="headline">{filteredDeals.length} deals</h2>
+            </div>
+            <StatusPill tone="neutral">{dealFilter === "all" ? "Alle types" : dealFilter === "expansion" ? "Uitbreidingen" : "Calculator"}</StatusPill>
           </div>
 
           {loading ? <div className="save-status">Deals worden geladen...</div> : null}
           {status ? <div className="save-status">{status}</div> : null}
 
-          <div className="deal-list">
+          <div className="deals-list">
             {filteredDeals.map((deal) => (
-              <div key={deal.id} className="deal-row">
-                <div>
-                  <div className="package-name">{deal.customer_name || "Onbekende klant"}</div>
-                  <div className="muted small-gap">{getDealMeta(deal)}</div>
-                  <div className="muted small-gap">Sales: {deal.sales_name || "-"} · Maand: {euro.format(Number(deal.monthly_total || 0))}</div>
+              <article key={deal.id} className="deal-card-row">
+                <div className="deal-card-main">
+                  <div className="deal-card-top">
+                    <StatusPill tone={isExpansionDeal(deal) ? "success" : "warning"}>{getDealTypeLabel(deal)}</StatusPill>
+                    <span className="deal-date">{getDealDateLabel(deal)}</span>
+                  </div>
+                  <div>
+                    <h3>{deal.customer_name || "Onbekende klant"}</h3>
+                    <p>{getDealMeta(deal)}</p>
+                  </div>
+                  <div className="deal-meta-grid">
+                    <span>Contact: <strong>{deal.contact_name || "-"}</strong></span>
+                    <span>Sales: <strong>{deal.sales_name || "-"}</strong></span>
+                  </div>
                 </div>
-                <div className="button-row compact">
-                  <Link href={`/deals/${deal.id}`} className="primary-button"><ExternalLink size={16} /> Open detail</Link>
-                  <button type="button" className="secondary-button danger" onClick={() => void handleDelete(deal)}><Trash2 size={16} /> Verwijder</button>
+                <div className="deal-card-side">
+                  <div className="deal-amount">
+                    <span>Maand</span>
+                    <strong>{euro.format(Number(deal.monthly_total || 0))}</strong>
+                  </div>
+                  <div className="button-row compact deal-actions">
+                    <Link href={`/deals/${deal.id}`} className="primary-button"><ExternalLink size={16} /> Open</Link>
+                    <button type="button" className="secondary-button danger" onClick={() => void handleDelete(deal)}><Trash2 size={16} /> Verwijder</button>
+                  </div>
                 </div>
-              </div>
+              </article>
             ))}
             {!loading && filteredDeals.length === 0 ? <div className="save-status">Geen deals gevonden.</div> : null}
           </div>

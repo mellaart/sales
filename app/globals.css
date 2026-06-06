@@ -517,6 +517,129 @@ td {
   border: 1px solid var(--line);
 }
 
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #dbeafe;
+  font-weight: 800;
+}
+
+.summary-list {
+  display: grid;
+  gap: 0;
+}
+
+.summary-list > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(148,163,184,0.1);
+}
+
+.summary-list > div:last-child {
+  border-bottom: 0;
+}
+
+.summary-list span {
+  min-width: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.summary-list strong {
+  flex: 0 0 auto;
+  color: #f8fafc;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.summary-list .total-row {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.expansion-line-list {
+  display: grid;
+  gap: 10px;
+}
+
+.expansion-line-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(148,163,184,0.14);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.04);
+}
+
+.expansion-line-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.expansion-line-title {
+  color: #f8fafc;
+  line-height: 1.35;
+}
+
+.expansion-line-meta {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.expansion-line-price {
+  color: #bfdbfe;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.proposal-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid rgba(96,165,250,0.22);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(37,99,235,0.2), rgba(255,255,255,0.04));
+}
+
+.proposal-brand {
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.proposal-title {
+  color: #f8fafc;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.proposal-meta,
+.proposal-sub {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.proposal-total {
+  margin-top: 6px;
+  color: #ffffff;
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
 .big-number,
 .kpi-value {
   font-size: 32px;
@@ -771,6 +894,25 @@ td {
   .quote-price-strip,
   .quote-facts {
     grid-template-columns: 1fr;
+  }
+
+  .expansion-line-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .expansion-line-price {
+    text-align: left;
+  }
+
+  .summary-list > div {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .summary-list strong {
+    text-align: left;
   }
 
 }

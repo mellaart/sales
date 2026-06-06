@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, Calculator, CalendarDays, ExternalLink, FileText, Layers3, RefreshCw, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { getDealSalesName, loadDealSalesNames, type SalesNamesByUserId } from "@/lib/deal-sales-names";
 import { listDealsWithFallback } from "@/lib/deal-storage";
-import { canViewAllDeals, getSupabaseClient, type DealRecord } from "@/lib/supabase";
+import { canViewAllDeals, getSupabaseClient, getUserDisplayName, type DealRecord } from "@/lib/supabase";
 import { euro } from "@/lib/pricing";
 import { StatusPill } from "@/components/ui";
 
@@ -44,9 +45,10 @@ function getDealDateLabel(deal: DealRecord) {
 }
 
 export default function HomeDashboard() {
-  const { user, role } = useAuth();
+  const { user, profile, role } = useAuth();
   const supabase = getSupabaseClient();
   const [deals, setDeals] = useState<DealRecord[]>([]);
+  const [salesNamesByUserId, setSalesNamesByUserId] = useState<SalesNamesByUserId>({});
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
 
@@ -66,10 +68,12 @@ export default function HomeDashboard() {
       return;
     }
 
-    setDeals(result.deals ?? []);
+    const nextDeals = result.deals ?? [];
+    setDeals(nextDeals);
+    setSalesNamesByUserId(await loadDealSalesNames(supabase, nextDeals, user, profile));
     setStatus(result.warning ?? "");
     setLoading(false);
-  }, [role, user, supabase]);
+  }, [profile, role, user, supabase]);
 
   useEffect(() => {
     void loadStats();
@@ -93,6 +97,7 @@ export default function HomeDashboard() {
   }, [deals]);
 
   const recentDeals = useMemo(() => deals.slice(0, 5), [deals]);
+  const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
   return (
     <div className="page-shell">
@@ -178,7 +183,7 @@ export default function HomeDashboard() {
                   </div>
                   <div className="deal-meta-grid">
                     <span>Contact: <strong>{deal.contact_name || "-"}</strong></span>
-                    <span>Sales: <strong>{deal.sales_name || "-"}</strong></span>
+                    <span>Sales: <strong>{getDealSalesName(deal, salesNamesByUserId, user?.id, currentSalesName)}</strong></span>
                   </div>
                 </div>
                 <div className="deal-card-side">

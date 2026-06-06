@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarDays, ExternalLink, FileText, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
+import { getDealSalesName, loadDealSalesNames, type SalesNamesByUserId } from "@/lib/deal-sales-names";
 import { deleteDealWithFallback, listDealsWithFallback } from "@/lib/deal-storage";
 import { euro } from "@/lib/pricing";
-import { canViewAllDeals, type DealRecord, getSupabaseClient } from "@/lib/supabase";
+import { canViewAllDeals, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { StatusPill } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 
@@ -45,22 +46,23 @@ function getDealDateLabel(deal: DealRecord) {
   return dealDateFormatter.format(date);
 }
 
-function getDealSearchValues(deal: DealRecord) {
+function getDealSearchValues(deal: DealRecord, salesName: string) {
   return [
     deal.customer_name,
     deal.quote_title,
     deal.contact_name,
     deal.package_name,
-    deal.sales_name,
+    salesName,
     getDealTypeLabel(deal),
     ...(deal.calculator_inputs?.assetsExpansion?.lines ?? []).map((line) => line.label),
   ];
 }
 
 export default function DealsDashboard() {
-  const { user, role } = useAuth();
+  const { user, profile, role } = useAuth();
   const supabase = getSupabaseClient();
   const [deals, setDeals] = useState<DealRecord[]>([]);
+  const [salesNamesByUserId, setSalesNamesByUserId] = useState<SalesNamesByUserId>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [dealFilter, setDealFilter] = useState<DealFilter>("all");
@@ -87,14 +89,18 @@ export default function DealsDashboard() {
       return;
     }
 
-    setDeals(result.deals ?? []);
+    const nextDeals = result.deals ?? [];
+    setDeals(nextDeals);
+    setSalesNamesByUserId(await loadDealSalesNames(supabase, nextDeals, user, profile));
     setStatus(result.warning ?? "");
     setLoading(false);
-  }, [role, user, supabase]);
+  }, [profile, role, user, supabase]);
 
   useEffect(() => {
     void loadDeals();
   }, [user, role, loadDeals]);
+
+  const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
   const filteredDeals = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -103,11 +109,11 @@ export default function DealsDashboard() {
       if (dealFilter === "calculator" && isExpansionDeal(deal)) return false;
       if (!q) return true;
 
-      return getDealSearchValues(deal)
+      return getDealSearchValues(deal, getDealSalesName(deal, salesNamesByUserId, user?.id, currentSalesName))
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [dealFilter, deals, query]);
+  }, [currentSalesName, dealFilter, deals, query, salesNamesByUserId, user?.id]);
 
   const stats = useMemo(() => {
     const expansionDeals = deals.filter(isExpansionDeal).length;
@@ -250,7 +256,7 @@ export default function DealsDashboard() {
                   </div>
                   <div className="deal-meta-grid">
                     <span>Contact: <strong>{deal.contact_name || "-"}</strong></span>
-                    <span>Sales: <strong>{deal.sales_name || "-"}</strong></span>
+                    <span>Sales: <strong>{getDealSalesName(deal, salesNamesByUserId, user?.id, currentSalesName)}</strong></span>
                   </div>
                 </div>
                 <div className="deal-card-side">

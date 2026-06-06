@@ -2,11 +2,26 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Calculator, Euro, FileText, Layers3, RefreshCw, Users } from "lucide-react";
+import { BarChart3, Calculator, CalendarDays, ExternalLink, FileText, Layers3, RefreshCw, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { listDealsWithFallback } from "@/lib/deal-storage";
 import { canViewAllDeals, getSupabaseClient, type DealRecord } from "@/lib/supabase";
 import { euro } from "@/lib/pricing";
+import { StatusPill } from "@/components/ui";
+
+const dashboardDateFormatter = new Intl.DateTimeFormat("nl-NL", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+function isExpansionDeal(deal: DealRecord) {
+  return deal.calculator_inputs?.quoteLayout === "assets-expansion" && Boolean(deal.calculator_inputs.assetsExpansion?.lines?.length);
+}
+
+function getDealTypeLabel(deal: DealRecord) {
+  return isExpansionDeal(deal) ? "Uitbreiding" : "Calculator";
+}
 
 function getRecentDealMeta(deal: DealRecord) {
   const expansionLines = deal.calculator_inputs?.assetsExpansion?.lines;
@@ -17,6 +32,15 @@ function getRecentDealMeta(deal: DealRecord) {
   }
 
   return `${deal.package_name || "-"} · ${deal.total_users || 0} gebruikers`;
+}
+
+function getDealDateLabel(deal: DealRecord) {
+  if (!deal.created_at) return "Geen datum";
+
+  const date = new Date(deal.created_at);
+  if (Number.isNaN(date.getTime())) return "Geen datum";
+
+  return dashboardDateFormatter.format(date);
 }
 
 export default function HomeDashboard() {
@@ -55,24 +79,30 @@ export default function HomeDashboard() {
     const totalDeals = deals.length;
     const totalMonthly = deals.reduce((sum, d) => sum + Number(d.monthly_total || 0), 0);
     const avgMonthly = totalDeals ? totalMonthly / totalDeals : 0;
-    const totalUsers = deals.reduce((sum, d) => sum + Number(d.total_users || 0), 0);
-    const packages = new Set(deals.map((d) => d.package_name).filter(Boolean));
+    const expansionDeals = deals.filter(isExpansionDeal).length;
+    const latestDeal = deals[0] ?? null;
 
-    return { totalDeals, totalMonthly, avgMonthly, totalUsers, activePackages: packages.size };
+    return {
+      totalDeals,
+      totalMonthly,
+      avgMonthly,
+      expansionDeals,
+      calculatorDeals: totalDeals - expansionDeals,
+      latestLabel: latestDeal ? getDealDateLabel(latestDeal) : "-",
+    };
   }, [deals]);
 
   const recentDeals = useMemo(() => deals.slice(0, 5), [deals]);
 
   return (
     <div className="page-shell">
-      <div className="container stack-4">
+      <div className="container dashboard-page">
         <header className="brand-hero card">
           <div>
             <div className="brand-mark">Smart Trade</div>
             <h1>Sales dashboard</h1>
             <p>
-              Welkom terug! Hier zie je in één oogopslag de belangrijkste sales cijfers en kan je direct naar de
-              calculator, deals en assets.
+              In één overzicht je saleswaarde, laatste deals en de belangrijkste acties.
             </p>
           </div>
           <div className="brand-actions">
@@ -81,15 +111,50 @@ export default function HomeDashboard() {
           </div>
         </header>
 
-        <section className="stats-grid">
-          <article className="card panel stat-card"><div className="stat-icon"><FileText size={18} /></div><div><div className="eyebrow">Deals</div><h3>{stats.totalDeals}</h3><p className="subtext">Totaal opgeslagen voorstellen</p></div></article>
-          <article className="card panel stat-card"><div className="stat-icon"><Euro size={18} /></div><div><div className="eyebrow">MRR</div><h3>{euro.format(stats.totalMonthly)}</h3><p className="subtext">Som van maandelijkse waarde</p></div></article>
-          <article className="card panel stat-card"><div className="stat-icon"><BarChart3 size={18} /></div><div><div className="eyebrow">Gemiddelde</div><h3>{euro.format(stats.avgMonthly)}</h3><p className="subtext">Gemiddelde maandprijs per deal</p></div></article>
-          <article className="card panel stat-card"><div className="stat-icon"><Users size={18} /></div><div><div className="eyebrow">Gebruikers</div><h3>{stats.totalUsers}</h3><p className="subtext">Totaal gebruikers in deals</p></div></article>
-          <article className="card panel stat-card"><div className="stat-icon"><Layers3 size={18} /></div><div><div className="eyebrow">Pakketten</div><h3>{stats.activePackages}</h3><p className="subtext">Aantal actieve pakkettypes</p></div></article>
+        <section className="deals-stat-grid">
+          <article className="deals-stat">
+            <div className="stat-icon"><FileText size={18} /></div>
+            <div><span>Deals</span><strong>{stats.totalDeals}</strong></div>
+          </article>
+          <article className="deals-stat">
+            <div className="stat-icon"><WalletCards size={18} /></div>
+            <div><span>Maandwaarde</span><strong>{euro.format(stats.totalMonthly)}</strong></div>
+          </article>
+          <article className="deals-stat">
+            <div className="stat-icon"><BarChart3 size={18} /></div>
+            <div><span>Gemiddelde</span><strong>{euro.format(stats.avgMonthly)}</strong></div>
+          </article>
+          <article className="deals-stat">
+            <div className="stat-icon"><CalendarDays size={18} /></div>
+            <div><span>Laatste deal</span><strong>{stats.latestLabel}</strong></div>
+          </article>
         </section>
 
-        <section className="card panel">
+        <section className="dashboard-action-grid">
+          <Link href="/deals" className="dashboard-action-card">
+            <div className="stat-icon"><FileText size={18} /></div>
+            <div>
+              <strong>Deals beheren</strong>
+              <span>{stats.calculatorDeals} calculator · {stats.expansionDeals} uitbreidingen</span>
+            </div>
+          </Link>
+          <Link href="/assets" className="dashboard-action-card">
+            <div className="stat-icon"><Layers3 size={18} /></div>
+            <div>
+              <strong>Assets bekijken</strong>
+              <span>Uitbreidingen selecteren en doorzetten naar deals</span>
+            </div>
+          </Link>
+          <Link href="/calculator" className="dashboard-action-card">
+            <div className="stat-icon"><Calculator size={18} /></div>
+            <div>
+              <strong>Nieuwe offerte</strong>
+              <span>Start direct een nieuwe calculatorberekening</span>
+            </div>
+          </Link>
+        </section>
+
+        <section className="deals-results card panel">
           <div className="top-row">
             <div>
               <div className="eyebrow">Recent</div>
@@ -99,15 +164,33 @@ export default function HomeDashboard() {
           </div>
           {loading ? <div className="save-status">Dashboard wordt geladen...</div> : null}
           {status ? <div className="save-status">{status}</div> : null}
-          <div className="deal-list">
+          <div className="deals-list">
             {recentDeals.map((deal) => (
-              <div key={deal.id} className="deal-row">
-                <div>
-                  <div className="package-name">{deal.customer_name || "Onbekende klant"}</div>
-                  <div className="muted small-gap">{getRecentDealMeta(deal)}</div>
+              <article key={deal.id} className="deal-card-row">
+                <div className="deal-card-main">
+                  <div className="deal-card-top">
+                    <StatusPill tone={isExpansionDeal(deal) ? "success" : "warning"}>{getDealTypeLabel(deal)}</StatusPill>
+                    <span className="deal-date">{getDealDateLabel(deal)}</span>
+                  </div>
+                  <div>
+                    <h3>{deal.customer_name || "Onbekende klant"}</h3>
+                    <p>{getRecentDealMeta(deal)}</p>
+                  </div>
+                  <div className="deal-meta-grid">
+                    <span>Contact: <strong>{deal.contact_name || "-"}</strong></span>
+                    <span>Sales: <strong>{deal.sales_name || "-"}</strong></span>
+                  </div>
                 </div>
-                <div className="muted">{euro.format(Number(deal.monthly_total || 0))} p/m</div>
-              </div>
+                <div className="deal-card-side">
+                  <div className="deal-amount">
+                    <span>Maand</span>
+                    <strong>{euro.format(Number(deal.monthly_total || 0))}</strong>
+                  </div>
+                  <div className="button-row compact deal-actions">
+                    <Link href={`/deals/${deal.id}`} className="primary-button"><ExternalLink size={16} /> Open</Link>
+                  </div>
+                </div>
+              </article>
             ))}
             {!loading && recentDeals.length === 0 ? <div className="save-status">Nog geen deals gevonden.</div> : null}
           </div>

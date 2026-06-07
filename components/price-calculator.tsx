@@ -4,18 +4,19 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
+  Boxes,
   Calculator,
   CheckCircle2,
   CloudUpload,
   Download,
   FileText,
+  LifeBuoy,
   Package,
   SlidersHorizontal,
   Users,
   WalletCards,
 } from "lucide-react";
 import {
-  IMPLEMENTATION_DAY_RATE,
   MODULES,
   PACKAGES,
   calculatePricing,
@@ -27,9 +28,53 @@ import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 
 const CALCULATOR_PACKAGES = PACKAGES.filter((packageConfig) => packageConfig.key !== "lite");
+const CUSTOMER_PORTAL_OPTIONS = [
+  { key: "facturenBetalen", name: "Facturen betalen", monthlyPrice: 30.15 },
+  { key: "offertesOrdersMaken", name: "Offertes en orders maken", monthlyPrice: 60.3 },
+  { key: "offertesInzienGoedkeuren", name: "Offertes inzien en goedkeuren", monthlyPrice: 12.05 },
+  { key: "assortiment", name: "Assortiment", monthlyPrice: 36.15 },
+];
+const SMART_CONNECT_TIERS = [
+  { connections: 1, monthlyPrice: 30.15 },
+  { connections: 3, monthlyPrice: 60.3 },
+  { connections: 5, monthlyPrice: 78.4 },
+  { connections: 10, monthlyPrice: 120.6 },
+];
+const SMART_CONNECT_EXTRA_CONNECTION_PRICE = 6;
 
 function getCalculatorPackageForPaidModules(paidModuleCount: number) {
   return CALCULATOR_PACKAGES.find((packageConfig) => paidModuleCount <= packageConfig.includedModules) ?? CALCULATOR_PACKAGES[CALCULATOR_PACKAGES.length - 1];
+}
+
+function formatConnectionCount(count: number) {
+  return count === 1 ? "1 connectie" : `${count} connecties`;
+}
+
+function getSmartConnectPricing(connectionCount: number) {
+  const safeConnectionCount = Math.max(0, Math.floor(connectionCount));
+
+  if (safeConnectionCount === 0) {
+    return {
+      connectionCount: 0,
+      baseTier: null,
+      extraConnections: 0,
+      extraMonthly: 0,
+      monthlyTotal: 0,
+    };
+  }
+
+  const baseTier = SMART_CONNECT_TIERS.find((tier) => safeConnectionCount <= tier.connections)
+    ?? SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1];
+  const extraConnections = Math.max(0, safeConnectionCount - SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1].connections);
+  const extraMonthly = extraConnections * SMART_CONNECT_EXTRA_CONNECTION_PRICE;
+
+  return {
+    connectionCount: safeConnectionCount,
+    baseTier,
+    extraConnections,
+    extraMonthly,
+    monthlyTotal: baseTier.monthlyPrice + extraMonthly,
+  };
 }
 
 export default function PriceCalculator() {
@@ -40,11 +85,14 @@ export default function PriceCalculator() {
   const [salesName, setSalesName] = useState("");
   const [extraUsers, setExtraUsers] = useState(1);
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
+  const [includeSupport, setIncludeSupport] = useState(true);
+  const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
+  const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [quantities, setQuantities] = useState<Record<string, number>>(
     Object.fromEntries(MODULES.map((module) => [module.key, 0])),
   );
   const [notes, setNotes] = useState(
-    "Bedragen zijn gebaseerd op het automatisch gekozen pakket, de gekozen modules en de huidige implementatie-inschatting.",
+    "Bedragen zijn gebaseerd op het automatisch gekozen pakket, support, gekozen modules, uitbreidingen en de huidige implementatie-inschatting.",
   );
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
@@ -73,12 +121,32 @@ export default function PriceCalculator() {
   );
   const activeResult = pricingResults.find((result) => result.key === recommendedPackage.key) ?? pricingResults[0];
   const totalUsers = extraUsers + 1;
+  const selectedCustomerPortalOptions = useMemo(
+    () => CUSTOMER_PORTAL_OPTIONS.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
+    [selectedCustomerPortalOptionKeys],
+  );
+  const smartConnectPricing = useMemo(() => getSmartConnectPricing(smartConnectConnections), [smartConnectConnections]);
+  const supportMonthly = includeSupport ? activeResult.supportMonthly : 0;
+  const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
+  const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
+  const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
+  const selectedExpansionCount = selectedCustomerPortalOptions.length + (smartConnectPricing.connectionCount > 0 ? 1 : 0);
 
   function setModuleChecked(moduleKey: string, checked: boolean) {
     setQuantities((currentQuantities) => ({
       ...currentQuantities,
       [moduleKey]: checked ? 1 : 0,
     }));
+  }
+
+  function toggleCustomerPortalOption(optionKey: string, checked: boolean) {
+    setSelectedCustomerPortalOptionKeys((currentKeys) => {
+      if (checked) {
+        return currentKeys.includes(optionKey) ? currentKeys : [...currentKeys, optionKey];
+      }
+
+      return currentKeys.filter((key) => key !== optionKey);
+    });
   }
 
   return (
@@ -102,7 +170,7 @@ export default function PriceCalculator() {
             <div className="stat-icon"><WalletCards size={18} /></div>
             <div>
               <span>Maandprijs</span>
-              <strong>{euro.format(activeResult.monthlyAfterDiscount)}</strong>
+              <strong>{euro.format(monthlyTotal)}</strong>
             </div>
           </article>
           <article className="deals-stat">
@@ -144,10 +212,10 @@ export default function PriceCalculator() {
             </div>
           </div>
           <div className="dashboard-action-card">
-            <div className="stat-icon"><Calculator size={18} /></div>
+            <div className="stat-icon"><Boxes size={18} /></div>
             <div>
-              <strong>{activeResult.visits} bezoeken</strong>
-              <span>{activeResult.visits} x {euro.format(IMPLEMENTATION_DAY_RATE)} implementatie</span>
+              <strong>{includeSupport ? "Support aan" : "Support uit"}</strong>
+              <span>{selectedExpansionCount} extra opties · {euro.format(expansionMonthlyTotal)} p/m</span>
             </div>
           </div>
         </section>
@@ -209,6 +277,83 @@ export default function PriceCalculator() {
             </div>
 
             <div className="section">
+              <div className="section-title"><LifeBuoy size={16} /> Support</div>
+              <div className="calculator-module-grid">
+                <label className={`calculator-module-card ${includeSupport ? "active" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={includeSupport}
+                    onChange={(event) => setIncludeSupport(event.target.checked)}
+                  />
+                  <span className="calculator-module-main">
+                    <strong>Supportcontract Smart Trade {activeResult.name}</strong>
+                    <span>{euro.format(activeResult.supportMonthly)} p/m voor {totalUsers} gebruikers</span>
+                  </span>
+                  <span className="calculator-module-state">{includeSupport ? "Aan" : "Uit"}</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title"><Boxes size={16} /> Klantportaal</div>
+              <div className="calculator-module-grid">
+                {CUSTOMER_PORTAL_OPTIONS.map((option) => {
+                  const active = selectedCustomerPortalOptionKeys.includes(option.key);
+
+                  return (
+                    <label key={option.key} className={`calculator-module-card ${active ? "active" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={(event) => toggleCustomerPortalOption(option.key, event.target.checked)}
+                      />
+                      <span className="calculator-module-main">
+                        <strong>{option.name}</strong>
+                        <span>{euro.format(option.monthlyPrice)} p/m</span>
+                      </span>
+                      <span className="calculator-module-state">{active ? "Aan" : "Uit"}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title"><Calculator size={16} /> Smart Connect</div>
+              <div className="field-grid-2">
+                <label className="input-wrap">
+                  <span className="input-label">Connecties</span>
+                  <NumberStepper
+                    ariaLabel="Smart Connect connecties"
+                    min={0}
+                    value={smartConnectConnections}
+                    onChange={(nextValue) => setSmartConnectConnections(Math.max(0, Math.floor(nextValue)))}
+                  />
+                </label>
+
+                <div className="input-wrap">
+                  <span className="input-label">Prijs</span>
+                  <div className="summary-list">
+                    <div><span>Aantal</span><strong>{formatConnectionCount(smartConnectPricing.connectionCount)}</strong></div>
+                    {smartConnectPricing.baseTier ? (
+                      <div>
+                        <span>Staffel {formatConnectionCount(smartConnectPricing.baseTier.connections)}</span>
+                        <strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong>
+                      </div>
+                    ) : null}
+                    {smartConnectPricing.extraConnections > 0 ? (
+                      <div>
+                        <span>{smartConnectPricing.extraConnections} extra connecties</span>
+                        <strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong>
+                      </div>
+                    ) : null}
+                    <div className="total-row"><span>Smart Connect</span><strong>{euro.format(smartConnectPricing.monthlyTotal)} p/m</strong></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
               <div className="section-title"><Package size={16} /> Pakket automatisch gekozen</div>
               <div className="calculator-package-grid">
                 {CALCULATOR_PACKAGES.map((packageConfig) => {
@@ -265,9 +410,9 @@ export default function PriceCalculator() {
 
             <div className="stats-grid">
               <div className="soft-card"><div className="kpi-title">Licentie p/m</div><div className="big-number">{euro.format(activeResult.licenseMonthly)}</div></div>
-              <div className="soft-card"><div className="kpi-title">Support p/m</div><div className="big-number">{euro.format(activeResult.supportMonthly)}</div></div>
+              <div className="soft-card"><div className="kpi-title">Support p/m</div><div className="big-number">{euro.format(supportMonthly)}</div></div>
               <div className="soft-card"><div className="kpi-title">Modules p/m</div><div className="big-number">{euro.format(activeResult.moduleMonthly)}</div></div>
-              <div className="soft-card"><div className="kpi-title">Setup</div><div className="big-number">{euro.format(activeResult.implementationAfterAdjustment)}</div></div>
+              <div className="soft-card"><div className="kpi-title">Uitbreidingen p/m</div><div className="big-number">{euro.format(expansionMonthlyTotal)}</div></div>
             </div>
 
             <div className="proposal-grid">
@@ -275,9 +420,15 @@ export default function PriceCalculator() {
                 <div className="section-title"><FileText size={16} /> Prijsopbouw</div>
                 <div className="summary-list">
                   <div><span>Licentie p/m</span><strong>{euro.format(activeResult.licenseMonthly)}</strong></div>
-                  <div><span>Support p/m</span><strong>{euro.format(activeResult.supportMonthly)}</strong></div>
+                  <div><span>Support p/m</span><strong>{euro.format(supportMonthly)}</strong></div>
                   <div><span>Modules p/m</span><strong>{euro.format(activeResult.moduleMonthly)}</strong></div>
-                  <div className="total-row"><span>Maandprijs</span><strong>{euro.format(activeResult.monthlyAfterDiscount)}</strong></div>
+                  {customerPortalMonthlyTotal > 0 ? (
+                    <div><span>Klantportaal p/m</span><strong>{euro.format(customerPortalMonthlyTotal)}</strong></div>
+                  ) : null}
+                  {smartConnectPricing.monthlyTotal > 0 ? (
+                    <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
+                  ) : null}
+                  <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
                   <div><span>Implementatie basis</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
                   <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
                 </div>
@@ -287,8 +438,8 @@ export default function PriceCalculator() {
                 <div className="proposal-brand">Offerte preview</div>
                 <div className="proposal-title">{quoteTitle || "Prijsvoorstel"}</div>
                 <div className="proposal-meta">{customerName || "Nog geen klant ingevuld"} · {contactName || "Geen contactpersoon"}</div>
-                <div className="proposal-total">{euro.format(activeResult.monthlyAfterDiscount)} p/m</div>
-                <div className="proposal-sub">Setup: {euro.format(activeResult.implementationAfterAdjustment)} · {totalUsers} gebruikers</div>
+                <div className="proposal-total">{euro.format(monthlyTotal)} p/m</div>
+                <div className="proposal-sub">Setup: {euro.format(activeResult.implementationAfterAdjustment)} · {totalUsers} gebruikers · {includeSupport ? "met support" : "zonder support"} · {selectedExpansionCount} uitbreidingen</div>
               </div>
             </div>
 

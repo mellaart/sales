@@ -5,8 +5,10 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 type NumberStepperProps = {
   ariaLabel: string;
   className?: string;
+  inputClassName?: string;
   min?: number;
   max?: number;
+  size?: "default" | "compact";
   step?: number;
   value: number;
   onChange: (value: number) => void;
@@ -21,11 +23,18 @@ function clampValue(value: number, min?: number, max?: number) {
   return nextValue;
 }
 
+function getStepPrecision(step: number) {
+  const [, decimals = ""] = String(step).split(".");
+  return decimals.length;
+}
+
 export function NumberStepper({
   ariaLabel,
   className = "",
+  inputClassName = "",
   min,
   max,
+  size = "default",
   step = 1,
   value,
   onChange,
@@ -34,14 +43,16 @@ export function NumberStepper({
   const canDecrease = typeof min !== "number" || value > min;
 
   const updateValue = (nextValue: number) => {
-    onChange(clampValue(nextValue, min, max));
+    const precision = getStepPrecision(step);
+    const roundedValue = precision > 0 ? Number(nextValue.toFixed(precision)) : nextValue;
+    onChange(clampValue(roundedValue, min, max));
   };
 
   return (
-    <div className={`number-stepper ${className}`.trim()}>
+    <div className={`number-stepper number-stepper--${size} ${className}`.trim()}>
       <input
         aria-label={ariaLabel}
-        className="input number-stepper-input"
+        className={`input number-stepper-input ${inputClassName}`.trim()}
         type="number"
         min={min}
         max={max}

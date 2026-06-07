@@ -11,6 +11,7 @@ import {
 import { euro, getVisitsForUsers, type ModuleConfig, type PackageConfig } from "@/lib/pricing";
 import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
+import { NumberStepper } from "@/components/number-stepper";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
 
@@ -51,13 +52,15 @@ function PriceInput({
   step?: number;
 }) {
   return (
-    <input
-      aria-label={label}
-      className="price-table-input"
-      type="number"
+    <NumberStepper
+      ariaLabel={label}
+      className="price-table-stepper"
+      inputClassName="price-table-input"
+      min={0}
+      size="compact"
       step={step}
       value={Number.isFinite(value) ? value : 0}
-      onChange={(event) => onChange(Number(event.target.value || 0))}
+      onChange={onChange}
     />
   );
 }

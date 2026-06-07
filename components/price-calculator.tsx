@@ -20,12 +20,17 @@ import {
   PACKAGES,
   calculatePricing,
   euro,
-  getMinimumPackageForPaidModules,
   getPaidSelectedModuleCount,
 } from "@/lib/pricing";
 import { getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
+
+const CALCULATOR_PACKAGES = PACKAGES.filter((packageConfig) => packageConfig.key !== "lite");
+
+function getCalculatorPackageForPaidModules(paidModuleCount: number) {
+  return CALCULATOR_PACKAGES.find((packageConfig) => paidModuleCount <= packageConfig.includedModules) ?? CALCULATOR_PACKAGES[CALCULATOR_PACKAGES.length - 1];
+}
 
 export default function PriceCalculator() {
   const { user, profile } = useAuth();
@@ -61,7 +66,7 @@ export default function PriceCalculator() {
   );
 
   const paidModuleCount = getPaidSelectedModuleCount(quantities);
-  const recommendedPackage = getMinimumPackageForPaidModules(paidModuleCount);
+  const recommendedPackage = getCalculatorPackageForPaidModules(paidModuleCount);
   const pricingResults = useMemo(
     () => calculatePricing({ extraUsers, manualImplementationAdjustment, quantities }),
     [extraUsers, manualImplementationAdjustment, quantities],
@@ -206,7 +211,7 @@ export default function PriceCalculator() {
             <div className="section">
               <div className="section-title"><Package size={16} /> Pakket automatisch gekozen</div>
               <div className="calculator-package-grid">
-                {PACKAGES.map((packageConfig) => {
+                {CALCULATOR_PACKAGES.map((packageConfig) => {
                   const active = packageConfig.key === activeResult.key;
 
                   return (

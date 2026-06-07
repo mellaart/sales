@@ -5,9 +5,13 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 type NumberStepperProps = {
   ariaLabel: string;
   className?: string;
+  displayValue?: string;
+  inputMode?: "decimal" | "numeric";
+  inputType?: "number" | "text";
   inputClassName?: string;
   min?: number;
   max?: number;
+  parseValue?: (value: string) => number;
   size?: "default" | "compact";
   step?: number;
   value: number;
@@ -31,9 +35,13 @@ function getStepPrecision(step: number) {
 export function NumberStepper({
   ariaLabel,
   className = "",
+  displayValue,
+  inputMode,
+  inputType = "number",
   inputClassName = "",
   min,
   max,
+  parseValue,
   size = "default",
   step = 1,
   value,
@@ -53,12 +61,13 @@ export function NumberStepper({
       <input
         aria-label={ariaLabel}
         className={`input number-stepper-input ${inputClassName}`.trim()}
-        type="number"
+        inputMode={inputMode}
+        type={inputType}
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(event) => updateValue(Number(event.target.value || 0))}
+        value={displayValue ?? value}
+        onChange={(event) => updateValue(parseValue ? parseValue(event.target.value) : Number(event.target.value || 0))}
       />
       <div className="number-stepper-controls">
         <button

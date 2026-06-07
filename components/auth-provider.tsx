@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { fetchProfile, getSupabaseClient, type ProfileRecord, type UserRole } from "@/lib/supabase";
 
@@ -10,6 +10,7 @@ type AuthContextType = {
   role: UserRole | null;
   loading: boolean;
   refreshProfile: () => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,11 +19,41 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   loading: true,
   refreshProfile: async () => {},
+  signOut: async () => {},
 });
+
+const AUTH_REQUEST_TIMEOUT_MS = 3000;
+const SESSION_REFRESH_MARGIN_SECONDS = 90;
 
 function fallbackRole(user: User | null): UserRole | null {
   if (!user) return null;
   return (user.user_metadata?.role as UserRole) || "sales";
+}
+
+function timeout<T>(milliseconds: number, fallback: T) {
+  return new Promise<T>((resolve) => {
+    setTimeout(() => resolve(fallback), milliseconds);
+  });
+}
+
+async function withAuthTimeout<T>(promise: Promise<T>, fallback: T) {
+  return Promise.race([promise, timeout(AUTH_REQUEST_TIMEOUT_MS, fallback)]);
+}
+
+function clearSupabaseAuthStorage() {
+  if (typeof window === "undefined") return;
+
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(
+      (key): key is string => Boolean(key),
+    );
+
+    for (const key of keys) {
+      if ((key.startsWith("sb-") && key.includes("auth-token")) || key === "supabase.auth.token") {
+        storage.removeItem(key);
+      }
+    }
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -31,85 +62,129 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function refreshProfile() {
+  const applyUser = useCallback(async (nextUser: User | null, active = true) => {
+    if (!active) return;
+
+    setUser(nextUser);
+
+    if (nextUser) {
+      const nextProfile = await fetchProfile(nextUser.id);
+      if (!active) return;
+
+      setProfile(nextProfile);
+      setRole(nextProfile?.role ?? fallbackRole(nextUser));
+    } else {
+      setProfile(null);
+      setRole(null);
+    }
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
     if (!user) return;
 
     const nextProfile = await fetchProfile(user.id);
 
     setProfile(nextProfile);
     setRole(nextProfile?.role ?? fallbackRole(user));
-  }
+  }, [user]);
+
+  const signOut = useCallback(async () => {
+    const supabase = getSupabaseClient();
+
+    setLoading(true);
+
+    try {
+      if (supabase) {
+        await withAuthTimeout(supabase.auth.signOut({ scope: "local" }), null);
+      }
+    } finally {
+      clearSupabaseAuthStorage();
+      setUser(null);
+      setProfile(null);
+      setRole(null);
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
 
-    async function initAuth() {
+    async function syncAuthState(showLoading = false) {
       const supabase = getSupabaseClient();
+
+      if (showLoading) {
+        setLoading(true);
+      }
 
       if (!supabase) {
         if (active) {
-          setUser(null);
-          setProfile(null);
-          setRole(null);
+          await applyUser(null, active);
           setLoading(false);
         }
         return;
       }
 
       try {
-        const timeout = new Promise<null>((resolve) => {
-          setTimeout(() => resolve(null), 2500);
-        });
-
-        const sessionPromise = supabase.auth.getSession();
-
-        const result = await Promise.race([sessionPromise, timeout]);
+        const result = await withAuthTimeout(supabase.auth.getSession(), null);
 
         if (!active) return;
 
-        const currentUser =
-          result && "data" in result ? result.data.session?.user ?? null : null;
+        let currentSession = result && "data" in result ? result.data.session ?? null : null;
+        const expiresAt = currentSession?.expires_at ?? 0;
+        const expiresSoon = expiresAt > 0 && expiresAt - Math.floor(Date.now() / 1000) < SESSION_REFRESH_MARGIN_SECONDS;
 
-        setUser(currentUser);
-
-        if (currentUser) {
-          const nextProfile = await fetchProfile(currentUser.id);
+        if (currentSession && expiresSoon) {
+          const refreshResult = await withAuthTimeout(supabase.auth.refreshSession(), null);
           if (!active) return;
-
-          setProfile(nextProfile);
-          setRole(nextProfile?.role ?? fallbackRole(currentUser));
-        } else {
-          setProfile(null);
-          setRole(null);
+          currentSession = refreshResult && "data" in refreshResult ? refreshResult.data.session ?? currentSession : currentSession;
         }
 
+        await applyUser(currentSession?.user ?? null, active);
         setLoading(false);
+      } catch {
+        if (active) {
+          await applyUser(null, active);
+          setLoading(false);
+        }
+      }
+    }
 
+    async function initAuth() {
+      const supabase = getSupabaseClient();
+
+      await syncAuthState(true);
+
+      if (!supabase || !active) return undefined;
+
+      try {
         const {
           data: { subscription },
         } = supabase.auth.onAuthStateChange(async (_event, session) => {
-          const nextUser = session?.user ?? null;
-
-          setUser(nextUser);
-
-          if (nextUser) {
-            const nextProfile = await fetchProfile(nextUser.id);
-            setProfile(nextProfile);
-            setRole(nextProfile?.role ?? fallbackRole(nextUser));
-          } else {
-            setProfile(null);
-            setRole(null);
-          }
-
+          await applyUser(session?.user ?? null, active);
           setLoading(false);
         });
 
-        return () => subscription.unsubscribe();
+        function handleWindowFocus() {
+          void syncAuthState(false);
+        }
+
+        function handleVisibilityChange() {
+          if (document.visibilityState === "visible") {
+            void syncAuthState(false);
+          }
+        }
+
+        window.addEventListener("focus", handleWindowFocus);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+          subscription.unsubscribe();
+          window.removeEventListener("focus", handleWindowFocus);
+          document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
       } catch {
         if (active) {
-          setUser(null);
-          setProfile(null);
-          setRole(null);
+          await applyUser(null, active);
           setLoading(false);
         }
       }
@@ -121,10 +196,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
       void cleanupPromise.then((cleanup) => cleanup?.());
     };
-  }, []);
+  }, [applyUser]);
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, loading, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, role, loading, refreshProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   );

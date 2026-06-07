@@ -1,0 +1,39 @@
+import { createClient } from "@supabase/supabase-js";
+
+export function getServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) return null;
+
+  return createClient(url, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export type ServiceClient = NonNullable<ReturnType<typeof getServiceClient>>;
+
+export async function verifyAdmin(request: Request, service: ServiceClient) {
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!token) return { ok: false as const, message: "Niet ingelogd." };
+
+  const { data: userData, error: userError } = await service.auth.getUser(token);
+
+  if (userError || !userData.user) {
+    return { ok: false as const, message: "Ongeldige sessie." };
+  }
+
+  const { data: profile, error: profileError } = await service
+    .from("profiles")
+    .select("role")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile || profile.role !== "admin") {
+    return { ok: false as const, message: "Geen toegang." };
+  }
+
+  return { ok: true as const };
+}

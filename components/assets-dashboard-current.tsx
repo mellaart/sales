@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, Search, Sparkles } from "lucide-react";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
+import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { createDealWithFallback } from "@/lib/deal-storage";
@@ -23,20 +24,6 @@ import styles from "./assets-dashboard.module.css";
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
 const NO_PACKAGE_SWITCH_MODULE_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi", "leverschema"]);
-const CUSTOMER_PORTAL_OPTIONS = [
-  { key: "facturenBetalen", name: "Facturen betalen", monthlyPrice: 30.15 },
-  { key: "offertesOrdersMaken", name: "Offertes en orders maken", monthlyPrice: 60.3 },
-  { key: "offertesInzienGoedkeuren", name: "Offertes inzien en goedkeuren", monthlyPrice: 12.05 },
-  { key: "assortiment", name: "Assortiment", monthlyPrice: 36.15 },
-];
-const SMART_CONNECT_TIERS = [
-  { connections: 1, monthlyPrice: 30.15 },
-  { connections: 3, monthlyPrice: 60.3 },
-  { connections: 5, monthlyPrice: 78.4 },
-  { connections: 10, monthlyPrice: 120.6 },
-];
-const SMART_CONNECT_EXTRA_CONNECTION_PRICE = 6;
-const SERVICE_COST_ANNUAL_PRICE = 175.8;
 const SERVICE_COST_OPTIONS = [
   { key: "ccv", name: "CCV servicekosten", assetClassIds: ["114"] },
   { key: "worldline", name: "Worldline servicekosten", assetClassIds: ["113", "401"] },
@@ -46,29 +33,6 @@ const MODULE_DEPENDENCIES: Record<string, string[]> = {
   partijregistratie: ["voorraad"],
   hoveniersapp: ["ticketing"],
 };
-const MODULE_IMPLEMENTATION_COSTS: Record<string, number> = {
-  mailchimp: 360,
-  rapportage: 360,
-  scanHerken: 720,
-  statistiekenPlus: 360,
-  digitaleOndertekening: 360,
-  leverschema: 360,
-  postnl: 360,
-  suiteMkb: 400,
-  powerbi: 720,
-  kassa: 720,
-  terrein: 720,
-  voorraad: 720,
-  partijregistratie: 1440,
-  chauffeurs: 720,
-  assets: 720,
-  ticketing: 1440,
-  contracten: 720,
-  verhuur: 720,
-  prijsstaffels: 720,
-  hoveniersapp: 720,
-};
-
 type RelationOption = {
   id: string;
   name: string;
@@ -310,17 +274,21 @@ function getSmartConnectRows(assets: AssetRecord[]) {
   return Array.from(rowsByConnections.values()).sort((left, right) => left.connections - right.connections);
 }
 
-function getSmartConnectPricing(connectionCount: number) {
+function getSmartConnectPricing(
+  connectionCount: number,
+  smartConnectTiers: Array<{ connections: number; monthlyPrice: number }>,
+  extraConnectionPrice: number,
+) {
   const safeConnectionCount = Math.max(0, Math.floor(connectionCount));
 
   if (safeConnectionCount === 0) {
     return { connectionCount: 0, baseTier: null, extraConnections: 0, extraMonthly: 0, monthlyTotal: 0 };
   }
 
-  const baseTier = SMART_CONNECT_TIERS.find((tier) => safeConnectionCount <= tier.connections)
-    ?? SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1];
-  const extraConnections = Math.max(0, safeConnectionCount - SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1].connections);
-  const extraMonthly = extraConnections * SMART_CONNECT_EXTRA_CONNECTION_PRICE;
+  const baseTier = smartConnectTiers.find((tier) => safeConnectionCount <= tier.connections)
+    ?? smartConnectTiers[smartConnectTiers.length - 1];
+  const extraConnections = Math.max(0, safeConnectionCount - smartConnectTiers[smartConnectTiers.length - 1].connections);
+  const extraMonthly = extraConnections * extraConnectionPrice;
 
   return {
     connectionCount: safeConnectionCount,
@@ -348,7 +316,10 @@ function getServiceCostCounts(assets: AssetRecord[]) {
   }, getInitialServiceCostQuantities());
 }
 
-function getCustomerPortalKeysFromAssets(assets: AssetRecord[]) {
+function getCustomerPortalKeysFromAssets(
+  assets: AssetRecord[],
+  customerPortalOptions: Array<{ key: string; name: string }>,
+) {
   const optionKeys = new Set<string>();
 
   for (const asset of assets) {
@@ -358,22 +329,22 @@ function getCustomerPortalKeysFromAssets(assets: AssetRecord[]) {
 
     if (!combined.includes("klantportaal")) continue;
 
-    for (const option of CUSTOMER_PORTAL_OPTIONS) {
+    for (const option of customerPortalOptions) {
       if (combined.includes(normalizeLabel(option.name))) optionKeys.add(option.key);
     }
   }
 
-  return CUSTOMER_PORTAL_OPTIONS.filter((option) => optionKeys.has(option.key)).map((option) => option.key);
+  return customerPortalOptions.filter((option) => optionKeys.has(option.key)).map((option) => option.key);
 }
 
-function getSortedModuleKeys(moduleKeys: string[]) {
-  const moduleOrder = new Map(MODULES.map((module, index) => [module.key, index]));
+function getSortedModuleKeys(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
+  const moduleOrder = new Map(modules.map((module, index) => [module.key, index]));
   return Array.from(new Set(moduleKeys)).sort(
     (left, right) => (moduleOrder.get(left) ?? 0) - (moduleOrder.get(right) ?? 0),
   );
 }
 
-function getModuleKeysFromAssets(assets: AssetRecord[]) {
+function getModuleKeysFromAssets(assets: AssetRecord[], modules: ModuleConfig[] = MODULES) {
   const moduleKeys = new Set<string>();
 
   for (const asset of assets) {
@@ -382,20 +353,20 @@ function getModuleKeysFromAssets(assets: AssetRecord[]) {
 
     if (!isSmartTradeAsset(asset) || !assetName.toLowerCase().includes(" module - ")) continue;
 
-    for (const moduleConfig of MODULES) {
+    for (const moduleConfig of modules) {
       if (normalizedAssetName.includes(normalizeLabel(moduleConfig.name))) moduleKeys.add(moduleConfig.key);
     }
   }
 
-  return getSortedModuleKeys(Array.from(moduleKeys));
+  return getSortedModuleKeys(Array.from(moduleKeys), modules);
 }
 
-function getModulesByKeys(moduleKeys: string[]) {
-  return MODULES.filter((moduleConfig) => moduleKeys.includes(moduleConfig.key));
+function getModulesByKeys(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
+  return modules.filter((moduleConfig) => moduleKeys.includes(moduleConfig.key));
 }
 
-function getModuleName(moduleKey: string) {
-  return MODULES.find((moduleConfig) => moduleConfig.key === moduleKey)?.name ?? moduleKey;
+function getModuleName(moduleKey: string, modules: ModuleConfig[] = MODULES) {
+  return modules.find((moduleConfig) => moduleConfig.key === moduleKey)?.name ?? moduleKey;
 }
 
 function applyModuleDependencies(moduleKeys: string[]) {
@@ -434,25 +405,25 @@ function removeModuleAndDependents(moduleKey: string, moduleKeys: string[]) {
   return getSortedModuleKeys(Array.from(remainingKeys));
 }
 
-function getPackageRelevantModules(moduleKeys: string[]) {
-  return getModulesByKeys(moduleKeys).filter(
-    (moduleConfig) => moduleConfig.monthlyPrice > 0 && !NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key),
+function getPackageRelevantModules(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
+  return getModulesByKeys(moduleKeys, modules).filter(
+    (moduleConfig) => moduleConfig.monthlyPrice > 0 && !moduleConfig.noPackageSwitch && !NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key),
   );
 }
 
-function getStandaloneModules(moduleKeys: string[]) {
-  return getModulesByKeys(moduleKeys).filter(
-    (moduleConfig) => moduleConfig.monthlyPrice > 0 && NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key),
+function getStandaloneModules(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
+  return getModulesByKeys(moduleKeys, modules).filter(
+    (moduleConfig) => moduleConfig.monthlyPrice > 0 && (moduleConfig.noPackageSwitch || NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key)),
   );
 }
 
-function getPackageRelevantModuleCount(moduleKeys: string[]) {
-  return getPackageRelevantModules(moduleKeys).length;
+function getPackageRelevantModuleCount(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
+  return getPackageRelevantModules(moduleKeys, modules).length;
 }
 
-function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: PackageConfig) {
-  const packageRelevantModules = getPackageRelevantModules(moduleKeys);
-  const standaloneModuleMonthly = getStandaloneModules(moduleKeys).reduce(
+function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: PackageConfig, modules: ModuleConfig[] = MODULES) {
+  const packageRelevantModules = getPackageRelevantModules(moduleKeys, modules);
+  const standaloneModuleMonthly = getStandaloneModules(moduleKeys, modules).reduce(
     (sum, moduleConfig) => sum + moduleConfig.monthlyPrice,
     0,
   );
@@ -467,10 +438,6 @@ function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: Package
     .reduce((sum, moduleConfig) => sum + moduleConfig.monthlyPrice, 0);
 
   return standaloneModuleMonthly + Math.max(0, packageRelevantMonthly - includedModuleDiscount);
-}
-
-function getModuleImplementationCost(moduleKey: string) {
-  return MODULE_IMPLEMENTATION_COSTS[moduleKey] ?? 0;
 }
 
 function formatImplementationBasis(cost: number) {
@@ -493,16 +460,19 @@ function formatModuleList(modules: ModuleConfig[]) {
   return modules.map((moduleConfig) => moduleConfig.name).join(", ");
 }
 
-function getPackageIndex(packageConfig: PackageConfig) {
-  return PACKAGES.findIndex((candidate) => candidate.key === packageConfig.key);
+function getPackageIndex(packageConfig: PackageConfig, packages: PackageConfig[] = PACKAGES) {
+  return packages.findIndex((candidate) => candidate.key === packageConfig.key);
 }
 
-function getModuleRuleNotes(moduleConfig: ModuleConfig) {
+function getModuleRuleNotes(moduleConfig: ModuleConfig, modules: ModuleConfig[] = MODULES) {
   const notes: string[] = [];
   const dependencies = MODULE_DEPENDENCIES[moduleConfig.key] ?? [];
 
-  if (NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key)) notes.push("Geen pakketwissel nodig");
-  if (dependencies.length > 0) notes.push(`Vereist: ${dependencies.map(getModuleName).join(", ")}`);
+  if (moduleConfig.noPackageSwitch || NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key)) notes.push("Geen pakketwissel nodig");
+  if (moduleConfig.dependencyNote) notes.push(moduleConfig.dependencyNote);
+  if (!moduleConfig.dependencyNote && dependencies.length > 0) {
+    notes.push(`Vereist: ${dependencies.map((moduleKey) => getModuleName(moduleKey, modules)).join(", ")}`);
+  }
 
   return notes;
 }
@@ -531,6 +501,9 @@ function buildAssetDealNotes(relation: RelationOption, lines: AssetExpansionLine
 export default function AssetsDashboardCurrent() {
   const router = useRouter();
   const { user, profile } = useAuth();
+  const { pricingConfig } = usePricingConfig();
+  const packages = pricingConfig.packages;
+  const modules = pricingConfig.modules;
   const supabase = getSupabaseClient();
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
@@ -554,49 +527,61 @@ export default function AssetsDashboardCurrent() {
   const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);
   const existingServiceCostCounts = useMemo(() => getServiceCostCounts(assets), [assets]);
   const existingSmartConnectRows = useMemo(() => getSmartConnectRows(assets), [assets]);
-  const currentCustomerPortalKeys = useMemo(() => getCustomerPortalKeysFromAssets(visibleAssets), [visibleAssets]);
+  const currentCustomerPortalKeys = useMemo(
+    () => getCustomerPortalKeysFromAssets(visibleAssets, pricingConfig.customerPortalOptions),
+    [pricingConfig.customerPortalOptions, visibleAssets],
+  );
 
   const selectedPackageName = useMemo(
     () => visibleAssets.map(getSmartTradePackageName).find((packageName): packageName is string => Boolean(packageName)) ?? null,
     [visibleAssets],
   );
   const selectedPackage = useMemo(
-    () => PACKAGES.find((packageConfig) => packageConfig.name === selectedPackageName) ?? null,
-    [selectedPackageName],
+    () => packages.find((packageConfig) => packageConfig.name === selectedPackageName) ?? null,
+    [packages, selectedPackageName],
   );
 
-  const currentModuleKeys = useMemo(() => applyModuleDependencies(getModuleKeysFromAssets(visibleAssets)), [visibleAssets]);
-  const selectedModules = useMemo(() => getModulesByKeys(selectedModuleKeys), [selectedModuleKeys]);
+  const currentModuleKeys = useMemo(() => applyModuleDependencies(getModuleKeysFromAssets(visibleAssets, modules)), [modules, visibleAssets]);
+  const selectedModules = useMemo(() => getModulesByKeys(selectedModuleKeys, modules), [modules, selectedModuleKeys]);
   const addedModules = useMemo(
     () => selectedModules.filter((moduleConfig) => !currentModuleKeys.includes(moduleConfig.key)),
     [currentModuleKeys, selectedModules],
   );
   const removedModules = useMemo(
-    () => getModulesByKeys(currentModuleKeys).filter((moduleConfig) => !selectedModuleKeys.includes(moduleConfig.key)),
-    [currentModuleKeys, selectedModuleKeys],
+    () => getModulesByKeys(currentModuleKeys, modules).filter((moduleConfig) => !selectedModuleKeys.includes(moduleConfig.key)),
+    [currentModuleKeys, modules, selectedModuleKeys],
   );
-  const selectedPackageModuleCount = useMemo(() => getPackageRelevantModuleCount(selectedModuleKeys), [selectedModuleKeys]);
-  const targetPackage = useMemo(() => getMinimumPackageForPaidModules(selectedPackageModuleCount), [selectedPackageModuleCount]);
+  const selectedPackageModuleCount = useMemo(() => getPackageRelevantModuleCount(selectedModuleKeys, modules), [modules, selectedModuleKeys]);
+  const targetPackage = useMemo(() => getMinimumPackageForPaidModules(selectedPackageModuleCount, packages), [packages, selectedPackageModuleCount]);
   const selectedCustomerPortalOptions = useMemo(
-    () => CUSTOMER_PORTAL_OPTIONS.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
-    [selectedCustomerPortalOptionKeys],
+    () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
+    [pricingConfig.customerPortalOptions, selectedCustomerPortalOptionKeys],
   );
-  const smartConnectPricing = useMemo(() => getSmartConnectPricing(smartConnectConnections), [smartConnectConnections]);
+  const smartConnectPricing = useMemo(
+    () => getSmartConnectPricing(
+      smartConnectConnections,
+      pricingConfig.smartConnectTiers,
+      pricingConfig.smartConnectExtraConnectionPrice,
+    ),
+    [pricingConfig.smartConnectExtraConnectionPrice, pricingConfig.smartConnectTiers, smartConnectConnections],
+  );
 
   const serviceCostRows = useMemo(
     () =>
       SERVICE_COST_OPTIONS.map((option) => {
         const existingQuantity = existingServiceCostCounts[option.key] ?? 0;
         const offerQuantity = serviceCostQuantities[option.key] ?? 0;
+        const annualPrice = pricingConfig.serviceCostOptions.find((priceOption) => priceOption.key === option.key)?.annualPrice ?? 0;
         return {
           ...option,
+          annualPrice,
           existingQuantity,
-          existingAnnualTotal: existingQuantity * SERVICE_COST_ANNUAL_PRICE,
+          existingAnnualTotal: existingQuantity * annualPrice,
           offerQuantity,
-          offerAnnualTotal: offerQuantity * SERVICE_COST_ANNUAL_PRICE,
+          offerAnnualTotal: offerQuantity * annualPrice,
         };
       }),
-    [existingServiceCostCounts, serviceCostQuantities],
+    [existingServiceCostCounts, pricingConfig.serviceCostOptions, serviceCostQuantities],
   );
 
   const existingServiceCostRows = serviceCostRows.filter((option) => option.existingQuantity > 0);
@@ -604,6 +589,9 @@ export default function AssetsDashboardCurrent() {
   const existingServiceCostTotal = existingServiceCostRows.reduce((sum, option) => sum + option.existingQuantity, 0);
   const existingServiceCostAnnualTotal = existingServiceCostRows.reduce((sum, option) => sum + option.existingAnnualTotal, 0);
   const serviceCostAnnualTotal = selectedServiceCostRows.reduce((sum, option) => sum + option.offerAnnualTotal, 0);
+  const serviceCostPriceLabel = new Set(serviceCostRows.map((option) => option.annualPrice)).size === 1
+    ? `${euro.format(serviceCostRows[0]?.annualPrice ?? 0)} per jaar per stuk`
+    : "Prijzen per servicekostenregel";
 
   const shouldIncludeSupport = useMemo(() => hasSupportAsset(visibleAssets), [visibleAssets]);
   const existingExtraUserCount = useMemo(
@@ -633,13 +621,13 @@ export default function AssetsDashboardCurrent() {
 
   const hasModuleSelectionChanges = !isSameModuleSelection(currentModuleKeys, selectedModuleKeys);
   const hasPackageChange = Boolean(selectedPackage && targetPackage && selectedPackage.key !== targetPackage.key);
-  const packageChangeDirection = selectedPackage && targetPackage && getPackageIndex(targetPackage) > getPackageIndex(selectedPackage)
+  const packageChangeDirection = selectedPackage && targetPackage && getPackageIndex(targetPackage, packages) > getPackageIndex(selectedPackage, packages)
     ? "upgrade nodig"
     : "downgrade mogelijk";
-  const currentModuleMonthly = selectedPackage ? getModuleMonthlyForPackage(currentModuleKeys, selectedPackage) : 0;
-  const targetModuleMonthly = targetPackage ? getModuleMonthlyForPackage(selectedModuleKeys, targetPackage) : 0;
+  const currentModuleMonthly = selectedPackage ? getModuleMonthlyForPackage(currentModuleKeys, selectedPackage, modules) : 0;
+  const targetModuleMonthly = targetPackage ? getModuleMonthlyForPackage(selectedModuleKeys, targetPackage, modules) : 0;
   const moduleMonthlyDelta = targetModuleMonthly - currentModuleMonthly;
-  const moduleImplementationTotal = addedModules.reduce((sum, moduleConfig) => sum + getModuleImplementationCost(moduleConfig.key), 0);
+  const moduleImplementationTotal = addedModules.reduce((sum, moduleConfig) => sum + (moduleConfig.setupCost ?? 0), 0);
   const currentLicenseMonthly = selectedPackage ? selectedPackage.licenseFirst + existingExtraUserCount * selectedPackage.licenseExtra : 0;
   const currentSupportMonthly = selectedPackage && shouldIncludeSupport
     ? selectedPackage.supportFirst + existingExtraUserCount * selectedPackage.supportExtra
@@ -726,7 +714,7 @@ export default function AssetsDashboardCurrent() {
     }
 
     for (const moduleConfig of addedModules) {
-      const implementationCost = getModuleImplementationCost(moduleConfig.key);
+      const implementationCost = moduleConfig.setupCost ?? 0;
       if (implementationCost > 0) {
         lines.push({
           group: "Implementatie",
@@ -860,10 +848,10 @@ export default function AssetsDashboardCurrent() {
     setTransferBusy(true);
 
     try {
-      const finalPackage = targetPackage ?? selectedPackage ?? PACKAGES[PACKAGES.length - 1];
+      const finalPackage = targetPackage ?? selectedPackage ?? packages[packages.length - 1];
       const expansionTotals = getAssetExpansionTotals(assetDealLines);
       const quantities = Object.fromEntries(
-        MODULES.map((moduleConfig) => [moduleConfig.key, addedModules.some((addedModule) => addedModule.key === moduleConfig.key) ? 1 : 0]),
+        modules.map((moduleConfig) => [moduleConfig.key, addedModules.some((addedModule) => addedModule.key === moduleConfig.key) ? 1 : 0]),
       );
       const extraUsersForDeal = safeExtraUsersToOffer + safeChauffeurExtraUsersToOffer;
       const manualImplementationAdjustment = expansionTotals.once;
@@ -871,9 +859,9 @@ export default function AssetsDashboardCurrent() {
         extraUsers: extraUsersForDeal,
         manualImplementationAdjustment,
         quantities,
-      });
+      }, pricingConfig);
       const activeResult = pricingResults.find((packageResult) => packageResult.key === finalPackage.key) ?? pricingResults[0];
-      const selectedModuleRows = MODULES.filter((moduleConfig) => (quantities[moduleConfig.key] ?? 0) > 0).map((moduleConfig) => ({
+      const selectedModuleRows = modules.filter((moduleConfig) => (quantities[moduleConfig.key] ?? 0) > 0).map((moduleConfig) => ({
         ...moduleConfig,
         qty: quantities[moduleConfig.key] ?? 0,
         total: moduleConfig.monthlyPrice * (quantities[moduleConfig.key] ?? 0),
@@ -949,7 +937,7 @@ export default function AssetsDashboardCurrent() {
     }
 
     return addedModules.map((moduleConfig) => {
-      const implementationCost = getModuleImplementationCost(moduleConfig.key);
+      const implementationCost = moduleConfig.setupCost ?? 0;
       return (
         <div key={`implementation-${moduleConfig.key}`} className={styles.quoteRow}>
           <span>1x</span>
@@ -1022,8 +1010,8 @@ export default function AssetsDashboardCurrent() {
       const nextAssets: AssetRecord[] = json.assets ?? [];
       const nextVisibleAssets = getVisibleAssets(nextAssets);
       setAssets(nextAssets);
-      setSelectedModuleKeys(applyModuleDependencies(getModuleKeysFromAssets(nextVisibleAssets)));
-      setSelectedCustomerPortalOptionKeys(getCustomerPortalKeysFromAssets(nextVisibleAssets));
+      setSelectedModuleKeys(applyModuleDependencies(getModuleKeysFromAssets(nextVisibleAssets, modules)));
+      setSelectedCustomerPortalOptionKeys(getCustomerPortalKeysFromAssets(nextVisibleAssets, pricingConfig.customerPortalOptions));
 
       if (nextAssets.length === 0) setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
     } catch (error) {
@@ -1320,17 +1308,17 @@ export default function AssetsDashboardCurrent() {
           ) : (
             <div className={styles.modulePlanner}>
               <div className={styles.moduleSteps}>
-                <div><span>1</span><strong>Alle modules</strong><small>{MODULES.length} opties</small></div>
+                <div><span>1</span><strong>Alle modules</strong><small>{modules.length} opties</small></div>
                 <div><span>2</span><strong>Selectie</strong><small>{selectedModules.length} geselecteerd</small></div>
                 <div><span>3</span><strong>Pakketadvies</strong><small>{hasPackageChange ? `${selectedPackage.name} naar ${targetPackage.name}` : selectedPackage.name}</small></div>
                 <div><span>4</span><strong>Implementatie</strong><small>{euro.format(moduleImplementationTotal)}</small></div>
               </div>
 
               <div className={styles.moduleGrid}>
-                {MODULES.map((moduleConfig) => {
+                {modules.map((moduleConfig) => {
                   const selected = selectedModuleKeys.includes(moduleConfig.key);
                   const current = currentModuleKeys.includes(moduleConfig.key);
-                  const moduleRuleNotes = getModuleRuleNotes(moduleConfig);
+                  const moduleRuleNotes = getModuleRuleNotes(moduleConfig, modules);
                   return (
                     <label key={moduleConfig.key} className={`${styles.moduleOption} ${selected ? styles.moduleOptionSelected : ""}`}>
                       <input type="checkbox" checked={selected} onChange={() => handleToggleModule(moduleConfig.key)} />
@@ -1405,7 +1393,7 @@ export default function AssetsDashboardCurrent() {
           ) : (
             <div className={styles.upsellStack}>
               <div className={styles.moduleGrid}>
-                {CUSTOMER_PORTAL_OPTIONS.map((option) => {
+                {pricingConfig.customerPortalOptions.map((option) => {
                   const selected = selectedCustomerPortalOptionKeys.includes(option.key);
                   const current = currentCustomerPortalKeys.includes(option.key);
                   return (
@@ -1450,7 +1438,7 @@ export default function AssetsDashboardCurrent() {
               <label className={styles.upsellUserInput}><span>Extra aantal connecties voor offerte</span><NumberStepper ariaLabel="Extra aantal connecties voor offerte" min={0} value={smartConnectConnections} onChange={(nextValue) => setSmartConnectConnections(Math.floor(nextValue))} /></label>
               <div className={styles.quoteRows}>{existingSmartConnectRows.length > 0 ? existingSmartConnectRows.map((row) => <div key={`existing-smart-connect-${row.key}`} className={styles.quoteRow}><span>{row.quantity}x</span><strong>Huidig: Smart Connect {row.connections}</strong><span>{formatConnectionCount(row.connections)} per stuk</span><strong>{formatConnectionCount(row.totalConnections)}</strong></div>) : <div className="empty-state">Geen bestaande Smart Connect assets gevonden.</div>}</div>
               <div className={styles.quoteTotal}><span>Bestaande Smart Connect connecties</span><strong>{formatConnectionCount(existingSmartConnectTotal)}</strong></div>
-              <div className={styles.quoteRows}>{smartConnectPricing.baseTier ? <><div className={styles.quoteRow}><span>1x</span><strong>Smart Connect - {formatConnectionCount(smartConnectPricing.baseTier.connections)}</strong><span>staffel voor {formatConnectionCount(smartConnectPricing.connectionCount)}</span><strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong></div>{smartConnectPricing.extraConnections > 0 ? <div className={styles.quoteRow}><span>{smartConnectPricing.extraConnections}x</span><strong>Smart Connect extra connectie</strong><span>{euro.format(SMART_CONNECT_EXTRA_CONNECTION_PRICE)} p/m vanaf 11e</span><strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong></div> : null}</> : <div className="empty-state">Vul een extra aantal connecties in voor de offerte.</div>}</div>
+              <div className={styles.quoteRows}>{smartConnectPricing.baseTier ? <><div className={styles.quoteRow}><span>1x</span><strong>Smart Connect - {formatConnectionCount(smartConnectPricing.baseTier.connections)}</strong><span>staffel voor {formatConnectionCount(smartConnectPricing.connectionCount)}</span><strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong></div>{smartConnectPricing.extraConnections > 0 ? <div className={styles.quoteRow}><span>{smartConnectPricing.extraConnections}x</span><strong>Smart Connect extra connectie</strong><span>{euro.format(pricingConfig.smartConnectExtraConnectionPrice)} p/m vanaf 11e</span><strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong></div> : null}</> : <div className="empty-state">Vul een extra aantal connecties in voor de offerte.</div>}</div>
               <div className={styles.quoteTotal}><span>Smart Connect offerte</span><strong>{euro.format(smartConnectPricing.monthlyTotal)} p/m</strong></div>
             </div>
           )}
@@ -1460,11 +1448,11 @@ export default function AssetsDashboardCurrent() {
           <div className="top-row"><div><div className="eyebrow">Stap 7</div><h2 className="headline">Servicekosten</h2><p className="subtext">CCV en Worldline worden herkend op assetclass. Offerte-aantallen starten op 0.</p></div><div className="icon-badge"><Boxes size={26} /></div></div>
           {!selectedRelation ? <div className="empty-state">Kies eerst een relatie om servicekosten te bekijken.</div> : (
             <div className={styles.upsellPanel}>
-              <div className={styles.upsellSummary}><div><div className={styles.assetTitle}>Servicekosten offerte</div><div className={styles.assetMeta}>{euro.format(SERVICE_COST_ANNUAL_PRICE)} per jaar per stuk</div></div><StatusPill tone={existingServiceCostTotal > 0 ? "success" : "warning"}>{existingServiceCostTotal > 0 ? `${existingServiceCostTotal} huidig` : "geen huidige servicekosten"}</StatusPill></div>
+              <div className={styles.upsellSummary}><div><div className={styles.assetTitle}>Servicekosten offerte</div><div className={styles.assetMeta}>{serviceCostPriceLabel}</div></div><StatusPill tone={existingServiceCostTotal > 0 ? "success" : "warning"}>{existingServiceCostTotal > 0 ? `${existingServiceCostTotal} huidig` : "geen huidige servicekosten"}</StatusPill></div>
               <div className={styles.moduleSelectionSummary}>{serviceCostRows.map((option) => <div key={option.key}><span>{option.name}</span><strong>{option.existingQuantity} huidig</strong><span>{formatAssetClassIds(option.assetClassIds)}</span><label className={styles.upsellUserInput}><span>Extra aantal voor offerte</span><NumberStepper ariaLabel={`Extra aantal voor offerte ${option.name}`} min={0} value={option.offerQuantity} onChange={(nextValue) => handleServiceCostQuantityChange(option.key, String(Math.floor(nextValue)))} /></label></div>)}</div>
-              <div className={styles.quoteRows}>{existingServiceCostRows.length > 0 ? existingServiceCostRows.map((option) => <div key={`existing-service-${option.key}`} className={styles.quoteRow}><span>{option.existingQuantity}x</span><strong>Huidig: {option.name}</strong><span>{euro.format(SERVICE_COST_ANNUAL_PRICE)} p/j</span><strong>{euro.format(option.existingAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Geen bestaande CCV of Worldline servicekosten gevonden.</div>}</div>
+              <div className={styles.quoteRows}>{existingServiceCostRows.length > 0 ? existingServiceCostRows.map((option) => <div key={`existing-service-${option.key}`} className={styles.quoteRow}><span>{option.existingQuantity}x</span><strong>Huidig: {option.name}</strong><span>{euro.format(option.annualPrice)} p/j</span><strong>{euro.format(option.existingAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Geen bestaande CCV of Worldline servicekosten gevonden.</div>}</div>
               <div className={styles.quoteTotal}><span>Bestaande servicekosten per jaar</span><strong>{euro.format(existingServiceCostAnnualTotal)} p/j</strong></div>
-              <div className={styles.quoteRows}>{selectedServiceCostRows.length > 0 ? selectedServiceCostRows.map((option) => <div key={`service-${option.key}`} className={styles.quoteRow}><span>{option.offerQuantity}x</span><strong>{option.name}</strong><span>{euro.format(SERVICE_COST_ANNUAL_PRICE)} p/j</span><strong>{euro.format(option.offerAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Vul een extra aantal in voor CCV of Worldline.</div>}</div>
+              <div className={styles.quoteRows}>{selectedServiceCostRows.length > 0 ? selectedServiceCostRows.map((option) => <div key={`service-${option.key}`} className={styles.quoteRow}><span>{option.offerQuantity}x</span><strong>{option.name}</strong><span>{euro.format(option.annualPrice)} p/j</span><strong>{euro.format(option.offerAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Vul een extra aantal in voor CCV of Worldline.</div>}</div>
               <div className={styles.quoteTotal}><span>Servicekosten offerte per jaar</span><strong>{euro.format(serviceCostAnnualTotal)} p/j</strong></div>
             </div>
           )}

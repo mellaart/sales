@@ -17,40 +17,31 @@ import {
   WalletCards,
 } from "lucide-react";
 import {
-  MODULES,
-  PACKAGES,
   calculatePricing,
   euro,
   getPaidSelectedModuleCount,
+  type PackageConfig,
 } from "@/lib/pricing";
+import type { SmartConnectPriceTier } from "@/lib/price-config";
 import { getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
+import { usePricingConfig } from "@/components/pricing-provider";
 
-const CALCULATOR_PACKAGES = PACKAGES.filter((packageConfig) => packageConfig.key !== "lite");
-const CUSTOMER_PORTAL_OPTIONS = [
-  { key: "facturenBetalen", name: "Facturen betalen", monthlyPrice: 30.15 },
-  { key: "offertesOrdersMaken", name: "Offertes en orders maken", monthlyPrice: 60.3 },
-  { key: "offertesInzienGoedkeuren", name: "Offertes inzien en goedkeuren", monthlyPrice: 12.05 },
-  { key: "assortiment", name: "Assortiment", monthlyPrice: 36.15 },
-];
-const SMART_CONNECT_TIERS = [
-  { connections: 1, monthlyPrice: 30.15 },
-  { connections: 3, monthlyPrice: 60.3 },
-  { connections: 5, monthlyPrice: 78.4 },
-  { connections: 10, monthlyPrice: 120.6 },
-];
-const SMART_CONNECT_EXTRA_CONNECTION_PRICE = 6;
-
-function getCalculatorPackageForPaidModules(paidModuleCount: number) {
-  return CALCULATOR_PACKAGES.find((packageConfig) => paidModuleCount <= packageConfig.includedModules) ?? CALCULATOR_PACKAGES[CALCULATOR_PACKAGES.length - 1];
+function getCalculatorPackageForPaidModules(paidModuleCount: number, calculatorPackages: PackageConfig[]) {
+  return calculatorPackages.find((packageConfig) => paidModuleCount <= packageConfig.includedModules)
+    ?? calculatorPackages[calculatorPackages.length - 1];
 }
 
 function formatConnectionCount(count: number) {
   return count === 1 ? "1 connectie" : `${count} connecties`;
 }
 
-function getSmartConnectPricing(connectionCount: number) {
+function getSmartConnectPricing(
+  connectionCount: number,
+  tiers: SmartConnectPriceTier[],
+  extraConnectionPrice: number,
+) {
   const safeConnectionCount = Math.max(0, Math.floor(connectionCount));
 
   if (safeConnectionCount === 0) {
@@ -63,10 +54,10 @@ function getSmartConnectPricing(connectionCount: number) {
     };
   }
 
-  const baseTier = SMART_CONNECT_TIERS.find((tier) => safeConnectionCount <= tier.connections)
-    ?? SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1];
-  const extraConnections = Math.max(0, safeConnectionCount - SMART_CONNECT_TIERS[SMART_CONNECT_TIERS.length - 1].connections);
-  const extraMonthly = extraConnections * SMART_CONNECT_EXTRA_CONNECTION_PRICE;
+  const baseTier = tiers.find((tier) => safeConnectionCount <= tier.connections)
+    ?? tiers[tiers.length - 1];
+  const extraConnections = Math.max(0, safeConnectionCount - tiers[tiers.length - 1].connections);
+  const extraMonthly = extraConnections * extraConnectionPrice;
 
   return {
     connectionCount: safeConnectionCount,
@@ -79,6 +70,12 @@ function getSmartConnectPricing(connectionCount: number) {
 
 export default function PriceCalculator() {
   const { user, profile } = useAuth();
+  const { pricingConfig } = usePricingConfig();
+  const modules = pricingConfig.modules;
+  const calculatorPackages = useMemo(
+    () => pricingConfig.packages.filter((packageConfig) => packageConfig.key !== "lite"),
+    [pricingConfig.packages],
+  );
   const [customerName, setCustomerName] = useState("");
   const [contactName, setContactName] = useState("");
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
@@ -89,7 +86,7 @@ export default function PriceCalculator() {
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [quantities, setQuantities] = useState<Record<string, number>>(
-    Object.fromEntries(MODULES.map((module) => [module.key, 0])),
+    Object.fromEntries(modules.map((module) => [module.key, 0])),
   );
   const [notes, setNotes] = useState(
     "Bedragen zijn gebaseerd op het automatisch gekozen pakket, support, gekozen modules, uitbreidingen en de huidige implementatie-inschatting.",
@@ -105,27 +102,34 @@ export default function PriceCalculator() {
 
   const selectedModuleRows = useMemo(
     () =>
-      MODULES.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
+      modules.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
         ...module,
         qty: quantities[module.key] ?? 0,
         total: module.monthlyPrice * (quantities[module.key] ?? 0),
       })),
-    [quantities],
+    [modules, quantities],
   );
 
-  const paidModuleCount = getPaidSelectedModuleCount(quantities);
-  const recommendedPackage = getCalculatorPackageForPaidModules(paidModuleCount);
+  const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
+  const recommendedPackage = getCalculatorPackageForPaidModules(paidModuleCount, calculatorPackages);
   const pricingResults = useMemo(
-    () => calculatePricing({ extraUsers, manualImplementationAdjustment, quantities }),
-    [extraUsers, manualImplementationAdjustment, quantities],
+    () => calculatePricing({ extraUsers, manualImplementationAdjustment, quantities }, pricingConfig),
+    [extraUsers, manualImplementationAdjustment, pricingConfig, quantities],
   );
   const activeResult = pricingResults.find((result) => result.key === recommendedPackage.key) ?? pricingResults[0];
   const totalUsers = extraUsers + 1;
   const selectedCustomerPortalOptions = useMemo(
-    () => CUSTOMER_PORTAL_OPTIONS.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
-    [selectedCustomerPortalOptionKeys],
+    () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
+    [pricingConfig.customerPortalOptions, selectedCustomerPortalOptionKeys],
   );
-  const smartConnectPricing = useMemo(() => getSmartConnectPricing(smartConnectConnections), [smartConnectConnections]);
+  const smartConnectPricing = useMemo(
+    () => getSmartConnectPricing(
+      smartConnectConnections,
+      pricingConfig.smartConnectTiers,
+      pricingConfig.smartConnectExtraConnectionPrice,
+    ),
+    [pricingConfig.smartConnectExtraConnectionPrice, pricingConfig.smartConnectTiers, smartConnectConnections],
+  );
   const supportMonthly = includeSupport ? activeResult.supportMonthly : 0;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
@@ -297,7 +301,7 @@ export default function PriceCalculator() {
             <div className="section">
               <div className="section-title"><Boxes size={16} /> Klantportaal</div>
               <div className="calculator-module-grid">
-                {CUSTOMER_PORTAL_OPTIONS.map((option) => {
+                {pricingConfig.customerPortalOptions.map((option) => {
                   const active = selectedCustomerPortalOptionKeys.includes(option.key);
 
                   return (
@@ -356,7 +360,7 @@ export default function PriceCalculator() {
             <div className="section">
               <div className="section-title"><Package size={16} /> Pakket automatisch gekozen</div>
               <div className="calculator-package-grid">
-                {CALCULATOR_PACKAGES.map((packageConfig) => {
+                {calculatorPackages.map((packageConfig) => {
                   const active = packageConfig.key === activeResult.key;
 
                   return (
@@ -377,7 +381,7 @@ export default function PriceCalculator() {
             <div className="section">
               <div className="section-title"><SlidersHorizontal size={16} /> Modules aan/uit</div>
               <div className="calculator-module-grid">
-                {MODULES.map((module) => {
+                {modules.map((module) => {
                   const active = (quantities[module.key] ?? 0) > 0;
 
                   return (

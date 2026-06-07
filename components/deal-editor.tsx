@@ -9,6 +9,7 @@ import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage"
 import { calculatePricing, euro, getRecommendation, MODULES, type ModuleConfig } from "@/lib/pricing";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
+import { NumberStepper } from "@/components/number-stepper";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput, Toggle } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -335,12 +336,12 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                       <div key={module.key} className="module-card">
                         <div className="package-name">{module.name}</div>
                         <div className="muted small-gap">{euro.format(module.monthlyPrice)} per stuk / maand</div>
-                        <input
-                          className="input small-gap"
-                          type="number"
+                        <NumberStepper
+                          ariaLabel={`Aantal ${module.name}`}
+                          className="small-gap"
                           min={0}
                           value={quantities[module.key] ?? 0}
-                          onChange={(e) => setQuantities((prev) => ({ ...prev, [module.key]: Math.max(0, Number(e.target.value || 0)) }))}
+                          onChange={(nextValue) => setQuantities((prev) => ({ ...prev, [module.key]: Math.max(0, Math.floor(nextValue)) }))}
                         />
                       </div>
                     ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { NumberStepper } from "@/components/number-stepper";
 
 export function TextInput({
   label,
@@ -40,12 +41,11 @@ export function NumberInput({
   return (
     <label className="input-wrap">
       <span className="input-label">{label}</span>
-      <input
-        className="input"
-        type="number"
+      <NumberStepper
+        ariaLabel={label}
         value={value}
         step={step}
-        onChange={(event) => onChange(Number(event.target.value || 0))}
+        onChange={onChange}
       />
     </label>
   );

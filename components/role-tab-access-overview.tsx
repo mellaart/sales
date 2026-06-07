@@ -50,17 +50,19 @@ export function RoleTabAccessOverview({
             {APP_TABS.map((tab) => {
               const checked = access[role].includes(tab.key);
               const isSaving = savingKey === `${role}:${tab.key}`;
+              const locked = tab.key === "prices" && role !== "admin";
 
               return (
                 <label key={`${role}-${tab.key}`} className={`secondary-button ${checked ? "active" : ""}`}>
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={disabled}
+                    disabled={disabled || locked}
                     aria-label={`${role} ${tab.label} toegang`}
                     onChange={() => onToggle(role, tab.key)}
                   />
                   {tab.label}
+                  {locked ? " alleen admin" : null}
                   {isSaving ? " opslaan..." : null}
                 </label>
               );

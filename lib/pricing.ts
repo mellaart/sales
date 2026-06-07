@@ -13,6 +13,9 @@ export type ModuleConfig = {
   key: string;
   name: string;
   monthlyPrice: number;
+  setupCost?: number;
+  dependencyNote?: string | null;
+  noPackageSwitch?: boolean;
 };
 
 export const IMPLEMENTATION_DAY_RATE = 720;
@@ -129,7 +132,7 @@ export const MODULES: ModuleConfig[] = [
   { key: "digitaleOndertekening", name: "Digitale ondertekening", monthlyPrice: 27.5 },
   { key: "leverschema", name: "Leverschema", monthlyPrice: 27.5 },
   { key: "postnl", name: "PostNL", monthlyPrice: 0 },
-  { key: "suiteMkb", name: "Suite MKB koppeling", monthlyPrice: 55 },
+  { key: "suiteMkb", name: "Suite MKB koppeling", monthlyPrice: 30.15 },
   { key: "powerbi", name: "Power BI", monthlyPrice: 55 },
   { key: "kassa", name: "Kassa", monthlyPrice: 55 },
   { key: "terrein", name: "Terrein automatisering", monthlyPrice: 55 },
@@ -152,6 +155,12 @@ export type PricingInput = {
   manualImplementationAdjustment?: number;
   includeVat?: boolean;
   quantities?: Record<string, number>;
+};
+
+export type PricingCatalog = {
+  implementationDayRate: number;
+  packages: PackageConfig[];
+  modules: ModuleConfig[];
 };
 
 export type PricingResult = PackageConfig & {
@@ -184,15 +193,15 @@ export function getVisitsForUsers(packageConfig: PackageConfig, totalUsers: numb
   return packageConfig.implementationVisits.find((tier) => totalUsers <= tier.maxUsers)?.visits ?? 0;
 }
 
-export function getPaidSelectedModuleCount(quantities: Record<string, number>) {
-  return MODULES.filter((module) => module.monthlyPrice > 0).reduce(
+export function getPaidSelectedModuleCount(quantities: Record<string, number>, modules: ModuleConfig[] = MODULES) {
+  return modules.filter((module) => module.monthlyPrice > 0 && !module.noPackageSwitch).reduce(
     (sum, module) => sum + Math.max(0, quantities[module.key] ?? 0),
     0,
   );
 }
 
-export function getMinimumPackageForPaidModules(paidModuleCount: number) {
-  return PACKAGES.find((pkg) => paidModuleCount <= pkg.includedModules) ?? PACKAGES[PACKAGES.length - 1];
+export function getMinimumPackageForPaidModules(paidModuleCount: number, packages: PackageConfig[] = PACKAGES) {
+  return packages.find((pkg) => paidModuleCount <= pkg.includedModules) ?? packages[packages.length - 1];
 }
 
 function safeNumber(value: unknown, fallback = 0) {
@@ -200,7 +209,16 @@ function safeNumber(value: unknown, fallback = 0) {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
-export function calculatePricing(input: PricingInput = {}): PricingResult[] {
+function resolvePricingCatalog(catalog?: Partial<PricingCatalog>) {
+  return {
+    implementationDayRate: catalog?.implementationDayRate ?? IMPLEMENTATION_DAY_RATE,
+    packages: catalog?.packages && catalog.packages.length > 0 ? catalog.packages : PACKAGES,
+    modules: catalog?.modules && catalog.modules.length > 0 ? catalog.modules : MODULES,
+  };
+}
+
+export function calculatePricing(input: PricingInput = {}, catalog?: Partial<PricingCatalog>): PricingResult[] {
+  const resolvedCatalog = resolvePricingCatalog(catalog);
   const extraUsers = Math.max(0, safeNumber(input.extraUsers, 0));
   const contractMonths = Math.max(1, safeNumber(input.contractMonths, 1));
   const discountPct = Math.max(0, safeNumber(input.discountPct, 0));
@@ -210,20 +228,21 @@ export function calculatePricing(input: PricingInput = {}): PricingResult[] {
   const quantities = input.quantities ?? {};
 
   const totalUsers = extraUsers + 1;
-  const selectedModules = MODULES.filter((module) => (quantities[module.key] ?? 0) > 0);
-  const paidSelectedUnits = getPaidSelectedModuleCount(quantities);
+  const selectedModules = resolvedCatalog.modules.filter((module) => (quantities[module.key] ?? 0) > 0);
+  const paidSelectedUnits = getPaidSelectedModuleCount(quantities, resolvedCatalog.modules);
   const grossModuleMonthly = selectedModules.reduce(
     (sum, module) => sum + module.monthlyPrice * Math.max(0, safeNumber(quantities[module.key], 0)),
     0,
   );
 
-  return PACKAGES.map((pkg) => {
+  return resolvedCatalog.packages.map((pkg) => {
     const licenseMonthly = pkg.licenseFirst + extraUsers * pkg.licenseExtra;
     const supportMonthly = pkg.supportFirst + extraUsers * pkg.supportExtra;
-    // Alleen modules met een prijs boven 0 tellen mee voor de inbegrepen pakketmodules.
-    // Gratis modules zoals PostNL mogen geen inbegrepen betaalde module "opmaken".
+    // Alleen modules met een prijs boven 0 en zonder "geen pakketwissel" tellen mee voor de inbegrepen pakketmodules.
+    // Gratis en losse modules mogen geen inbegrepen betaalde module "opmaken".
     const freeModulesApplied = Math.min(pkg.includedModules, paidSelectedUnits);
     const includedModuleDiscount = selectedModules
+      .filter((module) => module.monthlyPrice > 0 && !module.noPackageSwitch)
       .slice()
       .sort((a, b) => b.monthlyPrice - a.monthlyPrice)
       .slice(0, freeModulesApplied)
@@ -234,7 +253,7 @@ export function calculatePricing(input: PricingInput = {}): PricingResult[] {
     const monthlyDiscountAmount = monthlyBase * (discountPct / 100);
     const monthlyAfterDiscount = Math.max(0, monthlyBase - monthlyDiscountAmount + manualMonthlyAdjustment);
     const visits = getVisitsForUsers(pkg, totalUsers);
-    const implementationBase = visits * IMPLEMENTATION_DAY_RATE;
+    const implementationBase = visits * resolvedCatalog.implementationDayRate;
     const implementationAfterAdjustment = Math.max(0, implementationBase + manualImplementationAdjustment);
     const recurringTotalContract = monthlyAfterDiscount * contractMonths;
     const contractValue = recurringTotalContract + implementationAfterAdjustment;

@@ -6,16 +6,17 @@ import { ArrowLeft, CheckCircle2, CloudUpload, Download, FileText, Package, Slid
 import { exportQuotePdf } from "@/lib/pdf";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
-import { calculatePricing, euro, getRecommendation, IMPLEMENTATION_DAY_RATE, MODULES, PACKAGES } from "@/lib/pricing";
+import { calculatePricing, euro, getRecommendation, MODULES, type ModuleConfig } from "@/lib/pricing";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput, Toggle } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
+import { usePricingConfig } from "@/components/pricing-provider";
 
-function toQuantities(modules: DealRecord["modules"] | undefined): Record<string, number> {
-  const base = Object.fromEntries(MODULES.map((module) => [module.key, 0]));
-  if (!Array.isArray(modules)) return base;
-  for (const item of modules as Array<{ key?: string; qty?: number }>) {
+function toQuantities(dealModules: DealRecord["modules"] | undefined, modules: ModuleConfig[] = MODULES): Record<string, number> {
+  const base = Object.fromEntries(modules.map((module) => [module.key, 0]));
+  if (!Array.isArray(dealModules)) return base;
+  for (const item of dealModules as Array<{ key?: string; qty?: number }>) {
     if (item?.key && Object.prototype.hasOwnProperty.call(base, item.key)) {
       base[item.key] = Number(item.qty || 0);
     }
@@ -23,13 +24,13 @@ function toQuantities(modules: DealRecord["modules"] | undefined): Record<string
   return base;
 }
 
-function normalizeInputs(deal: DealRecord): DealCalculatorInputs {
+function normalizeInputs(deal: DealRecord, modules: ModuleConfig[]): DealCalculatorInputs {
   return {
     extraUsers: Math.max(0, Number(deal.calculator_inputs?.extraUsers ?? Number(deal.total_users || 1) - 1)),
     selectedPackage: String(deal.calculator_inputs?.selectedPackage || deal.package_key || "enterprise"),
     manualImplementationAdjustment: Number(deal.calculator_inputs?.manualImplementationAdjustment ?? deal.manual_implementation_adjustment ?? 0),
     includeVat: Boolean(deal.calculator_inputs?.includeVat ?? deal.include_vat ?? false),
-    quantities: deal.calculator_inputs?.quantities ?? toQuantities(deal.modules),
+    quantities: deal.calculator_inputs?.quantities ?? toQuantities(deal.modules, modules),
     quoteLayout: normalizeQuoteLayout(deal.calculator_inputs?.quoteLayout),
     assetsExpansion: deal.calculator_inputs?.assetsExpansion ?? null,
   };
@@ -48,6 +49,9 @@ function getExpansionCadenceLabel(line: AssetExpansionLine) {
 
 export default function DealEditor({ dealId }: { dealId: string }) {
   const { user, profile } = useAuth();
+  const { pricingConfig } = usePricingConfig();
+  const modules = pricingConfig.modules;
+  const packages = pricingConfig.packages;
   const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -62,7 +66,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [selectedPackage, setSelectedPackage] = useState("enterprise");
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
   const [includeVat, setIncludeVat] = useState(false);
-  const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(MODULES.map((module) => [module.key, 0])));
+  const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(modules.map((module) => [module.key, 0])));
   const [quoteLayout, setQuoteLayout] = useState<QuoteLayoutKey>("standard");
   const [assetsExpansion, setAssetsExpansion] = useState<AssetExpansionSummary | null>(null);
 
@@ -84,7 +88,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       }
 
       const deal = result.deal;
-      const inputs = normalizeInputs(deal);
+      const inputs = normalizeInputs(deal, modules);
 
       setCustomerName(deal.customer_name || "");
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
@@ -103,18 +107,18 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     }
 
     void loadDeal();
-  }, [currentSalesName, dealId, supabase, user]);
+  }, [currentSalesName, dealId, modules, supabase, user]);
 
   const totalUsers = extraUsers + 1;
   const results = useMemo(
-    () => calculatePricing({ extraUsers, manualImplementationAdjustment, includeVat, quantities }),
-    [extraUsers, includeVat, manualImplementationAdjustment, quantities],
+    () => calculatePricing({ extraUsers, manualImplementationAdjustment, includeVat, quantities }, pricingConfig),
+    [extraUsers, includeVat, manualImplementationAdjustment, pricingConfig, quantities],
   );
   const activeResult = results.find((pkg) => pkg.key === selectedPackage) ?? results[0];
   const recommendation = getRecommendation(results);
   const isAssetsExpansionDeal = quoteLayout === "assets-expansion" && Boolean(assetsExpansion?.lines?.length);
   const expansionTotals = useMemo(() => getAssetExpansionTotals(assetsExpansion?.lines ?? []), [assetsExpansion]);
-  const selectedModuleRows = MODULES.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
+  const selectedModuleRows = modules.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
     ...module,
     qty: quantities[module.key] ?? 0,
     total: module.monthlyPrice * (quantities[module.key] ?? 0),
@@ -247,7 +251,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             <>
               <StatCard title="Gebruikers" value={String(totalUsers)} icon={Users} sublabel="1 hoofdgebruiker + extra gebruikers" />
               <StatCard title="Maandprijs" value={euro.format(includeVat ? activeResult.monthlyInclVat : activeResult.monthlyAfterDiscount)} icon={FileText} sublabel={includeVat ? "incl. BTW" : "ex. BTW"} />
-              <StatCard title="Implementatie" value={euro.format(includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)} icon={Package} sublabel={`${activeResult.visits} bezoeken × ${euro.format(IMPLEMENTATION_DAY_RATE)}`} />
+              <StatCard title="Implementatie" value={euro.format(includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)} icon={Package} sublabel={`${activeResult.visits} bezoeken × ${euro.format(pricingConfig.implementationDayRate)}`} />
             </>
           )}
         </div>
@@ -307,7 +311,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <div className="section">
                   <div className="section-title"><Package size={16} /> Pakket</div>
                   <div className="package-grid">
-                    {PACKAGES.map((pkg) => {
+                    {packages.map((pkg) => {
                       const isActive = pkg.key === selectedPackage;
                       return (
                         <button key={pkg.key} type="button" className={`package-button ${isActive ? "active" : ""}`} onClick={() => setSelectedPackage(pkg.key)}>
@@ -327,7 +331,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <div className="section">
                   <div className="section-title"><SlidersHorizontal size={16} /> Modules</div>
                   <div className="module-grid">
-                    {MODULES.map((module) => (
+                    {modules.map((module) => (
                       <div key={module.key} className="module-card">
                         <div className="package-name">{module.name}</div>
                         <div className="muted small-gap">{euro.format(module.monthlyPrice)} per stuk / maand</div>

@@ -430,7 +430,7 @@ export default function AdminDashboard() {
 
           <div className="save-status">
             {roleTabStatus ||
-              "Klik een vinkje aan of uit om de tabbladen Calculator, Deals, Assets, Testen en Admin per rol te beheren."}
+              "Klik een vinkje aan of uit om de tabbladen Calculator, Deals, Assets, Testen, Prijzen en Admin per rol te beheren."}
           </div>
         </section>
 

@@ -3,6 +3,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { AuthProvider } from "@/components/auth-provider";
 import { AppShellHeader } from "@/components/app-shell";
+import { PricingProvider } from "@/components/pricing-provider";
 
 export const metadata: Metadata = {
   title: "Smart Trade",
@@ -18,8 +19,10 @@ export default function RootLayout({
     <html lang="nl">
       <body>
         <AuthProvider>
-          <AppShellHeader />
-          {children}
+          <PricingProvider>
+            <AppShellHeader />
+            {children}
+          </PricingProvider>
         </AuthProvider>
       </body>
     </html>

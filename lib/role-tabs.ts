@@ -1,6 +1,6 @@
 import type { UserRole } from "@/lib/supabase";
 
-export type AppTabKey = "calculator" | "deals" | "assets" | "testen" | "admin";
+export type AppTabKey = "calculator" | "deals" | "assets" | "testen" | "prices" | "admin";
 
 export type AppTabConfig = {
   key: AppTabKey;
@@ -18,6 +18,7 @@ export const APP_TABS: AppTabConfig[] = [
   { key: "deals", label: "Deals", href: "/deals", pathPrefix: "/deals" },
   { key: "assets", label: "Assets", href: "/assets", pathPrefix: "/assets" },
   { key: "testen", label: "Testen", href: "/testen", pathPrefix: "/testen" },
+  { key: "prices", label: "Prijzen", href: "/prijzen", pathPrefix: "/prijzen" },
   { key: "admin", label: "Admin", href: "/admin", pathPrefix: "/admin" },
 ];
 
@@ -26,7 +27,7 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   consultant: ["calculator", "deals", "assets"],
   support: ["deals", "assets", "testen"],
   manager: ["calculator", "deals", "assets", "testen"],
-  admin: ["calculator", "deals", "assets", "testen", "admin"],
+  admin: ["calculator", "deals", "assets", "testen", "prices", "admin"],
 };
 
 const VALID_TAB_KEYS = new Set<AppTabKey>(APP_TABS.map((tab) => tab.key));
@@ -38,15 +39,22 @@ export function normalizeRoleTabAccess(input: unknown): RoleTabAccessMap {
     const rawTabs = Array.isArray(source[role]) ? source[role] : ROLE_TAB_ACCESS[role];
     const seen = new Set<AppTabKey>();
 
-    access[role] = rawTabs.filter((tabKey): tabKey is AppTabKey => {
+    const normalizedTabs = rawTabs.filter((tabKey): tabKey is AppTabKey => {
       if (typeof tabKey !== "string") return false;
 
       const normalizedKey = tabKey as AppTabKey;
       if (!VALID_TAB_KEYS.has(normalizedKey) || seen.has(normalizedKey)) return false;
+      if (normalizedKey === "prices" && role !== "admin") return false;
 
       seen.add(normalizedKey);
       return true;
     });
+
+    if (role === "admin" && !normalizedTabs.includes("prices")) {
+      normalizedTabs.push("prices");
+    }
+
+    access[role] = APP_TABS.filter((tab) => normalizedTabs.includes(tab.key)).map((tab) => tab.key);
 
     return access;
   }, {} as RoleTabAccessMap);
@@ -58,6 +66,7 @@ export function canAccessTab(
   accessMap: RoleTabAccessMap = ROLE_TAB_ACCESS,
 ) {
   if (!role) return false;
+  if (tabKey === "prices") return role === "admin";
   return accessMap[role]?.includes(tabKey) ?? false;
 }
 

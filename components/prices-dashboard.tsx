@@ -40,27 +40,56 @@ function formatTierLabel(maxUsers: number) {
   return `Admin. met ${minUsers}-${maxUsers} gebruikers`;
 }
 
+function formatFixedNumber(value: number, decimals: number) {
+  return new Intl.NumberFormat("nl-NL", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+function parseFixedNumber(value: string) {
+  const compactValue = value.replace(/\s/g, "");
+  const normalizedValue = compactValue.includes(",")
+    ? compactValue.replace(/\./g, "").replace(",", ".")
+    : compactValue;
+  const parsedValue = Number(normalizedValue);
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
+}
+
+function roundToDecimals(value: number, decimals: number) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
 function PriceInput({
   label,
   value,
   onChange,
+  decimals = 2,
   step = 0.01,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  decimals?: number;
   step?: number;
 }) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+
   return (
     <NumberStepper
       ariaLabel={label}
       className="price-table-stepper"
-      inputClassName="price-table-input"
+      displayValue={formatFixedNumber(safeValue, decimals)}
+      inputClassName="price-table-input price-table-input-number"
+      inputMode={decimals > 0 ? "decimal" : "numeric"}
+      inputType="text"
       min={0}
+      parseValue={parseFixedNumber}
       size="compact"
       step={step}
-      value={Number.isFinite(value) ? value : 0}
-      onChange={onChange}
+      value={safeValue}
+      onChange={(nextValue) => onChange(roundToDecimals(nextValue, decimals))}
     />
   );
 }
@@ -394,6 +423,7 @@ export default function PricesDashboard() {
                         <td key={`${packageConfig.key}-visits-${tierIndex}`}>
                           <PriceInput
                             label={`${packageConfig.name} bezoeken ${formatTierLabel(tier.maxUsers)}`}
+                            decimals={0}
                             step={1}
                             value={packageConfig.implementationVisits[tierIndex]?.visits ?? 0}
                             onChange={(value) => updatePackageVisits(packageConfig.key, tierIndex, value)}
@@ -422,9 +452,9 @@ export default function PricesDashboard() {
                 <tr>
                   <th>Module</th>
                   <th>Vereiste</th>
-                  <th>Prijs p/m</th>
+                  <th className="price-table-money-cell">Prijs p/m</th>
                   <th>Geen pakketwissel</th>
-                  <th>Setupkosten</th>
+                  <th className="price-table-money-cell">Setupkosten</th>
                 </tr>
               </thead>
               <tbody>
@@ -438,7 +468,7 @@ export default function PricesDashboard() {
                         onChange={(value) => updateModule(moduleConfig.key, "dependencyNote", value || null)}
                       />
                     </td>
-                    <td>
+                    <td className="price-table-money-cell">
                       <PriceInput
                         label={`${moduleConfig.name} maandprijs`}
                         value={moduleConfig.monthlyPrice}
@@ -455,7 +485,7 @@ export default function PricesDashboard() {
                         Geen pakketwissel nodig
                       </label>
                     </td>
-                    <td>
+                    <td className="price-table-money-cell">
                       <PriceInput
                         label={`${moduleConfig.name} setupkosten`}
                         value={moduleConfig.setupCost ?? 0}
@@ -482,7 +512,7 @@ export default function PricesDashboard() {
               <thead>
                 <tr>
                   <th>Onderdeel</th>
-                  <th>Prijs</th>
+                  <th className="price-table-money-cell">Prijs</th>
                 </tr>
               </thead>
               <tbody>
@@ -490,7 +520,7 @@ export default function PricesDashboard() {
                 {draftConfig.customerPortalOptions.map((option) => (
                   <tr key={option.key}>
                     <td>{option.name}</td>
-                    <td>
+                    <td className="price-table-money-cell">
                       <PriceInput
                         label={`${option.name} maandprijs`}
                         value={option.monthlyPrice}
@@ -504,7 +534,7 @@ export default function PricesDashboard() {
                 {draftConfig.smartConnectTiers.map((tier, index) => (
                   <tr key={tier.connections}>
                     <td>Smart Connect - {tier.connections} {tier.connections === 1 ? "connectie" : "connecties"}</td>
-                    <td>
+                    <td className="price-table-money-cell">
                       <PriceInput
                         label={`Smart Connect ${tier.connections} connecties`}
                         value={tier.monthlyPrice}
@@ -515,7 +545,7 @@ export default function PricesDashboard() {
                 ))}
                 <tr>
                   <td>Smart Connect extra connectie vanaf 11e connectie</td>
-                  <td>
+                  <td className="price-table-money-cell">
                     <PriceInput
                       label="Smart Connect extra connectie"
                       value={draftConfig.smartConnectExtraConnectionPrice}
@@ -527,7 +557,7 @@ export default function PricesDashboard() {
                 <tr className="price-section-row"><td colSpan={2}>Planningapp</td></tr>
                 <tr>
                   <td>Planningapp gebruiker</td>
-                  <td>
+                  <td className="price-table-money-cell">
                     <PriceInput
                       label="Planningapp gebruiker"
                       value={draftConfig.planningAppUserMonthly}
@@ -539,7 +569,7 @@ export default function PricesDashboard() {
                 <tr className="price-section-row"><td colSpan={2}>Twinfield</td></tr>
                 <tr>
                   <td>Twinfield connectie</td>
-                  <td>
+                  <td className="price-table-money-cell">
                     <PriceInput
                       label="Twinfield connectie"
                       value={draftConfig.twinfieldConnectionMonthly}
@@ -552,7 +582,7 @@ export default function PricesDashboard() {
                 {draftConfig.serviceCostOptions.map((option) => (
                   <tr key={option.key}>
                     <td>{option.name}</td>
-                    <td>
+                    <td className="price-table-money-cell">
                       <PriceInput
                         label={`${option.name} servicekosten per jaar`}
                         value={option.annualPrice}

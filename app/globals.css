@@ -1459,6 +1459,20 @@ td {
   padding-right: 46px;
 }
 
+.price-table th.price-table-money-cell,
+.price-table td.price-table-money-cell {
+  text-align: right;
+}
+
+.price-table-money-cell .price-table-stepper {
+  margin-left: auto;
+}
+
+.price-table-input-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .price-table-input.text {
   min-width: 180px;
 }

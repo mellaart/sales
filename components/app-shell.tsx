@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LogOut, UserRound, Users2 } from "lucide-react";
 import {
   ROLE_TAB_ACCESS,
@@ -10,13 +10,14 @@ import {
   normalizeRoleTabAccess,
   type RoleTabAccessMap,
 } from "@/lib/role-tabs";
-import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 
 export function AppShellHeader() {
-  const { user, role } = useAuth();
+  const { user, role, signOut } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -56,19 +57,12 @@ export function AppShellHeader() {
   const accessibleTabs = getAccessibleTabs(role ?? "sales", roleTabAccess);
 
   const handleLogout = async () => {
-    const supabase = getSupabaseClient();
+    if (loggingOut) return;
 
-    try {
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
-    } catch (error) {
-      console.error("Uitloggen mislukt, lokale sessie wordt alsnog opgeschoond.", error);
-    } finally {
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.href = "/login";
-    }
+    setLoggingOut(true);
+    await signOut();
+    router.replace("/login");
+    router.refresh();
   };
 
   return (
@@ -104,9 +98,9 @@ export function AppShellHeader() {
             {user.email}
           </span>
 
-          <button type="button" className="logout-button" onClick={handleLogout}>
+          <button type="button" className="logout-button" onClick={handleLogout} disabled={loggingOut}>
             <LogOut size={15} />
-            Uitloggen
+            {loggingOut ? "Uitloggen..." : "Uitloggen"}
           </button>
         </nav>
       </div>

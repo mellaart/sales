@@ -20,6 +20,33 @@ const MISSING_TABLE_LOCAL_DEAL_WARNING =
   "De database mist de Deals-tabel. Deze deal staat tijdelijk lokaal op dit apparaat.";
 const MISSING_TABLE_SAVE_WARNING =
   "De database mist de Deals-tabel. Deze wijziging is tijdelijk lokaal op dit apparaat bewaard.";
+const SESSION_REFRESH_TIMEOUT_MS = 3000;
+const SESSION_REFRESH_MARGIN_SECONDS = 90;
+
+function timeout<T>(milliseconds: number, fallback: T) {
+  return new Promise<T>((resolve) => {
+    setTimeout(() => resolve(fallback), milliseconds);
+  });
+}
+
+async function withTimeout<T>(promise: Promise<T>, fallback: T) {
+  return Promise.race([promise, timeout(SESSION_REFRESH_TIMEOUT_MS, fallback)]);
+}
+
+async function ensureFreshSession(supabase: SupabaseClient) {
+  try {
+    const result = await withTimeout(supabase.auth.getSession(), null);
+    const session = result && "data" in result ? result.data.session : null;
+    const expiresAt = session?.expires_at ?? 0;
+    const expiresSoon = expiresAt > 0 && expiresAt - Math.floor(Date.now() / 1000) < SESSION_REFRESH_MARGIN_SECONDS;
+
+    if (session && expiresSoon) {
+      await withTimeout(supabase.auth.refreshSession(), null);
+    }
+  } catch {
+    // The next Supabase query will surface any real auth error.
+  }
+}
 
 function hasStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -146,6 +173,8 @@ export async function listDealsWithFallback(
     return { error: "Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in." };
   }
 
+  await ensureFreshSession(supabase);
+
   let query = supabase.from("deals").select("*").order("created_at", { ascending: false });
   if (limit) {
     query = query.limit(limit);
@@ -182,6 +211,8 @@ export async function getDealWithFallback(supabase: SupabaseClient | null, dealI
     return { error: "Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in." };
   }
 
+  await ensureFreshSession(supabase);
+
   const { data, error } = await supabase.from("deals").select("*").eq("id", dealId).single();
 
   if (error) {
@@ -199,6 +230,8 @@ export async function createDealWithFallback(supabase: SupabaseClient | null, pa
   if (!supabase) {
     return { error: "Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in." };
   }
+
+  await ensureFreshSession(supabase);
 
   const { data, error } = await supabase.from("deals").insert(payload as never).select("*").single();
 
@@ -233,6 +266,8 @@ export async function updateDealWithFallback(
     return { error: "Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in." };
   }
 
+  await ensureFreshSession(supabase);
+
   const { data, error } = await supabase.from("deals").update(payload as never).eq("id", dealId).select("*").single();
 
   if (error) {
@@ -258,6 +293,8 @@ export async function deleteDealWithFallback(supabase: SupabaseClient | null, de
   if (!supabase) {
     return { error: "Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in." };
   }
+
+  await ensureFreshSession(supabase);
 
   const { error } = await supabase.from("deals").delete().eq("id", dealId);
 

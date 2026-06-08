@@ -414,7 +414,14 @@ export default function PricesDashboard() {
                         const packageTier = packageConfig.implementationVisits[tierIndex] ?? tier;
                         const amount = getVisitsForUsers(packageConfig, packageTier.maxUsers) * draftConfig.implementationDayRate;
 
-                        return <td key={`${packageConfig.key}-implementation-${tierIndex}`}>{euro.format(amount)}</td>;
+                        return (
+                          <td
+                            key={`${packageConfig.key}-implementation-${tierIndex}`}
+                            className="price-table-money-cell price-table-static-money"
+                          >
+                            {euro.format(amount)}
+                          </td>
+                        );
                       })}
                     </tr>
                     <tr key={`implementation-visits-${tierIndex}`}>

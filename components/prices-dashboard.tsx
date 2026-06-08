@@ -75,21 +75,47 @@ function PriceInput({
   step?: number;
 }) {
   const safeValue = Number.isFinite(value) ? value : 0;
+  const formattedValue = formatFixedNumber(safeValue, decimals);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftValue, setDraftValue] = useState(formattedValue);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setDraftValue(formatFixedNumber(safeValue, decimals));
+    }
+  }, [decimals, isEditing, safeValue]);
+
+  function commitValue(nextValue: number) {
+    onChange(roundToDecimals(nextValue, decimals));
+  }
+
+  function handleBlur() {
+    const roundedValue = roundToDecimals(parseFixedNumber(draftValue), decimals);
+    setIsEditing(false);
+    setDraftValue(formatFixedNumber(roundedValue, decimals));
+    onChange(roundedValue);
+  }
 
   return (
     <NumberStepper
       ariaLabel={label}
       className="price-table-stepper"
-      displayValue={formatFixedNumber(safeValue, decimals)}
+      displayValue={isEditing ? draftValue : formattedValue}
       inputClassName="price-table-input price-table-input-number"
       inputMode={decimals > 0 ? "decimal" : "numeric"}
       inputType="text"
       min={0}
+      onBlur={handleBlur}
+      onDisplayValueChange={setDraftValue}
+      onFocus={() => {
+        setIsEditing(true);
+        setDraftValue(formattedValue);
+      }}
       parseValue={parseFixedNumber}
       size="compact"
       step={step}
       value={safeValue}
-      onChange={(nextValue) => onChange(roundToDecimals(nextValue, decimals))}
+      onChange={commitValue}
     />
   );
 }

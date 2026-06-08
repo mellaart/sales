@@ -11,7 +11,10 @@ type NumberStepperProps = {
   inputClassName?: string;
   min?: number;
   max?: number;
+  onBlur?: () => void;
   parseValue?: (value: string) => number;
+  onDisplayValueChange?: (value: string) => void;
+  onFocus?: () => void;
   size?: "default" | "compact";
   step?: number;
   value: number;
@@ -41,7 +44,10 @@ export function NumberStepper({
   inputClassName = "",
   min,
   max,
+  onBlur,
   parseValue,
+  onDisplayValueChange,
+  onFocus,
   size = "default",
   step = 1,
   value,
@@ -67,7 +73,13 @@ export function NumberStepper({
         max={max}
         step={step}
         value={displayValue ?? value}
-        onChange={(event) => updateValue(parseValue ? parseValue(event.target.value) : Number(event.target.value || 0))}
+        onBlur={onBlur}
+        onChange={(event) => {
+          const rawValue = event.target.value;
+          onDisplayValueChange?.(rawValue);
+          updateValue(parseValue ? parseValue(rawValue) : Number(rawValue || 0));
+        }}
+        onFocus={onFocus}
       />
       <div className="number-stepper-controls">
         <button

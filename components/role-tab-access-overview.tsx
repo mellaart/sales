@@ -1,6 +1,6 @@
 "use client";
 
-import { APP_TABS, type AppTabKey, type RoleTabAccessMap } from "@/lib/role-tabs";
+import { APP_TABS, type AppTabKey, type RoleTabAccessMap, type TabPermission } from "@/lib/role-tabs";
 import type { UserRole } from "@/lib/supabase";
 
 type RoleTabAccessOverviewProps = {
@@ -8,13 +8,19 @@ type RoleTabAccessOverviewProps = {
   disabled?: boolean;
   roles: UserRole[];
   savingKey?: string | null;
-  onToggle: (role: UserRole, tabKey: AppTabKey) => void;
+  onChange: (role: UserRole, tabKey: AppTabKey, permission: TabPermission) => void;
 };
 
-function formatTabAccessDescription(tabKeys: AppTabKey[]) {
+const PERMISSION_LABELS: Record<TabPermission, string> = {
+  none: "Geen",
+  read: "Lezen",
+  write: "Schrijven",
+};
+
+function formatTabAccessDescription(tabPermissions: RoleTabAccessMap[UserRole]) {
   const selectedLabels = APP_TABS
-    .filter((tab) => tabKeys.includes(tab.key))
-    .map((tab) => tab.label);
+    .filter((tab) => tabPermissions[tab.key] !== "none")
+    .map((tab) => `${tab.label} ${PERMISSION_LABELS[tabPermissions[tab.key]].toLowerCase()}`);
 
   if (selectedLabels.length === 0) {
     return "Geen tabbladen geselecteerd.";
@@ -35,7 +41,7 @@ export function RoleTabAccessOverview({
   disabled = false,
   roles,
   savingKey,
-  onToggle,
+  onChange,
 }: RoleTabAccessOverviewProps) {
   return (
     <div className="admin-user-list">
@@ -46,24 +52,30 @@ export function RoleTabAccessOverview({
             <div className="subtext">{formatTabAccessDescription(access[role])}</div>
           </div>
 
-          <div className="button-row">
+          <div className="role-access-grid">
             {APP_TABS.map((tab) => {
-              const checked = access[role].includes(tab.key);
+              const permission = access[role][tab.key];
               const isSaving = savingKey === `${role}:${tab.key}`;
-              const locked = tab.key === "prices" && role !== "admin";
 
               return (
-                <label key={`${role}-${tab.key}`} className={`secondary-button ${checked ? "active" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={disabled || locked}
-                    aria-label={`${role} ${tab.label} toegang`}
-                    onChange={() => onToggle(role, tab.key)}
-                  />
-                  {tab.label}
-                  {locked ? " alleen admin" : null}
-                  {isSaving ? " opslaan..." : null}
+                <label key={`${role}-${tab.key}`} className="role-access-control">
+                  <span>
+                    {tab.label}
+                    {isSaving ? " opslaan..." : null}
+                  </span>
+                  <select
+                    className="input role-access-select"
+                    value={permission}
+                    disabled={disabled}
+                    aria-label={`${role} ${tab.label} rechten`}
+                    onChange={(event) => onChange(role, tab.key, event.target.value as TabPermission)}
+                  >
+                    {Object.entries(PERMISSION_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               );
             })}

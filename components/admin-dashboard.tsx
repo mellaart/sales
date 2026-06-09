@@ -15,6 +15,7 @@ import {
   normalizeRoleTabAccess,
   type AppTabKey,
   type RoleTabAccessMap,
+  type TabPermission,
 } from "@/lib/role-tabs";
 import { useAuth } from "@/components/auth-provider";
 import { RoleTabAccessOverview } from "@/components/role-tab-access-overview";
@@ -34,22 +35,18 @@ type RoleTabsResponse = {
 
 type EditableProfileField = "job_title" | "workdays" | "mobile_phone";
 
-function toggleRoleTabAccess(
+function setRoleTabPermission(
   currentAccess: RoleTabAccessMap,
   selectedRole: UserRole,
   tabKey: AppTabKey,
+  permission: TabPermission,
 ) {
-  const nextRoleTabs = new Set(currentAccess[selectedRole]);
-
-  if (nextRoleTabs.has(tabKey)) {
-    nextRoleTabs.delete(tabKey);
-  } else {
-    nextRoleTabs.add(tabKey);
-  }
-
   return normalizeRoleTabAccess({
     ...currentAccess,
-    [selectedRole]: Array.from(nextRoleTabs),
+    [selectedRole]: {
+      ...currentAccess[selectedRole],
+      [tabKey]: permission,
+    },
   });
 }
 
@@ -142,7 +139,7 @@ export default function AdminDashboard() {
       window.dispatchEvent(new CustomEvent("role-tab-access-updated", { detail: nextAccess }));
 
       if (!json.persisted) {
-        setRoleTabStatus("Standaardrechten geladen. Wijzig een vinkje om deze instellingen op te slaan.");
+        setRoleTabStatus("Standaardrechten geladen. Wijzig een selectie om deze instellingen op te slaan.");
       }
     } catch {
       setRoleTabAccess(ROLE_TAB_ACCESS);
@@ -306,14 +303,14 @@ export default function AdminDashboard() {
     }
   }
 
-  async function updateRoleTab(selectedRole: UserRole, tabKey: AppTabKey) {
+  async function updateRoleTab(selectedRole: UserRole, tabKey: AppTabKey, permission: TabPermission) {
     if (!supabase) {
       setRoleTabStatus("Supabase client ontbreekt.");
       return;
     }
 
     const previousAccess = roleTabAccess;
-    const nextAccess = toggleRoleTabAccess(roleTabAccess, selectedRole, tabKey);
+    const nextAccess = setRoleTabPermission(roleTabAccess, selectedRole, tabKey, permission);
     const savingKey = `${selectedRole}:${tabKey}`;
 
     setRoleTabAccess(nextAccess);
@@ -481,7 +478,7 @@ export default function AdminDashboard() {
             <div>
               <div className="brand-mark">Rollen overzicht</div>
               <h2>Wat mag je per rol?</h2>
-              <p className="subtext">Aangevinkt betekent dat het tabblad zichtbaar is in de navigatie.</p>
+              <p className="subtext">Kies per tabblad of een rol geen toegang, alleen lezen of schrijven krijgt.</p>
             </div>
           </div>
 
@@ -490,12 +487,12 @@ export default function AdminDashboard() {
             disabled={roleTabsLoading || roleTabSavingKey !== null}
             roles={roles}
             savingKey={roleTabSavingKey}
-            onToggle={updateRoleTab}
+            onChange={updateRoleTab}
           />
 
           <div className="save-status">
             {roleTabStatus ||
-              "Klik een vinkje aan of uit om de tabbladen Calculator, Deals, Assets, Testen, Prijzen en Admin per rol te beheren."}
+              "Wijzig een selectie om de rechten voor Calculator, Deals, Assets, Testen, Prijzen en Admin per rol te beheren."}
           </div>
         </section>
 

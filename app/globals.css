@@ -1446,7 +1446,7 @@ td {
 }
 
 .price-table.postcode-table {
-  min-width: 760px;
+  min-width: 900px;
 }
 
 .price-table th,
@@ -1467,6 +1467,13 @@ td {
   color: #dbeafe;
   font-weight: 850;
   text-align: left;
+}
+
+.price-filter-row th {
+  top: 42px;
+  z-index: 2;
+  padding: 8px 10px;
+  background: rgba(15,23,42,0.98);
 }
 
 .price-table td:first-child,
@@ -1490,6 +1497,21 @@ td {
   background: rgba(255,255,255,0.05);
   color: #ffffff;
   outline: none;
+}
+
+.price-table-filter-input {
+  width: 100%;
+  min-width: 84px;
+  padding: 8px 9px;
+  border: 1px solid rgba(148,163,184,0.16);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: #ffffff;
+  outline: none;
+}
+
+.price-table-filter-input::placeholder {
+  color: rgba(203,213,225,0.5);
 }
 
 .price-table-stepper {
@@ -1533,6 +1555,11 @@ td {
 }
 
 .price-table-input:focus {
+  border-color: rgba(96,165,250,0.58);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.14);
+}
+
+.price-table-filter-input:focus {
   border-color: rgba(96,165,250,0.58);
   box-shadow: 0 0 0 3px rgba(37,99,235,0.14);
 }

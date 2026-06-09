@@ -1,6 +1,6 @@
 import type { UserRole } from "@/lib/supabase";
 
-export type AppTabKey = "calculator" | "deals" | "assets" | "testen" | "prices" | "admin";
+export type AppTabKey = "calculator" | "deals" | "assets" | "testen" | "prices" | "postcode" | "admin";
 
 export type AppTabConfig = {
   key: AppTabKey;
@@ -20,6 +20,7 @@ export const APP_TABS: AppTabConfig[] = [
   { key: "assets", label: "Assets", href: "/assets", pathPrefix: "/assets" },
   { key: "testen", label: "Testen", href: "/testen", pathPrefix: "/testen" },
   { key: "prices", label: "Prijzen", href: "/prijzen", pathPrefix: "/prijzen" },
+  { key: "postcode", label: "Postcode", href: "/postcode", pathPrefix: "/postcode" },
   { key: "admin", label: "Admin", href: "/admin", pathPrefix: "/admin" },
 ];
 
@@ -28,7 +29,7 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   consultant: buildRoleAccess(["calculator", "deals", "assets"]),
   support: buildRoleAccess(["deals", "assets", "testen"]),
   manager: buildRoleAccess(["calculator", "deals", "assets", "testen"]),
-  admin: buildRoleAccess(["calculator", "deals", "assets", "testen", "prices", "admin"]),
+  admin: buildRoleAccess(["calculator", "deals", "assets", "testen", "prices", "postcode", "admin"]),
 };
 
 const VALID_TAB_KEYS = new Set<AppTabKey>(APP_TABS.map((tab) => tab.key));
@@ -74,7 +75,9 @@ export function normalizeRoleTabAccess(input: unknown): RoleTabAccessMap {
         : ROLE_TAB_ACCESS[role];
 
     access[role] = APP_TABS.reduce((roleAccess, tab) => {
-      roleAccess[tab.key] = normalizePermission(rawPermissions[tab.key]);
+      const rawPermission = rawPermissions[tab.key];
+      roleAccess[tab.key] =
+        rawPermission === undefined ? ROLE_TAB_ACCESS[role][tab.key] : normalizePermission(rawPermission);
       return roleAccess;
     }, {} as Record<AppTabKey, TabPermission>);
 

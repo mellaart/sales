@@ -976,6 +976,31 @@ td {
   background: rgba(255,255,255,0.04);
 }
 
+.role-access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.role-access-control {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.035);
+}
+
+.role-access-control > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.role-access-select {
+  height: 42px;
+}
+
 .secondary-button.active {
   border-color: #60a5fa;
   background: rgba(37,99,235,0.22);
@@ -1531,7 +1556,8 @@ td {
 
 @media (max-width: 640px) {
   .deals-stat-grid,
-  .deals-search-row {
+  .deals-search-row,
+  .role-access-grid {
     grid-template-columns: 1fr;
   }
 

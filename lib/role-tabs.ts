@@ -9,7 +9,8 @@ export type AppTabConfig = {
   pathPrefix: string;
 };
 
-export type RoleTabAccessMap = Record<UserRole, AppTabKey[]>;
+export type TabPermission = "none" | "read" | "write";
+export type RoleTabAccessMap = Record<UserRole, Record<AppTabKey, TabPermission>>;
 
 export const USER_ROLES: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
 
@@ -23,41 +24,71 @@ export const APP_TABS: AppTabConfig[] = [
 ];
 
 export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
-  sales: ["calculator", "deals", "assets"],
-  consultant: ["calculator", "deals", "assets"],
-  support: ["deals", "assets", "testen"],
-  manager: ["calculator", "deals", "assets", "testen"],
-  admin: ["calculator", "deals", "assets", "testen", "prices", "admin"],
+  sales: buildRoleAccess(["calculator", "deals", "assets"]),
+  consultant: buildRoleAccess(["calculator", "deals", "assets"]),
+  support: buildRoleAccess(["deals", "assets", "testen"]),
+  manager: buildRoleAccess(["calculator", "deals", "assets", "testen"]),
+  admin: buildRoleAccess(["calculator", "deals", "assets", "testen", "prices", "admin"]),
 };
 
 const VALID_TAB_KEYS = new Set<AppTabKey>(APP_TABS.map((tab) => tab.key));
+const VALID_TAB_PERMISSIONS = new Set<TabPermission>(["none", "read", "write"]);
+
+function buildRoleAccess(writeTabs: AppTabKey[]): Record<AppTabKey, TabPermission> {
+  const writeTabSet = new Set(writeTabs);
+
+  return APP_TABS.reduce((access, tab) => {
+    access[tab.key] = writeTabSet.has(tab.key) ? "write" : "none";
+    return access;
+  }, {} as Record<AppTabKey, TabPermission>);
+}
+
+function normalizePermission(value: unknown): TabPermission {
+  if (typeof value === "string" && VALID_TAB_PERMISSIONS.has(value as TabPermission)) {
+    return value as TabPermission;
+  }
+
+  if (value === true) return "write";
+  return "none";
+}
 
 export function normalizeRoleTabAccess(input: unknown): RoleTabAccessMap {
   const source = input && typeof input === "object" ? (input as Partial<Record<UserRole, unknown>>) : {};
 
   return USER_ROLES.reduce((access, role) => {
-    const rawTabs = Array.isArray(source[role]) ? source[role] : ROLE_TAB_ACCESS[role];
-    const seen = new Set<AppTabKey>();
+    const rawRoleAccess = source[role];
 
-    const normalizedTabs = rawTabs.filter((tabKey): tabKey is AppTabKey => {
-      if (typeof tabKey !== "string") return false;
+    if (Array.isArray(rawRoleAccess)) {
+      const writeTabs = rawRoleAccess.filter((tabKey): tabKey is AppTabKey => {
+        if (typeof tabKey !== "string") return false;
+        return VALID_TAB_KEYS.has(tabKey as AppTabKey);
+      });
 
-      const normalizedKey = tabKey as AppTabKey;
-      if (!VALID_TAB_KEYS.has(normalizedKey) || seen.has(normalizedKey)) return false;
-      if (normalizedKey === "prices" && role !== "admin") return false;
-
-      seen.add(normalizedKey);
-      return true;
-    });
-
-    if (role === "admin" && !normalizedTabs.includes("prices")) {
-      normalizedTabs.push("prices");
+      access[role] = buildRoleAccess(writeTabs);
+      return access;
     }
 
-    access[role] = APP_TABS.filter((tab) => normalizedTabs.includes(tab.key)).map((tab) => tab.key);
+    const rawPermissions =
+      rawRoleAccess && typeof rawRoleAccess === "object"
+        ? (rawRoleAccess as Partial<Record<AppTabKey, unknown>>)
+        : ROLE_TAB_ACCESS[role];
+
+    access[role] = APP_TABS.reduce((roleAccess, tab) => {
+      roleAccess[tab.key] = normalizePermission(rawPermissions[tab.key]);
+      return roleAccess;
+    }, {} as Record<AppTabKey, TabPermission>);
 
     return access;
   }, {} as RoleTabAccessMap);
+}
+
+export function getTabPermission(
+  role: UserRole | null,
+  tabKey: AppTabKey,
+  accessMap: RoleTabAccessMap = ROLE_TAB_ACCESS,
+): TabPermission {
+  if (!role) return "none";
+  return accessMap[role]?.[tabKey] ?? "none";
 }
 
 export function canAccessTab(
@@ -65,9 +96,15 @@ export function canAccessTab(
   tabKey: AppTabKey,
   accessMap: RoleTabAccessMap = ROLE_TAB_ACCESS,
 ) {
-  if (!role) return false;
-  if (tabKey === "prices") return role === "admin";
-  return accessMap[role]?.includes(tabKey) ?? false;
+  return getTabPermission(role, tabKey, accessMap) !== "none";
+}
+
+export function canWriteTab(
+  role: UserRole | null,
+  tabKey: AppTabKey,
+  accessMap: RoleTabAccessMap = ROLE_TAB_ACCESS,
+) {
+  return getTabPermission(role, tabKey, accessMap) === "write";
 }
 
 export function getAccessibleTabs(role: UserRole | null, accessMap: RoleTabAccessMap = ROLE_TAB_ACCESS) {

@@ -7,6 +7,7 @@ import {
   DEFAULT_PRICE_CONFIG,
   normalizePricingConfig,
   type EditablePricingConfig,
+  type TravelCostRegion,
 } from "@/lib/price-config";
 import { euro, getVisitsForUsers, type ModuleConfig, type PackageConfig } from "@/lib/pricing";
 import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
@@ -221,6 +222,15 @@ export default function PricesDashboard() {
       ...currentConfig,
       serviceCostOptions: currentConfig.serviceCostOptions.map((option) =>
         option.key === optionKey ? { ...option, annualPrice } : option,
+      ),
+    }));
+  }
+
+  function updateTravelCostRegion(region: number, values: Partial<TravelCostRegion>) {
+    updateDraft((currentConfig) => ({
+      ...currentConfig,
+      travelCostRegions: currentConfig.travelCostRegions.map((travelRegion) =>
+        travelRegion.region === region ? { ...travelRegion, ...values } : travelRegion,
       ),
     }));
   }
@@ -468,6 +478,7 @@ export default function PricesDashboard() {
                 ))}
               </tbody>
             </table>
+
           </div>
         </section>
 
@@ -529,6 +540,7 @@ export default function PricesDashboard() {
                 ))}
               </tbody>
             </table>
+
           </div>
         </section>
 
@@ -620,6 +632,62 @@ export default function PricesDashboard() {
                         label={`${option.name} servicekosten per jaar`}
                         value={option.annualPrice}
                         onChange={(value) => updateServiceCostOption(option.key, value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <table className="price-table travel-cost-table">
+              <thead>
+                <tr>
+                  <th>Regio</th>
+                  <th className="price-table-money-cell">Van (km)</th>
+                  <th className="price-table-money-cell">Tot (km)</th>
+                  <th className="price-table-money-cell">Prijs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="price-section-row"><td colSpan={4}>Reiskosten</td></tr>
+                {draftConfig.travelCostRegions.map((travelRegion) => (
+                  <tr key={travelRegion.region}>
+                    <td>{travelRegion.region}</td>
+                    {travelRegion.label ? (
+                      <td colSpan={2}>
+                        <TextPriceInput
+                          label={`Reiskosten regio ${travelRegion.region} omschrijving`}
+                          value={travelRegion.label}
+                          onChange={(value) => updateTravelCostRegion(travelRegion.region, { label: value || null })}
+                        />
+                      </td>
+                    ) : (
+                      <>
+                        <td className="price-table-money-cell">
+                          <PriceInput
+                            label={`Reiskosten regio ${travelRegion.region} van kilometer`}
+                            decimals={0}
+                            step={1}
+                            value={travelRegion.fromKm ?? 0}
+                            onChange={(value) => updateTravelCostRegion(travelRegion.region, { fromKm: value })}
+                          />
+                        </td>
+                        <td className="price-table-money-cell">
+                          <PriceInput
+                            label={`Reiskosten regio ${travelRegion.region} tot kilometer`}
+                            decimals={0}
+                            step={1}
+                            value={travelRegion.toKm ?? 0}
+                            onChange={(value) => updateTravelCostRegion(travelRegion.region, { toKm: value })}
+                          />
+                        </td>
+                      </>
+                    )}
+                    <td className="price-table-money-cell">
+                      <PriceInput
+                        label={`Reiskosten regio ${travelRegion.region} prijs`}
+                        value={travelRegion.price}
+                        onChange={(value) => updateTravelCostRegion(travelRegion.region, { price: value })}
                       />
                     </td>
                   </tr>

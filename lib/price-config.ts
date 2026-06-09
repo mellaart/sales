@@ -24,6 +24,14 @@ export type ServiceCostPriceOption = {
   annualPrice: number;
 };
 
+export type TravelCostRegion = {
+  region: number;
+  fromKm: number | null;
+  toKm: number | null;
+  label?: string | null;
+  price: number;
+};
+
 export type EditablePricingConfig = PricingCatalog & {
   customerPortalOptions: CustomerPortalPriceOption[];
   smartConnectTiers: SmartConnectPriceTier[];
@@ -31,6 +39,7 @@ export type EditablePricingConfig = PricingCatalog & {
   planningAppUserMonthly: number;
   twinfieldConnectionMonthly: number;
   serviceCostOptions: ServiceCostPriceOption[];
+  travelCostRegions: TravelCostRegion[];
   updatedAt?: string | null;
 };
 
@@ -84,6 +93,21 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
   serviceCostOptions: [
     { key: "ccv", name: "CCV", annualPrice: 175.8 },
     { key: "worldline", name: "Worldline", annualPrice: 175.8 },
+  ],
+  travelCostRegions: [
+    { region: 1, fromKm: 0, toKm: 20, price: 0 },
+    { region: 2, fromKm: 20, toKm: 40, price: 39 },
+    { region: 3, fromKm: 40, toKm: 60, price: 64 },
+    { region: 4, fromKm: 60, toKm: 80, price: 89 },
+    { region: 5, fromKm: 80, toKm: 100, price: 114 },
+    { region: 6, fromKm: 100, toKm: 120, price: 139 },
+    { region: 7, fromKm: 120, toKm: 140, price: 164 },
+    { region: 8, fromKm: 140, toKm: 160, price: 189 },
+    { region: 9, fromKm: 160, toKm: 180, price: 214 },
+    { region: 10, fromKm: 180, toKm: 200, price: 239 },
+    { region: 11, fromKm: 200, toKm: 220, price: 264 },
+    { region: 12, fromKm: 220, toKm: 246, price: 289 },
+    { region: 13, fromKm: null, toKm: null, label: "Eilanden / maatwerk", price: 399 },
   ],
   updatedAt: null,
 };
@@ -162,6 +186,19 @@ function normalizeServiceCostOption(input: unknown, fallback: ServiceCostPriceOp
   };
 }
 
+function normalizeTravelCostRegion(input: unknown, fallback: TravelCostRegion): TravelCostRegion {
+  const source = input && typeof input === "object" ? (input as Partial<TravelCostRegion>) : {};
+  const label = typeof source.label === "string" && source.label.trim() ? source.label.trim() : fallback.label ?? null;
+
+  return {
+    region: Math.max(1, Math.floor(safeNumber(source.region, fallback.region))),
+    fromKm: label ? null : safeNumber(source.fromKm, fallback.fromKm ?? 0),
+    toKm: label ? null : safeNumber(source.toKm, fallback.toKm ?? 0),
+    label,
+    price: safeNumber(source.price, fallback.price),
+  };
+}
+
 function mapByKey(values: unknown) {
   const rows = Array.isArray(values) ? values : [];
   return new Map(rows.flatMap((row) => {
@@ -180,6 +217,7 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
   const customerPortalByKey = mapByKey(source.customerPortalOptions);
   const serviceCostByKey = mapByKey(source.serviceCostOptions);
   const smartConnectRows = Array.isArray(source.smartConnectTiers) ? source.smartConnectTiers : [];
+  const travelCostRows = Array.isArray(source.travelCostRegions) ? source.travelCostRegions : [];
 
   return {
     implementationDayRate: safeNumber(source.implementationDayRate, DEFAULT_PRICE_CONFIG.implementationDayRate),
@@ -202,6 +240,9 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
     ),
     serviceCostOptions: DEFAULT_PRICE_CONFIG.serviceCostOptions.map((fallback) =>
       normalizeServiceCostOption(serviceCostByKey.get(fallback.key), fallback),
+    ),
+    travelCostRegions: DEFAULT_PRICE_CONFIG.travelCostRegions.map((fallback, index) =>
+      normalizeTravelCostRegion(travelCostRows[index], fallback),
     ),
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : null,
   };

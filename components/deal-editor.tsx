@@ -202,20 +202,27 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     setStatus(result.warning ?? "Deal opnieuw berekend en opgeslagen.");
   }
 
-  function handlePdfExport() {
-    exportQuotePdf({
-      quoteTitle,
-      customerName,
-      contactName,
-      salesName,
-      notes,
-      includeVat,
-      totalUsers,
-      selectedModules: selectedModuleRows,
-      result: activeResult,
-      quoteLayout,
-      assetsExpansion,
-    });
+  async function handlePdfExport() {
+    setStatus("PDF wordt gemaakt...");
+
+    try {
+      await exportQuotePdf({
+        quoteTitle,
+        customerName,
+        contactName,
+        salesName,
+        notes,
+        includeVat,
+        totalUsers,
+        selectedModules: selectedModuleRows,
+        result: activeResult,
+        quoteLayout,
+        assetsExpansion,
+      });
+      setStatus("PDF is gemaakt.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "PDF maken mislukt.");
+    }
   }
 
   if (loading) {
@@ -454,7 +461,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <TextArea label="Notities" value={notes} onChange={setNotes} placeholder="Interne of commerciële notities" />
                 <div className="button-row">
                   <button type="button" className="primary-button" onClick={() => void handleSave()}><CloudUpload size={16} /> Opslaan en herberekenen</button>
-                  <button type="button" className="secondary-button" onClick={handlePdfExport}><Download size={16} /> Exporteer PDF</button>
+                  <button type="button" className="secondary-button" onClick={() => void handlePdfExport()}><Download size={16} /> Exporteer PDF</button>
                 </div>
                 {status ? <div className="save-status">{status}</div> : null}
               </div>

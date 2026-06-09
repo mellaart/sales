@@ -20,8 +20,49 @@ type PdfTableRow = {
   total: number;
 };
 
+type LoadedLogo = string | null;
+
+const SMART_TRADE_LOGO_URL = "/smart-trade-logo.png";
+const COMPANY_CONTACT_LINES = [
+  "Smart Trade",
+  "Pletterij 1A",
+  "2211 JT Noordwijkerhout",
+  "Nederland",
+  "",
+  "Telefoon: 0252 250 260",
+  "Mail: support@smarttrade.nl",
+];
+
+let logoDataUrlPromise: Promise<LoadedLogo> | null = null;
+
 function valueOrDash(value: string) {
   return value?.trim() ? value : "-";
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function getSmartTradeLogoDataUrl(): Promise<LoadedLogo> {
+  if (typeof window === "undefined") return null;
+
+  if (!logoDataUrlPromise) {
+    logoDataUrlPromise = fetch(SMART_TRADE_LOGO_URL)
+      .then((response) => {
+        if (!response.ok) throw new Error("Logo kon niet worden geladen.");
+        return response.blob();
+      })
+      .then(blobToDataUrl)
+      .catch(() => null);
+  }
+
+  return logoDataUrlPromise;
 }
 
 function addWrappedText(doc: jsPDF, text: string, x: number, y: number, width: number, lineHeight = 5) {
@@ -77,6 +118,55 @@ function addBullets(doc: jsPDF, bullets: string[], y: number) {
   });
 
   return y + 2;
+}
+
+function addQuoteHeader(
+  doc: jsPDF,
+  input: OfferTemplateInput,
+  layoutName: string,
+  logoDataUrl: LoadedLogo,
+) {
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, 210, 104, "F");
+
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, "PNG", 16, 8, 68, 47);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(21);
+    doc.setTextColor(17, 58, 86);
+    doc.text("Smart Trade", 16, 30);
+  }
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(25, 40, 55);
+  COMPANY_CONTACT_LINES.forEach((line, index) => {
+    const y = 13 + index * 4.4;
+    doc.setFont("helvetica", index === 0 ? "bold" : "normal");
+    doc.text(line, 194, y, { align: "right" });
+  });
+
+  doc.setDrawColor(219, 228, 238);
+  doc.line(16, 59, 194, 59);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(17, 58, 86);
+  doc.text(input.quoteTitle || `Offerte Smart Trade ${input.result.name}`, 16, 72);
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 233, 241);
+  doc.roundedRect(16, 80, 178, 18, 2, 2, "FD");
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(95, 112, 131);
+  doc.text(`Klant: ${valueOrDash(input.customerName)}`, 20, 87);
+  doc.text(`Contactpersoon: ${valueOrDash(input.contactName)}`, 20, 93);
+  doc.text(`Sales consultant: ${valueOrDash(input.salesName)}`, 112, 87);
+  doc.text(`Layout: ${layoutName}`, 112, 93);
+
+  return 110;
 }
 
 function addPriceTable(doc: jsPDF, title: string, rows: PdfTableRow[], y: number) {
@@ -272,7 +362,7 @@ function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhon
   }
 }
 
-export function exportQuotePdf(input: OfferTemplateInput) {
+export async function exportQuotePdf(input: OfferTemplateInput) {
   const doc = new jsPDF();
   const layout = getQuoteLayout(input.quoteLayout);
   const isCompactLayout = layout.key === "compact";
@@ -282,31 +372,9 @@ export function exportQuotePdf(input: OfferTemplateInput) {
   const licenseRows = getLicenseRows(input);
   const supportRows = getSupportRows(input);
   const moduleRows = getModuleRows(input);
+  const logoDataUrl = await getSmartTradeLogoDataUrl();
 
-  doc.setFillColor(17, 58, 86);
-  doc.rect(0, 0, 210, 28, "F");
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("Smart Trade", 16, 18);
-
-  doc.setTextColor(17, 58, 86);
-  doc.setFontSize(20);
-  doc.text(input.quoteTitle || `Offerte Smart Trade ${input.result.name}`, 16, 43);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(95, 112, 131);
-  doc.text(`Klant: ${valueOrDash(input.customerName)}`, 16, 54);
-  doc.text(`Contactpersoon: ${valueOrDash(input.contactName)}`, 16, 60);
-  doc.text(`Sales consultant: ${valueOrDash(input.salesName)}`, 16, 66);
-  doc.text(`Layout: ${layout.name}`, 16, 72);
-
-  doc.setDrawColor(219, 228, 238);
-  doc.line(16, 80, 194, 80);
-
-  let y = 90;
+  let y = addQuoteHeader(doc, input, layout.name, logoDataUrl);
 
   y = addParagraph(doc, text.greeting, y);
   y = addParagraph(doc, isAssetsExpansionLayout ? "Zoals besproken hierbij een offerte over wat jullie besproken hebben:" : text.intro, y);

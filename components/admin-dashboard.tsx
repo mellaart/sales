@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, ShieldCheck, UserPlus, Users2 } from "lucide-react";
+import { RefreshCw, Save, ShieldCheck, UserPlus, Users2 } from "lucide-react";
 import {
   canManageRoles,
   getSupabaseClient,
@@ -31,6 +31,8 @@ type RoleTabsResponse = {
   roleTabAccess?: unknown;
   persisted?: boolean;
 };
+
+type EditableProfileField = "job_title" | "workdays" | "mobile_phone";
 
 function toggleRoleTabAccess(
   currentAccess: RoleTabAccessMap,
@@ -65,6 +67,7 @@ export default function AdminDashboard() {
   const [fullName, setFullName] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("sales");
   const [busy, setBusy] = useState(false);
+  const [profileSavingId, setProfileSavingId] = useState<string | null>(null);
 
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [roleTabsLoading, setRoleTabsLoading] = useState(true);
@@ -106,6 +109,9 @@ export default function AdminDashboard() {
         .map((profile) => ({
           ...profile,
           full_name: profile.full_name ?? null,
+          job_title: profile.job_title ?? null,
+          workdays: profile.workdays ?? null,
+          mobile_phone: profile.mobile_phone ?? null,
           updated_at: profile.updated_at ?? null,
         }))
         .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
@@ -239,6 +245,65 @@ export default function AdminDashboard() {
     setStatus("Rol bijgewerkt.");
     await loadProfiles({ keepStatus: true });
     await refreshProfile();
+  }
+
+  function updateProfileField(profileId: string, field: EditableProfileField, value: string) {
+    setProfiles((currentProfiles) =>
+      currentProfiles.map((profile) =>
+        profile.id === profileId
+          ? {
+              ...profile,
+              [field]: value,
+            }
+          : profile,
+      ),
+    );
+  }
+
+  async function saveProfileSignature(profile: ProfileRecord) {
+    if (!supabase) return;
+
+    setProfileSavingId(profile.id);
+    setStatus("Handtekeninggegevens worden opgeslagen...");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/users/update-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: profile.id,
+          jobTitle: profile.job_title,
+          workdays: profile.workdays,
+          mobilePhone: profile.mobile_phone,
+        }),
+      });
+
+      const json = (await response.json().catch(() => ({}))) as { error?: string; metadataWarning?: string | null };
+
+      if (!response.ok) {
+        setStatus(json.error || "Handtekeninggegevens opslaan mislukt.");
+        return;
+      }
+
+      setStatus(json.metadataWarning ? `Profiel opgeslagen. Metadata waarschuwing: ${json.metadataWarning}` : "Handtekeninggegevens opgeslagen.");
+      await loadProfiles({ keepStatus: true });
+      await refreshProfile();
+    } catch {
+      setStatus("Er ging iets mis bij het opslaan van de handtekeninggegevens.");
+    } finally {
+      setProfileSavingId(null);
+    }
   }
 
   async function updateRoleTab(selectedRole: UserRole, tabKey: AppTabKey) {
@@ -454,6 +519,51 @@ export default function AdminDashboard() {
                     {profile.full_name || profile.email || profile.id}
                   </div>
                   <div className="subtext">{profile.email || "Geen e-mail"}</div>
+                </div>
+
+                <div className="field-grid-2">
+                  <label className="input-wrap">
+                    <span className="input-label">Functie</span>
+                    <input
+                      className="input"
+                      type="text"
+                      value={profile.job_title ?? ""}
+                      onChange={(event) => updateProfileField(profile.id, "job_title", event.target.value)}
+                      placeholder="IT Sales Consultant"
+                    />
+                  </label>
+
+                  <label className="input-wrap">
+                    <span className="input-label">Werkdagen</span>
+                    <input
+                      className="input"
+                      type="text"
+                      value={profile.workdays ?? ""}
+                      onChange={(event) => updateProfileField(profile.id, "workdays", event.target.value)}
+                      placeholder="di - wo - do - vr"
+                    />
+                  </label>
+
+                  <label className="input-wrap">
+                    <span className="input-label">Mobiel</span>
+                    <input
+                      className="input"
+                      type="tel"
+                      value={profile.mobile_phone ?? ""}
+                      onChange={(event) => updateProfileField(profile.id, "mobile_phone", event.target.value)}
+                      placeholder="+31 630 050 413"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    className="secondary-button create-user-button"
+                    disabled={profileSavingId === profile.id}
+                    onClick={() => void saveProfileSignature(profile)}
+                  >
+                    <Save size={16} />
+                    {profileSavingId === profile.id ? "Opslaan..." : "Handtekening opslaan"}
+                  </button>
                 </div>
 
                 <div className="button-row">

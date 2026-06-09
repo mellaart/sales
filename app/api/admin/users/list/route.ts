@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 const AUTH_METADATA_TIMEOUT_MS = 2000;
 
-function isMissingColumnError(message: string, column: "full_name" | "created_at") {
+function isMissingColumnError(message: string, column: string) {
   return (
     message.includes(`Could not find the '${column}' column of 'profiles' in the schema cache`) ||
     message.includes(`profiles.${column} does not exist`) ||
@@ -99,6 +99,9 @@ async function verifyAdmin(request: Request) {
 type AuthMetadata = {
   email: string | null;
   fullName: string | null;
+  jobTitle: string | null;
+  workdays: string | null;
+  mobilePhone: string | null;
 };
 
 async function loadAuthMetadata(
@@ -134,6 +137,9 @@ async function loadAuthMetadata(
           {
             email: normalizeText(data.user.email),
             fullName,
+            jobTitle: normalizeText(metadata.job_title),
+            workdays: normalizeText(metadata.workdays),
+            mobilePhone: normalizeText(metadata.mobile_phone),
           },
         ] as [string, AuthMetadata];
       } catch {
@@ -149,9 +155,9 @@ async function loadAuthMetadata(
 
 async function loadProfiles(client: SupabaseClient) {
   const profileSelects = [
+    "id,role,full_name,job_title,workdays,mobile_phone,email,created_at",
+    "id,role,full_name,job_title,workdays,mobile_phone,email",
     "id,role,full_name,email,created_at",
-    "id,role,email,created_at",
-    "id,role,full_name,email",
     "id,role,email",
   ];
 
@@ -169,6 +175,9 @@ async function loadProfiles(client: SupabaseClient) {
 
     const isSchemaError =
       isMissingColumnError(result.error.message, "full_name") ||
+      isMissingColumnError(result.error.message, "job_title") ||
+      isMissingColumnError(result.error.message, "workdays") ||
+      isMissingColumnError(result.error.message, "mobile_phone") ||
       isMissingColumnError(result.error.message, "created_at");
 
     if (!isSchemaError) {
@@ -211,6 +220,9 @@ export async function GET(request: Request) {
         id: string;
         role?: UserRole;
         full_name?: string | null;
+        job_title?: string | null;
+        workdays?: string | null;
+        mobile_phone?: string | null;
         email?: string | null;
         created_at?: string | null;
       };
@@ -226,6 +238,9 @@ export async function GET(request: Request) {
         id: profile.id,
         email,
         full_name: fullName,
+        job_title: normalizeText(profile.job_title) ?? authMetadata?.jobTitle ?? null,
+        workdays: normalizeText(profile.workdays) ?? authMetadata?.workdays ?? null,
+        mobile_phone: normalizeText(profile.mobile_phone) ?? authMetadata?.mobilePhone ?? null,
         role: profile.role ?? "sales",
         created_at: profile.created_at ?? null,
         updated_at: null,

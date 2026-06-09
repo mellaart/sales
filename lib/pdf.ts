@@ -32,6 +32,25 @@ const COMPANY_CONTACT_LINES = [
   "Telefoon: 0252 250 260",
   "Mail: support@smarttrade.nl",
 ];
+const DEFAULT_SALES_TITLE = "IT Sales Consultant";
+const DEFAULT_OFFICE_PHONE = "+31 252 250 260";
+const DEFAULT_WEBSITE = "www.smarttrade.nl";
+const SIGNATURE_DISCLAIMER =
+  "De inhoud van dit bericht is alleen bestemd voor de geadresseerde en kan vertrouwelijke of persoonlijke informatie bevatten. Als u dit bericht onbedoeld heeft ontvangen, verzoeken wij u het te vernietigen en de afzender te informeren. Het is niet toegestaan om een bericht dat niet voor u bestemd is te vermenigvuldigen dan wel te verspreiden. Aan dit bericht inclusief de bijlagen kunnen geen rechten ontleend worden, tenzij schriftelijk anders wordt overeengekomen. Troublefree B.V. aanvaardt geen enkele aansprakelijkheid voor schade en/of kosten die voortvloeien uit onvolledige en/of foutieve informatie in e-mailberichten.";
+
+const SALES_SIGNATURE_PRESETS: Record<string, Partial<{
+  name: string;
+  title: string;
+  workdays: string;
+  mobilePhone: string;
+}>> = {
+  "erik@smarttrade.nl": {
+    name: "Erik Mellaart",
+    title: DEFAULT_SALES_TITLE,
+    workdays: "di - wo - do - vr",
+    mobilePhone: "+31 630 050 413",
+  },
+};
 
 let logoDataUrlPromise: Promise<LoadedLogo> | null = null;
 
@@ -308,40 +327,100 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
   return y + 13;
 }
 
-function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number) {
-  y = ensurePage(doc, y, 38);
+function getSignatureDetails(input: OfferTemplateInput) {
+  const preset = input.salesEmail ? SALES_SIGNATURE_PRESETS[input.salesEmail.toLowerCase()] : undefined;
+
+  return {
+    name: preset?.name || input.salesName || "Smart Trade",
+    title: input.salesTitle || preset?.title || DEFAULT_SALES_TITLE,
+    workdays: input.salesWorkdays || preset?.workdays || "",
+    mobilePhone: input.salesPhone || preset?.mobilePhone || "",
+    email: input.salesEmail || "",
+    officePhone: DEFAULT_OFFICE_PHONE,
+    website: DEFAULT_WEBSITE,
+  };
+}
+
+function addContactLine(doc: jsPDF, label: string, value: string, x: number, y: number, color: [number, number, number] = [25, 40, 55]) {
+  if (!value) return y;
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(25, 40, 55);
+  doc.text(label, x, y);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...color);
+  doc.text(value, x + 8, y);
+
+  return y + 6;
+}
+
+function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number, logoDataUrl: LoadedLogo) {
+  const signature = getSignatureDetails(input);
+
+  y = ensurePage(doc, y, 120);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(25, 40, 55);
   doc.text("Met vriendelijke groet,", 16, y);
-  y += 9;
+  y += 12;
+
+  const signatureTop = y;
 
   doc.setFont("helvetica", "bold");
-  doc.text(input.salesName || "Smart Trade", 16, y);
-  y += 6;
+  doc.setFontSize(17);
+  doc.setTextColor(38, 121, 214);
+  doc.text(signature.name, 16, y);
+  y += 7;
 
   doc.setFont("helvetica", "normal");
-  doc.text("IT Sales Consultant", 16, y);
-  y += 6;
+  doc.setFontSize(12);
+  doc.setTextColor(25, 40, 55);
+  doc.text(signature.title, 16, y);
+  y += 14;
 
-  if (input.salesPhone) {
-    doc.text(`M ${input.salesPhone}`, 16, y);
-    y += 6;
+  if (signature.workdays) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Werkdagen", 16, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`| ${signature.workdays}`, 43, y);
+    y += 14;
   }
 
-  if (input.salesEmail) {
-    doc.text(`E ${input.salesEmail}`, 16, y);
-    y += 6;
+  y = addContactLine(doc, "M", signature.mobilePhone, 16, y, [64, 122, 145]);
+  y = addContactLine(doc, "T", signature.officePhone, 16, y, [64, 122, 145]);
+  y = addContactLine(doc, "E", signature.email, 16, y);
+  y = addContactLine(doc, "W", signature.website, 16, y);
+
+  const companyY = Math.max(y + 8, signatureTop + 62);
+  doc.setFontSize(11);
+  doc.setTextColor(25, 40, 55);
+  doc.setFont("helvetica", "bold");
+  doc.text("Troublefree B.V.", 52, companyY);
+  doc.setFont("helvetica", "normal");
+  doc.text("Pletterij 1A", 52, companyY + 7);
+  doc.text("2211 JT Noordwijkerhout", 52, companyY + 14);
+  doc.text("Nederland", 52, companyY + 21);
+
+  doc.setDrawColor(38, 121, 214);
+  doc.setLineWidth(0.35);
+  doc.line(105, signatureTop - 10, 105, signatureTop + 76);
+
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, "PNG", 121, signatureTop + 20, 58, 40);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.setTextColor(17, 58, 86);
+    doc.text("Smart Trade", 122, signatureTop + 40);
   }
 
-  doc.text("W www.smarttrade.nl", 16, y);
-  y += 9;
-
+  const disclaimerY = signatureTop + 96;
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(95, 112, 131);
-  doc.text("Troublefree B.V. | Pletterij 1A | 2211 JT Noordwijkerhout | Nederland", 16, y);
+  doc.setTextColor(25, 40, 55);
+  addWrappedText(doc, SIGNATURE_DISCLAIMER, 16, disclaimerY, 178, 4.5);
 
-  return y;
+  return disclaimerY + 28;
 }
 
 function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhone?: string) {
@@ -389,7 +468,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
     y = addParagraph(doc, text.closing, y);
     y = addParagraph(doc, text.contact, y);
 
-    addSignature(doc, input, y);
+    addSignature(doc, input, y, logoDataUrl);
     addFooter(doc, input.salesName, input.salesEmail, input.salesPhone);
 
     const fileName = `${(input.customerName || "offerte-uitbreiding-smart-trade")
@@ -474,7 +553,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   y = addParagraph(doc, text.closing, y);
   y = addParagraph(doc, text.contact, y);
 
-  addSignature(doc, input, y);
+  addSignature(doc, input, y, logoDataUrl);
 
   addFooter(doc, input.salesName, input.salesEmail, input.salesPhone);
 

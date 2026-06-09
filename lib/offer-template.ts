@@ -18,6 +18,8 @@ export type OfferTemplateInput = {
   salesName: string;
   salesEmail?: string;
   salesPhone?: string;
+  salesTitle?: string;
+  salesWorkdays?: string;
   notes?: string;
   includeVat: boolean;
   totalUsers: number;

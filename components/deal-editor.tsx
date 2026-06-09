@@ -72,6 +72,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [assetsExpansion, setAssetsExpansion] = useState<AssetExpansionSummary | null>(null);
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
+  const currentSalesEmail = useMemo(() => user?.email ?? profile?.email ?? "", [profile, user]);
 
   useEffect(() => {
     async function loadDeal() {
@@ -210,7 +211,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         quoteTitle,
         customerName,
         contactName,
-        salesName,
+        salesName: currentSalesName || salesName,
+        salesEmail: currentSalesEmail,
         notes,
         includeVat,
         totalUsers,

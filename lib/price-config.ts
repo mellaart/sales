@@ -310,7 +310,7 @@ function normalizePostcodeRegion(input: unknown, fallback: PostcodeRegion): Post
     postcode: Math.max(0, Math.floor(safeNumber(source.postcode, fallback.postcode))),
     description: typeof source.description === "string" ? source.description.trim() : fallback.description,
     region: Math.max(1, Math.floor(safeNumber(source.region, fallback.region))),
-    kilometers: safeNumber(source.kilometers, fallback.kilometers),
+    kilometers: Math.max(0, Math.round(safeNumber(source.kilometers, fallback.kilometers))),
   };
 }
 

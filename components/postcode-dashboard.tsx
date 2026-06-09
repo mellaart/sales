@@ -152,7 +152,7 @@ export default function PostcodeDashboard() {
         const postcodeLabel = String(row.postcode);
         const descriptionLabel = row.description.toLowerCase();
         const regionLabel = String(row.region);
-        const kilometersLabel = formatFixedNumber(row.kilometers, 2);
+        const kilometersLabel = formatFixedNumber(row.kilometers, 0);
         const priceLabel = price === null ? "" : euro.format(price);
 
         return (
@@ -413,7 +413,6 @@ export default function PostcodeDashboard() {
                     <td className="price-table-money-cell">
                       <NumberCellInput
                         label={`Kilometers postcode ${postcodeRow.postcode}`}
-                        decimals={2}
                         value={postcodeRow.kilometers}
                         onChange={(value) => updatePostcodeRow(index, { kilometers: value })}
                       />

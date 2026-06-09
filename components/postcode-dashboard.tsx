@@ -9,6 +9,7 @@ import {
   type EditablePricingConfig,
   type PostcodeRegion,
 } from "@/lib/price-config";
+import { euro } from "@/lib/pricing";
 import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -17,6 +18,22 @@ import { StatusPill } from "@/components/ui";
 type PricesResponse = {
   error?: string;
   pricingConfig?: unknown;
+};
+
+type PostcodeFilters = {
+  postcode: string;
+  description: string;
+  region: string;
+  kilometers: string;
+  price: string;
+};
+
+const EMPTY_FILTERS: PostcodeFilters = {
+  postcode: "",
+  description: "",
+  region: "",
+  kilometers: "",
+  price: "",
 };
 
 function clonePricingConfig(config: EditablePricingConfig) {
@@ -118,11 +135,35 @@ export default function PostcodeDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
+  const [filters, setFilters] = useState<PostcodeFilters>(EMPTY_FILTERS);
 
   const regionCount = useMemo(
     () => new Set(draftConfig.postcodeRegions.map((row) => row.region)).size,
     [draftConfig.postcodeRegions],
   );
+  const travelPriceByRegion = useMemo(
+    () => new Map(draftConfig.travelCostRegions.map((travelRegion) => [travelRegion.region, travelRegion.price])),
+    [draftConfig.travelCostRegions],
+  );
+  const filteredPostcodeRows = useMemo(() => {
+    return draftConfig.postcodeRegions
+      .map((row, index) => ({ row, index, price: travelPriceByRegion.get(row.region) ?? null }))
+      .filter(({ row, price }) => {
+        const postcodeLabel = String(row.postcode);
+        const descriptionLabel = row.description.toLowerCase();
+        const regionLabel = String(row.region);
+        const kilometersLabel = formatFixedNumber(row.kilometers, 2);
+        const priceLabel = price === null ? "" : euro.format(price);
+
+        return (
+          postcodeLabel.includes(filters.postcode.trim()) &&
+          descriptionLabel.includes(filters.description.trim().toLowerCase()) &&
+          regionLabel.includes(filters.region.trim()) &&
+          kilometersLabel.includes(filters.kilometers.trim()) &&
+          priceLabel.toLowerCase().includes(filters.price.trim().toLowerCase())
+        );
+      });
+  }, [draftConfig.postcodeRegions, filters, travelPriceByRegion]);
   const updatedLabel = draftConfig.updatedAt
     ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draftConfig.updatedAt))
     : "Nog niet opgeslagen";
@@ -143,6 +184,10 @@ export default function PostcodeDashboard() {
         rowIndex === index ? { ...row, ...values } : row,
       ),
     }));
+  }
+
+  function updateFilter(filterKey: keyof PostcodeFilters, value: string) {
+    setFilters((currentFilters) => ({ ...currentFilters, [filterKey]: value }));
   }
 
   async function reloadPostcodes() {
@@ -291,10 +336,58 @@ export default function PostcodeDashboard() {
                   <th>Omschrijving</th>
                   <th className="price-table-money-cell">Regio</th>
                   <th className="price-table-money-cell">Kilometers</th>
+                  <th className="price-table-money-cell">Prijs</th>
+                </tr>
+                <tr className="price-filter-row">
+                  <th>
+                    <input
+                      aria-label="Filter op postcode"
+                      className="price-table-filter-input price-table-input-number"
+                      placeholder="Filter"
+                      value={filters.postcode}
+                      onChange={(event) => updateFilter("postcode", event.target.value)}
+                    />
+                  </th>
+                  <th>
+                    <input
+                      aria-label="Filter op omschrijving"
+                      className="price-table-filter-input"
+                      placeholder="Filter"
+                      value={filters.description}
+                      onChange={(event) => updateFilter("description", event.target.value)}
+                    />
+                  </th>
+                  <th>
+                    <input
+                      aria-label="Filter op regio"
+                      className="price-table-filter-input price-table-input-number"
+                      placeholder="Filter"
+                      value={filters.region}
+                      onChange={(event) => updateFilter("region", event.target.value)}
+                    />
+                  </th>
+                  <th>
+                    <input
+                      aria-label="Filter op kilometers"
+                      className="price-table-filter-input price-table-input-number"
+                      placeholder="Filter"
+                      value={filters.kilometers}
+                      onChange={(event) => updateFilter("kilometers", event.target.value)}
+                    />
+                  </th>
+                  <th>
+                    <input
+                      aria-label="Filter op prijs"
+                      className="price-table-filter-input price-table-input-number"
+                      placeholder="Filter"
+                      value={filters.price}
+                      onChange={(event) => updateFilter("price", event.target.value)}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {draftConfig.postcodeRegions.map((postcodeRow, index) => (
+                {filteredPostcodeRows.map(({ row: postcodeRow, index, price }) => (
                   <tr key={`postcode-row-${index}`}>
                     <td className="price-table-money-cell">
                       <NumberCellInput
@@ -324,6 +417,9 @@ export default function PostcodeDashboard() {
                         value={postcodeRow.kilometers}
                         onChange={(value) => updatePostcodeRow(index, { kilometers: value })}
                       />
+                    </td>
+                    <td className="price-table-money-cell price-table-static-money">
+                      {price === null ? "Niet gevonden" : euro.format(price)}
                     </td>
                   </tr>
                 ))}

@@ -1440,6 +1440,11 @@ td {
   min-width: 560px;
 }
 
+.price-table.travel-cost-table {
+  margin-top: 18px;
+  min-width: 720px;
+}
+
 .price-table th,
 .price-table td {
   padding: 10px 12px;

@@ -4,11 +4,17 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
+  job_title text,
+  workdays text,
+  mobile_phone text,
   role text not null default 'sales' check (role in ('sales', 'support', 'consultant', 'manager', 'admin')),
   created_at timestamptz not null default now()
 );
 
 alter table public.profiles enable row level security;
+alter table public.profiles add column if not exists job_title text;
+alter table public.profiles add column if not exists workdays text;
+alter table public.profiles add column if not exists mobile_phone text;
 
 create or replace function public.handle_new_user_profile()
 returns trigger
@@ -17,16 +23,22 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, full_name, role)
+  insert into public.profiles (id, email, full_name, job_title, workdays, mobile_phone, role)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    new.raw_user_meta_data->>'job_title',
+    new.raw_user_meta_data->>'workdays',
+    new.raw_user_meta_data->>'mobile_phone',
     'sales'
   )
   on conflict (id) do update
     set email = excluded.email,
-        full_name = coalesce(public.profiles.full_name, excluded.full_name);
+        full_name = coalesce(public.profiles.full_name, excluded.full_name),
+        job_title = coalesce(public.profiles.job_title, excluded.job_title),
+        workdays = coalesce(public.profiles.workdays, excluded.workdays),
+        mobile_phone = coalesce(public.profiles.mobile_phone, excluded.mobile_phone);
   return new;
 end;
 $$;

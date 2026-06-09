@@ -73,6 +73,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
   const currentSalesEmail = useMemo(() => user?.email ?? profile?.email ?? "", [profile, user]);
+  const currentSalesTitle = profile?.job_title ?? "";
+  const currentSalesWorkdays = profile?.workdays ?? "";
+  const currentSalesPhone = profile?.mobile_phone ?? "";
 
   useEffect(() => {
     async function loadDeal() {
@@ -213,6 +216,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         contactName,
         salesName: currentSalesName || salesName,
         salesEmail: currentSalesEmail,
+        salesPhone: currentSalesPhone,
+        salesTitle: currentSalesTitle,
+        salesWorkdays: currentSalesWorkdays,
         notes,
         includeVat,
         totalUsers,

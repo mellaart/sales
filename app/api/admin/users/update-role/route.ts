@@ -98,8 +98,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
+    const { data: authUserData } = await verified.service.auth.admin.getUserById(userId);
     const { error: metadataError } = await verified.service.auth.admin.updateUserById(userId, {
-      user_metadata: { role },
+      user_metadata: {
+        ...(authUserData.user?.user_metadata ?? {}),
+        role,
+      },
     });
 
     if (metadataError) {

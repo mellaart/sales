@@ -7,6 +7,9 @@ export type ProfileRecord = {
   id: string;
   email: string | null;
   full_name?: string | null;
+  job_title?: string | null;
+  workdays?: string | null;
+  mobile_phone?: string | null;
   role: UserRole;
   created_at?: string | null;
   updated_at?: string | null;
@@ -137,6 +140,8 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
   }
 
   const profileSelects = [
+    "id,email,full_name,job_title,workdays,mobile_phone,role,created_at,updated_at",
+    "id,email,full_name,job_title,workdays,mobile_phone,role,created_at",
     "id,email,full_name,role,created_at,updated_at",
     "id,email,full_name,role,created_at",
     "id,email,role,created_at,updated_at",
@@ -154,6 +159,12 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
       const isSchemaColumnError =
         error.message.includes("profiles.full_name does not exist") ||
         error.message.includes("column profiles.full_name does not exist") ||
+        error.message.includes("profiles.job_title does not exist") ||
+        error.message.includes("column profiles.job_title does not exist") ||
+        error.message.includes("profiles.workdays does not exist") ||
+        error.message.includes("column profiles.workdays does not exist") ||
+        error.message.includes("profiles.mobile_phone does not exist") ||
+        error.message.includes("column profiles.mobile_phone does not exist") ||
         error.message.includes("profiles.updated_at does not exist") ||
         error.message.includes("column profiles.updated_at does not exist");
 
@@ -174,6 +185,9 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
       id: profile.id,
       email: profile.email,
       full_name: profile.full_name ?? null,
+      job_title: profile.job_title ?? null,
+      workdays: profile.workdays ?? null,
+      mobile_phone: profile.mobile_phone ?? null,
       role: profile.role,
       created_at: profile.created_at,
       updated_at: profile.updated_at ?? null,

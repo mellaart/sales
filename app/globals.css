@@ -1445,6 +1445,10 @@ td {
   min-width: 720px;
 }
 
+.price-table.postcode-table {
+  min-width: 760px;
+}
+
 .price-table th,
 .price-table td {
   padding: 10px 12px;
@@ -1517,6 +1521,15 @@ td {
 
 .price-table-input.text {
   min-width: 180px;
+}
+
+.postcode-table td:first-child,
+.postcode-table th:first-child {
+  min-width: 130px;
+}
+
+.postcode-description-input {
+  min-width: 280px;
 }
 
 .price-table-input:focus {

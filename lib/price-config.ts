@@ -32,6 +32,13 @@ export type TravelCostRegion = {
   price: number;
 };
 
+export type PostcodeRegion = {
+  postcode: number;
+  description: string;
+  region: number;
+  kilometers: number;
+};
+
 export type EditablePricingConfig = PricingCatalog & {
   customerPortalOptions: CustomerPortalPriceOption[];
   smartConnectTiers: SmartConnectPriceTier[];
@@ -40,6 +47,7 @@ export type EditablePricingConfig = PricingCatalog & {
   twinfieldConnectionMonthly: number;
   serviceCostOptions: ServiceCostPriceOption[];
   travelCostRegions: TravelCostRegion[];
+  postcodeRegions: PostcodeRegion[];
   updatedAt?: string | null;
 };
 
@@ -108,6 +116,102 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { region: 11, fromKm: 200, toKm: 220, price: 264 },
     { region: 12, fromKm: 220, toKm: 246, price: 289 },
     { region: 13, fromKm: null, toKm: null, label: "Eilanden / maatwerk", price: 399 },
+  ],
+  postcodeRegions: [
+    { postcode: 10, description: "Amsterdam", region: 2, kilometers: 38.96 },
+    { postcode: 11, description: "Edam / Amstelveen", region: 3, kilometers: 43.54 },
+    { postcode: 12, description: "Hilversum", region: 4, kilometers: 65.57 },
+    { postcode: 13, description: "Abcoude / Almere", region: 4, kilometers: 62.78 },
+    { postcode: 14, description: "Bussum / Uithoorn / Purmerend", region: 3, kilometers: 50.35 },
+    { postcode: 15, description: "Zaandam", region: 3, kilometers: 50.81 },
+    { postcode: 16, description: "Hoorn", region: 5, kilometers: 83.63 },
+    { postcode: 17, description: "Schagen", region: 5, kilometers: 91.2 },
+    { postcode: 17, description: "Texel", region: 13, kilometers: 333 },
+    { postcode: 18, description: "Alkmaar", region: 4, kilometers: 66.21 },
+    { postcode: 19, description: "IJmuiden - Egmond", region: 3, kilometers: 49.79 },
+    { postcode: 20, description: "Haarlem", region: 2, kilometers: 26.09 },
+    { postcode: 21, description: "Lisse", region: 2, kilometers: 15.5 },
+    { postcode: 22, description: "Noordwijk", region: 2, kilometers: 20.28 },
+    { postcode: 22, description: "Noordwijkerhout", region: 1, kilometers: 0 },
+    { postcode: 23, description: "Leiden", region: 2, kilometers: 15.5 },
+    { postcode: 24, description: "Alphen aan den Rijn", region: 2, kilometers: 29.59 },
+    { postcode: 25, description: "Den Haag", region: 2, kilometers: 31.35 },
+    { postcode: 26, description: "Delft", region: 3, kilometers: 40.58 },
+    { postcode: 27, description: "Zoetermeer", region: 2, kilometers: 36.6 },
+    { postcode: 28, description: "Gouda", region: 3, kilometers: 54.64 },
+    { postcode: 29, description: "Capelle aan den IJssel", region: 4, kilometers: 64.14 },
+    { postcode: 30, description: "Rotterdam", region: 3, kilometers: 52.74 },
+    { postcode: 31, description: "Schiedam / Vlaardingen", region: 3, kilometers: 51.24 },
+    { postcode: 32, description: "Spijkenisse", region: 4, kilometers: 71.86 },
+    { postcode: 33, description: "Dordrecht", region: 4, kilometers: 73.85 },
+    { postcode: 34, description: "Woerden", region: 4, kilometers: 64.69 },
+    { postcode: 35, description: "Utrecht", region: 4, kilometers: 69.32 },
+    { postcode: 36, description: "Maarssen / Mijdrecht", region: 3, kilometers: 52.76 },
+    { postcode: 37, description: "Soest / Barneveld", region: 5, kilometers: 82.67 },
+    { postcode: 38, description: "Amersfoort", region: 5, kilometers: 90.85 },
+    { postcode: 39, description: "Veenendaal / Houten", region: 5, kilometers: 93.4 },
+    { postcode: 40, description: "Tiel", region: 6, kilometers: 112.15 },
+    { postcode: 41, description: "Culemborg", region: 5, kilometers: 91.12 },
+    { postcode: 42, description: "Gorinchem", region: 5, kilometers: 97.27 },
+    { postcode: 43, description: "Zierikzee", region: 8, kilometers: 148.37 },
+    { postcode: 44, description: "Goes", region: 8, kilometers: 146.76 },
+    { postcode: 45, description: "Breskens", region: 10, kilometers: 187.21 },
+    { postcode: 46, description: "Bergen op Zoom", region: 6, kilometers: 112.89 },
+    { postcode: 47, description: "Roosendaal", region: 6, kilometers: 104.02 },
+    { postcode: 48, description: "Breda", region: 6, kilometers: 102.72 },
+    { postcode: 49, description: "Oosterhout", region: 6, kilometers: 103.91 },
+    { postcode: 50, description: "Tilburg", region: 7, kilometers: 131.11 },
+    { postcode: 51, description: "Kaatsheuvel", region: 6, kilometers: 118.48 },
+    { postcode: 52, description: "Den Bosch", region: 7, kilometers: 119.56 },
+    { postcode: 53, description: "Oss", region: 7, kilometers: 125.01 },
+    { postcode: 54, description: "Uden", region: 8, kilometers: 143.45 },
+    { postcode: 55, description: "Valkenswaard", region: 9, kilometers: 160.67 },
+    { postcode: 56, description: "Eindhoven", region: 8, kilometers: 149.97 },
+    { postcode: 57, description: "Helmond", region: 9, kilometers: 162.87 },
+    { postcode: 58, description: "Venray", region: 10, kilometers: 184.04 },
+    { postcode: 59, description: "Venlo", region: 11, kilometers: 205.02 },
+    { postcode: 60, description: "Weert", region: 10, kilometers: 195.51 },
+    { postcode: 61, description: "Geleen", region: 12, kilometers: 220.7 },
+    { postcode: 62, description: "Maastricht", region: 12, kilometers: 242.14 },
+    { postcode: 63, description: "Valkenburg", region: 12, kilometers: 241.15 },
+    { postcode: 64, description: "Heerlen", region: 12, kilometers: 240.29 },
+    { postcode: 65, description: "Nijmegen", region: 8, kilometers: 152.81 },
+    { postcode: 66, description: "Wijchen", region: 7, kilometers: 138.34 },
+    { postcode: 67, description: "Ede", region: 6, kilometers: 110.42 },
+    { postcode: 68, description: "Arnhem", region: 7, kilometers: 133.46 },
+    { postcode: 69, description: "Dieren", region: 8, kilometers: 143.14 },
+    { postcode: 70, description: "Doetinchem", region: 9, kilometers: 165.29 },
+    { postcode: 71, description: "Winterswijk", region: 10, kilometers: 184.74 },
+    { postcode: 72, description: "Zutphen", region: 8, kilometers: 154.76 },
+    { postcode: 73, description: "Apeldoorn", region: 7, kilometers: 125.33 },
+    { postcode: 74, description: "Deventer", region: 8, kilometers: 158.74 },
+    { postcode: 75, description: "Enschede", region: 10, kilometers: 191.47 },
+    { postcode: 76, description: "Almelo", region: 10, kilometers: 185.55 },
+    { postcode: 77, description: "Hardenberg", region: 10, kilometers: 183.94 },
+    { postcode: 78, description: "Emmen", region: 12, kilometers: 221.72 },
+    { postcode: 79, description: "Hoogeveen", region: 10, kilometers: 181.13 },
+    { postcode: 80, description: "Zwolle", region: 8, kilometers: 139.71 },
+    { postcode: 81, description: "Epe", region: 8, kilometers: 149.27 },
+    { postcode: 82, description: "Lelystad", region: 6, kilometers: 106.46 },
+    { postcode: 83, description: "Emmeloord", region: 8, kilometers: 140.69 },
+    { postcode: 84, description: "Heereveen", region: 9, kilometers: 170.3 },
+    { postcode: 85, description: "Joure", region: 8, kilometers: 148.59 },
+    { postcode: 86, description: "Sneek", region: 8, kilometers: 159.18 },
+    { postcode: 87, description: "Bolsward", region: 8, kilometers: 151.33 },
+    { postcode: 88, description: "Harlingen", region: 8, kilometers: 156 },
+    { postcode: 88, description: "Vlieland / Terschelling", region: 13, kilometers: 333 },
+    { postcode: 89, description: "Leeuwarden", region: 9, kilometers: 172.75 },
+    { postcode: 90, description: "Grouw", region: 9, kilometers: 173.02 },
+    { postcode: 91, description: "Ameland / Schiermonnikoog", region: 13, kilometers: 333 },
+    { postcode: 91, description: "Dokkum", region: 11, kilometers: 209.9 },
+    { postcode: 92, description: "Drachten", region: 10, kilometers: 189.2 },
+    { postcode: 93, description: "Roden", region: 11, kilometers: 202.11 },
+    { postcode: 94, description: "Assen", region: 12, kilometers: 221.75 },
+    { postcode: 95, description: "Stadskanaal", region: 12, kilometers: 246.43 },
+    { postcode: 96, description: "Veendam", region: 12, kilometers: 242.99 },
+    { postcode: 97, description: "Groningen", region: 11, kilometers: 215.27 },
+    { postcode: 98, description: "Zuidhorn", region: 11, kilometers: 204.9 },
+    { postcode: 99, description: "Delftzijl", region: 12, kilometers: 239.86 },
   ],
   updatedAt: null,
 };
@@ -199,6 +303,17 @@ function normalizeTravelCostRegion(input: unknown, fallback: TravelCostRegion): 
   };
 }
 
+function normalizePostcodeRegion(input: unknown, fallback: PostcodeRegion): PostcodeRegion {
+  const source = input && typeof input === "object" ? (input as Partial<PostcodeRegion>) : {};
+
+  return {
+    postcode: Math.max(0, Math.floor(safeNumber(source.postcode, fallback.postcode))),
+    description: typeof source.description === "string" ? source.description.trim() : fallback.description,
+    region: Math.max(1, Math.floor(safeNumber(source.region, fallback.region))),
+    kilometers: safeNumber(source.kilometers, fallback.kilometers),
+  };
+}
+
 function mapByKey(values: unknown) {
   const rows = Array.isArray(values) ? values : [];
   return new Map(rows.flatMap((row) => {
@@ -218,6 +333,10 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
   const serviceCostByKey = mapByKey(source.serviceCostOptions);
   const smartConnectRows = Array.isArray(source.smartConnectTiers) ? source.smartConnectTiers : [];
   const travelCostRows = Array.isArray(source.travelCostRegions) ? source.travelCostRegions : [];
+  const postcodeRows =
+    Array.isArray(source.postcodeRegions) && source.postcodeRegions.length > 0
+      ? source.postcodeRegions
+      : DEFAULT_PRICE_CONFIG.postcodeRegions;
 
   return {
     implementationDayRate: safeNumber(source.implementationDayRate, DEFAULT_PRICE_CONFIG.implementationDayRate),
@@ -243,6 +362,14 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
     ),
     travelCostRegions: DEFAULT_PRICE_CONFIG.travelCostRegions.map((fallback, index) =>
       normalizeTravelCostRegion(travelCostRows[index], fallback),
+    ),
+    postcodeRegions: postcodeRows.map((row, index) =>
+      normalizePostcodeRegion(row, DEFAULT_PRICE_CONFIG.postcodeRegions[index] ?? {
+        postcode: 0,
+        description: "",
+        region: 1,
+        kilometers: 0,
+      }),
     ),
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : null,
   };

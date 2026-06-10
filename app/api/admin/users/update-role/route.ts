@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isProtectedAdminEmail } from "@/lib/protected-admin";
+import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import type { UserRole } from "@/lib/supabase";
 
 const allowedRoles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
@@ -28,13 +30,15 @@ async function verifyAdmin(request: Request) {
 
   if (userError || !userData.user) return { ok: false, message: "Ongeldige sessie." } as const;
 
+  await ensureProtectedAdminRole(service, userData.user);
+
   const { data: profile, error: profileError } = await service
     .from("profiles")
     .select("role")
     .eq("id", userData.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.role !== "admin") {
+  if (!isProtectedAdminEmail(userData.user.email) && (profileError || !profile || profile.role !== "admin")) {
     return { ok: false, message: "Geen toegang." } as const;
   }
 
@@ -66,7 +70,7 @@ export async function POST(request: Request) {
 
     const { data: existingProfile, error: profileLookupError } = await verified.service
       .from("profiles")
-      .select("id")
+      .select("id,email")
       .eq("id", userId)
       .maybeSingle();
 
@@ -74,15 +78,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileLookupError.message }, { status: 500 });
     }
 
+    const { data: authUserData, error: authUserError } = await verified.service.auth.admin.getUserById(userId);
+    if (authUserError || !authUserData.user) {
+      return NextResponse.json({ error: authUserError?.message ?? "Gebruiker niet gevonden." }, { status: 404 });
+    }
+
     let profileError: { message: string } | null = null;
 
     if (existingProfile) {
+      if (
+        (
+          isProtectedAdminEmail((existingProfile as { email?: string | null }).email) ||
+          isProtectedAdminEmail(authUserData.user.email)
+        ) &&
+        role !== "admin"
+      ) {
+        return NextResponse.json({ error: "Deze gebruiker is beschermd en moet altijd admin blijven." }, { status: 400 });
+      }
+
       const { error } = await verified.service.from("profiles").update({ role }).eq("id", userId);
       profileError = error;
     } else {
-      const { data: authUserData, error: authUserError } = await verified.service.auth.admin.getUserById(userId);
-      if (authUserError || !authUserData.user) {
-        return NextResponse.json({ error: authUserError?.message ?? "Gebruiker niet gevonden." }, { status: 404 });
+      if (isProtectedAdminEmail(authUserData.user.email) && role !== "admin") {
+        return NextResponse.json({ error: "Deze gebruiker is beschermd en moet altijd admin blijven." }, { status: 400 });
       }
 
       const { error } = await verified.service.from("profiles").insert({
@@ -98,7 +116,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
 
-    const { data: authUserData } = await verified.service.auth.admin.getUserById(userId);
     const { error: metadataError } = await verified.service.auth.admin.updateUserById(userId, {
       user_metadata: {
         ...(authUserData.user?.user_metadata ?? {}),

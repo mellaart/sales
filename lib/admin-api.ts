@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import { isProtectedAdminEmail } from "@/lib/protected-admin";
+import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 
 export function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,13 +27,15 @@ export async function verifyAdmin(request: Request, service: ServiceClient) {
     return { ok: false as const, message: "Ongeldige sessie." };
   }
 
+  await ensureProtectedAdminRole(service, userData.user);
+
   const { data: profile, error: profileError } = await service
     .from("profiles")
     .select("role")
     .eq("id", userData.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.role !== "admin") {
+  if (!isProtectedAdminEmail(userData.user.email) && (profileError || !profile || profile.role !== "admin")) {
     return { ok: false as const, message: "Geen toegang." };
   }
 

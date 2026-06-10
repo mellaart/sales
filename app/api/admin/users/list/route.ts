@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getEffectiveUserRole, isProtectedAdminEmail } from "@/lib/protected-admin";
+import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import type { UserRole } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +84,10 @@ async function verifyAdmin(request: Request) {
     return { ok: false as const, message: "Server configuratie ontbreekt." };
   }
 
+  if (service) {
+    await ensureProtectedAdminRole(service, userData.user);
+  }
+
   const profileClient = service ?? sessionClient;
   const { data: profile, error: profileError } = await profileClient
     .from("profiles")
@@ -89,7 +95,7 @@ async function verifyAdmin(request: Request) {
     .eq("id", userData.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.role !== "admin") {
+  if (!isProtectedAdminEmail(userData.user.email) && (profileError || !profile || profile.role !== "admin")) {
     return { ok: false as const, message: "Alleen admins hebben toegang." };
   }
 
@@ -241,7 +247,7 @@ export async function GET(request: Request) {
         job_title: normalizeText(profile.job_title) ?? authMetadata?.jobTitle ?? null,
         workdays: normalizeText(profile.workdays) ?? authMetadata?.workdays ?? null,
         mobile_phone: normalizeText(profile.mobile_phone) ?? authMetadata?.mobilePhone ?? null,
-        role: profile.role ?? "sales",
+        role: getEffectiveUserRole(profile.role ?? "sales", email) ?? "sales",
         created_at: profile.created_at ?? null,
         updated_at: null,
       };

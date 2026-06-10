@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { getEffectiveUserRole } from "@/lib/protected-admin";
 import { fetchProfile, getSupabaseClient, type ProfileRecord, type UserRole } from "@/lib/supabase";
 
 type AuthContextType = {
@@ -27,7 +28,7 @@ const SESSION_REFRESH_MARGIN_SECONDS = 90;
 
 function fallbackRole(user: User | null): UserRole | null {
   if (!user) return null;
-  return (user.user_metadata?.role as UserRole) || "sales";
+  return getEffectiveUserRole((user.user_metadata?.role as UserRole) || "sales", user.email);
 }
 
 function timeout<T>(milliseconds: number, fallback: T) {
@@ -71,8 +72,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const nextProfile = await fetchProfile(nextUser.id);
       if (!active) return;
 
-      setProfile(nextProfile);
-      setRole(nextProfile?.role ?? fallbackRole(nextUser));
+      const nextRole = getEffectiveUserRole(nextProfile?.role ?? fallbackRole(nextUser), nextUser.email ?? nextProfile?.email);
+      setProfile(nextProfile && nextRole ? { ...nextProfile, role: nextRole } : nextProfile);
+      setRole(nextRole);
     } else {
       setProfile(null);
       setRole(null);
@@ -84,8 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const nextProfile = await fetchProfile(user.id);
 
-    setProfile(nextProfile);
-    setRole(nextProfile?.role ?? fallbackRole(user));
+    const nextRole = getEffectiveUserRole(nextProfile?.role ?? fallbackRole(user), user.email ?? nextProfile?.email);
+    setProfile(nextProfile && nextRole ? { ...nextProfile, role: nextRole } : nextProfile);
+    setRole(nextRole);
   }, [user]);
 
   const signOut = useCallback(async () => {

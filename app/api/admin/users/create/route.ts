@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isProtectedAdminEmail } from "@/lib/protected-admin";
+import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import type { UserRole } from "@/lib/supabase";
 
 const allowedRoles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
@@ -67,13 +69,15 @@ async function verifyAdmin(request: Request) {
 
   if (userError || !userData.user) return { ok: false, message: "Ongeldige sessie." } as const;
 
+  await ensureProtectedAdminRole(service, userData.user);
+
   const { data: profile, error: profileError } = await service
     .from("profiles")
     .select("role")
     .eq("id", userData.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.role !== "admin") {
+  if (!isProtectedAdminEmail(userData.user.email) && (profileError || !profile || profile.role !== "admin")) {
     return { ok: false, message: "Geen toegang." } as const;
   }
 
@@ -202,9 +206,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ongeldige rol." }, { status: 400 });
     }
 
+    if (isProtectedAdminEmail(email) && role !== "admin") {
+      return NextResponse.json({ error: "Deze gebruiker is beschermd en moet altijd admin blijven." }, { status: 400 });
+    }
+
     const existingProfile = await findProfileByEmail(verified.service, email);
 
     if (existingProfile) {
+      if (isProtectedAdminEmail(email)) {
+        return NextResponse.json({ error: "Deze beschermde admin-gebruiker kan hier niet worden aangepast." }, { status: 400 });
+      }
+
       const profileError = await updateExistingProfile(verified.service, {
         id: existingProfile.id,
         email,

@@ -9,6 +9,7 @@ import {
   type ProfileRecord,
   type UserRole,
 } from "@/lib/supabase";
+import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import {
   ROLE_TAB_ACCESS,
   USER_ROLES,
@@ -34,6 +35,10 @@ type RoleTabsResponse = {
 };
 
 type EditableProfileField = "job_title" | "workdays" | "mobile_phone";
+
+function isProtectedProfile(profile: Pick<ProfileRecord, "email">) {
+  return isProtectedAdminEmail(profile.email);
+}
 
 function setRoleTabPermission(
   currentAccess: RoleTabAccessMap,
@@ -215,6 +220,12 @@ export default function AdminDashboard() {
   async function updateRole(profileId: string, nextRole: UserRole) {
     if (!supabase) return;
 
+    const profile = profiles.find((item) => item.id === profileId);
+    if (profile && isProtectedProfile(profile)) {
+      setStatus("Deze beschermde admin-gebruiker kan niet worden aangepast.");
+      return;
+    }
+
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
 
@@ -247,7 +258,7 @@ export default function AdminDashboard() {
   function updateProfileField(profileId: string, field: EditableProfileField, value: string) {
     setProfiles((currentProfiles) =>
       currentProfiles.map((profile) =>
-        profile.id === profileId
+        profile.id === profileId && !isProtectedProfile(profile)
           ? {
               ...profile,
               [field]: value,
@@ -259,6 +270,11 @@ export default function AdminDashboard() {
 
   async function saveProfileSignature(profile: ProfileRecord) {
     if (!supabase) return;
+
+    if (isProtectedProfile(profile)) {
+      setStatus("Deze beschermde admin-gebruiker kan niet worden aangepast.");
+      return;
+    }
 
     setProfileSavingId(profile.id);
     setStatus("Handtekeninggegevens worden opgeslagen...");
@@ -354,6 +370,12 @@ export default function AdminDashboard() {
 
   async function deleteUser(profileId: string) {
     if (!supabase) return;
+
+    const profile = profiles.find((item) => item.id === profileId);
+    if (profile && isProtectedProfile(profile)) {
+      setStatus("Deze beschermde admin-gebruiker kan niet worden verwijderd.");
+      return;
+    }
 
     const confirmed = confirm("Weet je zeker dat je deze gebruiker wilt verwijderen?");
     if (!confirmed) return;
@@ -509,13 +531,17 @@ export default function AdminDashboard() {
           {status ? <div className="save-status">{status}</div> : null}
 
           <div className="admin-user-list">
-            {profiles.map((profile) => (
+            {profiles.map((profile) => {
+              const protectedProfile = isProtectedProfile(profile);
+
+              return (
               <div key={profile.id} className="admin-user-card">
                 <div>
                   <div className="package-name">
                     {profile.full_name || profile.email || profile.id}
                   </div>
                   <div className="subtext">{profile.email || "Geen e-mail"}</div>
+                  {protectedProfile ? <div className="subtext">Beschermde admin - niet aanpasbaar</div> : null}
                 </div>
 
                 <div className="field-grid-2">
@@ -525,6 +551,7 @@ export default function AdminDashboard() {
                       className="input"
                       type="text"
                       value={profile.job_title ?? ""}
+                      disabled={protectedProfile}
                       onChange={(event) => updateProfileField(profile.id, "job_title", event.target.value)}
                       placeholder="IT Sales Consultant"
                     />
@@ -536,6 +563,7 @@ export default function AdminDashboard() {
                       className="input"
                       type="text"
                       value={profile.workdays ?? ""}
+                      disabled={protectedProfile}
                       onChange={(event) => updateProfileField(profile.id, "workdays", event.target.value)}
                       placeholder="di - wo - do - vr"
                     />
@@ -547,6 +575,7 @@ export default function AdminDashboard() {
                       className="input"
                       type="tel"
                       value={profile.mobile_phone ?? ""}
+                      disabled={protectedProfile}
                       onChange={(event) => updateProfileField(profile.id, "mobile_phone", event.target.value)}
                       placeholder="+31 630 050 413"
                     />
@@ -555,7 +584,7 @@ export default function AdminDashboard() {
                   <button
                     type="button"
                     className="secondary-button create-user-button"
-                    disabled={profileSavingId === profile.id}
+                    disabled={protectedProfile || profileSavingId === profile.id}
                     onClick={() => void saveProfileSignature(profile)}
                   >
                     <Save size={16} />
@@ -574,6 +603,7 @@ export default function AdminDashboard() {
                       key={item}
                       type="button"
                       className={`secondary-button ${profile.role === item ? "active" : ""}`}
+                      disabled={protectedProfile}
                       onClick={() => updateRole(profile.id, item)}
                     >
                       <ShieldCheck size={15} />
@@ -584,13 +614,15 @@ export default function AdminDashboard() {
                   <button
                     type="button"
                     className="secondary-button danger-button"
+                    disabled={protectedProfile}
                     onClick={() => deleteUser(profile.id)}
                   >
                     Verwijderen
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </div>

@@ -1,4 +1,5 @@
 import { createClient, type User } from "@supabase/supabase-js";
+import { getEffectiveUserRole } from "@/lib/protected-admin";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 
 export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant";
@@ -188,7 +189,7 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
       job_title: profile.job_title ?? null,
       workdays: profile.workdays ?? null,
       mobile_phone: profile.mobile_phone ?? null,
-      role: profile.role,
+      role: getEffectiveUserRole(profile.role, profile.email) ?? profile.role,
       created_at: profile.created_at,
       updated_at: profile.updated_at ?? null,
     };

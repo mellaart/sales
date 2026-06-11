@@ -1497,7 +1497,7 @@ td {
 }
 
 .price-table th.package-price-heading {
-  text-align: center;
+  text-align: right;
 }
 
 .price-table-input {

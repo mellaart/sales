@@ -20,6 +20,8 @@ const MISSING_TABLE_LOCAL_DEAL_WARNING =
   "De database mist de Deals-tabel. Deze deal staat tijdelijk lokaal op dit apparaat.";
 const MISSING_TABLE_SAVE_WARNING =
   "De database mist de Deals-tabel. Deze wijziging is tijdelijk lokaal op dit apparaat bewaard.";
+const LOCAL_DEALS_SYNC_WARNING =
+  "Lokaal bewaarde deals zijn centraal opgeslagen. Open Deals opnieuw in Safari als daar nog oude aantallen stonden.";
 const SESSION_REFRESH_TIMEOUT_MS = 3000;
 const SESSION_REFRESH_MARGIN_SECONDS = 90;
 
@@ -95,6 +97,83 @@ function mergeDeals(remoteDeals: DealRecord[], localDeals: DealRecord[]) {
   }
 
   return sortDealsByCreatedAt(mergedDeals);
+}
+
+function removeLocalDealsById(dealIds: string[]) {
+  if (dealIds.length === 0) return;
+
+  const dealIdSet = new Set(dealIds);
+  writeLocalDeals(readLocalDeals().filter((deal) => !dealIdSet.has(deal.id)));
+}
+
+function toSupabaseDealPayload(deal: DealRecord, userId: string): DealPayload {
+  const packageKey = deal.package_key || deal.selected_package || "enterprise";
+  const totalUsers = Number(deal.total_users ?? deal.extra_users ?? 1);
+  const includeVat = Boolean(deal.include_vat ?? false);
+  const manualImplementationAdjustment = Number(deal.manual_implementation_adjustment ?? 0);
+  const monthlyTotal = Number(deal.monthly_total ?? deal.monthly_price ?? 0);
+  const implementationTotal = Number(
+    (deal as { implementation_total?: number | null }).implementation_total ??
+      deal.implementation_price ??
+      deal.implementation_base ??
+      0,
+  );
+
+  return {
+    user_id: deal.user_id || userId,
+    created_at: deal.created_at ?? new Date().toISOString(),
+    customer_name: deal.customer_name ?? null,
+    quote_title: deal.quote_title || "Prijsvoorstel Smart Trade",
+    contact_name: deal.contact_name ?? null,
+    sales_name: deal.sales_name ?? null,
+    package_key: packageKey,
+    package_name: deal.package_name || "Enterprise",
+    total_users: totalUsers,
+    contract_months: Number((deal as { contract_months?: number | null }).contract_months ?? 1),
+    discount_pct: Number((deal as { discount_pct?: number | null }).discount_pct ?? 0),
+    include_vat: includeVat,
+    manual_monthly_adjustment: Number((deal as { manual_monthly_adjustment?: number | null }).manual_monthly_adjustment ?? 0),
+    manual_implementation_adjustment: manualImplementationAdjustment,
+    monthly_base: Number((deal as { monthly_base?: number | null }).monthly_base ?? monthlyTotal),
+    monthly_total: monthlyTotal,
+    implementation_total: implementationTotal,
+    contract_value: Number((deal as { contract_value?: number | null }).contract_value ?? monthlyTotal * 12 + implementationTotal),
+    annual_recurring: Number((deal as { annual_recurring?: number | null }).annual_recurring ?? monthlyTotal * 12),
+    modules: Array.isArray(deal.modules) ? deal.modules : [],
+    notes: deal.notes ?? null,
+    calculator_inputs: deal.calculator_inputs ?? {
+      extraUsers: Math.max(0, totalUsers - 1),
+      selectedPackage: packageKey,
+      manualImplementationAdjustment,
+      includeVat,
+      quantities: {},
+    },
+  };
+}
+
+async function syncLocalDealsToSupabase(supabase: SupabaseClient, userId: string) {
+  const localDeals = readLocalDeals().filter((deal) => isLocalDealId(deal.id) && (deal.user_id === userId || !deal.user_id));
+  const syncedDeals: DealRecord[] = [];
+  const syncedLocalDealIds: string[] = [];
+
+  for (const localDeal of localDeals) {
+    const { data, error } = await supabase
+      .from("deals")
+      .insert(toSupabaseDealPayload(localDeal, userId) as never)
+      .select("*")
+      .single();
+
+    if (error) {
+      continue;
+    }
+
+    syncedDeals.push(data as DealRecord);
+    syncedLocalDealIds.push(localDeal.id);
+  }
+
+  removeLocalDealsById(syncedLocalDealIds);
+
+  return syncedDeals;
 }
 
 export function isLocalDealId(dealId: string) {
@@ -194,9 +273,12 @@ export async function listDealsWithFallback(
     return { error: error.message };
   }
 
-  const deals = mergeDeals((data ?? []) as DealRecord[], listLocalDeals(userId, canViewAll));
+  const syncedDeals = await syncLocalDealsToSupabase(supabase, userId);
+  const localDeals = listLocalDeals(userId, false);
+  const deals = mergeDeals([...(data ?? []) as DealRecord[], ...syncedDeals], localDeals);
+  const warning = syncedDeals.length > 0 ? LOCAL_DEALS_SYNC_WARNING : undefined;
 
-  return { deals: limit ? deals.slice(0, limit) : deals, storage: "supabase" };
+  return { deals: limit ? deals.slice(0, limit) : deals, warning, storage: "supabase" };
 }
 
 export async function getDealWithFallback(supabase: SupabaseClient | null, dealId: string): Promise<DealResult> {

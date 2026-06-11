@@ -641,6 +641,7 @@ export default function PricesDashboard() {
 
             <table className="price-table travel-cost-table">
               <thead>
+                <tr className="price-section-row"><th colSpan={4}>Reiskosten</th></tr>
                 <tr>
                   <th>Regio</th>
                   <th className="price-table-money-cell">Van (km)</th>
@@ -649,7 +650,6 @@ export default function PricesDashboard() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="price-section-row"><td colSpan={4}>Reiskosten</td></tr>
                 {draftConfig.travelCostRegions.map((travelRegion) => (
                   <tr key={travelRegion.region}>
                     <td>{travelRegion.region}</td>

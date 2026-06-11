@@ -1482,10 +1482,15 @@ td {
   font-weight: 700;
 }
 
-.price-section-row td {
+.price-section-row td,
+.price-section-row th {
   background: rgba(37,99,235,0.16);
   color: #ffffff;
   font-weight: 900;
+}
+
+.price-table .price-section-row th {
+  text-align: left;
 }
 
 .price-table-input {

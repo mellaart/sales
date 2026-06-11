@@ -16,6 +16,7 @@ export type ModuleConfig = {
   setupCost?: number;
   dependencyNote?: string | null;
   noPackageSwitch?: boolean;
+  workItems?: string[];
 };
 
 export const IMPLEMENTATION_DAY_RATE = 720;

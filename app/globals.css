@@ -1444,6 +1444,10 @@ td {
   min-width: 720px;
 }
 
+.price-table.work-items-table {
+  min-width: 760px;
+}
+
 .price-table.postcode-table {
   min-width: 900px;
 }

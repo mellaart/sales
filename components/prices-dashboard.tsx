@@ -220,6 +220,15 @@ export default function PricesDashboard() {
     }));
   }
 
+  function updateModuleWorkItems(moduleKey: string, workItems: string[]) {
+    setDraftConfig((currentConfig) => ({
+      ...currentConfig,
+      modules: currentConfig.modules.map((moduleConfig) =>
+        moduleConfig.key === moduleKey ? { ...moduleConfig, workItems } : moduleConfig,
+      ),
+    }));
+  }
+
   function updateCustomerPortalOption(optionKey: string, monthlyPrice: number) {
     updateDraft((currentConfig) => ({
       ...currentConfig,
@@ -667,7 +676,18 @@ export default function PricesDashboard() {
                   </tr>
                 ))}
 
-                <tr className="price-section-row"><td colSpan={2}>Werkzaamheden offerte</td></tr>
+              </tbody>
+            </table>
+
+            <table className="price-table work-items-table">
+              <thead>
+                <tr className="price-section-row"><th colSpan={2}>Werkzaamheden offerte</th></tr>
+                <tr>
+                  <th>Onderdeel</th>
+                  <th>Werkzaamheden</th>
+                </tr>
+              </thead>
+              <tbody>
                 {draftConfig.expansionWorkItems.map((item) => (
                   <tr key={item.key}>
                     <td>{item.name}</td>
@@ -676,6 +696,19 @@ export default function PricesDashboard() {
                         label={`${item.name} werkzaamheden offerte`}
                         value={item.workItems}
                         onChange={(value) => updateExpansionWorkItems(item.key, value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+                <tr className="price-section-row"><td colSpan={2}>Modules</td></tr>
+                {draftConfig.modules.map((moduleConfig) => (
+                  <tr key={`work-items-${moduleConfig.key}`}>
+                    <td>{moduleConfig.name}</td>
+                    <td>
+                      <WorkItemsInput
+                        label={`${moduleConfig.name} werkzaamheden offerte`}
+                        value={moduleConfig.workItems ?? []}
+                        onChange={(value) => updateModuleWorkItems(moduleConfig.key, value)}
                       />
                     </td>
                   </tr>

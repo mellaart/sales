@@ -10,6 +10,7 @@ export type OfferModule = {
   monthlyPrice: number;
   qty: number;
   total: number;
+  workItems?: string[];
 };
 
 export type OfferTemplateInput = {

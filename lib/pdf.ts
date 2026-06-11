@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import { getAssetExpansionTotals, getAssetExpansionUnitAmount } from "@/lib/asset-expansions";
-import { DEFAULT_PRICE_CONFIG, type ExpansionWorkItemConfig, type ExpansionWorkItemKey } from "@/lib/price-config";
+import { DEFAULT_PRICE_CONFIG, getDefaultModuleWorkItems, type ExpansionWorkItemConfig, type ExpansionWorkItemKey } from "@/lib/price-config";
 import { euro } from "@/lib/pricing";
 import { getQuoteLayout } from "@/lib/quote-layouts";
 import {
@@ -243,38 +243,47 @@ function getExpansionSectionTitle(lines: AssetExpansionLine[]) {
   return "Uitbreidingen";
 }
 
-function getExpansionWorkItemKey(lines: AssetExpansionLine[]): ExpansionWorkItemKey {
+function getConfiguredExpansionWorkItems(workItemKey: ExpansionWorkItemKey, configuredItems?: ExpansionWorkItemConfig[]) {
+  const configuredItem = configuredItems?.find((item) => item.key === workItemKey);
+  const defaultWorkItems = DEFAULT_PRICE_CONFIG.expansionWorkItems.find((item) => item.key === workItemKey)?.workItems ?? [];
+  const workItems = configuredItem ? configuredItem.workItems : defaultWorkItems;
+
+  return workItems.map((item) => item.trim()).filter(Boolean);
+}
+
+function uniqueWorkItems(items: string[]) {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    const normalizedItem = item.trim();
+    if (!normalizedItem || seen.has(normalizedItem)) return false;
+
+    seen.add(normalizedItem);
+    return true;
+  });
+}
+
+function getExpansionWorkItems(input: OfferTemplateInput) {
+  const lines = input.assetsExpansion?.lines ?? [];
   const groups = new Set(lines.map((line) => line.group));
+  const workItems: string[] = [];
 
   if (groups.has("Klantenportaal")) {
-    return "customerPortal";
+    workItems.push(...getConfiguredExpansionWorkItems("customerPortal", input.expansionWorkItems));
   }
 
   if (groups.has("Smart Connect")) {
-    return "smartConnect";
+    workItems.push(...getConfiguredExpansionWorkItems("smartConnect", input.expansionWorkItems));
   }
 
-  if (groups.has("Modules") || groups.has("Pakket")) {
-    return "modules";
+  if (groups.has("Modules") || groups.has("Pakket") || groups.has("Implementatie")) {
+    input.selectedModules.forEach((module) => {
+      const moduleWorkItems = Array.isArray(module.workItems) ? module.workItems : getDefaultModuleWorkItems(module.name);
+      workItems.push(...moduleWorkItems);
+    });
   }
 
-  if (groups.has("Servicekosten")) {
-    return "serviceCosts";
-  }
-
-  return "default";
-}
-
-function getExpansionWorkItems(lines: AssetExpansionLine[], configuredItems?: ExpansionWorkItemConfig[]) {
-  const workItemKey = getExpansionWorkItemKey(lines);
-  const configuredWorkItems = configuredItems?.find((item) => item.key === workItemKey)?.workItems ?? [];
-  const defaultWorkItems =
-    DEFAULT_PRICE_CONFIG.expansionWorkItems.find((item) => item.key === workItemKey)?.workItems ??
-    DEFAULT_PRICE_CONFIG.expansionWorkItems.find((item) => item.key === "default")?.workItems ??
-    [];
-  const workItems = configuredWorkItems.length > 0 ? configuredWorkItems : defaultWorkItems;
-
-  return workItems.map((item) => item.trim()).filter(Boolean);
+  return uniqueWorkItems(workItems);
 }
 
 function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansionLine[], y: number) {
@@ -471,8 +480,11 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   if (isAssetsExpansionLayout && expansionLines.length > 0) {
     y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2);
 
-    y = addSectionTitle(doc, "Werkzaamheden", y + 2);
-    y = addBullets(doc, getExpansionWorkItems(expansionLines, input.expansionWorkItems), y);
+    const expansionWorkItems = getExpansionWorkItems(input);
+    if (expansionWorkItems.length > 0) {
+      y = addSectionTitle(doc, "Werkzaamheden", y + 2);
+      y = addBullets(doc, expansionWorkItems, y);
+    }
 
     y = addSectionTitle(doc, "Tot slot", y + 2);
     y = addParagraph(doc, text.closing, y);

@@ -39,7 +39,7 @@ export type PostcodeRegion = {
   kilometers: number;
 };
 
-export type ExpansionWorkItemKey = "customerPortal" | "smartConnect" | "modules" | "serviceCosts" | "default";
+export type ExpansionWorkItemKey = "customerPortal" | "smartConnect";
 
 export type ExpansionWorkItemConfig = {
   key: ExpansionWorkItemKey;
@@ -83,6 +83,13 @@ const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependenc
   hoveniersapp: { setupCost: 1440, dependencyNote: "Vereist: Ticketing" },
 };
 
+export function getDefaultModuleWorkItems(moduleName: string) {
+  return [
+    `${moduleName} activeren`,
+    "Inrichting en werking binnen Smart Trade controleren",
+  ];
+}
+
 export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
   implementationDayRate: IMPLEMENTATION_DAY_RATE,
   packages: PACKAGES,
@@ -91,6 +98,7 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     setupCost: MODULE_DETAILS[module.key]?.setupCost ?? 0,
     dependencyNote: MODULE_DETAILS[module.key]?.dependencyNote ?? null,
     noPackageSwitch: MODULE_DETAILS[module.key]?.noPackageSwitch ?? false,
+    workItems: getDefaultModuleWorkItems(module.name),
   })),
   customerPortalOptions: [
     { key: "facturenBetalen", name: "Facturen betalen", monthlyPrice: 30.15 },
@@ -126,30 +134,6 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
       workItems: [
         "Smart Connect configureren",
         "Koppeling maken met de Smart Trade administratie",
-      ],
-    },
-    {
-      key: "modules",
-      name: "Modules en pakket",
-      workItems: [
-        "Geselecteerde uitbreiding activeren",
-        "Koppeling en inrichting binnen Smart Trade controleren",
-      ],
-    },
-    {
-      key: "serviceCosts",
-      name: "Servicekosten",
-      workItems: [
-        "Servicekosten registreren",
-        "Administratieve verwerking controleren",
-      ],
-    },
-    {
-      key: "default",
-      name: "Overige uitbreidingen",
-      workItems: [
-        "Geselecteerde uitbreiding verwerken",
-        "Inrichting en activatie controleren",
       ],
     },
   ],
@@ -272,6 +256,12 @@ function safeNumber(value: unknown, fallback = 0) {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function cleanWorkItems(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : null;
+}
+
 function normalizePackage(input: unknown, fallback: PackageConfig): PackageConfig {
   const source = input && typeof input === "object" ? (input as Partial<PackageConfig>) : {};
 
@@ -296,6 +286,7 @@ function normalizePackage(input: unknown, fallback: PackageConfig): PackageConfi
 
 function normalizeModule(input: unknown, fallback: ModuleConfig): ModuleConfig {
   const source = input && typeof input === "object" ? (input as Partial<ModuleConfig>) : {};
+  const workItems = cleanWorkItems(source.workItems);
 
   return {
     key: fallback.key,
@@ -306,6 +297,7 @@ function normalizeModule(input: unknown, fallback: ModuleConfig): ModuleConfig {
       ? source.dependencyNote.trim()
       : fallback.dependencyNote ?? null,
     noPackageSwitch: Boolean(source.noPackageSwitch ?? fallback.noPackageSwitch),
+    workItems: workItems ?? fallback.workItems ?? getDefaultModuleWorkItems(fallback.name),
   };
 }
 
@@ -367,15 +359,12 @@ function normalizePostcodeRegion(input: unknown, fallback: PostcodeRegion): Post
 
 function normalizeExpansionWorkItems(input: unknown, fallback: ExpansionWorkItemConfig): ExpansionWorkItemConfig {
   const source = input && typeof input === "object" ? (input as Partial<ExpansionWorkItemConfig>) : {};
-  const sourceWorkItems = Array.isArray(source.workItems) ? source.workItems : [];
-  const workItems = sourceWorkItems
-    .map((item) => String(item).trim())
-    .filter(Boolean);
+  const workItems = cleanWorkItems(source.workItems);
 
   return {
     key: fallback.key,
     name: typeof source.name === "string" && source.name.trim() ? source.name.trim() : fallback.name,
-    workItems: workItems.length > 0 ? workItems : fallback.workItems,
+    workItems: workItems ?? fallback.workItems,
   };
 }
 

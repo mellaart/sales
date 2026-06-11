@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getEffectiveUserRole } from "@/lib/protected-admin";
 import { fetchProfile, getSupabaseClient, type ProfileRecord, type UserRole } from "@/lib/supabase";
@@ -23,22 +23,27 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
-const AUTH_REQUEST_TIMEOUT_MS = 3000;
+const AUTH_REQUEST_TIMEOUT_MS = 10000;
 const SESSION_REFRESH_MARGIN_SECONDS = 90;
+const AUTH_TIMEOUT_RESULT = { timedOut: true } as const;
 
 function fallbackRole(user: User | null): UserRole | null {
   if (!user) return null;
   return getEffectiveUserRole((user.user_metadata?.role as UserRole) || "sales", user.email);
 }
 
-function timeout<T>(milliseconds: number, fallback: T) {
-  return new Promise<T>((resolve) => {
-    setTimeout(() => resolve(fallback), milliseconds);
+function timeout(milliseconds: number) {
+  return new Promise<typeof AUTH_TIMEOUT_RESULT>((resolve) => {
+    setTimeout(() => resolve(AUTH_TIMEOUT_RESULT), milliseconds);
   });
 }
 
-async function withAuthTimeout<T>(promise: Promise<T>, fallback: T) {
-  return Promise.race([promise, timeout(AUTH_REQUEST_TIMEOUT_MS, fallback)]);
+async function withAuthTimeout<T>(promise: Promise<T>) {
+  return Promise.race([promise, timeout(AUTH_REQUEST_TIMEOUT_MS)]);
+}
+
+function isAuthTimeout<T>(value: T | typeof AUTH_TIMEOUT_RESULT): value is typeof AUTH_TIMEOUT_RESULT {
+  return value === AUTH_TIMEOUT_RESULT;
 }
 
 function clearSupabaseAuthStorage() {
@@ -62,10 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const userRef = useRef<User | null>(null);
 
   const applyUser = useCallback(async (nextUser: User | null, active = true) => {
     if (!active) return;
 
+    userRef.current = nextUser;
     setUser(nextUser);
 
     if (nextUser) {
@@ -98,10 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       if (supabase) {
-        await withAuthTimeout(supabase.auth.signOut({ scope: "local" }), null);
+        await withAuthTimeout(supabase.auth.signOut({ scope: "local" }));
       }
     } finally {
       clearSupabaseAuthStorage();
+      userRef.current = null;
       setUser(null);
       setProfile(null);
       setRole(null);
@@ -128,25 +136,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const result = await withAuthTimeout(supabase.auth.getSession(), null);
+        const result = await withAuthTimeout(supabase.auth.getSession());
 
         if (!active) return;
+
+        if (isAuthTimeout(result)) {
+          setLoading(false);
+          return;
+        }
 
         let currentSession = result && "data" in result ? result.data.session ?? null : null;
         const expiresAt = currentSession?.expires_at ?? 0;
         const expiresSoon = expiresAt > 0 && expiresAt - Math.floor(Date.now() / 1000) < SESSION_REFRESH_MARGIN_SECONDS;
 
         if (currentSession && expiresSoon) {
-          const refreshResult = await withAuthTimeout(supabase.auth.refreshSession(), null);
+          const refreshResult = await withAuthTimeout(supabase.auth.refreshSession());
           if (!active) return;
-          currentSession = refreshResult && "data" in refreshResult ? refreshResult.data.session ?? currentSession : currentSession;
+          if (!isAuthTimeout(refreshResult)) {
+            currentSession = refreshResult && "data" in refreshResult ? refreshResult.data.session ?? currentSession : currentSession;
+          }
         }
 
         await applyUser(currentSession?.user ?? null, active);
         setLoading(false);
       } catch {
         if (active) {
-          await applyUser(null, active);
+          if (!userRef.current) {
+            await applyUser(null, active);
+          }
           setLoading(false);
         }
       }
@@ -162,7 +179,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const {
           data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (!session && event !== "SIGNED_OUT") {
+            setLoading(false);
+            return;
+          }
+
           await applyUser(session?.user ?? null, active);
           setLoading(false);
         });

@@ -56,7 +56,7 @@ function setRoleTabPermission(
 }
 
 export default function AdminDashboard() {
-  const { role, refreshProfile } = useAuth();
+  const { role, loading: authLoading, refreshProfile } = useAuth();
   const router = useRouter();
   const supabase = getSupabaseClient();
 
@@ -406,6 +406,19 @@ export default function AdminDashboard() {
 
     setStatus("Gebruiker verwijderd.");
     await loadProfiles({ keepStatus: true });
+  }
+
+  if (authLoading) {
+    return (
+      <div className="page-shell">
+        <div className="container">
+          <section className="card panel">
+            <h1>Admin laden</h1>
+            <p className="subtext">Je sessie en rechten worden gecontroleerd.</p>
+          </section>
+        </div>
+      </div>
+    );
   }
 
   if (!canManageRoles(role)) {

@@ -1,5 +1,6 @@
 import type { PricingResult } from "@/lib/pricing";
 import { euro, IMPLEMENTATION_DAY_RATE } from "@/lib/pricing";
+import type { ExpansionWorkItemConfig } from "@/lib/price-config";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 import type { AssetExpansionSummary } from "@/lib/supabase";
 
@@ -27,6 +28,7 @@ export type OfferTemplateInput = {
   result: PricingResult;
   quoteLayout?: QuoteLayoutKey;
   assetsExpansion?: AssetExpansionSummary | null;
+  expansionWorkItems?: ExpansionWorkItemConfig[];
 };
 
 export function getGreeting(contactName?: string) {

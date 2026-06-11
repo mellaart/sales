@@ -7,6 +7,7 @@ import {
   DEFAULT_PRICE_CONFIG,
   normalizePricingConfig,
   type EditablePricingConfig,
+  type ExpansionWorkItemConfig,
   type TravelCostRegion,
 } from "@/lib/price-config";
 import { euro, getVisitsForUsers, type ModuleConfig, type PackageConfig } from "@/lib/pricing";
@@ -140,6 +141,26 @@ function TextPriceInput({
   );
 }
 
+function WorkItemsInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  return (
+    <textarea
+      aria-label={label}
+      className="price-table-input price-work-items-input"
+      rows={Math.max(2, value.length)}
+      value={value.join("\n")}
+      onChange={(event) => onChange(event.target.value.split(/\r?\n/))}
+    />
+  );
+}
+
 export default function PricesDashboard() {
   const { role } = useAuth();
   const router = useRouter();
@@ -222,6 +243,15 @@ export default function PricesDashboard() {
       ...currentConfig,
       serviceCostOptions: currentConfig.serviceCostOptions.map((option) =>
         option.key === optionKey ? { ...option, annualPrice } : option,
+      ),
+    }));
+  }
+
+  function updateExpansionWorkItems(workItemKey: ExpansionWorkItemConfig["key"], workItems: string[]) {
+    setDraftConfig((currentConfig) => ({
+      ...currentConfig,
+      expansionWorkItems: currentConfig.expansionWorkItems.map((item) =>
+        item.key === workItemKey ? { ...item, workItems } : item,
       ),
     }));
   }
@@ -632,6 +662,20 @@ export default function PricesDashboard() {
                         label={`${option.name} servicekosten per jaar`}
                         value={option.annualPrice}
                         onChange={(value) => updateServiceCostOption(option.key, value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+
+                <tr className="price-section-row"><td colSpan={2}>Werkzaamheden offerte</td></tr>
+                {draftConfig.expansionWorkItems.map((item) => (
+                  <tr key={item.key}>
+                    <td>{item.name}</td>
+                    <td>
+                      <WorkItemsInput
+                        label={`${item.name} werkzaamheden offerte`}
+                        value={item.workItems}
+                        onChange={(value) => updateExpansionWorkItems(item.key, value)}
                       />
                     </td>
                   </tr>

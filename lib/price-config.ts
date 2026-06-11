@@ -39,6 +39,14 @@ export type PostcodeRegion = {
   kilometers: number;
 };
 
+export type ExpansionWorkItemKey = "customerPortal" | "smartConnect" | "modules" | "serviceCosts" | "default";
+
+export type ExpansionWorkItemConfig = {
+  key: ExpansionWorkItemKey;
+  name: string;
+  workItems: string[];
+};
+
 export type EditablePricingConfig = PricingCatalog & {
   customerPortalOptions: CustomerPortalPriceOption[];
   smartConnectTiers: SmartConnectPriceTier[];
@@ -48,6 +56,7 @@ export type EditablePricingConfig = PricingCatalog & {
   serviceCostOptions: ServiceCostPriceOption[];
   travelCostRegions: TravelCostRegion[];
   postcodeRegions: PostcodeRegion[];
+  expansionWorkItems: ExpansionWorkItemConfig[];
   updatedAt?: string | null;
 };
 
@@ -101,6 +110,48 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
   serviceCostOptions: [
     { key: "ccv", name: "CCV", annualPrice: 175.8 },
     { key: "worldline", name: "Worldline", annualPrice: 175.8 },
+  ],
+  expansionWorkItems: [
+    {
+      key: "customerPortal",
+      name: "Klantportaal",
+      workItems: [
+        "Configuratie van het klantportaal en SSL-certificaat",
+        "Klantportaal instellen en koppeling maken met Smart Trade administratie",
+      ],
+    },
+    {
+      key: "smartConnect",
+      name: "Smart Connect",
+      workItems: [
+        "Smart Connect configureren",
+        "Koppeling maken met de Smart Trade administratie",
+      ],
+    },
+    {
+      key: "modules",
+      name: "Modules en pakket",
+      workItems: [
+        "Geselecteerde uitbreiding activeren",
+        "Koppeling en inrichting binnen Smart Trade controleren",
+      ],
+    },
+    {
+      key: "serviceCosts",
+      name: "Servicekosten",
+      workItems: [
+        "Servicekosten registreren",
+        "Administratieve verwerking controleren",
+      ],
+    },
+    {
+      key: "default",
+      name: "Overige uitbreidingen",
+      workItems: [
+        "Geselecteerde uitbreiding verwerken",
+        "Inrichting en activatie controleren",
+      ],
+    },
   ],
   travelCostRegions: [
     { region: 1, fromKm: 0, toKm: 20, price: 0 },
@@ -314,6 +365,20 @@ function normalizePostcodeRegion(input: unknown, fallback: PostcodeRegion): Post
   };
 }
 
+function normalizeExpansionWorkItems(input: unknown, fallback: ExpansionWorkItemConfig): ExpansionWorkItemConfig {
+  const source = input && typeof input === "object" ? (input as Partial<ExpansionWorkItemConfig>) : {};
+  const sourceWorkItems = Array.isArray(source.workItems) ? source.workItems : [];
+  const workItems = sourceWorkItems
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+
+  return {
+    key: fallback.key,
+    name: typeof source.name === "string" && source.name.trim() ? source.name.trim() : fallback.name,
+    workItems: workItems.length > 0 ? workItems : fallback.workItems,
+  };
+}
+
 function mapByKey(values: unknown) {
   const rows = Array.isArray(values) ? values : [];
   return new Map(rows.flatMap((row) => {
@@ -331,6 +396,7 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
   const moduleByKey = mapByKey(source.modules);
   const customerPortalByKey = mapByKey(source.customerPortalOptions);
   const serviceCostByKey = mapByKey(source.serviceCostOptions);
+  const expansionWorkItemsByKey = mapByKey(source.expansionWorkItems);
   const smartConnectRows = Array.isArray(source.smartConnectTiers) ? source.smartConnectTiers : [];
   const travelCostRows = Array.isArray(source.travelCostRegions) ? source.travelCostRegions : [];
   const postcodeRows =
@@ -359,6 +425,9 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
     ),
     serviceCostOptions: DEFAULT_PRICE_CONFIG.serviceCostOptions.map((fallback) =>
       normalizeServiceCostOption(serviceCostByKey.get(fallback.key), fallback),
+    ),
+    expansionWorkItems: DEFAULT_PRICE_CONFIG.expansionWorkItems.map((fallback) =>
+      normalizeExpansionWorkItems(expansionWorkItemsByKey.get(fallback.key), fallback),
     ),
     travelCostRegions: DEFAULT_PRICE_CONFIG.travelCostRegions.map((fallback, index) =>
       normalizeTravelCostRegion(travelCostRows[index], fallback),

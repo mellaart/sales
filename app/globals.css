@@ -1549,6 +1549,14 @@ td {
   min-width: 180px;
 }
 
+.price-work-items-input {
+  min-width: 420px;
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .postcode-table td:first-child,
 .postcode-table th:first-child {
   min-width: 130px;

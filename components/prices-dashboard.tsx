@@ -414,7 +414,9 @@ export default function PricesDashboard() {
               <thead>
                 <tr>
                   <th>Regel</th>
-                  {editablePackages.map((packageConfig) => <th key={packageConfig.key}>{packageConfig.name}</th>)}
+                  {editablePackages.map((packageConfig) => (
+                    <th key={packageConfig.key} className="package-price-heading">{packageConfig.name}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>

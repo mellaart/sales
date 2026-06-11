@@ -1496,6 +1496,10 @@ td {
   text-align: left;
 }
 
+.price-table th.package-price-heading {
+  text-align: center;
+}
+
 .price-table-input {
   width: 100%;
   min-width: 92px;

@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { getAssetExpansionTotals, getAssetExpansionUnitAmount } from "@/lib/asset-expansions";
+import { DEFAULT_PRICE_CONFIG, type ExpansionWorkItemConfig, type ExpansionWorkItemKey } from "@/lib/price-config";
 import { euro } from "@/lib/pricing";
 import { getQuoteLayout } from "@/lib/quote-layouts";
 import {
@@ -242,29 +243,38 @@ function getExpansionSectionTitle(lines: AssetExpansionLine[]) {
   return "Uitbreidingen";
 }
 
-function getExpansionWorkItems(lines: AssetExpansionLine[]) {
+function getExpansionWorkItemKey(lines: AssetExpansionLine[]): ExpansionWorkItemKey {
   const groups = new Set(lines.map((line) => line.group));
 
   if (groups.has("Klantenportaal")) {
-    return [
-      "Configuratie van het klantportaal en SSL-certificaat",
-      "Klantportaal instellen en koppeling maken met Smart Trade administratie",
-    ];
+    return "customerPortal";
   }
 
   if (groups.has("Smart Connect")) {
-    return ["Smart Connect configureren", "Koppeling maken met de Smart Trade administratie"];
+    return "smartConnect";
   }
 
   if (groups.has("Modules") || groups.has("Pakket")) {
-    return ["Geselecteerde uitbreiding activeren", "Koppeling en inrichting binnen Smart Trade controleren"];
+    return "modules";
   }
 
   if (groups.has("Servicekosten")) {
-    return ["Servicekosten registreren", "Administratieve verwerking controleren"];
+    return "serviceCosts";
   }
 
-  return ["Geselecteerde uitbreiding verwerken", "Inrichting en activatie controleren"];
+  return "default";
+}
+
+function getExpansionWorkItems(lines: AssetExpansionLine[], configuredItems?: ExpansionWorkItemConfig[]) {
+  const workItemKey = getExpansionWorkItemKey(lines);
+  const configuredWorkItems = configuredItems?.find((item) => item.key === workItemKey)?.workItems ?? [];
+  const defaultWorkItems =
+    DEFAULT_PRICE_CONFIG.expansionWorkItems.find((item) => item.key === workItemKey)?.workItems ??
+    DEFAULT_PRICE_CONFIG.expansionWorkItems.find((item) => item.key === "default")?.workItems ??
+    [];
+  const workItems = configuredWorkItems.length > 0 ? configuredWorkItems : defaultWorkItems;
+
+  return workItems.map((item) => item.trim()).filter(Boolean);
 }
 
 function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansionLine[], y: number) {
@@ -462,7 +472,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
     y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2);
 
     y = addSectionTitle(doc, "Werkzaamheden", y + 2);
-    y = addBullets(doc, getExpansionWorkItems(expansionLines), y);
+    y = addBullets(doc, getExpansionWorkItems(expansionLines, input.expansionWorkItems), y);
 
     y = addSectionTitle(doc, "Tot slot", y + 2);
     y = addParagraph(doc, text.closing, y);

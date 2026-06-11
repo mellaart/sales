@@ -226,6 +226,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         result: activeResult,
         quoteLayout,
         assetsExpansion,
+        expansionWorkItems: pricingConfig.expansionWorkItems,
       });
       setStatus("PDF is gemaakt.");
     } catch (error) {

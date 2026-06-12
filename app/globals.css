@@ -1599,14 +1599,200 @@ td {
   accent-color: #60a5fa;
 }
 
+.worldline-page {
+  display: grid;
+  gap: 22px;
+}
+
+.worldline-project-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.worldline-project-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.worldline-project-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 72px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.worldline-project-card.active,
+.worldline-project-card:hover {
+  border-color: rgba(96,165,250,0.48);
+  background: rgba(37,99,235,0.14);
+}
+
+.worldline-project-card strong,
+.worldline-project-card small {
+  display: block;
+}
+
+.worldline-project-card small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.worldline-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.worldline-form-grid .input-wrap:last-child {
+  grid-column: span 3;
+}
+
+.worldline-status-select {
+  max-width: 220px;
+}
+
+.worldline-document-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.worldline-document-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+}
+
+.worldline-document-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.worldline-document-top h3 {
+  margin: 2px 0 6px;
+  color: #f8fafc;
+  font-size: 20px;
+}
+
+.worldline-document-top p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.worldline-dropzone {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 118px;
+  padding: 18px;
+  border: 1px dashed rgba(148,163,184,0.42);
+  border-radius: 8px;
+  background: rgba(15,23,42,0.38);
+  color: #dbeafe;
+  cursor: pointer;
+  text-align: center;
+}
+
+.worldline-dropzone:hover {
+  border-color: rgba(96,165,250,0.72);
+  background: rgba(37,99,235,0.12);
+}
+
+.worldline-dropzone input {
+  display: none;
+}
+
+.worldline-dropzone small {
+  color: var(--muted);
+}
+
+.worldline-document-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.worldline-document-meta div {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(15,23,42,0.36);
+}
+
+.worldline-document-meta span,
+.worldline-document-meta strong {
+  display: block;
+}
+
+.worldline-document-meta span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.worldline-document-meta strong {
+  margin-top: 3px;
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.worldline-checklist {
+  display: grid;
+  gap: 7px;
+}
+
+.worldline-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #dbeafe;
+  font-size: 13px;
+}
+
+.worldline-check-item svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #93c5fd;
+}
+
+.worldline-mail-copy {
+  display: grid;
+  gap: 10px;
+  color: #dbeafe;
+  line-height: 1.6;
+}
+
+.worldline-mail-copy p {
+  margin: 0;
+}
+
 @media (max-width: 980px) {
   .deals-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .calculator-workspace,
-  .dashboard-action-grid {
+  .dashboard-action-grid,
+  .worldline-document-grid,
+  .worldline-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .worldline-form-grid .input-wrap:last-child {
+    grid-column: auto;
   }
 
   .deal-card-row {

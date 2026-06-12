@@ -47,6 +47,30 @@ type CheckResult = {
   note?: string;
 };
 
+const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function withWorldlineTimeout<T>(request: PromiseLike<T>, action: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(`${action} duurt te lang. Vernieuw de pagina en controleer of de Worldline SQL volledig in Supabase is uitgevoerd.`));
+    }, WORLDLINE_REQUEST_TIMEOUT_MS);
+
+    Promise.resolve(request)
+      .then((result) => {
+        window.clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
 
@@ -373,31 +397,38 @@ export default function WorldlineDashboard() {
     setBusy(true);
     setStatus("Worldline-project wordt aangemaakt...");
 
-    const { data, error } = await supabase
-      .from("worldline_projects")
-      .insert({
-        relation_id: selectedRelation.id,
-        relation_name: selectedRelation.name,
-        relation_email: selectedRelation.email,
-        debtor_number: selectedRelation.debtorNumber ? String(selectedRelation.debtorNumber) : null,
-        status: "concept",
-        agreement_fields: DEFAULT_WORLDLINE_AGREEMENT_FIELDS,
-        created_by: user.id,
-      } as never)
-      .select("*")
-      .single();
+    try {
+      const { data, error } = await withWorldlineTimeout(
+        supabase
+          .from("worldline_projects")
+          .insert({
+            relation_id: selectedRelation.id,
+            relation_name: selectedRelation.name,
+            relation_email: selectedRelation.email,
+            debtor_number: selectedRelation.debtorNumber ? String(selectedRelation.debtorNumber) : null,
+            status: "concept",
+            agreement_fields: DEFAULT_WORLDLINE_AGREEMENT_FIELDS,
+            created_by: user.id,
+          } as never)
+          .select("*")
+          .single(),
+        "Worldline-project aanmaken",
+      );
 
-    if (error) {
-      setStatus(`Project aanmaken mislukt: ${error.message}`);
+      if (error) {
+        setStatus(`Project aanmaken mislukt: ${error.message}`);
+        return;
+      }
+
+      const nextProject = data as WorldlineProject;
+      setProjects((currentProjects) => [nextProject, ...currentProjects]);
+      setActiveProject(nextProject);
+      setStatus("Worldline-project aangemaakt.");
+    } catch (error) {
+      setStatus(`Project aanmaken mislukt: ${getErrorMessage(error, "Supabase gaf geen antwoord.")}`);
+    } finally {
       setBusy(false);
-      return;
     }
-
-    const nextProject = data as WorldlineProject;
-    setProjects((currentProjects) => [nextProject, ...currentProjects]);
-    setActiveProject(nextProject);
-    setStatus("Worldline-project aangemaakt.");
-    setBusy(false);
   }
 
   async function saveAgreementFields() {

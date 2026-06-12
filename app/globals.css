@@ -401,14 +401,16 @@ select option {
   align-items: center;
   gap: 8px;
 
-  padding: 10px 14px;
-  border-radius: 14px;
+  padding: 8px 10px;
+  border-radius: 12px;
 
   background: rgba(255,255,255,0.06);
   border: 1px solid var(--line);
 
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .app-nav {
@@ -423,28 +425,33 @@ select option {
 }
 
 .app-nav-inner {
-  width: min(1400px, calc(100% - 32px));
+  width: min(1680px, calc(100% - 32px));
   margin: 0 auto;
 
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  gap: 14px;
 
-  padding: 18px 0;
+  padding: 10px 0;
 }
 
 .app-nav-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 
+  color: var(--text);
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .brand-dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
 
   background:
@@ -454,18 +461,43 @@ select option {
     0 0 24px rgba(37,99,235,0.75);
 }
 
-.app-nav-actions {
+.app-nav-brand-text {
+  white-space: nowrap;
+}
+
+.app-nav-tabs,
+.app-nav-account {
   display: flex;
-  gap: 12px;
   align-items: center;
-  flex-wrap: wrap;
+}
+
+.app-nav-tabs {
+  min-width: 0;
+  gap: 4px;
+  justify-content: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-nav-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.app-nav-account {
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .nav-button {
-  padding: 10px 14px;
-  border-radius: 12px;
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-radius: 10px;
 
   color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
 
   transition: 180ms ease;
 }
@@ -474,6 +506,31 @@ select option {
 .nav-button:hover {
   background: rgba(37,99,235,0.16);
   color: white;
+}
+
+.email-chip {
+  max-width: 240px;
+}
+
+.email-chip svg,
+.user-chip svg {
+  flex: 0 0 auto;
+}
+
+.email-chip span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-logout-button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1;
 }
 
 .save-status,
@@ -704,14 +761,32 @@ td {
   }
 
   .brand-hero,
-  .top-row,
-  .app-nav-inner {
+  .top-row {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .app-nav-actions {
+  .app-nav-inner {
+    width: min(100% - 24px, 1680px);
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .app-nav-tabs,
+  .app-nav-account {
     width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .app-nav-tabs::-webkit-scrollbar,
+  .app-nav-account::-webkit-scrollbar {
+    display: none;
+  }
+
+  .email-chip {
+    max-width: 220px;
   }
   
 }

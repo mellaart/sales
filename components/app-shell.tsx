@@ -70,10 +70,10 @@ export function AppShellHeader() {
       <div className="app-nav-inner">
         <Link href="/" className="app-nav-brand">
           <span className="brand-dot" />
-          Smart Trade
+          <span className="app-nav-brand-text">Smart Trade</span>
         </Link>
 
-        <nav className="app-nav-actions">
+        <nav className="app-nav-tabs" aria-label="Hoofdnavigatie">
           <Link href="/" className={`nav-button ${pathname === "/" ? "active" : ""}`}>
             Dashboard
           </Link>
@@ -87,22 +87,24 @@ export function AppShellHeader() {
               {tab.label}
             </Link>
           ))}
+        </nav>
 
+        <div className="app-nav-account">
           <span className="user-chip">
             <Users2 size={13} />
-            {role ?? "sales"}
+            <span>{role ?? "sales"}</span>
           </span>
 
           <span className="user-chip email-chip">
             <UserRound size={13} />
-            {user.email}
+            <span>{user.email}</span>
           </span>
 
-          <button type="button" className="logout-button" onClick={handleLogout} disabled={loggingOut}>
+          <button type="button" className="logout-button nav-logout-button" onClick={handleLogout} disabled={loggingOut}>
             <LogOut size={15} />
             {loggingOut ? "Uitloggen..." : "Uitloggen"}
           </button>
-        </nav>
+        </div>
       </div>
     </header>
   );

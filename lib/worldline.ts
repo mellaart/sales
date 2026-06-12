@@ -1,21 +1,19 @@
 export type WorldlineProjectStatus = "concept" | "waiting_customer" | "checking" | "complete" | "submitted";
 export type WorldlineDocumentType = "kvk" | "agreement" | "identity" | "bank_statement" | "refund";
 export type WorldlineCheckStatus = "missing" | "uploaded" | "checking" | "approved" | "rejected";
+export type WorldlineAgreementFieldType = "text" | "textarea" | "checkbox" | "select";
 
-export type WorldlineAgreementFields = {
-  vatNumber: string;
-  invoiceEmail: string;
-  cardTypes: string;
-  refund: string;
-  expectedDebitAmount: string;
-  expectedDebitTransactions: string;
-  accountHolder: string;
-  iban: string;
-  bic: string;
-  placeDate: string;
-  signerFunction: string;
-  signers: string;
+export type WorldlineAgreementFieldDefinition = {
+  key: string;
+  pdfField: string;
+  label: string;
+  section: string;
+  type: WorldlineAgreementFieldType;
+  defaultValue?: string;
+  options?: string[];
 };
+
+export type WorldlineAgreementFields = Record<string, string>;
 
 export type WorldlineProject = {
   id: string;
@@ -47,20 +45,60 @@ export type WorldlineDocument = {
 
 export const WORLDLINE_DOCUMENT_BUCKET = "worldline-documents";
 
-export const DEFAULT_WORLDLINE_AGREEMENT_FIELDS: WorldlineAgreementFields = {
-  vatNumber: "",
-  invoiceEmail: "",
-  cardTypes: "",
-  refund: "",
-  expectedDebitAmount: "",
-  expectedDebitTransactions: "",
-  accountHolder: "",
-  iban: "",
-  bic: "",
-  placeDate: "",
-  signerFunction: "",
-  signers: "",
-};
+export const WORLDLINE_AGREEMENT_FIELD_DEFINITIONS: WorldlineAgreementFieldDefinition[] = [
+  { key: "quoteDate", pdfField: "Offertedatum", label: "Offertedatum", section: "In te vullen door Worldline", type: "text" },
+  { key: "salesperson", pdfField: "Salesperson", label: "Salesperson", section: "In te vullen door Worldline", type: "text", defaultValue: "Troublefree NL" },
+  { key: "existingCustomer", pdfField: "Bestaande klant", label: "Bestaande klant", section: "In te vullen door Worldline", type: "select", defaultValue: "nee", options: ["nee", "ja"] },
+  { key: "allianceCode", pdfField: "Alliance code", label: "Alliance code", section: "In te vullen door Worldline", type: "text", defaultValue: "NL_Troublefree" },
+  { key: "mcc", pdfField: "MCC", label: "MCC", section: "In te vullen door Worldline", type: "text" },
+
+  { key: "companyName", pdfField: "Bedrijfsnaam", label: "Bedrijfsnaam", section: "Bedrijfsgegevens", type: "text" },
+  { key: "contactPerson", pdfField: "Contactpersoon", label: "Contactpersoon", section: "Bedrijfsgegevens", type: "text" },
+  { key: "contactGender", pdfField: "Keuzerondje 2", label: "Contactpersoon M/V", section: "Bedrijfsgegevens", type: "select", options: ["", "M", "V"] },
+  { key: "businessAddress", pdfField: "Vestigingsadres", label: "Vestigingsadres", section: "Bedrijfsgegevens", type: "text" },
+  { key: "businessPostcode", pdfField: "Postcode 1", label: "Postcode vestiging", section: "Bedrijfsgegevens", type: "text" },
+  { key: "businessCity", pdfField: "Plaats 1", label: "Plaats vestiging", section: "Bedrijfsgegevens", type: "text" },
+  { key: "phoneNumber", pdfField: "Telefoonnummer", label: "Telefoonnummer", section: "Bedrijfsgegevens", type: "text" },
+  { key: "vatNumber", pdfField: "BTW-nummer", label: "BTW-nummer", section: "Bedrijfsgegevens", type: "text" },
+  { key: "kvkNumber", pdfField: "KvKnummer", label: "KvK-nummer", section: "Bedrijfsgegevens", type: "text" },
+  { key: "companyEmail", pdfField: "Emailadres 1", label: "E-mailadres", section: "Bedrijfsgegevens", type: "text" },
+  { key: "invoiceEmail", pdfField: "Emailadres 2", label: "E-mailadres voor factuur", section: "Bedrijfsgegevens", type: "text" },
+
+  { key: "shopName", pdfField: "Winkelnaam", label: "Winkelnaam", section: "Shopgegevens", type: "text" },
+  { key: "shopAddress", pdfField: "Adres 2", label: "Adres shop", section: "Shopgegevens", type: "text" },
+  { key: "shopPostcode", pdfField: "Postocode 3", label: "Postcode shop", section: "Shopgegevens", type: "text" },
+  { key: "shopCity", pdfField: "Plaats_3", label: "Plaats shop", section: "Shopgegevens", type: "text" },
+  { key: "terminalCount", pdfField: "Aantal betaalautomaten per shop", label: "Aantal betaalautomaten per shop", section: "Betaalautomaat gegevens", type: "text" },
+  { key: "terminalType", pdfField: "type betaalautomaten/maten", label: "Type betaalautomaat/maten", section: "Betaalautomaat gegevens", type: "text" },
+  { key: "terminalCodes", pdfField: "Betaalautomaat codes", label: "Betaalautomaat codes", section: "Betaalautomaat gegevens", type: "textarea" },
+
+  { key: "cardMastercard", pdfField: "Mastercard", label: "Mastercard", section: "Betaalkaarten en tarieven", type: "checkbox" },
+  { key: "cardVisa", pdfField: "Visa", label: "Visa", section: "Betaalkaarten en tarieven", type: "checkbox" },
+  { key: "cardVisaElectron", pdfField: "Visa Electron", label: "Visa Electron", section: "Betaalkaarten en tarieven", type: "checkbox" },
+  { key: "cardUnionPay", pdfField: "UnionPay", label: "UnionPay", section: "Betaalkaarten en tarieven", type: "checkbox" },
+  { key: "cardJcb", pdfField: "JCB", label: "JCB", section: "Betaalkaarten en tarieven", type: "checkbox" },
+  { key: "cardDinersDiscover", pdfField: "DinersDiscover", label: "Diners/Discover", section: "Betaalkaarten en tarieven", type: "checkbox" },
+  { key: "refund", pdfField: "Refund", label: "Refund", section: "Betaalkaarten en tarieven", type: "checkbox" },
+  { key: "expectedDebitAmount", pdfField: "Verwacht gemiddeld", label: "Verwacht gemiddeld debit transactiebedrag", section: "Betaalkaarten en tarieven", type: "text" },
+  { key: "expectedDebitTransactions", pdfField: "Verwacht aantal", label: "Verwacht aantal debit transacties per jaar", section: "Betaalkaarten en tarieven", type: "text" },
+
+  { key: "accountHolder", pdfField: "Naam rekeninghouder", label: "Naam rekeninghouder", section: "Uitbetaling", type: "text" },
+  { key: "iban", pdfField: "Rekeningnr", label: "Rekeningnr. (IBAN)", section: "Uitbetaling", type: "text" },
+  { key: "bic", pdfField: "BIC-code", label: "BIC-code", section: "Uitbetaling", type: "text" },
+
+  { key: "signers", pdfField: "Naam tekenbevoegden", label: "Naam tekenbevoegde(n)", section: "Handtekening", type: "textarea" },
+  { key: "placeDate", pdfField: "Plaats & Datum", label: "Plaats & datum", section: "Handtekening", type: "text" },
+  { key: "signerFunction", pdfField: "Functie", label: "Functie", section: "Handtekening", type: "text" },
+  { key: "signature", pdfField: "Handtekening", label: "Handtekening tekenbevoegde(n)", section: "Handtekening", type: "textarea" },
+];
+
+export const DEFAULT_WORLDLINE_AGREEMENT_FIELDS: WorldlineAgreementFields = WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.reduce(
+  (fields, definition) => {
+    fields[definition.key] = definition.defaultValue ?? "";
+    return fields;
+  },
+  {} as WorldlineAgreementFields,
+);
 
 export const WORLDLINE_STATUS_LABELS: Record<WorldlineProjectStatus, string> = {
   concept: "Concept",
@@ -153,11 +191,27 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
 ];
 
 export function normalizeWorldlineAgreementFields(input: unknown): WorldlineAgreementFields {
-  const source = input && typeof input === "object" ? (input as Partial<Record<keyof WorldlineAgreementFields, unknown>>) : {};
+  const source = input && typeof input === "object" ? (input as Partial<Record<string, unknown>>) : {};
+  const legacyAliases: Record<string, string[]> = {
+    vatNumber: ["vatNumber"],
+    invoiceEmail: ["invoiceEmail"],
+    refund: ["refund"],
+    expectedDebitAmount: ["expectedDebitAmount"],
+    expectedDebitTransactions: ["expectedDebitTransactions"],
+    accountHolder: ["accountHolder"],
+    iban: ["iban"],
+    bic: ["bic"],
+    placeDate: ["placeDate"],
+    signerFunction: ["signerFunction"],
+    signers: ["signers"],
+    terminalCodes: ["cardTypes"],
+  };
 
-  return Object.entries(DEFAULT_WORLDLINE_AGREEMENT_FIELDS).reduce((fields, [key, fallback]) => {
-    const value = source[key as keyof WorldlineAgreementFields];
-    fields[key as keyof WorldlineAgreementFields] = typeof value === "string" ? value : fallback;
+  return WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.reduce((fields, definition) => {
+    const directValue = source[definition.key];
+    const aliasValue = legacyAliases[definition.key]?.map((alias) => source[alias]).find((value) => typeof value === "string");
+    const value = typeof directValue === "string" ? directValue : aliasValue;
+    fields[definition.key] = typeof value === "string" ? value : definition.defaultValue ?? "";
     return fields;
   }, { ...DEFAULT_WORLDLINE_AGREEMENT_FIELDS });
 }

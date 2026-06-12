@@ -4,7 +4,7 @@ import jsPDF from "jspdf";
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
 import { Building2, CheckCircle2, ChevronRight, Download, FileText, Hash, Mail, RefreshCw, Search, UploadCloud, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { StatusPill, TextArea, TextInput } from "@/components/ui";
+import { StatusPill } from "@/components/ui";
 import {
   ROLE_TAB_ACCESS,
   canAccessTab,
@@ -15,12 +15,14 @@ import {
 import { getSupabaseClient } from "@/lib/supabase";
 import {
   DEFAULT_WORLDLINE_AGREEMENT_FIELDS,
+  WORLDLINE_AGREEMENT_FIELD_DEFINITIONS,
   WORLDLINE_CHECK_STATUS_LABELS,
   WORLDLINE_DOCUMENT_BUCKET,
   WORLDLINE_DOCUMENT_DEFINITIONS,
   WORLDLINE_STATUS_LABELS,
   getWorldlineDocumentDefinition,
   normalizeWorldlineAgreementFields,
+  type WorldlineAgreementFieldDefinition,
   type WorldlineAgreementFields,
   type WorldlineCheckStatus,
   type WorldlineDocument,
@@ -135,6 +137,21 @@ function fileSizeLabel(size?: number | null) {
   return `${(size / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
+function getAgreementFieldValue(fields: WorldlineAgreementFields, definition: WorldlineAgreementFieldDefinition) {
+  const value = fields[definition.key] ?? "";
+  if (definition.type === "checkbox") return value === "ja" ? "Ja" : "Nee";
+  return value.trim() || "-";
+}
+
+function getAgreementSections() {
+  return WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.reduce((sections, definition) => {
+    const currentFields = sections.get(definition.section) ?? [];
+    currentFields.push(definition);
+    sections.set(definition.section, currentFields);
+    return sections;
+  }, new Map<string, WorldlineAgreementFieldDefinition[]>());
+}
+
 function downloadAgreementPdf(
   relation: RelationOption,
   project: WorldlineProject,
@@ -160,42 +177,7 @@ function downloadAgreementPdf(
   doc.text(`Project: ${project.id}`, left, y);
   y += 12;
 
-  const sections: Array<{ title: string; rows: Array<[string, string]> }> = [
-    {
-      title: "Bedrijfsgegevens",
-      rows: [
-        ["BTW-nummer", fields.vatNumber],
-        ["E-mailadres facturatie", fields.invoiceEmail],
-      ],
-    },
-    {
-      title: "Betaalkaarten en tarieven",
-      rows: [
-        ["Gewenste betaalkaarten", fields.cardTypes],
-        ["Refund", fields.refund],
-        ["Gemiddeld debit transactiebedrag", fields.expectedDebitAmount],
-        ["Aantal debit transacties per jaar", fields.expectedDebitTransactions],
-      ],
-    },
-    {
-      title: "Uitbetaling",
-      rows: [
-        ["Naam rekeninghouder", fields.accountHolder],
-        ["IBAN", fields.iban],
-        ["BIC-code", fields.bic],
-      ],
-    },
-    {
-      title: "Handtekening",
-      rows: [
-        ["Plaats en datum", fields.placeDate],
-        ["Functie", fields.signerFunction],
-        ["Tekenbevoegde(n)", fields.signers],
-      ],
-    },
-  ];
-
-  sections.forEach((section) => {
+  getAgreementSections().forEach((definitions, sectionTitle) => {
     if (y > 250) {
       doc.addPage();
       y = 18;
@@ -204,18 +186,23 @@ function downloadAgreementPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(17, 58, 86);
-    doc.text(section.title, left, y);
+    doc.text(sectionTitle, left, y);
     y += 7;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(25, 40, 55);
 
-    section.rows.forEach(([label, value]) => {
-      const valueText = value.trim() || "-";
+    definitions.forEach((definition) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 18;
+      }
+
+      const valueText = getAgreementFieldValue(fields, definition);
       const wrapped = doc.splitTextToSize(valueText, 104);
       doc.setFont("helvetica", "bold");
-      doc.text(label, left, y);
+      doc.text(definition.label, left, y);
       doc.setFont("helvetica", "normal");
       doc.text(wrapped, 82, y);
       y += Math.max(7, wrapped.length * 5);
@@ -230,6 +217,64 @@ function downloadAgreementPdf(
   doc.text("Let op: klant dient de originele Worldline overeenkomst volledig aan te vullen en nat te ondertekenen.", left, 286);
 
   doc.save(`${relation.name.replace(/\s+/g, "-").toLowerCase()}-worldline-aansluitgegevens.pdf`);
+}
+
+function renderAgreementFieldControl(
+  definition: WorldlineAgreementFieldDefinition,
+  value: string,
+  disabled: boolean,
+  onChange: (value: string) => void,
+) {
+  if (definition.type === "checkbox") {
+    return (
+      <label className="worldline-checkbox-control">
+        <input
+          type="checkbox"
+          checked={value === "ja"}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked ? "ja" : "nee")}
+        />
+        <span>{value === "ja" ? "Ja" : "Nee"}</span>
+      </label>
+    );
+  }
+
+  if (definition.type === "select") {
+    return (
+      <select
+        className="input worldline-field-input"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {(definition.options ?? []).map((option) => (
+          <option key={option || "empty"} value={option}>
+            {option || "-"}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (definition.type === "textarea") {
+    return (
+      <textarea
+        className="textarea worldline-field-input"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  }
+
+  return (
+    <input
+      className="input worldline-field-input"
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
 }
 
 export default function WorldlineDashboard() {
@@ -492,7 +537,7 @@ export default function WorldlineDashboard() {
     setBusy(false);
   }
 
-  function updateAgreementField(field: keyof WorldlineAgreementFields, value: string) {
+  function updateAgreementField(field: string, value: string) {
     if (!canWriteWorldline) return;
     setAgreementFields((currentFields) => ({ ...currentFields, [field]: value }));
   }
@@ -803,19 +848,27 @@ export default function WorldlineDashboard() {
                 </div>
               </div>
 
-              <div className="worldline-form-grid">
-                <TextInput label="BTW-nummer" value={agreementFields.vatNumber} onChange={(value) => updateAgreementField("vatNumber", value)} />
-                <TextInput label="E-mailadres facturatie" value={agreementFields.invoiceEmail} onChange={(value) => updateAgreementField("invoiceEmail", value)} />
-                <TextInput label="Gewenste betaalkaarten" value={agreementFields.cardTypes} onChange={(value) => updateAgreementField("cardTypes", value)} />
-                <TextInput label="Refund" value={agreementFields.refund} onChange={(value) => updateAgreementField("refund", value)} />
-                <TextInput label="Gemiddeld debit transactiebedrag" value={agreementFields.expectedDebitAmount} onChange={(value) => updateAgreementField("expectedDebitAmount", value)} />
-                <TextInput label="Aantal debit transacties per jaar" value={agreementFields.expectedDebitTransactions} onChange={(value) => updateAgreementField("expectedDebitTransactions", value)} />
-                <TextInput label="Naam rekeninghouder" value={agreementFields.accountHolder} onChange={(value) => updateAgreementField("accountHolder", value)} />
-                <TextInput label="IBAN" value={agreementFields.iban} onChange={(value) => updateAgreementField("iban", value)} />
-                <TextInput label="BIC-code" value={agreementFields.bic} onChange={(value) => updateAgreementField("bic", value)} />
-                <TextInput label="Plaats en datum" value={agreementFields.placeDate} onChange={(value) => updateAgreementField("placeDate", value)} />
-                <TextInput label="Functie" value={agreementFields.signerFunction} onChange={(value) => updateAgreementField("signerFunction", value)} />
-                <TextArea label="Tekenbevoegde(n)" value={agreementFields.signers} onChange={(value) => updateAgreementField("signers", value)} />
+              <div className="worldline-field-list">
+                {Array.from(getAgreementSections()).map(([sectionTitle, definitions]) => (
+                  <div key={sectionTitle} className="worldline-field-section">
+                    <h3>{sectionTitle}</h3>
+                    <div className="worldline-field-rows">
+                      {definitions.map((definition) => (
+                        <div key={definition.key} className="worldline-yellow-field">
+                          <span className="worldline-field-label">{definition.label}</span>
+                          <div className="worldline-field-control">
+                            {renderAgreementFieldControl(
+                              definition,
+                              agreementFields[definition.key] ?? definition.defaultValue ?? "",
+                              !canWriteWorldline,
+                              (value) => updateAgreementField(definition.key, value),
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
 

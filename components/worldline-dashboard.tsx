@@ -234,7 +234,7 @@ function renderAgreementFieldControl(
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked ? "ja" : "nee")}
         />
-        <span>{value === "ja" ? "Ja" : "Nee"}</span>
+        <span>Ja</span>
       </label>
     );
   }

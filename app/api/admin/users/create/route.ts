@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
+import { USER_ROLES } from "@/lib/role-tabs";
 import type { UserRole } from "@/lib/supabase";
 
-const allowedRoles: UserRole[] = ["sales", "support", "consultant", "manager", "admin"];
+const allowedRoles: UserRole[] = USER_ROLES;
 
 type ServiceClient = ReturnType<typeof getServiceClient>;
 

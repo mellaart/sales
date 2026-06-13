@@ -2,7 +2,7 @@
 
 import jsPDF from "jspdf";
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
-import { Building2, CheckCircle2, ChevronRight, Download, FileText, Hash, Mail, RefreshCw, Search, UploadCloud, WalletCards } from "lucide-react";
+import { Building2, CheckCircle2, ChevronRight, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Trash2, UploadCloud, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 import {
@@ -50,6 +50,7 @@ type CheckResult = {
 };
 
 const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
+const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -92,6 +93,19 @@ function getProjectTone(status: WorldlineProjectStatus): "success" | "warning" |
   if (status === "complete" || status === "submitted") return "success";
   if (status === "checking") return "warning";
   return "warning";
+}
+
+function isOngoingWorldlineProject(project: WorldlineProject) {
+  return ONGOING_WORLDLINE_STATUSES.includes(project.status);
+}
+
+function getRelationFromProject(project: WorldlineProject): RelationOption {
+  return {
+    id: project.relation_id,
+    name: project.relation_name,
+    email: project.relation_email ?? null,
+    debtorNumber: project.debtor_number ?? null,
+  };
 }
 
 function sanitizeFileName(fileName: string) {
@@ -285,11 +299,13 @@ export default function WorldlineDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
+  const [ongoingProjects, setOngoingProjects] = useState<WorldlineProject[]>([]);
   const [projects, setProjects] = useState<WorldlineProject[]>([]);
   const [activeProject, setActiveProject] = useState<WorldlineProject | null>(null);
   const [documents, setDocuments] = useState<WorldlineDocument[]>([]);
   const [agreementFields, setAgreementFields] = useState<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
   const [searching, setSearching] = useState(false);
+  const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -343,7 +359,45 @@ export default function WorldlineDashboard() {
     setAgreementFields(normalizeWorldlineAgreementFields(activeProject?.agreement_fields));
   }, [activeProject]);
 
-  async function loadProjects(relation: RelationOption) {
+  const loadOngoingProjects = useCallback(async () => {
+    if (!supabase) return;
+
+    setLoadingOngoingProjects(true);
+
+    const { data, error } = await supabase
+      .from("worldline_projects")
+      .select("*")
+      .in("status", ONGOING_WORLDLINE_STATUSES)
+      .order("updated_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      setStatus(`Lopende projecten laden mislukt: ${error.message}`);
+      setOngoingProjects([]);
+      setLoadingOngoingProjects(false);
+      return;
+    }
+
+    setOngoingProjects((data ?? []) as WorldlineProject[]);
+    setLoadingOngoingProjects(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase || roleAccessLoading || !canAccessWorldline) return;
+    void loadOngoingProjects();
+  }, [canAccessWorldline, loadOngoingProjects, roleAccessLoading, supabase]);
+
+  function syncOngoingProject(project: WorldlineProject) {
+    setOngoingProjects((currentProjects) => {
+      const remainingProjects = currentProjects.filter((item) => item.id !== project.id);
+      if (!isOngoingWorldlineProject(project)) {
+        return remainingProjects;
+      }
+      return [project, ...remainingProjects].sort((a, b) => String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")));
+    });
+  }
+
+  async function loadProjects(relation: RelationOption, preferredProjectId?: string) {
     if (!supabase) return;
 
     setLoadingProjects(true);
@@ -366,7 +420,7 @@ export default function WorldlineDashboard() {
 
     const nextProjects = (data ?? []) as WorldlineProject[];
     setProjects(nextProjects);
-    setActiveProject(nextProjects[0] ?? null);
+    setActiveProject(nextProjects.find((project) => project.id === preferredProjectId) ?? nextProjects[0] ?? null);
     setLoadingProjects(false);
   }
 
@@ -432,6 +486,62 @@ export default function WorldlineDashboard() {
     await loadProjects(relation);
   }
 
+  async function openProject(project: WorldlineProject) {
+    const relation = getRelationFromProject(project);
+    setSelectedRelation(relation);
+    setQuery("");
+    setRelations([]);
+    setStatus(`${project.relation_name} geopend.`);
+    await loadProjects(relation, project.id);
+  }
+
+  async function deleteProject(project: WorldlineProject) {
+    if (!supabase) return;
+    if (!canWriteWorldline) {
+      setStatus("Je hebt alleen leesrechten voor Worldline.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Weet je zeker dat je het Worldline-project voor ${project.relation_name} wilt verwijderen?`);
+    if (!confirmed) return;
+
+    setBusy(true);
+    setStatus("Worldline-project wordt verwijderd...");
+
+    const { data: projectDocuments } = await supabase
+      .from("worldline_documents")
+      .select("storage_path")
+      .eq("project_id", project.id);
+
+    const storagePaths = ((projectDocuments ?? []) as Array<{ storage_path?: string | null }>)
+      .map((document) => document.storage_path)
+      .filter((path): path is string => Boolean(path));
+
+    if (storagePaths.length > 0) {
+      await supabase.storage.from(WORLDLINE_DOCUMENT_BUCKET).remove(storagePaths);
+    }
+
+    const { error } = await supabase
+      .from("worldline_projects")
+      .delete()
+      .eq("id", project.id);
+
+    if (error) {
+      setStatus(`Project verwijderen mislukt: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+
+    const nextProjects = projects.filter((item) => item.id !== project.id);
+    setOngoingProjects((currentProjects) => currentProjects.filter((item) => item.id !== project.id));
+    setProjects(nextProjects);
+    if (activeProject?.id === project.id) {
+      setActiveProject(nextProjects[0] ?? null);
+    }
+    setStatus("Worldline-project verwijderd.");
+    setBusy(false);
+  }
+
   async function createProject() {
     if (!supabase || !user || !selectedRelation) return;
     if (!canWriteWorldline) {
@@ -468,6 +578,7 @@ export default function WorldlineDashboard() {
       const nextProject = data as WorldlineProject;
       setProjects((currentProjects) => [nextProject, ...currentProjects]);
       setActiveProject(nextProject);
+      syncOngoingProject(nextProject);
       setStatus("Worldline-project aangemaakt.");
     } catch (error) {
       setStatus(`Project aanmaken mislukt: ${getErrorMessage(error, "Supabase gaf geen antwoord.")}`);
@@ -505,6 +616,7 @@ export default function WorldlineDashboard() {
     const nextProject = data as WorldlineProject;
     setActiveProject(nextProject);
     setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
+    syncOngoingProject(nextProject);
     setStatus("Aansluitgegevens opgeslagen.");
     setBusy(false);
   }
@@ -533,6 +645,7 @@ export default function WorldlineDashboard() {
     const nextProject = data as WorldlineProject;
     setActiveProject(nextProject);
     setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
+    syncOngoingProject(nextProject);
     setStatus("Projectstatus bijgewerkt.");
     setBusy(false);
   }
@@ -731,6 +844,58 @@ export default function WorldlineDashboard() {
             </StatusPill>
           </div>
         </header>
+
+        <section className="card panel worldline-ongoing-panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Lopende projecten</div>
+              <h2 className="headline">Worldline-projecten</h2>
+              <p className="subtext">Open direct een lopend dossier of verwijder een project dat niet meer nodig is.</p>
+            </div>
+            <div className="button-row compact">
+              <StatusPill tone="warning">{ongoingProjects.length} project(en)</StatusPill>
+              <button type="button" className="secondary-button" onClick={() => void loadOngoingProjects()} disabled={loadingOngoingProjects || busy}>
+                <RefreshCw size={16} />
+                Vernieuwen
+              </button>
+            </div>
+          </div>
+
+          {loadingOngoingProjects ? <div className="save-status">Lopende projecten worden geladen...</div> : null}
+
+          {!loadingOngoingProjects && ongoingProjects.length === 0 ? (
+            <div className="empty-state">Geen lopende Worldline-projecten gevonden.</div>
+          ) : null}
+
+          {ongoingProjects.length > 0 ? (
+            <div className="worldline-ongoing-list">
+              {ongoingProjects.map((project) => (
+                <article key={project.id} className={`worldline-ongoing-card ${activeProject?.id === project.id ? "active" : ""}`}>
+                  <div className="worldline-ongoing-main">
+                    <strong>{project.relation_name}</strong>
+                    <span>
+                      {project.relation_email || "Geen e-mail"}
+                      {project.debtor_number ? ` · Debiteur ${project.debtor_number}` : ""}
+                    </span>
+                    <small>Laatst bijgewerkt: {formatDate(project.updated_at ?? project.created_at)}</small>
+                  </div>
+
+                  <div className="worldline-ongoing-actions">
+                    <StatusPill tone={getProjectTone(project.status)}>{WORLDLINE_STATUS_LABELS[project.status]}</StatusPill>
+                    <button type="button" className="secondary-button" onClick={() => void openProject(project)} disabled={busy}>
+                      <FolderOpen size={16} />
+                      Openen
+                    </button>
+                    <button type="button" className="secondary-button danger" onClick={() => void deleteProject(project)} disabled={busy || !canWriteWorldline}>
+                      <Trash2 size={16} />
+                      Verwijderen
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
         <section className="card panel">
           <div className="top-row">

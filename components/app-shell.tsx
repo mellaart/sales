@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, UserRound, Users2 } from "lucide-react";
 import {
+  ROLE_LABELS,
   ROLE_TAB_ACCESS,
   getAccessibleTabs,
   normalizeRoleTabAccess,
@@ -92,7 +93,7 @@ export function AppShellHeader() {
         <div className="app-nav-account">
           <span className="user-chip">
             <Users2 size={13} />
-            <span>{role ?? "sales"}</span>
+            <span>{role ? ROLE_LABELS[role] : "Sales"}</span>
           </span>
 
           <span className="user-chip email-chip">

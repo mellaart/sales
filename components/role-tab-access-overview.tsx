@@ -1,6 +1,6 @@
 "use client";
 
-import { APP_TABS, type AppTabKey, type RoleTabAccessMap, type TabPermission } from "@/lib/role-tabs";
+import { APP_TABS, ROLE_LABELS, type AppTabKey, type RoleTabAccessMap, type TabPermission } from "@/lib/role-tabs";
 import type { UserRole } from "@/lib/supabase";
 
 type RoleTabAccessOverviewProps = {
@@ -48,7 +48,7 @@ export function RoleTabAccessOverview({
       {roles.map((role) => (
         <div key={role} className="admin-user-card">
           <div>
-            <div className="package-name">{role}</div>
+            <div className="package-name">{ROLE_LABELS[role]}</div>
             <div className="subtext">{formatTabAccessDescription(access[role])}</div>
           </div>
 

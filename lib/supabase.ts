@@ -2,7 +2,7 @@ import { createClient, type User } from "@supabase/supabase-js";
 import { getEffectiveUserRole } from "@/lib/protected-admin";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 
-export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant";
+export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant" | "worldline";
 
 export type ProfileRecord = {
   id: string;

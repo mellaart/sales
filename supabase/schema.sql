@@ -7,7 +7,7 @@ create table if not exists public.profiles (
   job_title text,
   workdays text,
   mobile_phone text,
-  role text not null default 'sales' check (role in ('sales', 'support', 'consultant', 'manager', 'admin')),
+  role text not null default 'sales' check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')),
   created_at timestamptz not null default now()
 );
 
@@ -167,6 +167,7 @@ drop policy if exists "Users update own worldline projects" on public.worldline_
 drop policy if exists "Users delete own worldline projects" on public.worldline_projects;
 drop policy if exists "Managers and admins view all worldline projects" on public.worldline_projects;
 drop policy if exists "Managers and admins update all worldline projects" on public.worldline_projects;
+drop policy if exists "Managers and admins delete all worldline projects" on public.worldline_projects;
 drop policy if exists "Users insert worldline documents" on public.worldline_documents;
 drop policy if exists "Users view worldline documents" on public.worldline_documents;
 drop policy if exists "Users update worldline documents" on public.worldline_documents;
@@ -265,14 +266,20 @@ create policy "Managers and admins view all worldline projects"
   on public.worldline_projects
   for select
   to authenticated
-  using (public.current_user_role() in ('manager', 'admin'));
+  using (public.current_user_role() in ('manager', 'admin', 'worldline'));
 
 create policy "Managers and admins update all worldline projects"
   on public.worldline_projects
   for update
   to authenticated
-  using (public.current_user_role() in ('manager', 'admin'))
-  with check (public.current_user_role() in ('manager', 'admin'));
+  using (public.current_user_role() in ('manager', 'admin', 'worldline'))
+  with check (public.current_user_role() in ('manager', 'admin', 'worldline'));
+
+create policy "Managers and admins delete all worldline projects"
+  on public.worldline_projects
+  for delete
+  to authenticated
+  using (public.current_user_role() in ('manager', 'admin', 'worldline'));
 
 create policy "Users insert worldline documents"
   on public.worldline_documents
@@ -284,7 +291,7 @@ create policy "Users insert worldline documents"
       select 1
       from public.worldline_projects project
       where project.id = project_id
-        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin'))
+        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin', 'worldline'))
     )
   );
 
@@ -297,7 +304,7 @@ create policy "Users view worldline documents"
       select 1
       from public.worldline_projects project
       where project.id = project_id
-        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin'))
+        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin', 'worldline'))
     )
   );
 
@@ -310,7 +317,7 @@ create policy "Users update worldline documents"
       select 1
       from public.worldline_projects project
       where project.id = project_id
-        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin'))
+        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin', 'worldline'))
     )
   )
   with check (
@@ -318,7 +325,7 @@ create policy "Users update worldline documents"
       select 1
       from public.worldline_projects project
       where project.id = project_id
-        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin'))
+        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin', 'worldline'))
     )
   );
 
@@ -331,7 +338,7 @@ create policy "Users delete worldline documents"
       select 1
       from public.worldline_projects project
       where project.id = project_id
-        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin'))
+        and (project.created_by = auth.uid() or public.current_user_role() in ('manager', 'admin', 'worldline'))
     )
   );
 
@@ -346,6 +353,6 @@ create policy "Authenticated users manage worldline storage"
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles
   add constraint profiles_role_check
-  check (role in ('sales', 'support', 'consultant', 'manager', 'admin'));
+  check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin'));
 
 notify pgrst, 'reload schema';

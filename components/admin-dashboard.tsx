@@ -11,6 +11,7 @@ import {
 } from "@/lib/supabase";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import {
+  ROLE_LABELS,
   ROLE_TAB_ACCESS,
   USER_ROLES,
   normalizeRoleTabAccess,
@@ -493,7 +494,7 @@ export default function AdminDashboard() {
               <select className="input" value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)}>
                 {roles.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {ROLE_LABELS[item]}
                   </option>
                 ))}
               </select>
@@ -608,7 +609,7 @@ export default function AdminDashboard() {
                 <div className="button-row">
                   <span className="secondary-button">
                     <Users2 size={15} />
-                    Huidig: {profile.role}
+                    Huidig: {ROLE_LABELS[profile.role]}
                   </span>
 
                   {roles.map((item) => (
@@ -620,7 +621,7 @@ export default function AdminDashboard() {
                       onClick={() => updateRole(profile.id, item)}
                     >
                       <ShieldCheck size={15} />
-                      {item}
+                      {ROLE_LABELS[item]}
                     </button>
                   ))}
 

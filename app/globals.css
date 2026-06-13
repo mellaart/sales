@@ -1684,6 +1684,57 @@ td {
   gap: 16px;
 }
 
+.worldline-ongoing-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.worldline-ongoing-list {
+  display: grid;
+  gap: 10px;
+}
+
+.worldline-ongoing-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+}
+
+.worldline-ongoing-card.active {
+  border-color: rgba(96,165,250,0.58);
+  background: rgba(37,99,235,0.14);
+}
+
+.worldline-ongoing-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.worldline-ongoing-main strong {
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.worldline-ongoing-main span,
+.worldline-ongoing-main small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.worldline-ongoing-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .worldline-project-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1945,6 +1996,14 @@ td {
   .worldline-yellow-field {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .worldline-ongoing-card {
+    grid-template-columns: 1fr;
+  }
+
+  .worldline-ongoing-actions {
+    justify-content: flex-start;
   }
 
   .deal-card-row {

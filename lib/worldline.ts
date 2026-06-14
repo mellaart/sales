@@ -70,7 +70,7 @@ export const WORLDLINE_AGREEMENT_FIELD_DEFINITIONS: WorldlineAgreementFieldDefin
   { key: "shopCity", pdfField: "Plaats_3", label: "Plaats shop", section: "Shopgegevens", type: "text" },
   { key: "terminalCount", pdfField: "Aantal betaalautomaten per shop", label: "Aantal betaalautomaten per shop", section: "Betaalautomaat gegevens", type: "text" },
   { key: "terminalType", pdfField: "type betaalautomaten/maten", label: "Type betaalautomaat/maten", section: "Betaalautomaat gegevens", type: "text" },
-  { key: "terminalCodes", pdfField: "Betaalautomaat codes", label: "Betaalautomaat codes", section: "Betaalautomaat gegevens", type: "textarea" },
+  { key: "terminalCodes", pdfField: "Betaalautomaat codes", label: "Betaalautomaat codes", section: "Betaalautomaat gegevens", type: "text" },
 
   { key: "cardMastercard", pdfField: "Mastercard", label: "Mastercard", section: "Betaalkaarten en tarieven", type: "checkbox" },
   { key: "cardVisa", pdfField: "Visa", label: "Visa", section: "Betaalkaarten en tarieven", type: "checkbox" },

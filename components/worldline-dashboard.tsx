@@ -2,7 +2,7 @@
 
 import jsPDF from "jspdf";
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
-import { Building2, CheckCircle2, ChevronRight, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Trash2, UploadCloud, WalletCards } from "lucide-react";
+import { Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Trash2, UploadCloud, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 import {
@@ -655,6 +655,19 @@ export default function WorldlineDashboard() {
     setAgreementFields((currentFields) => ({ ...currentFields, [field]: value }));
   }
 
+  function copyBusinessDataToShop() {
+    if (!canWriteWorldline) return;
+
+    setAgreementFields((currentFields) => ({
+      ...currentFields,
+      shopName: currentFields.companyName ?? "",
+      shopAddress: currentFields.businessAddress ?? "",
+      shopPostcode: currentFields.businessPostcode ?? "",
+      shopCity: currentFields.businessCity ?? "",
+    }));
+    setStatus("Shopgegevens overgenomen uit bedrijfsgegevens. Klik op Opslaan om te bewaren.");
+  }
+
   async function uploadDocument(documentType: WorldlineDocumentType, file: File | null | undefined) {
     if (!file || !supabase || !activeProject || !selectedRelation || !user) return;
     if (!canWriteWorldline) {
@@ -1016,7 +1029,20 @@ export default function WorldlineDashboard() {
               <div className="worldline-field-list">
                 {Array.from(getAgreementSections()).map(([sectionTitle, definitions]) => (
                   <div key={sectionTitle} className="worldline-field-section">
-                    <h3>{sectionTitle}</h3>
+                    <div className="worldline-field-section-header">
+                      <h3>{sectionTitle}</h3>
+                      {sectionTitle === "Shopgegevens" ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={copyBusinessDataToShop}
+                          disabled={busy || !canWriteWorldline}
+                        >
+                          <Copy size={16} />
+                          Bedrijfsgegevens overnemen
+                        </button>
+                      ) : null}
+                    </div>
                     <div className="worldline-field-rows">
                       {definitions.map((definition) => (
                         <div key={definition.key} className="worldline-yellow-field">

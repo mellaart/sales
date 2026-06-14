@@ -1,6 +1,5 @@
 "use client";
 
-import jsPDF from "jspdf";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Trash2, UploadCloud, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
@@ -16,6 +15,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import {
   DEFAULT_WORLDLINE_AGREEMENT_FIELDS,
   WORLDLINE_AGREEMENT_FIELD_DEFINITIONS,
+  WORLDLINE_AGREEMENT_TEMPLATE_PATH,
   WORLDLINE_CHECK_STATUS_LABELS,
   WORLDLINE_DOCUMENT_BUCKET,
   WORLDLINE_DOCUMENT_DEFINITIONS,
@@ -151,12 +151,6 @@ function fileSizeLabel(size?: number | null) {
   return `${(size / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
-function getAgreementFieldValue(fields: WorldlineAgreementFields, definition: WorldlineAgreementFieldDefinition) {
-  const value = fields[definition.key] ?? "";
-  if (definition.type === "checkbox") return value === "ja" ? "Ja" : "Nee";
-  return value.trim() || "-";
-}
-
 function getAgreementSections() {
   return WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.reduce((sections, definition) => {
     const currentFields = sections.get(definition.section) ?? [];
@@ -166,71 +160,95 @@ function getAgreementSections() {
   }, new Map<string, WorldlineAgreementFieldDefinition[]>());
 }
 
-function downloadAgreementPdf(
+function getAgreementPdfValue(fields: WorldlineAgreementFields, definition: WorldlineAgreementFieldDefinition) {
+  const value = (fields[definition.key] ?? definition.defaultValue ?? "").trim();
+  if (definition.type === "checkbox") return value === "ja" ? "Ja" : "Nee";
+  if (value === "ja") return "Ja";
+  if (value === "nee") return "Nee";
+  return value;
+}
+
+function getAgreementRadioValue(definition: WorldlineAgreementFieldDefinition, value: string) {
+  if (definition.key === "contactGender") {
+    if (value === "M") return "Keuze1";
+    if (value === "V") return "Keuze2";
+  }
+
+  return value;
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadAgreementPdf(
   relation: RelationOption,
   project: WorldlineProject,
   fields: WorldlineAgreementFields,
 ) {
-  const doc = new jsPDF();
-  const left = 16;
-  let y = 18;
+  const [{ PDFCheckBox, PDFDocument, PDFDropdown, PDFRadioGroup, PDFTextField, StandardFonts }, templateResponse] = await Promise.all([
+    import("pdf-lib"),
+    fetch(WORLDLINE_AGREEMENT_TEMPLATE_PATH),
+  ]);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.setTextColor(17, 58, 86);
-  doc.text("Worldline aansluitovereenkomst", left, y);
-  y += 10;
+  if (!templateResponse.ok) {
+    throw new Error("Worldline PDF-template kon niet worden geladen.");
+  }
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(74, 91, 112);
-  doc.text(`Relatie: ${relation.name}`, left, y);
-  y += 6;
-  doc.text(`Relatie ID: ${relation.id}${relation.debtorNumber ? ` | Debiteur: ${relation.debtorNumber}` : ""}`, left, y);
-  y += 6;
-  doc.text(`Project: ${project.id}`, left, y);
-  y += 12;
+  const pdfDoc = await PDFDocument.load(await templateResponse.arrayBuffer());
+  pdfDoc.setTitle(`Worldline aansluitovereenkomst ${relation.name}`);
+  pdfDoc.setSubject(`Worldline project ${project.id}`);
+  const form = pdfDoc.getForm();
 
-  getAgreementSections().forEach((definitions, sectionTitle) => {
-    if (y > 250) {
-      doc.addPage();
-      y = 18;
-    }
+  WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.forEach((definition) => {
+    const value = getAgreementPdfValue(fields, definition);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.setTextColor(17, 58, 86);
-    doc.text(sectionTitle, left, y);
-    y += 7;
+    try {
+      const field = form.getField(definition.pdfField);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(25, 40, 55);
-
-    definitions.forEach((definition) => {
-      if (y > 270) {
-        doc.addPage();
-        y = 18;
+      if (field instanceof PDFCheckBox) {
+        if (value === "Ja") {
+          field.check();
+        } else {
+          field.uncheck();
+        }
+        return;
       }
 
-      const valueText = getAgreementFieldValue(fields, definition);
-      const wrapped = doc.splitTextToSize(valueText, 104);
-      doc.setFont("helvetica", "bold");
-      doc.text(definition.label, left, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(wrapped, 82, y);
-      y += Math.max(7, wrapped.length * 5);
-    });
+      if (field instanceof PDFRadioGroup) {
+        const radioValue = getAgreementRadioValue(definition, fields[definition.key] ?? "");
+        if (radioValue) field.select(radioValue);
+        return;
+      }
 
-    y += 5;
+      if (field instanceof PDFDropdown) {
+        if (value) field.select(value);
+        return;
+      }
+
+      if (field instanceof PDFTextField) {
+        field.setText(value);
+      }
+    } catch (error) {
+      console.warn(`Worldline PDF-veld niet gevuld: ${definition.pdfField}`, error);
+    }
   });
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(74, 91, 112);
-  doc.text("Let op: klant dient de originele Worldline overeenkomst volledig aan te vullen en nat te ondertekenen.", left, 286);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  form.updateFieldAppearances(font);
 
-  doc.save(`${relation.name.replace(/\s+/g, "-").toLowerCase()}-worldline-aansluitgegevens.pdf`);
+  const pdfBytes = await pdfDoc.save();
+  const pdfArrayBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+  const safeRelationName = sanitizeFileName(relation.name) || "worldline";
+  const fileName = `${safeRelationName}-worldline-aansluitovereenkomst.pdf`;
+  downloadBlob(new Blob([pdfArrayBuffer], { type: "application/pdf" }), fileName);
 }
 
 function renderAgreementFieldControl(
@@ -793,6 +811,19 @@ export default function WorldlineDashboard() {
     setBusy(false);
   }
 
+  async function handleDownloadAgreementPdf() {
+    if (!selectedRelation || !activeProject) return;
+
+    setStatus("Aansluitovereenkomst wordt ingevuld...");
+
+    try {
+      await downloadAgreementPdf(selectedRelation, activeProject, agreementFields);
+      setStatus("Aansluitovereenkomst gedownload.");
+    } catch (error) {
+      setStatus(`Aansluitovereenkomst downloaden mislukt: ${getErrorMessage(error, "PDF kon niet worden ingevuld.")}`);
+    }
+  }
+
   async function downloadDocument(document: WorldlineDocument) {
     if (!supabase) return;
 
@@ -1061,7 +1092,7 @@ export default function WorldlineDashboard() {
                     <RefreshCw size={16} />
                     {savingAgreementFields ? "Opslaan..." : "Opslaan"}
                   </button>
-                  <button type="button" className="primary-button" onClick={() => downloadAgreementPdf(selectedRelation, activeProject, agreementFields)}>
+                  <button type="button" className="primary-button" onClick={() => void handleDownloadAgreementPdf()} disabled={busy || savingAgreementFields}>
                     <Download size={16} />
                     Download PDF
                   </button>

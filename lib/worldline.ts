@@ -15,6 +15,8 @@ export type WorldlineAgreementFieldDefinition = {
 
 export type WorldlineAgreementFields = Record<string, string>;
 
+export const WORLDLINE_AGREEMENT_TEMPLATE_PATH = "/worldline-aansluitovereenkomst-2026-v6.pdf";
+
 export type WorldlineProject = {
   id: string;
   relation_id: string;

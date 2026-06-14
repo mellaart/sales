@@ -86,10 +86,9 @@ export const WORLDLINE_AGREEMENT_FIELD_DEFINITIONS: WorldlineAgreementFieldDefin
   { key: "iban", pdfField: "Rekeningnr", label: "Rekeningnr. (IBAN)", section: "Uitbetaling", type: "text" },
   { key: "bic", pdfField: "BIC-code", label: "BIC-code", section: "Uitbetaling", type: "text" },
 
-  { key: "signers", pdfField: "Naam tekenbevoegden", label: "Naam tekenbevoegde(n)", section: "Handtekening", type: "textarea" },
+  { key: "signers", pdfField: "Naam tekenbevoegden", label: "Naam tekenbevoegde(n)", section: "Handtekening", type: "text" },
   { key: "placeDate", pdfField: "Plaats & Datum", label: "Plaats & datum", section: "Handtekening", type: "text" },
   { key: "signerFunction", pdfField: "Functie", label: "Functie", section: "Handtekening", type: "text" },
-  { key: "signature", pdfField: "Handtekening", label: "Handtekening tekenbevoegde(n)", section: "Handtekening", type: "textarea" },
 ];
 
 export const DEFAULT_WORLDLINE_AGREEMENT_FIELDS: WorldlineAgreementFields = WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.reduce(

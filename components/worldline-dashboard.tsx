@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Trash2, UploadCloud, WalletCards } from "lucide-react";
+import { Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Send, Trash2, UploadCloud, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 import {
@@ -666,7 +666,7 @@ export default function WorldlineDashboard() {
     });
   }
 
-  async function updateProjectStatus(nextStatus: WorldlineProjectStatus) {
+  async function updateProjectStatus(nextStatus: WorldlineProjectStatus, successMessage = "Projectstatus bijgewerkt.") {
     if (!supabase || !activeProject) return;
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
@@ -691,8 +691,12 @@ export default function WorldlineDashboard() {
     setActiveProject(nextProject);
     setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
     syncOngoingProject(nextProject);
-    setStatus("Projectstatus bijgewerkt.");
+    setStatus(successMessage);
     setBusy(false);
+  }
+
+  async function markAgreementSentToCustomer() {
+    await updateProjectStatus("waiting_customer", "Aansluitovereenkomst gemarkeerd als verstuurd naar klant.");
   }
 
   function updateAgreementField(field: string, value: string) {
@@ -1095,6 +1099,15 @@ export default function WorldlineDashboard() {
                   <button type="button" className="primary-button" onClick={() => void handleDownloadAgreementPdf()} disabled={busy || savingAgreementFields}>
                     <Download size={16} />
                     Download PDF
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void markAgreementSentToCustomer()}
+                    disabled={busy || savingAgreementFields || !canWriteWorldline || activeProject.status === "waiting_customer"}
+                  >
+                    <Send size={16} />
+                    {activeProject.status === "waiting_customer" ? "Verstuurd naar klant" : "Markeer verstuurd"}
                   </button>
                 </div>
               </div>

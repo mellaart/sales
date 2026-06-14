@@ -103,7 +103,7 @@ export const DEFAULT_WORLDLINE_AGREEMENT_FIELDS: WorldlineAgreementFields = WORL
 
 export const WORLDLINE_STATUS_LABELS: Record<WorldlineProjectStatus, string> = {
   concept: "Concept",
-  waiting_customer: "Wacht op klant",
+  waiting_customer: "Verstuurd naar klant",
   checking: "Controleren",
   complete: "Compleet",
   submitted: "Ingediend",

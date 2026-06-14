@@ -1,7 +1,7 @@
 "use client";
 
 import jsPDF from "jspdf";
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Trash2, UploadCloud, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
@@ -238,6 +238,7 @@ function renderAgreementFieldControl(
   value: string,
   disabled: boolean,
   onChange: (value: string) => void,
+  onCommit?: (value: string) => void,
 ) {
   if (definition.type === "checkbox") {
     return (
@@ -246,7 +247,11 @@ function renderAgreementFieldControl(
           type="checkbox"
           checked={value === "ja"}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.checked ? "ja" : "nee")}
+          onChange={(event) => {
+            const nextValue = event.target.checked ? "ja" : "nee";
+            onChange(nextValue);
+            onCommit?.(nextValue);
+          }}
         />
         <span>Ja</span>
       </label>
@@ -260,6 +265,7 @@ function renderAgreementFieldControl(
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={(event) => onCommit?.(event.target.value)}
       >
         {(definition.options ?? []).map((option) => (
           <option key={option || "empty"} value={option}>
@@ -277,6 +283,7 @@ function renderAgreementFieldControl(
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={(event) => onCommit?.(event.target.value)}
       />
     );
   }
@@ -287,6 +294,7 @@ function renderAgreementFieldControl(
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
+      onBlur={(event) => onCommit?.(event.target.value)}
     />
   );
 }
@@ -304,9 +312,11 @@ export default function WorldlineDashboard() {
   const [activeProject, setActiveProject] = useState<WorldlineProject | null>(null);
   const [documents, setDocuments] = useState<WorldlineDocument[]>([]);
   const [agreementFields, setAgreementFields] = useState<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
+  const hydratedAgreementProjectId = useRef<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [savingAgreementFields, setSavingAgreementFields] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -356,6 +366,9 @@ export default function WorldlineDashboard() {
   }, [user]);
 
   useEffect(() => {
+    const projectId = activeProject?.id ?? null;
+    if (hydratedAgreementProjectId.current === projectId) return;
+    hydratedAgreementProjectId.current = projectId;
     setAgreementFields(normalizeWorldlineAgreementFields(activeProject?.agreement_fields));
   }, [activeProject]);
 
@@ -587,20 +600,25 @@ export default function WorldlineDashboard() {
     }
   }
 
-  async function saveAgreementFields() {
+  async function persistAgreementFields(
+    nextAgreementFields: WorldlineAgreementFields,
+    options: { savingMessage?: string; savedMessage?: string } = {},
+  ) {
     if (!supabase || !activeProject) return;
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
       return;
     }
 
-    setBusy(true);
-    setStatus("Aansluitgegevens worden opgeslagen...");
+    setSavingAgreementFields(true);
+    if (options.savingMessage) {
+      setStatus(options.savingMessage);
+    }
 
     const { data, error } = await supabase
       .from("worldline_projects")
       .update({
-        agreement_fields: agreementFields,
+        agreement_fields: nextAgreementFields,
         updated_at: new Date().toISOString(),
       } as never)
       .eq("id", activeProject.id)
@@ -609,7 +627,7 @@ export default function WorldlineDashboard() {
 
     if (error) {
       setStatus(`Aansluitgegevens opslaan mislukt: ${error.message}`);
-      setBusy(false);
+      setSavingAgreementFields(false);
       return;
     }
 
@@ -617,8 +635,17 @@ export default function WorldlineDashboard() {
     setActiveProject(nextProject);
     setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
     syncOngoingProject(nextProject);
-    setStatus("Aansluitgegevens opgeslagen.");
-    setBusy(false);
+    if (options.savedMessage) {
+      setStatus(options.savedMessage);
+    }
+    setSavingAgreementFields(false);
+  }
+
+  async function saveAgreementFields() {
+    await persistAgreementFields(agreementFields, {
+      savingMessage: "Aansluitgegevens worden opgeslagen...",
+      savedMessage: "Aansluitgegevens opgeslagen.",
+    });
   }
 
   async function updateProjectStatus(nextStatus: WorldlineProjectStatus) {
@@ -655,17 +682,32 @@ export default function WorldlineDashboard() {
     setAgreementFields((currentFields) => ({ ...currentFields, [field]: value }));
   }
 
+  function commitAgreementField(field: string, value: string) {
+    if (!canWriteWorldline) return;
+
+    const nextFields = { ...agreementFields, [field]: value };
+    setAgreementFields(nextFields);
+    void persistAgreementFields(nextFields, {
+      savedMessage: "Aansluitgegevens automatisch opgeslagen.",
+    });
+  }
+
   function copyBusinessDataToShop() {
     if (!canWriteWorldline) return;
 
-    setAgreementFields((currentFields) => ({
-      ...currentFields,
-      shopName: currentFields.companyName ?? "",
-      shopAddress: currentFields.businessAddress ?? "",
-      shopPostcode: currentFields.businessPostcode ?? "",
-      shopCity: currentFields.businessCity ?? "",
-    }));
-    setStatus("Shopgegevens overgenomen uit bedrijfsgegevens. Klik op Opslaan om te bewaren.");
+    const nextFields = {
+      ...agreementFields,
+      shopName: agreementFields.companyName ?? "",
+      shopAddress: agreementFields.businessAddress ?? "",
+      shopPostcode: agreementFields.businessPostcode ?? "",
+      shopCity: agreementFields.businessCity ?? "",
+    };
+
+    setAgreementFields(nextFields);
+    void persistAgreementFields(nextFields, {
+      savingMessage: "Shopgegevens worden overgenomen...",
+      savedMessage: "Shopgegevens overgenomen en opgeslagen.",
+    });
   }
 
   async function uploadDocument(documentType: WorldlineDocumentType, file: File | null | undefined) {
@@ -1015,9 +1057,9 @@ export default function WorldlineDashboard() {
                   <p className="subtext">Vul de bekende gegevens in en download een PDF voor het dossier of de klantmail.</p>
                 </div>
                 <div className="button-row compact">
-                  <button type="button" className="secondary-button" onClick={() => void saveAgreementFields()} disabled={busy || !canWriteWorldline}>
+                  <button type="button" className="secondary-button" onClick={() => void saveAgreementFields()} disabled={busy || savingAgreementFields || !canWriteWorldline}>
                     <RefreshCw size={16} />
-                    Opslaan
+                    {savingAgreementFields ? "Opslaan..." : "Opslaan"}
                   </button>
                   <button type="button" className="primary-button" onClick={() => downloadAgreementPdf(selectedRelation, activeProject, agreementFields)}>
                     <Download size={16} />
@@ -1036,7 +1078,7 @@ export default function WorldlineDashboard() {
                           type="button"
                           className="secondary-button"
                           onClick={copyBusinessDataToShop}
-                          disabled={busy || !canWriteWorldline}
+                          disabled={busy || savingAgreementFields || !canWriteWorldline}
                         >
                           <Copy size={16} />
                           Bedrijfsgegevens overnemen
@@ -1053,6 +1095,7 @@ export default function WorldlineDashboard() {
                               agreementFields[definition.key] ?? definition.defaultValue ?? "",
                               !canWriteWorldline,
                               (value) => updateAgreementField(definition.key, value),
+                              (value) => commitAgreementField(definition.key, value),
                             )}
                           </div>
                         </div>

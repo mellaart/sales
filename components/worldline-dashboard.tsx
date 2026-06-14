@@ -369,7 +369,6 @@ export default function WorldlineDashboard() {
   const [documents, setDocuments] = useState<WorldlineDocument[]>([]);
   const [agreementFields, setAgreementFields] = useState<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
   const hydratedAgreementProjectId = useRef<string | null>(null);
-  const [kvkUploadNumber, setKvkUploadNumber] = useState("");
   const [searching, setSearching] = useState(false);
   const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -781,11 +780,11 @@ export default function WorldlineDashboard() {
 
     const definition = getWorldlineDocumentDefinition(documentType);
     const kvkNumber = documentType === "kvk"
-      ? normalizeKvkNumber(kvkUploadNumber) || extractKvkNumberFromText(file.name)
+      ? extractKvkNumberFromText(file.name)
       : "";
 
     if (documentType === "kvk" && !kvkNumber) {
-      setStatus("Vul eerst het uittrekselnummer van de KvK in of gebruik een bestandsnaam zoals 'Uittreksel - 58048472.pdf'.");
+      setStatus("Gebruik voor KvK een bestandsnaam zoals 'Uittreksel - 58048472.pdf', zodat het uittrekselnummer automatisch herkend wordt.");
       return;
     }
 
@@ -845,7 +844,6 @@ export default function WorldlineDashboard() {
     setDocuments((currentDocuments) => [data as WorldlineDocument, ...currentDocuments]);
     if (documentType === "kvk") {
       const hasOtherKvkDocuments = documents.some((document) => document.document_type === "kvk" && getDocumentKvkNumber(document) !== kvkNumber);
-      setKvkUploadNumber("");
       setStatus(
         latestVersion > 0
           ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${nextVersion}.`
@@ -1259,21 +1257,6 @@ export default function WorldlineDashboard() {
                           {WORLDLINE_CHECK_STATUS_LABELS[latestDocument?.check_status ?? "missing"]}
                         </StatusPill>
                       </div>
-
-                      {definition.key === "kvk" ? (
-                        <label className="input-wrap worldline-kvk-number-field">
-                          <span className="input-label">Uittrekselnummer</span>
-                          <input
-                            className="input"
-                            value={kvkUploadNumber}
-                            placeholder="Bijv. 58048472"
-                            inputMode="numeric"
-                            maxLength={8}
-                            onChange={(event) => setKvkUploadNumber(normalizeKvkNumber(event.target.value))}
-                            disabled={busy || !canWriteWorldline}
-                          />
-                        </label>
-                      ) : null}
 
                       <label
                         className="worldline-dropzone"

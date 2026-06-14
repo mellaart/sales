@@ -1925,11 +1925,6 @@ td {
   color: var(--muted);
 }
 
-.worldline-kvk-number-field {
-  display: grid;
-  gap: 6px;
-}
-
 .worldline-kvk-list {
   display: grid;
   gap: 10px;

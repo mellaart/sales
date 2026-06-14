@@ -1925,6 +1925,53 @@ td {
   color: var(--muted);
 }
 
+.worldline-kvk-number-field {
+  display: grid;
+  gap: 6px;
+}
+
+.worldline-kvk-list {
+  display: grid;
+  gap: 10px;
+}
+
+.worldline-kvk-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148,163,184,0.18);
+  border-radius: 8px;
+  background: rgba(15,23,42,0.36);
+}
+
+.worldline-kvk-item-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.worldline-kvk-item-main strong {
+  color: #f8fafc;
+}
+
+.worldline-kvk-item-main span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.worldline-kvk-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+
+.worldline-kvk-item-meta > span {
+  color: #f8fafc;
+  font-weight: 900;
+}
+
 .worldline-document-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

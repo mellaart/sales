@@ -46,6 +46,7 @@ type RelationSearchResponse = {
 
 type CheckResult = {
   checklist?: Array<{ text: string; done: boolean }>;
+  kvkNumber?: string;
   note?: string;
 };
 
@@ -116,10 +117,47 @@ function sanitizeFileName(fileName: string) {
     .replace(/^-|-$/g, "");
 }
 
+function normalizeKvkNumber(value?: string | null) {
+  return (value ?? "").replace(/\D/g, "").slice(0, 8);
+}
+
+function extractKvkNumberFromText(value?: string | null) {
+  const match = (value ?? "").match(/\b(\d{8})\b/);
+  return normalizeKvkNumber(match?.[1]);
+}
+
+function getDocumentKvkNumber(document: WorldlineDocument) {
+  const checkResult = document.check_result && typeof document.check_result === "object"
+    ? (document.check_result as CheckResult)
+    : {};
+
+  return normalizeKvkNumber(checkResult.kvkNumber) || extractKvkNumberFromText(document.file_name);
+}
+
 function getLatestDocument(documents: WorldlineDocument[], documentType: WorldlineDocumentType) {
   return documents
     .filter((document) => document.document_type === documentType)
     .sort((a, b) => b.version - a.version || String(b.uploaded_at ?? "").localeCompare(String(a.uploaded_at ?? "")))[0] ?? null;
+}
+
+function getLatestKvkDocuments(documents: WorldlineDocument[]) {
+  const groups = new Map<string, WorldlineDocument[]>();
+
+  documents
+    .filter((document) => document.document_type === "kvk")
+    .forEach((document) => {
+      const kvkNumber = getDocumentKvkNumber(document);
+      const groupKey = kvkNumber || `unknown-${document.id}`;
+      const currentDocuments = groups.get(groupKey) ?? [];
+      currentDocuments.push(document);
+      groups.set(groupKey, currentDocuments);
+    });
+
+  return Array.from(groups.values())
+    .map((groupDocuments) => (
+      [...groupDocuments].sort((a, b) => b.version - a.version || String(b.uploaded_at ?? "").localeCompare(String(a.uploaded_at ?? "")))[0]
+    ))
+    .sort((a, b) => String(b.uploaded_at ?? "").localeCompare(String(a.uploaded_at ?? "")));
 }
 
 function createInitialCheckResult(documentType: WorldlineDocumentType): CheckResult {
@@ -331,6 +369,7 @@ export default function WorldlineDashboard() {
   const [documents, setDocuments] = useState<WorldlineDocument[]>([]);
   const [agreementFields, setAgreementFields] = useState<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
   const hydratedAgreementProjectId = useRef<string | null>(null);
+  const [kvkUploadNumber, setKvkUploadNumber] = useState("");
   const [searching, setSearching] = useState(false);
   const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -343,6 +382,7 @@ export default function WorldlineDashboard() {
       WORLDLINE_DOCUMENT_DEFINITIONS.map((definition) => [definition.key, getLatestDocument(documents, definition.key)]),
     ) as Record<WorldlineDocumentType, WorldlineDocument | null>;
   }, [documents]);
+  const latestKvkDocuments = useMemo(() => getLatestKvkDocuments(documents), [documents]);
 
   const canAccessWorldline = canAccessTab(role, "worldline", roleTabAccess);
   const canWriteWorldline = canWriteTab(role, "worldline", roleTabAccess);
@@ -740,9 +780,28 @@ export default function WorldlineDashboard() {
     }
 
     const definition = getWorldlineDocumentDefinition(documentType);
-    const latestVersion = Math.max(0, ...documents.filter((document) => document.document_type === documentType).map((document) => document.version));
+    const kvkNumber = documentType === "kvk"
+      ? normalizeKvkNumber(kvkUploadNumber) || extractKvkNumberFromText(file.name)
+      : "";
+
+    if (documentType === "kvk" && !kvkNumber) {
+      setStatus("Vul eerst het uittrekselnummer van de KvK in of gebruik een bestandsnaam zoals 'Uittreksel - 58048472.pdf'.");
+      return;
+    }
+
+    const versionDocuments = documents.filter((document) => {
+      if (document.document_type !== documentType) return false;
+      if (documentType !== "kvk") return true;
+      return getDocumentKvkNumber(document) === kvkNumber;
+    });
+    const latestVersion = Math.max(0, ...versionDocuments.map((document) => document.version));
     const nextVersion = latestVersion + 1;
-    const storagePath = `${selectedRelation.id}/${activeProject.id}/${documentType}/v${nextVersion}-${Date.now()}-${sanitizeFileName(file.name)}`;
+    const storageGroup = documentType === "kvk" ? `${documentType}/${kvkNumber}` : documentType;
+    const storagePath = `${selectedRelation.id}/${activeProject.id}/${storageGroup}/v${nextVersion}-${Date.now()}-${sanitizeFileName(file.name)}`;
+    const nextCheckResult: CheckResult = {
+      ...createInitialCheckResult(documentType),
+      ...(documentType === "kvk" ? { kvkNumber } : {}),
+    };
 
     setBusy(true);
     setStatus(`${definition?.title ?? "Document"} wordt geupload...`);
@@ -771,7 +830,7 @@ export default function WorldlineDashboard() {
         file_size: file.size,
         version: nextVersion,
         check_status: "uploaded",
-        check_result: createInitialCheckResult(documentType),
+        check_result: nextCheckResult,
         uploaded_by: user.id,
       } as never)
       .select("*")
@@ -784,7 +843,17 @@ export default function WorldlineDashboard() {
     }
 
     setDocuments((currentDocuments) => [data as WorldlineDocument, ...currentDocuments]);
-    setStatus(`${definition?.title ?? "Document"} is opgeslagen onder dit Worldline-project.`);
+    if (documentType === "kvk") {
+      const hasOtherKvkDocuments = documents.some((document) => document.document_type === "kvk" && getDocumentKvkNumber(document) !== kvkNumber);
+      setKvkUploadNumber("");
+      setStatus(
+        latestVersion > 0
+          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${nextVersion}.`
+          : `KvK-uittreksel ${kvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK.`
+      );
+    } else {
+      setStatus(`${definition?.title ?? "Document"} is opgeslagen onder dit Worldline-project.`);
+    }
     setBusy(false);
   }
 
@@ -1172,7 +1241,9 @@ export default function WorldlineDashboard() {
 
               <div className="worldline-document-grid">
                 {WORLDLINE_DOCUMENT_DEFINITIONS.map((definition) => {
-                  const latestDocument = latestDocuments[definition.key];
+                  const latestDocument = definition.key === "kvk"
+                    ? latestKvkDocuments[0] ?? null
+                    : latestDocuments[definition.key];
                   const checkResult = getCheckResult(latestDocument, definition.key);
                   const inputId = `worldline-${definition.key}`;
 
@@ -1188,6 +1259,21 @@ export default function WorldlineDashboard() {
                           {WORLDLINE_CHECK_STATUS_LABELS[latestDocument?.check_status ?? "missing"]}
                         </StatusPill>
                       </div>
+
+                      {definition.key === "kvk" ? (
+                        <label className="input-wrap worldline-kvk-number-field">
+                          <span className="input-label">Uittrekselnummer</span>
+                          <input
+                            className="input"
+                            value={kvkUploadNumber}
+                            placeholder="Bijv. 58048472"
+                            inputMode="numeric"
+                            maxLength={8}
+                            onChange={(event) => setKvkUploadNumber(normalizeKvkNumber(event.target.value))}
+                            disabled={busy || !canWriteWorldline}
+                          />
+                        </label>
+                      ) : null}
 
                       <label
                         className="worldline-dropzone"
@@ -1207,7 +1293,46 @@ export default function WorldlineDashboard() {
                         />
                       </label>
 
-                      {latestDocument ? (
+                      {definition.key === "kvk" && latestKvkDocuments.length > 0 ? (
+                        <div className="worldline-kvk-list">
+                          {latestKvkDocuments.map((kvkDocument) => {
+                            const documentKvkNumber = getDocumentKvkNumber(kvkDocument);
+
+                            return (
+                              <div key={kvkDocument.id} className="worldline-kvk-item">
+                                <div className="worldline-kvk-item-main">
+                                  <strong>{documentKvkNumber ? `Uittreksel - ${documentKvkNumber}` : "KvK-uittreksel zonder nummer"}</strong>
+                                  <span>{kvkDocument.file_name}</span>
+                                </div>
+                                <div className="worldline-kvk-item-meta">
+                                  <StatusPill tone={getCheckTone(kvkDocument.check_status)}>
+                                    {WORLDLINE_CHECK_STATUS_LABELS[kvkDocument.check_status]}
+                                  </StatusPill>
+                                  <span>v{kvkDocument.version}</span>
+                                  <small>{formatDate(kvkDocument.uploaded_at)}</small>
+                                </div>
+                                <div className="button-row compact">
+                                  <button type="button" className="secondary-button" onClick={() => void downloadDocument(kvkDocument)}>
+                                    <Download size={16} />
+                                    Download
+                                  </button>
+                                  <button type="button" className="secondary-button" onClick={() => void updateDocumentStatus(kvkDocument, "checking")} disabled={busy || !canWriteWorldline}>
+                                    Controleren
+                                  </button>
+                                  <button type="button" className="secondary-button" onClick={() => void updateDocumentStatus(kvkDocument, "approved")} disabled={busy || !canWriteWorldline}>
+                                    Akkoord
+                                  </button>
+                                  <button type="button" className="secondary-button danger" onClick={() => void updateDocumentStatus(kvkDocument, "rejected")} disabled={busy || !canWriteWorldline}>
+                                    Afkeur
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+
+                      {definition.key !== "kvk" && latestDocument ? (
                         <div className="worldline-document-meta">
                           <div><span>Laatste versie</span><strong>v{latestDocument.version}</strong></div>
                           <div><span>Bestand</span><strong>{latestDocument.file_name}</strong></div>
@@ -1226,7 +1351,7 @@ export default function WorldlineDashboard() {
                       </div>
 
                       <div className="button-row compact">
-                        {latestDocument ? (
+                        {definition.key !== "kvk" && latestDocument ? (
                           <>
                             <button type="button" className="secondary-button" onClick={() => void downloadDocument(latestDocument)}>
                               <Download size={16} />

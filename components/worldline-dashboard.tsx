@@ -1057,7 +1057,7 @@ export default function WorldlineDashboard() {
         <section className="card panel">
           <div className="top-row">
             <div>
-              <div className="eyebrow">Stap 1</div>
+              <div className="eyebrow">Relatie</div>
               <h2 className="headline">Relatie selecteren</h2>
               <p className="subtext">Zoek op bedrijfsnaam, contactnaam, e-mail of relatienummer.</p>
             </div>
@@ -1154,7 +1154,7 @@ export default function WorldlineDashboard() {
             <section className="card panel">
               <div className="top-row">
                 <div>
-                  <div className="eyebrow">Stap 3</div>
+                  <div className="eyebrow">Aansluitovereenkomst</div>
                   <h2 className="headline">Aansluitovereenkomst voorbereiden</h2>
                   <p className="subtext">Vul de bekende gegevens in en download een PDF voor het dossier of de klantmail.</p>
                 </div>
@@ -1249,7 +1249,7 @@ export default function WorldlineDashboard() {
                     <article key={definition.key} className="worldline-document-card">
                       <div className="worldline-document-top">
                         <div>
-                          <div className="eyebrow">{definition.step}</div>
+                          <div className="eyebrow">Documentcontrole</div>
                           <h3>{definition.title}</h3>
                           <p>{definition.description}</p>
                         </div>

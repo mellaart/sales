@@ -119,7 +119,6 @@ export const WORLDLINE_CHECK_STATUS_LABELS: Record<WorldlineCheckStatus, string>
 
 export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
   key: WorldlineDocumentType;
-  step: string;
   title: string;
   description: string;
   accept: string;
@@ -127,7 +126,6 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
 }> = [
   {
     key: "kvk",
-    step: "Stap 2",
     title: "KvK",
     description: "Upload een KvK-uittreksel, inclusief eventuele vervolguittreksels.",
     accept: "application/pdf",
@@ -140,7 +138,6 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
   },
   {
     key: "agreement",
-    step: "Stap 3",
     title: "Aansluitovereenkomst",
     description: "Bewaar de door klant ingevulde en nat ondertekende overeenkomst.",
     accept: "application/pdf",
@@ -153,7 +150,6 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
   },
   {
     key: "identity",
-    step: "Stap 4",
     title: "ID",
     description: "Upload legitimatie van iedere tekenbevoegde persoon.",
     accept: "application/pdf,image/jpeg,image/png",
@@ -166,7 +162,6 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
   },
   {
     key: "bank_statement",
-    step: "Stap 5",
     title: "Bankafschrift",
     description: "Upload een bankafschrift van maximaal 2 maanden oud.",
     accept: "application/pdf,image/jpeg,image/png",
@@ -179,7 +174,6 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
   },
   {
     key: "refund",
-    step: "Stap 6",
     title: "Refund",
     description: "Upload het refund formulier als refund is aangevraagd.",
     accept: "application/pdf",

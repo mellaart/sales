@@ -18,6 +18,12 @@ type OpenAiChatCompletionResponse = {
   };
 };
 
+type TesseractLanguageData = {
+  code: string;
+  gzip: boolean;
+  langPath: string;
+};
+
 export class DocumentTextExtractionError extends Error {
   status: number;
 
@@ -32,6 +38,10 @@ const require = createRequire(import.meta.url);
 
 function getPdfParse() {
   return require("pdf-parse/lib/pdf-parse.js") as PdfParse;
+}
+
+function getEnglishTesseractData() {
+  return require("@tesseract.js-data/eng") as TesseractLanguageData;
 }
 
 function normalizeText(value: unknown) {
@@ -70,18 +80,40 @@ async function extractPdfText(file: Blob) {
   return normalizeText(parsed.text);
 }
 
-async function extractImageText(file: Blob, documentTitle: string, mimeType: string) {
+async function extractImageTextWithTesseract(buffer: Buffer) {
+  const [{ createWorker, OEM, PSM }, languageData] = await Promise.all([
+    import("tesseract.js"),
+    Promise.resolve(getEnglishTesseractData()),
+  ]);
+  const worker = await createWorker(languageData.code, OEM.LSTM_ONLY, {
+    cachePath: "/tmp/tesseract-cache",
+    gzip: languageData.gzip,
+    langPath: languageData.langPath,
+  });
+
+  try {
+    await worker.setParameters({
+      preserve_interword_spaces: "1",
+      tessedit_pageseg_mode: PSM.AUTO,
+    });
+    const result = await worker.recognize(buffer);
+    return normalizeText(result.data.text);
+  } finally {
+    await worker.terminate();
+  }
+}
+
+async function extractImageTextWithOpenAi(buffer: Buffer, documentTitle: string, mimeType: string) {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new DocumentTextExtractionError(
-      `${documentTitle}-controle voor JPG/PNG heeft OCR nodig. Voeg OPENAI_API_KEY toe aan de Vercel environment variables.`,
+      `${documentTitle}-controle kon geen tekst lezen uit deze afbeelding. Upload eventueel een PDF of een scherpere JPG/PNG.`,
       503,
     );
   }
 
   const model = process.env.OPENAI_OCR_MODEL?.trim() || "gpt-4o-mini";
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const imageMimeType = mimeType || file.type || "image/jpeg";
+  const imageMimeType = mimeType || "image/jpeg";
   const imageUrl = `data:${imageMimeType};base64,${buffer.toString("base64")}`;
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -126,6 +158,19 @@ async function extractImageText(file: Blob, documentTitle: string, mimeType: str
   }
 
   return normalizeText(json.choices?.[0]?.message?.content);
+}
+
+async function extractImageText(file: Blob, documentTitle: string, mimeType: string) {
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  try {
+    const text = await extractImageTextWithTesseract(buffer);
+    if (text) return text;
+  } catch (error) {
+    console.warn(`${documentTitle}-OCR via Tesseract mislukt`, error);
+  }
+
+  return extractImageTextWithOpenAi(buffer, documentTitle, mimeType || file.type || "image/jpeg");
 }
 
 export async function extractWorldlineDocumentText(document: WorldlineDocument, file: Blob, documentTitle: string) {

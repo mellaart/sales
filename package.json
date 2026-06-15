@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
+    "@tesseract.js-data/eng": "^1.0.0",
     "framer-motion": "^12.10.0",
     "jspdf": "^2.5.2",
     "lucide-react": "^0.511.0",
@@ -17,7 +18,8 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

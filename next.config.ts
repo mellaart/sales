@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  outputFileTracingIncludes: {
+    "/api/worldline/documents/check": [
+      "./node_modules/.pnpm/@tesseract.js-data+eng@*/node_modules/@tesseract.js-data/eng/**/*",
+      "./node_modules/.pnpm/tesseract.js-core@*/node_modules/tesseract.js-core/**/*",
+      "./node_modules/.pnpm/tesseract.js@*/node_modules/tesseract.js/src/worker-script/node/**/*",
+    ],
+  },
   async headers() {
     return [
       {

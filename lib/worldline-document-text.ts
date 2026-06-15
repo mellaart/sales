@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import type { WorldlineDocument } from "@/lib/worldline";
 
 type PdfParseResult = {
@@ -44,6 +45,15 @@ function getEnglishTesseractData() {
   return require("@tesseract.js-data/eng") as TesseractLanguageData;
 }
 
+function getTesseractWorkerPath() {
+  return require.resolve("tesseract.js/src/worker-script/node/index.js");
+}
+
+function getTesseractCorePath() {
+  const tesseractPackageDir = dirname(dirname(dirname(dirname(getTesseractWorkerPath()))));
+  return dirname(require.resolve("tesseract.js-core/package.json", { paths: [tesseractPackageDir] }));
+}
+
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -87,8 +97,10 @@ async function extractImageTextWithTesseract(buffer: Buffer) {
   ]);
   const worker = await createWorker(languageData.code, OEM.LSTM_ONLY, {
     cachePath: "/tmp/tesseract-cache",
+    corePath: getTesseractCorePath(),
     gzip: languageData.gzip,
     langPath: languageData.langPath,
+    workerPath: getTesseractWorkerPath(),
   });
 
   try {

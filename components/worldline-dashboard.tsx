@@ -47,7 +47,7 @@ type RelationSearchResponse = {
 
 const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
-const WORLDLINE_KVK_ANALYSIS_VERSION = 3;
+const WORLDLINE_KVK_ANALYSIS_VERSION = 4;
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;

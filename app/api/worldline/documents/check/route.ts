@@ -161,7 +161,14 @@ export async function POST(request: Request) {
       .filter((item) => item.id !== document.id)
       .map((item) => normalizeText(item.file_name))
       .filter(Boolean);
-    const analysis = analyzeWorldlineKvkText(pdfText, kvkNumber, new Date(), { supportingDocumentNames });
+    const agreementFields = project.agreement_fields && typeof project.agreement_fields === "object"
+      ? project.agreement_fields as Record<string, unknown>
+      : {};
+    const expectedCompanyName = normalizeText(agreementFields.companyName) || project.relation_name;
+    const analysis = analyzeWorldlineKvkText(pdfText, kvkNumber, new Date(), {
+      expectedCompanyName,
+      supportingDocumentNames,
+    });
 
     const { data: updatedDocument, error: updateError } = await service
       .from("worldline_documents")

@@ -208,11 +208,14 @@ function getCheckResult(document: WorldlineDocument | null, documentType: Worldl
 
   return {
     analysisVersion: typeof source.analysisVersion === "number" ? source.analysisVersion : undefined,
+    bankName: typeof source.bankName === "string" ? source.bankName : undefined,
     checklist: Array.isArray(source.checklist) ? source.checklist : fallback.checklist,
     documentTitle: typeof source.documentTitle === "string" ? source.documentTitle : undefined,
+    iban: typeof source.iban === "string" ? source.iban : undefined,
     note: typeof source.note === "string" ? source.note : "",
     kvkNumber: typeof source.kvkNumber === "string" ? source.kvkNumber : undefined,
     producedDate: typeof source.producedDate === "string" ? source.producedDate : undefined,
+    statementDate: typeof source.statementDate === "string" ? source.statementDate : undefined,
     authorizedSigners: Array.isArray(source.authorizedSigners) ? source.authorizedSigners : undefined,
     legalShareholders: Array.isArray(source.legalShareholders) ? source.legalShareholders : undefined,
   };
@@ -965,22 +968,24 @@ export default function WorldlineDashboard() {
     }
   }
 
-  const checkKvkDocument = useCallback(async (document: WorldlineDocument) => {
+  const runAutomatedDocumentCheck = useCallback(async (document: WorldlineDocument) => {
     if (!supabase) return;
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
       return;
     }
 
+    const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
+
     setBusy(true);
-    setStatus("KvK wordt gecontroleerd...");
+    setStatus(`${documentTitle} wordt gecontroleerd...`);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
 
       if (!accessToken) {
-        setStatus("Je sessie is verlopen. Log opnieuw in om de KvK te controleren.");
+        setStatus(`Je sessie is verlopen. Log opnieuw in om ${documentTitle.toLowerCase()} te controleren.`);
         return;
       }
 
@@ -999,14 +1004,14 @@ export default function WorldlineDashboard() {
       };
 
       if (!response.ok || !json.document) {
-        setStatus(`KvK-controle mislukt: ${json.error ?? "geen resultaat ontvangen"}.`);
+        setStatus(`${documentTitle}-controle mislukt: ${json.error ?? "geen resultaat ontvangen"}.`);
         return;
       }
 
       setDocuments((currentDocuments) => currentDocuments.map((item) => item.id === json.document?.id ? json.document : item));
-      setStatus(json.message ?? "KvK-controle uitgevoerd.");
+      setStatus(json.message ?? `${documentTitle}-controle uitgevoerd.`);
     } catch (error) {
-      setStatus(`KvK-controle mislukt: ${getErrorMessage(error, "controle kon niet worden uitgevoerd.")}`);
+      setStatus(`${documentTitle}-controle mislukt: ${getErrorMessage(error, "controle kon niet worden uitgevoerd.")}`);
     } finally {
       setBusy(false);
     }
@@ -1040,8 +1045,8 @@ export default function WorldlineDashboard() {
   }
 
   async function checkDocument(document: WorldlineDocument) {
-    if (document.document_type === "kvk") {
-      await checkKvkDocument(document);
+    if (document.document_type === "kvk" || document.document_type === "bank_statement") {
+      await runAutomatedDocumentCheck(document);
       return;
     }
 
@@ -1058,8 +1063,8 @@ export default function WorldlineDashboard() {
     if (!staleKvkDocument) return;
 
     autoCheckedKvkDocumentIds.current.add(staleKvkDocument.id);
-    void checkKvkDocument(staleKvkDocument);
-  }, [activeProjectId, busy, canWriteWorldline, checkKvkDocument, latestKvkDocuments, roleAccessLoading]);
+    void runAutomatedDocumentCheck(staleKvkDocument);
+  }, [activeProjectId, busy, canWriteWorldline, runAutomatedDocumentCheck, latestKvkDocuments, roleAccessLoading]);
 
   async function handleDownloadAgreementPdf() {
     if (!selectedRelation || !activeProject) return;

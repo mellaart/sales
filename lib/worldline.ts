@@ -6,11 +6,14 @@ export type WorldlineCheckItemTone = "success" | "warning" | "danger";
 
 export type WorldlineCheckResult = {
   analysisVersion?: number;
+  bankName?: string;
   checklist?: Array<{ text: string; done: boolean; tone?: WorldlineCheckItemTone }>;
   documentTitle?: string;
+  iban?: string;
   kvkNumber?: string;
   note?: string;
   producedDate?: string;
+  statementDate?: string;
   authorizedSigners?: string[];
   legalShareholders?: string[];
 };

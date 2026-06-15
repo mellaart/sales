@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/admin-api";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
+import { analyzeWorldlineBankStatementText } from "@/lib/worldline-bank-statement-check";
 import { analyzeWorldlineKvkText } from "@/lib/worldline-kvk-check";
-import { WORLDLINE_DOCUMENT_BUCKET, type WorldlineDocument, type WorldlineProject } from "@/lib/worldline";
+import { WORLDLINE_DOCUMENT_BUCKET, getWorldlineDocumentDefinition, type WorldlineDocument, type WorldlineProject } from "@/lib/worldline";
 import type { UserRole } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,11 @@ async function extractPdfText(file: Blob) {
   return normalizeText(parsed.text);
 }
 
+function isPdfDocument(document: WorldlineDocument, file: Blob) {
+  const mimeType = normalizeText(document.mime_type) || normalizeText(file.type);
+  return mimeType.toLowerCase().includes("pdf") || /\.pdf$/i.test(document.file_name);
+}
+
 export async function POST(request: Request) {
   try {
     const service = getServiceClient();
@@ -113,8 +119,8 @@ export async function POST(request: Request) {
 
     const document = documentRow as WorldlineDocument;
 
-    if (document.document_type !== "kvk") {
-      return jsonResponse({ error: "Deze automatische controle is nu alleen voor KvK-documenten." }, 400);
+    if (document.document_type !== "kvk" && document.document_type !== "bank_statement") {
+      return jsonResponse({ error: "Deze automatische controle is nu beschikbaar voor KvK en Bankafschrift." }, 400);
     }
 
     const { data: projectRow, error: projectError } = await service
@@ -138,43 +144,64 @@ export async function POST(request: Request) {
       .download(document.storage_path);
 
     if (storageError || !file) {
-      return jsonResponse({ error: storageError?.message ?? "KvK-PDF kon niet worden opgehaald." }, 500);
+      return jsonResponse({ error: storageError?.message ?? "Document kon niet worden opgehaald." }, 500);
+    }
+
+    const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
+
+    if (!isPdfDocument(document, file)) {
+      return jsonResponse({ error: `${documentTitle}-controle werkt nu alleen op PDF-bestanden met tekstlaag.` }, 415);
     }
 
     const pdfText = await extractPdfText(file);
 
     if (!pdfText) {
-      return jsonResponse({ error: "Geen tekst gevonden in de KvK-PDF. Controleer of dit geen scan zonder tekstlaag is." }, 422);
+      return jsonResponse({ error: `Geen tekst gevonden in de ${documentTitle}-PDF. Controleer of dit geen scan zonder tekstlaag is.` }, 422);
     }
 
     const currentResult = document.check_result && typeof document.check_result === "object"
-      ? document.check_result as { kvkNumber?: unknown }
+      ? document.check_result as { documentTitle?: unknown; kvkNumber?: unknown }
       : {};
-    const kvkNumber = normalizeText(currentResult.kvkNumber) || (document.file_name.match(/\b\d{8}\b/)?.[0] ?? "");
-
-    const { data: projectKvkDocuments } = await service
-      .from("worldline_documents")
-      .select("id,file_name")
-      .eq("project_id", document.project_id)
-      .eq("document_type", "kvk");
-    const supportingDocumentNames = ((projectKvkDocuments ?? []) as Array<{ id?: string | null; file_name?: string | null }>)
-      .filter((item) => item.id !== document.id)
-      .map((item) => normalizeText(item.file_name))
-      .filter(Boolean);
     const agreementFields = project.agreement_fields && typeof project.agreement_fields === "object"
       ? project.agreement_fields as Record<string, unknown>
       : {};
     const expectedCompanyName = normalizeText(agreementFields.companyName) || project.relation_name;
-    const analysis = analyzeWorldlineKvkText(pdfText, kvkNumber, new Date(), {
-      expectedCompanyName,
-      supportingDocumentNames,
-    });
+    const documentTitleFromResult = normalizeText(currentResult.documentTitle);
+
+    const analysis = document.document_type === "kvk"
+      ? (() => {
+          const kvkNumber = normalizeText(currentResult.kvkNumber) || (document.file_name.match(/\b\d{8}\b/)?.[0] ?? "");
+          return service
+            .from("worldline_documents")
+            .select("id,file_name")
+            .eq("project_id", document.project_id)
+            .eq("document_type", "kvk")
+            .then(({ data: projectKvkDocuments }) => {
+              const supportingDocumentNames = ((projectKvkDocuments ?? []) as Array<{ id?: string | null; file_name?: string | null }>)
+                .filter((item) => item.id !== document.id)
+                .map((item) => normalizeText(item.file_name))
+                .filter(Boolean);
+              return analyzeWorldlineKvkText(pdfText, kvkNumber, new Date(), {
+                expectedCompanyName,
+                supportingDocumentNames,
+              });
+            });
+        })()
+      : Promise.resolve(analyzeWorldlineBankStatementText(pdfText, new Date(), {
+          expectedCompanyName,
+          expectedIban: normalizeText(agreementFields.iban),
+        }));
+    const resolvedAnalysis = await analysis;
+    const nextCheckResult = {
+      ...resolvedAnalysis.result,
+      ...(documentTitleFromResult ? { documentTitle: documentTitleFromResult } : {}),
+    };
 
     const { data: updatedDocument, error: updateError } = await service
       .from("worldline_documents")
       .update({
-        check_status: analysis.status,
-        check_result: analysis.result,
+        check_status: resolvedAnalysis.status,
+        check_result: nextCheckResult,
       } as never)
       .eq("id", document.id)
       .select("*")
@@ -186,10 +213,10 @@ export async function POST(request: Request) {
 
     return jsonResponse({
       document: updatedDocument,
-      message: analysis.message,
+      message: resolvedAnalysis.message,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "KvK-controle mislukt.";
+    const message = error instanceof Error ? error.message : "Documentcontrole mislukt.";
     return jsonResponse({ error: message }, 500);
   }
 }

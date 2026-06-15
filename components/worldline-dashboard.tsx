@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Send, Trash2, UploadCloud, WalletCards } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Send, Trash2, UploadCloud, WalletCards } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 import {
@@ -24,6 +24,7 @@ import {
   normalizeWorldlineAgreementFields,
   type WorldlineAgreementFieldDefinition,
   type WorldlineAgreementFields,
+  type WorldlineCheckResult,
   type WorldlineCheckStatus,
   type WorldlineDocument,
   type WorldlineDocumentType,
@@ -42,12 +43,6 @@ type RelationOption = {
 type RelationSearchResponse = {
   error?: string;
   relations?: RelationOption[];
-};
-
-type CheckResult = {
-  checklist?: Array<{ text: string; done: boolean }>;
-  kvkNumber?: string;
-  note?: string;
 };
 
 const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
@@ -128,7 +123,7 @@ function extractKvkNumberFromText(value?: string | null) {
 
 function getDocumentKvkNumber(document: WorldlineDocument) {
   const checkResult = document.check_result && typeof document.check_result === "object"
-    ? (document.check_result as CheckResult)
+    ? (document.check_result as WorldlineCheckResult)
     : {};
 
   return normalizeKvkNumber(checkResult.kvkNumber) || extractKvkNumberFromText(document.file_name);
@@ -160,7 +155,7 @@ function getLatestKvkDocuments(documents: WorldlineDocument[]) {
     .sort((a, b) => String(b.uploaded_at ?? "").localeCompare(String(a.uploaded_at ?? "")));
 }
 
-function createInitialCheckResult(documentType: WorldlineDocumentType): CheckResult {
+function createInitialCheckResult(documentType: WorldlineDocumentType): WorldlineCheckResult {
   const definition = getWorldlineDocumentDefinition(documentType);
 
   return {
@@ -169,17 +164,21 @@ function createInitialCheckResult(documentType: WorldlineDocumentType): CheckRes
   };
 }
 
-function getCheckResult(document: WorldlineDocument | null, documentType: WorldlineDocumentType): CheckResult {
+function getCheckResult(document: WorldlineDocument | null, documentType: WorldlineDocumentType): WorldlineCheckResult {
   if (!document?.check_result || typeof document.check_result !== "object") {
     return createInitialCheckResult(documentType);
   }
 
-  const source = document.check_result as CheckResult;
+  const source = document.check_result as WorldlineCheckResult;
   const fallback = createInitialCheckResult(documentType);
 
   return {
     checklist: Array.isArray(source.checklist) ? source.checklist : fallback.checklist,
     note: typeof source.note === "string" ? source.note : "",
+    kvkNumber: typeof source.kvkNumber === "string" ? source.kvkNumber : undefined,
+    producedDate: typeof source.producedDate === "string" ? source.producedDate : undefined,
+    authorizedSigners: Array.isArray(source.authorizedSigners) ? source.authorizedSigners : undefined,
+    legalShareholders: Array.isArray(source.legalShareholders) ? source.legalShareholders : undefined,
   };
 }
 
@@ -224,6 +223,27 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+function renderCheckResult(checkResult: WorldlineCheckResult) {
+  return (
+    <>
+      {checkResult.note ? <div className="worldline-check-note">{checkResult.note}</div> : null}
+      <div className="worldline-checklist">
+        {checkResult.checklist?.map((item) => {
+          const isDone = item.done || item.tone === "success";
+          const tone = item.tone ?? (isDone ? "success" : "warning");
+
+          return (
+            <div key={item.text} className={`worldline-check-item ${tone}`}>
+              {isDone ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+              <span>{item.text}</span>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
 }
 
 async function downloadAgreementPdf(
@@ -797,7 +817,7 @@ export default function WorldlineDashboard() {
     const nextVersion = latestVersion + 1;
     const storageGroup = documentType === "kvk" ? `${documentType}/${kvkNumber}` : documentType;
     const storagePath = `${selectedRelation.id}/${activeProject.id}/${storageGroup}/v${nextVersion}-${Date.now()}-${sanitizeFileName(file.name)}`;
-    const nextCheckResult: CheckResult = {
+    const nextCheckResult: WorldlineCheckResult = {
       ...createInitialCheckResult(documentType),
       ...(documentType === "kvk" ? { kvkNumber } : {}),
     };
@@ -882,6 +902,58 @@ export default function WorldlineDashboard() {
     setBusy(false);
   }
 
+  async function checkDocument(document: WorldlineDocument) {
+    if (!supabase) return;
+    if (!canWriteWorldline) {
+      setStatus("Je hebt alleen leesrechten voor Worldline.");
+      return;
+    }
+
+    if (document.document_type !== "kvk") {
+      await updateDocumentStatus(document, "checking");
+      return;
+    }
+
+    setBusy(true);
+    setStatus("KvK wordt gecontroleerd...");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in om de KvK te controleren.");
+        return;
+      }
+
+      const response = await fetch("/api/worldline/documents/check", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ documentId: document.id }),
+      });
+      const json = (await response.json().catch(() => ({}))) as {
+        document?: WorldlineDocument;
+        error?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !json.document) {
+        setStatus(`KvK-controle mislukt: ${json.error ?? "geen resultaat ontvangen"}.`);
+        return;
+      }
+
+      setDocuments((currentDocuments) => currentDocuments.map((item) => item.id === json.document?.id ? json.document : item));
+      setStatus(json.message ?? "KvK-controle uitgevoerd.");
+    } catch (error) {
+      setStatus(`KvK-controle mislukt: ${getErrorMessage(error, "controle kon niet worden uitgevoerd.")}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDownloadAgreementPdf() {
     if (!selectedRelation || !activeProject) return;
 
@@ -898,16 +970,19 @@ export default function WorldlineDashboard() {
   async function downloadDocument(document: WorldlineDocument) {
     if (!supabase) return;
 
+    setStatus("Download wordt voorbereid...");
+
     const { data, error } = await supabase.storage
       .from(WORLDLINE_DOCUMENT_BUCKET)
-      .createSignedUrl(document.storage_path, 600, { download: document.file_name });
+      .download(document.storage_path);
 
-    if (error || !data?.signedUrl) {
-      setStatus(`Downloadlink maken mislukt: ${error?.message ?? "geen link ontvangen"}.`);
+    if (error || !data) {
+      setStatus(`Download mislukt: ${error?.message ?? "geen bestand ontvangen"}.`);
       return;
     }
 
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    downloadBlob(data, document.file_name);
+    setStatus(`${document.file_name} gedownload.`);
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>, documentType: WorldlineDocumentType) {
@@ -1280,6 +1355,7 @@ export default function WorldlineDashboard() {
                         <div className="worldline-kvk-list">
                           {latestKvkDocuments.map((kvkDocument) => {
                             const documentKvkNumber = getDocumentKvkNumber(kvkDocument);
+                            const kvkCheckResult = getCheckResult(kvkDocument, "kvk");
 
                             return (
                               <div key={kvkDocument.id} className="worldline-kvk-item">
@@ -1299,7 +1375,7 @@ export default function WorldlineDashboard() {
                                     <Download size={16} />
                                     Download
                                   </button>
-                                  <button type="button" className="secondary-button" onClick={() => void updateDocumentStatus(kvkDocument, "checking")} disabled={busy || !canWriteWorldline}>
+                                  <button type="button" className="secondary-button" onClick={() => void checkDocument(kvkDocument)} disabled={busy || !canWriteWorldline}>
                                     Controleren
                                   </button>
                                   <button type="button" className="secondary-button" onClick={() => void updateDocumentStatus(kvkDocument, "approved")} disabled={busy || !canWriteWorldline}>
@@ -1309,6 +1385,7 @@ export default function WorldlineDashboard() {
                                     Afkeur
                                   </button>
                                 </div>
+                                {renderCheckResult(kvkCheckResult)}
                               </div>
                             );
                           })}
@@ -1324,14 +1401,7 @@ export default function WorldlineDashboard() {
                         </div>
                       ) : null}
 
-                      <div className="worldline-checklist">
-                        {checkResult.checklist?.map((item) => (
-                          <div key={item.text} className="worldline-check-item">
-                            <CheckCircle2 size={15} />
-                            <span>{item.text}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {definition.key !== "kvk" ? renderCheckResult(checkResult) : null}
 
                       <div className="button-row compact">
                         {definition.key !== "kvk" && latestDocument ? (
@@ -1340,7 +1410,7 @@ export default function WorldlineDashboard() {
                               <Download size={16} />
                               Download
                             </button>
-                            <button type="button" className="secondary-button" onClick={() => void updateDocumentStatus(latestDocument, "checking")} disabled={busy || !canWriteWorldline}>
+                            <button type="button" className="secondary-button" onClick={() => void checkDocument(latestDocument)} disabled={busy || !canWriteWorldline}>
                               Controleren
                             </button>
                             <button type="button" className="secondary-button" onClick={() => void updateDocumentStatus(latestDocument, "approved")} disabled={busy || !canWriteWorldline}>

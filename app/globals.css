@@ -2002,6 +2002,15 @@ td {
   gap: 7px;
 }
 
+.worldline-check-note {
+  padding: 10px 12px;
+  border: 1px solid rgba(148,163,184,0.22);
+  border-radius: 8px;
+  background: rgba(15,23,42,0.42);
+  color: #e2e8f0;
+  font-weight: 800;
+}
+
 .worldline-check-item {
   display: flex;
   align-items: flex-start;
@@ -2014,6 +2023,30 @@ td {
   flex: 0 0 auto;
   margin-top: 2px;
   color: #93c5fd;
+}
+
+.worldline-check-item.success {
+  color: #bbf7d0;
+}
+
+.worldline-check-item.success svg {
+  color: #22c55e;
+}
+
+.worldline-check-item.warning {
+  color: #fde68a;
+}
+
+.worldline-check-item.warning svg {
+  color: #f59e0b;
+}
+
+.worldline-check-item.danger {
+  color: #fecaca;
+}
+
+.worldline-check-item.danger svg {
+  color: #ef4444;
 }
 
 .worldline-mail-copy {

@@ -2,6 +2,16 @@ export type WorldlineProjectStatus = "concept" | "waiting_customer" | "checking"
 export type WorldlineDocumentType = "kvk" | "agreement" | "identity" | "bank_statement" | "refund";
 export type WorldlineCheckStatus = "missing" | "uploaded" | "checking" | "approved" | "rejected";
 export type WorldlineAgreementFieldType = "text" | "textarea" | "checkbox" | "select";
+export type WorldlineCheckItemTone = "success" | "warning" | "danger";
+
+export type WorldlineCheckResult = {
+  checklist?: Array<{ text: string; done: boolean; tone?: WorldlineCheckItemTone }>;
+  kvkNumber?: string;
+  note?: string;
+  producedDate?: string;
+  authorizedSigners?: string[];
+  legalShareholders?: string[];
+};
 
 export type WorldlineAgreementFieldDefinition = {
   key: string;

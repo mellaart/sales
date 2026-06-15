@@ -151,7 +151,17 @@ export async function POST(request: Request) {
       ? document.check_result as { kvkNumber?: unknown }
       : {};
     const kvkNumber = normalizeText(currentResult.kvkNumber) || (document.file_name.match(/\b\d{8}\b/)?.[0] ?? "");
-    const analysis = analyzeWorldlineKvkText(pdfText, kvkNumber);
+
+    const { data: projectKvkDocuments } = await service
+      .from("worldline_documents")
+      .select("id,file_name")
+      .eq("project_id", document.project_id)
+      .eq("document_type", "kvk");
+    const supportingDocumentNames = ((projectKvkDocuments ?? []) as Array<{ id?: string | null; file_name?: string | null }>)
+      .filter((item) => item.id !== document.id)
+      .map((item) => normalizeText(item.file_name))
+      .filter(Boolean);
+    const analysis = analyzeWorldlineKvkText(pdfText, kvkNumber, new Date(), { supportingDocumentNames });
 
     const { data: updatedDocument, error: updateError } = await service
       .from("worldline_documents")

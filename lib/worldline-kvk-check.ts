@@ -119,7 +119,26 @@ function extractNames(section: string) {
   return uniqueValues(names);
 }
 
+function extractAuthorizedNaturalNamesFromText(text: string) {
+  const compact = normalizeWhitespace(text);
+  const names: string[] = [];
+  const namePattern = /\bNaam\s+(.+?)(?=\s+(?:Geboortedatum|Geboorteplaats|Datum\s+in\s+functie|Titel|Bevoegdheid|Alleen\/zelfstandig\s+bevoegd|Gezamenlijk\s+bevoegd|Bezoekadres|Vestigingsadres|Adres|Ingeschreven\s+onder|KvK-nummer|RSIN|Datum\s+akte|Deponering|Enig\s+aandeelhouder\s+sinds|Aandeelhouder\s+sinds|Naam|Gegevens\s+zijn\s+vervaardigd|$))/gi;
+
+  for (const match of compact.matchAll(namePattern)) {
+    const name = normalizeName(match[1]);
+    const context = compact.slice(match.index, match.index + 700);
+    const looksLikeAuthorizedPerson = /\bGeboortedatum\b/i.test(context) && /\bBevoegdheid\b/i.test(context);
+
+    if (looksLikeAuthorizedPerson && !isLegalEntityName(name)) {
+      names.push(name);
+    }
+  }
+
+  return uniqueValues(names);
+}
+
 function extractDirectorNames(text: string) {
+  const fallbackNames = extractAuthorizedNaturalNamesFromText(text);
   const directorsSection = sectionBetween(
     text,
     /\b(?:Bestuurders|Bestuurder|Gevolmachtigden|Gevolmachtigde)\b/i,
@@ -127,9 +146,12 @@ function extractDirectorNames(text: string) {
   );
   const hasAuthority = /\bBevoegdheid\b/i.test(directorsSection);
 
-  if (!directorsSection || !hasAuthority) return [];
+  if (!directorsSection || !hasAuthority) return fallbackNames;
 
-  return extractNames(directorsSection).filter((name) => !isLegalEntityName(name));
+  return uniqueValues([
+    ...extractNames(directorsSection).filter((name) => !isLegalEntityName(name)),
+    ...fallbackNames,
+  ]);
 }
 
 function extractLegalShareholders(text: string) {
@@ -168,19 +190,9 @@ export function analyzeWorldlineKvkText(
       tone: kvkNumber ? "success" : "warning",
     },
     {
-      text: "Uittreksel is niet ouder dan 2 maanden",
-      done: Boolean(producedDate && !isExpired),
-      tone: producedDate && !isExpired ? "success" : "danger",
-    },
-    {
       text: "Bedrijfsnaam komt overeen met de relatie",
       done: false,
       tone: "warning",
-    },
-    {
-      text: "Tekenbevoegde natuurlijke persoon/personen zijn zichtbaar",
-      done: hasAuthorizedSigner,
-      tone: hasAuthorizedSigner ? "success" : "danger",
     },
     {
       text: "Eventuele vervolguittreksels zijn aanwezig",
@@ -243,7 +255,7 @@ export function analyzeWorldlineKvkText(
 
   const hasBlockingIssue = checklist.some((item) => item.tone === "danger" && !item.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: 2,
+    analysisVersion: 3,
     checklist,
     kvkNumber,
     note: hasBlockingIssue

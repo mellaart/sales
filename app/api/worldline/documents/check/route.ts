@@ -1,8 +1,8 @@
-import { createRequire } from "node:module";
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/admin-api";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
+import { DocumentTextExtractionError, extractWorldlineDocumentText } from "@/lib/worldline-document-text";
 import { analyzeWorldlineBankStatementText } from "@/lib/worldline-bank-statement-check";
 import { analyzeWorldlineKvkText } from "@/lib/worldline-kvk-check";
 import { WORLDLINE_DOCUMENT_BUCKET, getWorldlineDocumentDefinition, type WorldlineDocument, type WorldlineProject } from "@/lib/worldline";
@@ -11,23 +11,11 @@ import type { UserRole } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type PdfParseResult = {
-  text?: string;
-};
-
-type PdfParse = (data: Buffer, options?: unknown) => Promise<PdfParseResult>;
-
-const require = createRequire(import.meta.url);
-
 function jsonResponse(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
     headers: { "Cache-Control": "no-store" },
   });
-}
-
-function getPdfParse() {
-  return require("pdf-parse/lib/pdf-parse.js") as PdfParse;
 }
 
 function normalizeText(value: unknown) {
@@ -73,18 +61,6 @@ function canCheckWorldlineDocument(
     user.role === "worldline" ||
     isProtectedAdminEmail(user.email)
   );
-}
-
-async function extractPdfText(file: Blob) {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const pdfParse = getPdfParse();
-  const parsed = await pdfParse(buffer);
-  return normalizeText(parsed.text);
-}
-
-function isPdfDocument(document: WorldlineDocument, file: Blob) {
-  const mimeType = normalizeText(document.mime_type) || normalizeText(file.type);
-  return mimeType.toLowerCase().includes("pdf") || /\.pdf$/i.test(document.file_name);
 }
 
 export async function POST(request: Request) {
@@ -148,15 +124,10 @@ export async function POST(request: Request) {
     }
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
+    const documentText = await extractWorldlineDocumentText(document, file, documentTitle);
 
-    if (!isPdfDocument(document, file)) {
-      return jsonResponse({ error: `${documentTitle}-controle werkt nu alleen op PDF-bestanden met tekstlaag.` }, 415);
-    }
-
-    const pdfText = await extractPdfText(file);
-
-    if (!pdfText) {
-      return jsonResponse({ error: `Geen tekst gevonden in de ${documentTitle}-PDF. Controleer of dit geen scan zonder tekstlaag is.` }, 422);
+    if (!documentText) {
+      return jsonResponse({ error: `Geen tekst gevonden in ${documentTitle}. Controleer of het document goed leesbaar is.` }, 422);
     }
 
     const currentResult = document.check_result && typeof document.check_result === "object"
@@ -181,13 +152,13 @@ export async function POST(request: Request) {
                 .filter((item) => item.id !== document.id)
                 .map((item) => normalizeText(item.file_name))
                 .filter(Boolean);
-              return analyzeWorldlineKvkText(pdfText, kvkNumber, new Date(), {
+              return analyzeWorldlineKvkText(documentText, kvkNumber, new Date(), {
                 expectedCompanyName,
                 supportingDocumentNames,
               });
             });
         })()
-      : Promise.resolve(analyzeWorldlineBankStatementText(pdfText, new Date(), {
+      : Promise.resolve(analyzeWorldlineBankStatementText(documentText, new Date(), {
           expectedCompanyName,
           expectedIban: normalizeText(agreementFields.iban),
         }));
@@ -216,6 +187,10 @@ export async function POST(request: Request) {
       message: resolvedAnalysis.message,
     });
   } catch (error) {
+    if (error instanceof DocumentTextExtractionError) {
+      return jsonResponse({ error: error.message }, error.status);
+    }
+
     const message = error instanceof Error ? error.message : "Documentcontrole mislukt.";
     return jsonResponse({ error: message }, 500);
   }

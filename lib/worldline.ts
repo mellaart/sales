@@ -143,7 +143,7 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
     key: "kvk",
     title: "KvK",
     description: "Upload een KvK-uittreksel, inclusief eventuele vervolguittreksels.",
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     checklist: [
       "Uittreksel is niet ouder dan 2 maanden",
       "Bedrijfsnaam komt overeen met de relatie",
@@ -155,7 +155,7 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
     key: "agreement",
     title: "Aansluitovereenkomst",
     description: "Bewaar de door klant ingevulde en nat ondertekende overeenkomst.",
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     checklist: [
       "BTW-nummer en facturatie e-mailadres zijn ingevuld",
       "Betaalkaarten, refund en verwachte transacties zijn ingevuld",
@@ -191,7 +191,7 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
     key: "refund",
     title: "Refund",
     description: "Upload het refund formulier als refund is aangevraagd.",
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     checklist: [
       "Refund formulier is aanwezig wanneer refund gewenst is",
       "Formulier hoort bij de juiste relatie",

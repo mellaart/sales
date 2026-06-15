@@ -47,6 +47,7 @@ type RelationSearchResponse = {
 
 const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
+const WORLDLINE_KVK_ANALYSIS_VERSION = 2;
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -173,6 +174,7 @@ function getCheckResult(document: WorldlineDocument | null, documentType: Worldl
   const fallback = createInitialCheckResult(documentType);
 
   return {
+    analysisVersion: typeof source.analysisVersion === "number" ? source.analysisVersion : undefined,
     checklist: Array.isArray(source.checklist) ? source.checklist : fallback.checklist,
     note: typeof source.note === "string" ? source.note : "",
     kvkNumber: typeof source.kvkNumber === "string" ? source.kvkNumber : undefined,
@@ -180,6 +182,15 @@ function getCheckResult(document: WorldlineDocument | null, documentType: Worldl
     authorizedSigners: Array.isArray(source.authorizedSigners) ? source.authorizedSigners : undefined,
     legalShareholders: Array.isArray(source.legalShareholders) ? source.legalShareholders : undefined,
   };
+}
+
+function shouldRefreshKvkCheck(document: WorldlineDocument) {
+  if (document.document_type !== "kvk") return false;
+  const checkResult = document.check_result && typeof document.check_result === "object"
+    ? (document.check_result as WorldlineCheckResult)
+    : {};
+
+  return checkResult.analysisVersion !== WORLDLINE_KVK_ANALYSIS_VERSION;
 }
 
 function fileSizeLabel(size?: number | null) {
@@ -389,6 +400,7 @@ export default function WorldlineDashboard() {
   const [documents, setDocuments] = useState<WorldlineDocument[]>([]);
   const [agreementFields, setAgreementFields] = useState<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
   const hydratedAgreementProjectId = useRef<string | null>(null);
+  const autoCheckedKvkDocumentIds = useRef<Set<string>>(new Set());
   const [searching, setSearching] = useState(false);
   const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -534,6 +546,7 @@ export default function WorldlineDashboard() {
 
   const activeProjectId = activeProject?.id;
   useEffect(() => {
+    autoCheckedKvkDocumentIds.current.clear();
     if (activeProjectId) {
       void loadDocuments(activeProjectId);
     } else {
@@ -875,42 +888,10 @@ export default function WorldlineDashboard() {
     setBusy(false);
   }
 
-  async function updateDocumentStatus(document: WorldlineDocument, nextStatus: WorldlineCheckStatus) {
+  const checkKvkDocument = useCallback(async (document: WorldlineDocument) => {
     if (!supabase) return;
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
-      return;
-    }
-
-    setBusy(true);
-    const { data, error } = await supabase
-      .from("worldline_documents")
-      .update({ check_status: nextStatus } as never)
-      .eq("id", document.id)
-      .select("*")
-      .single();
-
-    if (error) {
-      setStatus(`Documentstatus wijzigen mislukt: ${error.message}`);
-      setBusy(false);
-      return;
-    }
-
-    const nextDocument = data as WorldlineDocument;
-    setDocuments((currentDocuments) => currentDocuments.map((item) => item.id === nextDocument.id ? nextDocument : item));
-    setStatus("Documentstatus bijgewerkt.");
-    setBusy(false);
-  }
-
-  async function checkDocument(document: WorldlineDocument) {
-    if (!supabase) return;
-    if (!canWriteWorldline) {
-      setStatus("Je hebt alleen leesrechten voor Worldline.");
-      return;
-    }
-
-    if (document.document_type !== "kvk") {
-      await updateDocumentStatus(document, "checking");
       return;
     }
 
@@ -952,7 +933,56 @@ export default function WorldlineDashboard() {
     } finally {
       setBusy(false);
     }
+  }, [canWriteWorldline, supabase]);
+
+  async function updateDocumentStatus(document: WorldlineDocument, nextStatus: WorldlineCheckStatus) {
+    if (!supabase) return;
+    if (!canWriteWorldline) {
+      setStatus("Je hebt alleen leesrechten voor Worldline.");
+      return;
+    }
+
+    setBusy(true);
+    const { data, error } = await supabase
+      .from("worldline_documents")
+      .update({ check_status: nextStatus } as never)
+      .eq("id", document.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      setStatus(`Documentstatus wijzigen mislukt: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+
+    const nextDocument = data as WorldlineDocument;
+    setDocuments((currentDocuments) => currentDocuments.map((item) => item.id === nextDocument.id ? nextDocument : item));
+    setStatus("Documentstatus bijgewerkt.");
+    setBusy(false);
   }
+
+  async function checkDocument(document: WorldlineDocument) {
+    if (document.document_type === "kvk") {
+      await checkKvkDocument(document);
+      return;
+    }
+
+    await updateDocumentStatus(document, "checking");
+  }
+
+  useEffect(() => {
+    if (!activeProjectId || !canWriteWorldline || roleAccessLoading || busy) return;
+
+    const staleKvkDocument = latestKvkDocuments.find((document) => (
+      shouldRefreshKvkCheck(document) && !autoCheckedKvkDocumentIds.current.has(document.id)
+    ));
+
+    if (!staleKvkDocument) return;
+
+    autoCheckedKvkDocumentIds.current.add(staleKvkDocument.id);
+    void checkKvkDocument(staleKvkDocument);
+  }, [activeProjectId, busy, canWriteWorldline, checkKvkDocument, latestKvkDocuments, roleAccessLoading]);
 
   async function handleDownloadAgreementPdf() {
     if (!selectedRelation || !activeProject) return;

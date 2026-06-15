@@ -5,6 +5,7 @@ export type WorldlineAgreementFieldType = "text" | "textarea" | "checkbox" | "se
 export type WorldlineCheckItemTone = "success" | "warning" | "danger";
 
 export type WorldlineCheckResult = {
+  analysisVersion?: number;
   checklist?: Array<{ text: string; done: boolean; tone?: WorldlineCheckItemTone }>;
   kvkNumber?: string;
   note?: string;

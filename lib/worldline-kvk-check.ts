@@ -243,6 +243,7 @@ export function analyzeWorldlineKvkText(
 
   const hasBlockingIssue = checklist.some((item) => item.tone === "danger" && !item.done);
   const result: WorldlineCheckResult = {
+    analysisVersion: 2,
     checklist,
     kvkNumber,
     note: hasBlockingIssue

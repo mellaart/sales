@@ -192,6 +192,12 @@ function extractDirectorNames(text: string) {
   ]);
 }
 
+function hasNaturalPersonAuthority(text: string) {
+  const compact = normalizeWhitespace(text);
+
+  return /\bGeboortedatum\b/i.test(compact) && /\bBevoegdheid\b/i.test(compact);
+}
+
 function extractLegalShareholders(text: string) {
   const shareholderSection = sectionBetween(
     text,
@@ -244,7 +250,7 @@ export function analyzeWorldlineKvkText(
   const cutoff = getTwoMonthCutoff(referenceDate);
   const isExpired = producedDate ? producedDate < cutoff : true;
   const hasLegalShareholder = legalShareholders.length > 0;
-  const hasAuthorizedSigner = authorizedSigners.length > 0;
+  const hasAuthorizedSigner = authorizedSigners.length > 0 || hasNaturalPersonAuthority(text);
   const supportingDocumentNames = options.supportingDocumentNames ?? [];
   const expectedCompanyName = normalizeName(options.expectedCompanyName ?? "");
   const companyMatches = Boolean(expectedCompanyName && extractedCompanyNames.some((name) => isSameEntityName(name, expectedCompanyName)));
@@ -259,16 +265,19 @@ export function analyzeWorldlineKvkText(
       tone: kvkNumber ? "success" : "warning",
     },
     {
-      text: "Bedrijfsnaam komt overeen met de relatie",
-      done: companyMatches,
-      tone: companyMatches ? "success" : "warning",
-    },
-    {
       text: "Eventuele vervolguittreksels zijn aanwezig",
       done: hasRequiredFollowUps,
       tone: hasRequiredFollowUps ? "success" : "danger",
     },
   ];
+
+  if (companyMatches) {
+    checklist.push({
+      text: "Bedrijfsnaam komt overeen met de relatie",
+      done: true,
+      tone: "success",
+    });
+  }
 
   if (producedDate) {
     checklist.push({
@@ -288,7 +297,9 @@ export function analyzeWorldlineKvkText(
 
   if (hasAuthorizedSigner) {
     checklist.push({
-      text: `Tekenbevoegde persoon/personen gevonden: ${authorizedSigners.join(", ")}.`,
+      text: authorizedSigners.length > 0
+        ? `Tekenbevoegde persoon/personen gevonden: ${authorizedSigners.join(", ")}.`
+        : "Tekenbevoegde natuurlijke persoon/personen gevonden in de KvK.",
       done: true,
       tone: "success",
     });
@@ -324,7 +335,7 @@ export function analyzeWorldlineKvkText(
 
   const hasBlockingIssue = checklist.some((item) => item.tone === "danger" && !item.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: 4,
+    analysisVersion: 5,
     checklist,
     kvkNumber,
     note: hasBlockingIssue

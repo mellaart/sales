@@ -45,6 +45,14 @@ function normalizeEntityKey(value: string) {
     .replace(/[^a-z0-9]+/g, "");
 }
 
+function normalizeSearchKey(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
 function isSameEntityName(left: string, right: string) {
   const leftKey = normalizeEntityKey(left);
   const rightKey = normalizeEntityKey(right);
@@ -194,8 +202,27 @@ function extractDirectorNames(text: string) {
 
 function hasNaturalPersonAuthority(text: string) {
   const compact = normalizeWhitespace(text);
+  const searchKey = normalizeSearchKey(text);
+  const hasBirthDate =
+    /\bGeboortedatum\b/i.test(compact) ||
+    /\b\d{2}-\d{2}-\d{4}\b/.test(compact) ||
+    searchKey.includes("geboortedatum");
+  const hasAuthority =
+    /\bBevoegdheid\b/i.test(compact) ||
+    /\bbevoegd\b/i.test(compact) ||
+    /Alleen\/zelfstandig\s+bevoegd/i.test(compact) ||
+    /Gezamenlijk\s+bevoegd/i.test(compact) ||
+    searchKey.includes("bevoegdheid") ||
+    searchKey.includes("alleenzelfstandigbevoegd") ||
+    searchKey.includes("gezamenlijkbevoegd");
+  const hasDirectorContext =
+    /\bBestuurders?\b/i.test(compact) ||
+    /\bAlgemeen directeur\b/i.test(compact) ||
+    searchKey.includes("bestuurder") ||
+    searchKey.includes("bestuurders") ||
+    searchKey.includes("algemeendirecteur");
 
-  return /\bGeboortedatum\b/i.test(compact) && /\bBevoegdheid\b/i.test(compact);
+  return (hasBirthDate && hasAuthority) || (hasDirectorContext && hasAuthority);
 }
 
 function extractLegalShareholders(text: string) {
@@ -335,7 +362,7 @@ export function analyzeWorldlineKvkText(
 
   const hasBlockingIssue = checklist.some((item) => item.tone === "danger" && !item.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: 5,
+    analysisVersion: 6,
     checklist,
     kvkNumber,
     note: hasBlockingIssue

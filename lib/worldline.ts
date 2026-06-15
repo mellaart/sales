@@ -7,6 +7,7 @@ export type WorldlineCheckItemTone = "success" | "warning" | "danger";
 export type WorldlineCheckResult = {
   analysisVersion?: number;
   checklist?: Array<{ text: string; done: boolean; tone?: WorldlineCheckItemTone }>;
+  documentTitle?: string;
   kvkNumber?: string;
   note?: string;
   producedDate?: string;

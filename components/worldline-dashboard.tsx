@@ -48,10 +48,7 @@ type RelationSearchResponse = {
 const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 6;
-const PDF_PAGE = {
-  portrait: { width: 595.28, height: 841.89 },
-  landscape: { width: 841.89, height: 595.28 },
-};
+const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund"];
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -79,42 +76,94 @@ function isImageUploadFile(file: File) {
   return file.type === "image/jpeg" || file.type === "image/png" || /\.(jpe?g|png)$/i.test(file.name);
 }
 
-function getPdfUploadFileName(fileName: string) {
-  return fileName.replace(/\.(jpe?g|png)$/i, "") + ".pdf";
+function normalizeBrowserOcrText(value: unknown) {
+  return typeof value === "string" ? value.replace(/\r/g, "\n").replace(/[ \t]+\n/g, "\n").trim() : "";
 }
 
-async function convertImageFileToPdf(file: File) {
-  const { PDFDocument } = await import("pdf-lib");
-  const bytes = await file.arrayBuffer();
-  const pdfDoc = await PDFDocument.create();
-  const image = /\.png$/i.test(file.name) || file.type === "image/png"
-    ? await pdfDoc.embedPng(bytes)
-    : await pdfDoc.embedJpg(bytes);
-  const pageSize = image.width > image.height ? PDF_PAGE.landscape : PDF_PAGE.portrait;
-  const page = pdfDoc.addPage([pageSize.width, pageSize.height]);
-  const margin = 24;
-  const scale = Math.min(
-    (pageSize.width - margin * 2) / image.width,
-    (pageSize.height - margin * 2) / image.height,
-  );
-  const width = image.width * scale;
-  const height = image.height * scale;
+async function loadImageForOcr(file: File) {
+  const url = URL.createObjectURL(file);
 
-  page.drawImage(image, {
-    x: (pageSize.width - width) / 2,
-    y: (pageSize.height - height) / 2,
-    width,
-    height,
+  try {
+    const image = new Image();
+    image.decoding = "async";
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Afbeelding kon niet worden geladen."));
+      image.src = url;
+    });
+
+    return image;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function createOcrReadyImage(file: File) {
+  const image = await loadImageForOcr(file);
+  const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+  const targetLongestSide = Math.min(3200, Math.max(longestSide, 2200));
+  const scale = targetLongestSide / longestSide;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Afbeelding kon niet worden voorbereid voor OCR.");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.18 + 128));
+    data[index] = contrast;
+    data[index + 1] = contrast;
+    data[index + 2] = contrast;
+    data[index + 3] = 255;
+  }
+
+  context.putImageData(imageData, 0, 0);
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Afbeelding kon niet als OCR-beeld worden gemaakt."));
+    }, "image/png");
+  });
+}
+
+async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: string) => void) {
+  const { PSM, createWorker } = await import("tesseract.js");
+  const ocrImage = await createOcrReadyImage(file);
+  const worker = await createWorker(["nld", "eng"], 1, {
+    logger: (message) => {
+      if (typeof message.progress !== "number" || !message.status) return;
+      const percentage = Math.round(message.progress * 100);
+      onProgress(`Gratis OCR leest afbeelding... ${percentage}%`);
+    },
   });
 
-  const pdfBytes = await pdfDoc.save();
-  const pdfBuffer = new ArrayBuffer(pdfBytes.byteLength);
-  new Uint8Array(pdfBuffer).set(pdfBytes);
+  try {
+    await worker.setParameters({
+      preserve_interword_spaces: "1",
+      tessedit_pageseg_mode: PSM.AUTO,
+      user_defined_dpi: "300",
+    });
 
-  return new File([pdfBuffer], getPdfUploadFileName(file.name), {
-    type: "application/pdf",
-    lastModified: file.lastModified,
-  });
+    const result = await worker.recognize(ocrImage);
+
+    return {
+      confidence: typeof result.data.confidence === "number" ? Math.round(result.data.confidence) : undefined,
+      text: normalizeBrowserOcrText(result.data.text),
+    };
+  } finally {
+    await worker.terminate();
+  }
 }
 
 function formatDate(value?: string | null) {
@@ -192,12 +241,26 @@ function getDocumentTitle(document: WorldlineDocument) {
     : getDocumentTitleFromFileName(document.file_name);
 }
 
-function isConvertedImagePdfDocument(document: WorldlineDocument) {
+function isImageDocument(document: WorldlineDocument) {
+  const checkResult = document.check_result && typeof document.check_result === "object"
+    ? (document.check_result as WorldlineCheckResult)
+    : {};
+  const mimeType = (document.mime_type ?? "").toLowerCase();
+
+  return (
+    checkResult.uploadedAsImage === true ||
+    checkResult.convertedFromImage === true ||
+    mimeType.startsWith("image/") ||
+    /\.(jpe?g|png)$/i.test(document.file_name)
+  );
+}
+
+function getDocumentStoredOcrText(document: WorldlineDocument) {
   const checkResult = document.check_result && typeof document.check_result === "object"
     ? (document.check_result as WorldlineCheckResult)
     : {};
 
-  return checkResult.convertedFromImage === true;
+  return normalizeBrowserOcrText(checkResult.ocrText);
 }
 
 function getDocumentTitleKey(value: string) {
@@ -268,11 +331,16 @@ function getCheckResult(document: WorldlineDocument | null, documentType: Worldl
     documentTitle: typeof source.documentTitle === "string" ? source.documentTitle : undefined,
     iban: typeof source.iban === "string" ? source.iban : undefined,
     note: typeof source.note === "string" ? source.note : "",
+    ocrConfidence: typeof source.ocrConfidence === "number" ? source.ocrConfidence : undefined,
+    ocrEngine: typeof source.ocrEngine === "string" ? source.ocrEngine : undefined,
+    ocrError: typeof source.ocrError === "string" ? source.ocrError : undefined,
+    ocrText: typeof source.ocrText === "string" ? source.ocrText : undefined,
     kvkNumber: typeof source.kvkNumber === "string" ? source.kvkNumber : undefined,
     originalFileName: typeof source.originalFileName === "string" ? source.originalFileName : undefined,
     originalMimeType: typeof source.originalMimeType === "string" ? source.originalMimeType : undefined,
     producedDate: typeof source.producedDate === "string" ? source.producedDate : undefined,
     statementDate: typeof source.statementDate === "string" ? source.statementDate : undefined,
+    uploadedAsImage: source.uploadedAsImage === true,
     authorizedSigners: Array.isArray(source.authorizedSigners) ? source.authorizedSigners : undefined,
     legalShareholders: Array.isArray(source.legalShareholders) ? source.legalShareholders : undefined,
   };
@@ -288,7 +356,7 @@ function getAggregateCheckStatus(documents: WorldlineDocument[]): WorldlineCheck
 
 function shouldRefreshKvkCheck(document: WorldlineDocument) {
   if (document.document_type !== "kvk") return false;
-  if (isConvertedImagePdfDocument(document)) return false;
+  if (isImageDocument(document) && !getDocumentStoredOcrText(document)) return false;
 
   const checkResult = document.check_result && typeof document.check_result === "object"
     ? (document.check_result as WorldlineCheckResult)
@@ -928,20 +996,24 @@ export default function WorldlineDashboard() {
       return null;
     }
 
-    let uploadFile = file;
-    let convertedToPdf = false;
+    const uploadFile = file;
+    const uploadedAsImage = isImageUploadFile(file);
+    let ocrConfidence: number | undefined;
+    let ocrError = "";
+    let ocrText = "";
 
-    if (isImageUploadFile(file)) {
-      setBusy(true);
-      setStatus("Afbeelding wordt omgezet naar PDF...");
+    if (uploadedAsImage) {
+      if (OCR_DOCUMENT_TYPES.includes(documentType)) {
+        setBusy(true);
+        setStatus("Gratis OCR leest de JPG/PNG...");
 
-      try {
-        uploadFile = await convertImageFileToPdf(file);
-        convertedToPdf = true;
-      } catch (error) {
-        setStatus(`Afbeelding omzetten naar PDF mislukt: ${getErrorMessage(error, "bestand kon niet worden omgezet.")}`);
-        setBusy(false);
-        return null;
+        try {
+          const ocrResult = await extractImageTextWithBrowserOcr(file, setStatus);
+          ocrText = ocrResult.text;
+          ocrConfidence = ocrResult.confidence;
+        } catch (error) {
+          ocrError = getErrorMessage(error, "OCR kon niet worden uitgevoerd.");
+        }
       }
     }
 
@@ -970,10 +1042,16 @@ export default function WorldlineDashboard() {
     const nextCheckResult: WorldlineCheckResult = {
       ...createInitialCheckResult(documentType),
       documentTitle,
-      ...(convertedToPdf
+      ...(uploadedAsImage
         ? {
-            convertedFromImage: true,
-            note: "JPG/PNG is automatisch als PDF opgeslagen. Automatische tekstcontrole is zonder OCR niet mogelijk; controleer dit document handmatig.",
+            uploadedAsImage: true,
+            note: ocrText
+              ? "JPG/PNG is opgeslagen. Tekst is met gratis browser-OCR gelezen; controleer het resultaat bij twijfel."
+              : "JPG/PNG is opgeslagen. Gratis OCR kon geen tekst lezen; controleer dit document handmatig.",
+            ...(typeof ocrConfidence === "number" ? { ocrConfidence } : {}),
+            ocrEngine: "tesseract.js",
+            ...(ocrError ? { ocrError } : {}),
+            ...(ocrText ? { ocrText } : {}),
             originalFileName: file.name,
             originalMimeType: file.type || "image",
           }
@@ -987,7 +1065,7 @@ export default function WorldlineDashboard() {
     const uploadResult = await supabase.storage
       .from(WORLDLINE_DOCUMENT_BUCKET)
       .upload(storagePath, uploadFile, {
-        contentType: uploadFile.type || "application/pdf",
+        contentType: uploadFile.type || "application/octet-stream",
         upsert: false,
       });
 
@@ -1026,14 +1104,14 @@ export default function WorldlineDashboard() {
       const hasOtherKvkDocuments = sourceDocuments.some((document) => document.document_type === "kvk" && getDocumentKvkNumber(document) !== kvkNumber);
       setStatus(
         latestVersion > 0
-          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${nextVersion}${convertedToPdf ? " en omgezet naar PDF" : ""}.`
-          : `KvK-uittreksel ${kvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK${convertedToPdf ? " en omgezet naar PDF" : ""}.`
+          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${nextVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+          : `KvK-uittreksel ${kvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
       );
     } else {
       setStatus(
         latestVersion > 0
-          ? `${definition?.title ?? "Document"} '${documentTitle}' is opgeslagen als v${nextVersion}${convertedToPdf ? " en omgezet naar PDF" : ""}.`
-          : `${definition?.title ?? "Document"} '${documentTitle}' is toegevoegd aan dit Worldline-project${convertedToPdf ? " en omgezet naar PDF" : ""}.`
+          ? `${definition?.title ?? "Document"} '${documentTitle}' is opgeslagen als v${nextVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+          : `${definition?.title ?? "Document"} '${documentTitle}' is toegevoegd aan dit Worldline-project${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
       );
     }
     setBusy(false);
@@ -1062,8 +1140,8 @@ export default function WorldlineDashboard() {
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
 
-    if (isConvertedImagePdfDocument(document)) {
-      setStatus(`${documentTitle} is opgeslagen als PDF, maar komt uit een JPG/PNG. Automatische controle werkt alleen met tekst-PDF's; controleer dit document handmatig.`);
+    if (isImageDocument(document) && !getDocumentStoredOcrText(document)) {
+      setStatus(`${documentTitle} is opgeslagen als JPG/PNG, maar OCR kon geen tekst lezen. Controleer dit document handmatig.`);
       return;
     }
 
@@ -1135,21 +1213,16 @@ export default function WorldlineDashboard() {
   }
 
   async function checkDocument(document: WorldlineDocument) {
-    if (document.document_type === "kvk" || document.document_type === "bank_statement") {
-      if (isConvertedImagePdfDocument(document)) {
-        await updateDocumentStatus(
-          document,
-          "checking",
-          "Document staat klaar voor handmatige controle. Het bestand is uit JPG/PNG naar PDF gezet en bevat geen selecteerbare tekst."
-        );
-        return;
-      }
-
-      await runAutomatedDocumentCheck(document);
+    if (isImageDocument(document) && !getDocumentStoredOcrText(document)) {
+      await updateDocumentStatus(
+        document,
+        "checking",
+        "Document staat klaar voor handmatige controle. OCR kon geen tekst lezen uit deze JPG/PNG."
+      );
       return;
     }
 
-    await updateDocumentStatus(document, "checking");
+    await runAutomatedDocumentCheck(document);
   }
 
   useEffect(() => {
@@ -1244,8 +1317,7 @@ export default function WorldlineDashboard() {
   function renderUploadedDocument(document: WorldlineDocument, title: string, documentType: WorldlineDocumentType) {
     const checkResult = getCheckResult(document, documentType);
     const isRefundDisabled = documentType === "refund" && !refundEnabled;
-    const isConvertedImagePdf = isConvertedImagePdfDocument(document);
-    const usesManualCheckOnly = isConvertedImagePdf && (documentType === "kvk" || documentType === "bank_statement");
+    const usesManualCheckOnly = isImageDocument(document) && !getDocumentStoredOcrText(document);
 
     return (
       <div key={document.id} className="worldline-document-item">
@@ -1592,7 +1664,7 @@ export default function WorldlineDashboard() {
                 <div>
                   <div className="eyebrow">Documenten</div>
                   <h2 className="headline">Uploaden en controleren</h2>
-                  <p className="subtext">Sleep PDF-bestanden of afbeeldingen naar de juiste stap. JPG en PNG worden automatisch als PDF opgeslagen.</p>
+                  <p className="subtext">Sleep PDF-, JPG- of PNG-bestanden naar de juiste stap. Bij afbeeldingen wordt gratis OCR direct op de afbeelding uitgevoerd.</p>
                 </div>
                 <select
                   className="input worldline-status-select"
@@ -1640,7 +1712,7 @@ export default function WorldlineDashboard() {
                       >
                         <UploadCloud size={22} />
                         <span>{isRefundDisabled ? "Refund is niet geselecteerd" : "Sleep bestanden hierheen of kies bestanden"}</span>
-                        <small>{isRefundDisabled ? "Zet Refund op Ja om te uploaden" : definition.accept.includes("image") ? "PDF, JPG/PNG wordt PDF" : "PDF"}</small>
+                        <small>{isRefundDisabled ? "Zet Refund op Ja om te uploaden" : definition.accept.includes("image") ? "PDF, JPG of PNG" : "PDF"}</small>
                         <input
                           id={inputId}
                           type="file"

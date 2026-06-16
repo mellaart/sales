@@ -58,7 +58,7 @@ export async function extractWorldlineDocumentText(document: WorldlineDocument, 
   }
 
   throw new DocumentTextExtractionError(
-    `${documentTitle}-controle ondersteunt alleen PDF. JPG en PNG worden bij upload als PDF opgeslagen, maar automatische tekstcontrole werkt alleen met PDF's waarin tekst selecteerbaar is.`,
+    `${documentTitle}-controle kan server-side alleen tekst uit PDF lezen. JPG en PNG worden bij upload met gratis browser-OCR gelezen.`,
     415,
   );
 }

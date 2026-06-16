@@ -4,8 +4,9 @@ import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { DocumentTextExtractionError, extractWorldlineDocumentText } from "@/lib/worldline-document-text";
 import { analyzeWorldlineBankStatementText } from "@/lib/worldline-bank-statement-check";
+import { analyzeWorldlineGenericDocumentText } from "@/lib/worldline-generic-document-check";
 import { analyzeWorldlineKvkText } from "@/lib/worldline-kvk-check";
-import { WORLDLINE_DOCUMENT_BUCKET, getWorldlineDocumentDefinition, type WorldlineDocument, type WorldlineProject } from "@/lib/worldline";
+import { WORLDLINE_DOCUMENT_BUCKET, getWorldlineDocumentDefinition, type WorldlineCheckResult, type WorldlineDocument, type WorldlineProject } from "@/lib/worldline";
 import type { UserRole } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,14 @@ function jsonResponse(body: unknown, status = 200) {
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function keepString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function keepNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 async function verifyUser(request: Request, service: NonNullable<ReturnType<typeof getServiceClient>>) {
@@ -96,10 +105,6 @@ export async function POST(request: Request) {
 
     const document = documentRow as WorldlineDocument;
 
-    if (document.document_type !== "kvk" && document.document_type !== "bank_statement") {
-      return jsonResponse({ error: "Deze automatische controle is nu beschikbaar voor KvK en Bankafschrift." }, 400);
-    }
-
     const { data: projectRow, error: projectError } = await service
       .from("worldline_projects")
       .select("*")
@@ -116,24 +121,28 @@ export async function POST(request: Request) {
       return jsonResponse({ error: "Geen toegang tot dit Worldline-project." }, 403);
     }
 
-    const { data: file, error: storageError } = await service.storage
-      .from(WORLDLINE_DOCUMENT_BUCKET)
-      .download(document.storage_path);
-
-    if (storageError || !file) {
-      return jsonResponse({ error: storageError?.message ?? "Document kon niet worden opgehaald." }, 500);
-    }
-
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
-    const documentText = await extractWorldlineDocumentText(document, file, documentTitle);
+    const currentResult = document.check_result && typeof document.check_result === "object"
+      ? document.check_result as WorldlineCheckResult
+      : {};
+    let documentText = normalizeText(currentResult.ocrText);
+
+    if (!documentText) {
+      const { data: file, error: storageError } = await service.storage
+        .from(WORLDLINE_DOCUMENT_BUCKET)
+        .download(document.storage_path);
+
+      if (storageError || !file) {
+        return jsonResponse({ error: storageError?.message ?? "Document kon niet worden opgehaald." }, 500);
+      }
+
+      documentText = await extractWorldlineDocumentText(document, file, documentTitle);
+    }
 
     if (!documentText) {
       return jsonResponse({ error: `Geen selecteerbare tekst gevonden in ${documentTitle}. Automatische controle werkt alleen met PDF's waarin tekst selecteerbaar is.` }, 422);
     }
 
-    const currentResult = document.check_result && typeof document.check_result === "object"
-      ? document.check_result as { documentTitle?: unknown; kvkNumber?: unknown }
-      : {};
     const agreementFields = project.agreement_fields && typeof project.agreement_fields === "object"
       ? project.agreement_fields as Record<string, unknown>
       : {};
@@ -159,14 +168,28 @@ export async function POST(request: Request) {
               });
             });
         })()
-      : Promise.resolve(analyzeWorldlineBankStatementText(documentText, new Date(), {
-          expectedCompanyName,
-          expectedIban: normalizeText(agreementFields.iban),
-        }));
+      : document.document_type === "bank_statement"
+        ? Promise.resolve(analyzeWorldlineBankStatementText(documentText, new Date(), {
+            expectedCompanyName,
+            expectedIban: normalizeText(agreementFields.iban),
+          }))
+        : Promise.resolve(analyzeWorldlineGenericDocumentText(document.document_type, documentText, {
+            expectedCompanyName,
+            expectedIban: normalizeText(agreementFields.iban),
+            expectedSignerNames: normalizeText(agreementFields.signers) || normalizeText(agreementFields.contactPerson),
+          }));
     const resolvedAnalysis = await analysis;
     const nextCheckResult = {
       ...resolvedAnalysis.result,
+      ...(currentResult.convertedFromImage === true ? { convertedFromImage: true } : {}),
+      ...(currentResult.uploadedAsImage === true ? { uploadedAsImage: true } : {}),
       ...(documentTitleFromResult ? { documentTitle: documentTitleFromResult } : {}),
+      ...(keepNumber(currentResult.ocrConfidence) !== undefined ? { ocrConfidence: keepNumber(currentResult.ocrConfidence) } : {}),
+      ...(keepString(currentResult.ocrEngine) ? { ocrEngine: keepString(currentResult.ocrEngine) } : {}),
+      ...(keepString(currentResult.ocrError) ? { ocrError: keepString(currentResult.ocrError) } : {}),
+      ...(keepString(currentResult.ocrText) ? { ocrText: keepString(currentResult.ocrText) } : {}),
+      ...(keepString(currentResult.originalFileName) ? { originalFileName: keepString(currentResult.originalFileName) } : {}),
+      ...(keepString(currentResult.originalMimeType) ? { originalMimeType: keepString(currentResult.originalMimeType) } : {}),
     };
 
     const { data: updatedDocument, error: updateError } = await service

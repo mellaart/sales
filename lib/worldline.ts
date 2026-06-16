@@ -13,10 +13,15 @@ export type WorldlineCheckResult = {
   iban?: string;
   kvkNumber?: string;
   note?: string;
+  ocrConfidence?: number;
+  ocrEngine?: string;
+  ocrError?: string;
+  ocrText?: string;
   originalFileName?: string;
   originalMimeType?: string;
   producedDate?: string;
   statementDate?: string;
+  uploadedAsImage?: boolean;
   authorizedSigners?: string[];
   legalShareholders?: string[];
 };

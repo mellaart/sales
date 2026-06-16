@@ -67,8 +67,18 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function getOpenAiApiKey() {
+  return (
+    process.env.OPENAI_API_KEY ||
+    process.env.OPENAI_OCR_API_KEY ||
+    process.env.OPEN_AI_API_KEY ||
+    process.env.NEXT_PUBLIC_OPENAI_API_KEY ||
+    ""
+  ).trim();
+}
+
 function hasOpenAiOcrKey() {
-  return Boolean(process.env.OPENAI_API_KEY?.trim());
+  return Boolean(getOpenAiApiKey());
 }
 
 function getExtension(fileName: string) {
@@ -267,10 +277,10 @@ async function extractImageTextWithTesseract(buffer: Buffer) {
 }
 
 async function extractImageTextWithOpenAi(buffer: Buffer, documentTitle: string, mimeType: string) {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const apiKey = getOpenAiApiKey();
   if (!apiKey) {
     throw new DocumentTextExtractionError(
-      `${documentTitle}-controle kon geen tekst lezen uit deze afbeelding. Upload eventueel een PDF of een scherpere JPG/PNG.`,
+      `${documentTitle}-controle voor JPG/PNG heeft AI-OCR nodig. Zet OPENAI_API_KEY in de Vercel Production environment variables en deploy opnieuw.`,
       503,
     );
   }

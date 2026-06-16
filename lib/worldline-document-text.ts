@@ -45,6 +45,10 @@ function getEnglishTesseractData() {
   return require("@tesseract.js-data/eng") as TesseractLanguageData;
 }
 
+function getDutchTesseractData() {
+  return require("@tesseract.js-data/nld") as TesseractLanguageData;
+}
+
 function getTesseractWorkerPath() {
   return require.resolve("tesseract.js/src/worker-script/node/index.js");
 }
@@ -90,11 +94,50 @@ async function extractPdfText(file: Blob) {
   return normalizeText(parsed.text);
 }
 
-async function extractImageTextWithTesseract(buffer: Buffer) {
-  const [{ createWorker, OEM, PSM }, languageData] = await Promise.all([
-    import("tesseract.js"),
-    Promise.resolve(getEnglishTesseractData()),
-  ]);
+async function createOcrImageVariants(buffer: Buffer) {
+  const variants: Array<{ label: string; buffer: Buffer }> = [{ label: "origineel", buffer }];
+
+  try {
+    const sharp = (await import("sharp")).default;
+    const base = sharp(buffer, { failOn: "none", limitInputPixels: false })
+      .rotate()
+      .resize({ width: 2600, withoutEnlargement: true })
+      .grayscale()
+      .normalize()
+      .sharpen();
+
+    const normalized = await base.clone().png({ compressionLevel: 9 }).toBuffer();
+    variants.unshift({ label: "opgeschoond", buffer: normalized });
+
+    const highContrast = await base.clone().threshold(170).png({ compressionLevel: 9 }).toBuffer();
+    variants.push({ label: "hoog contrast", buffer: highContrast });
+  } catch (error) {
+    console.warn("Afbeelding voorbereiden voor OCR mislukt", error);
+  }
+
+  return variants;
+}
+
+function combineUniqueText(values: string[]) {
+  const seen = new Set<string>();
+  return values
+    .map(normalizeText)
+    .filter(Boolean)
+    .filter((value) => {
+      const key = value.replace(/\s+/g, " ").toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join("\n\n");
+}
+
+async function recognizeImageWithTesseract(
+  buffer: Buffer,
+  languageData: TesseractLanguageData,
+  pageSegmentationMode: import("tesseract.js").PSM,
+) {
+  const { createWorker, OEM } = await import("tesseract.js");
   const worker = await createWorker(languageData.code, OEM.LSTM_ONLY, {
     cachePath: "/tmp/tesseract-cache",
     corePath: getTesseractCorePath(),
@@ -106,13 +149,39 @@ async function extractImageTextWithTesseract(buffer: Buffer) {
   try {
     await worker.setParameters({
       preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: PSM.AUTO,
+      tessedit_pageseg_mode: pageSegmentationMode,
     });
     const result = await worker.recognize(buffer);
     return normalizeText(result.data.text);
   } finally {
     await worker.terminate();
   }
+}
+
+async function extractImageTextWithTesseract(buffer: Buffer) {
+  const { PSM } = await import("tesseract.js");
+  const variants = await createOcrImageVariants(buffer);
+  const attempts = [
+    { variant: variants.find((item) => item.label === "opgeschoond") ?? variants[0], languageData: getDutchTesseractData(), psm: PSM.AUTO },
+    { variant: variants.find((item) => item.label === "opgeschoond") ?? variants[0], languageData: getEnglishTesseractData(), psm: PSM.AUTO },
+    { variant: variants.find((item) => item.label === "hoog contrast") ?? variants[0], languageData: getDutchTesseractData(), psm: PSM.SPARSE_TEXT },
+    { variant: variants.find((item) => item.label === "origineel") ?? variants[0], languageData: getDutchTesseractData(), psm: PSM.SPARSE_TEXT },
+  ];
+  const results: string[] = [];
+
+  for (const attempt of attempts) {
+    try {
+      const text = await recognizeImageWithTesseract(attempt.variant.buffer, attempt.languageData, attempt.psm);
+      if (text) results.push(text);
+    } catch (error) {
+      console.warn(
+        `OCR-poging mislukt (${attempt.variant.label}, ${attempt.languageData.code}, PSM ${attempt.psm})`,
+        error,
+      );
+    }
+  }
+
+  return combineUniqueText(results);
 }
 
 async function extractImageTextWithOpenAi(buffer: Buffer, documentTitle: string, mimeType: string) {

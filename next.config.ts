@@ -15,10 +15,14 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/worldline/documents/check": [
       "./node_modules/.pnpm/@tesseract.js-data+eng@*/node_modules/@tesseract.js-data/eng/**/*",
+      "./node_modules/.pnpm/@tesseract.js-data+nld@*/node_modules/@tesseract.js-data/nld/**/*",
+      "./node_modules/.pnpm/@img+sharp-*@*/node_modules/@img/sharp-*/**/*",
+      "./node_modules/.pnpm/@img+sharp-libvips-*@*/node_modules/@img/sharp-libvips-*/**/*",
       "./node_modules/.pnpm/bmp-js@*/node_modules/bmp-js/**/*",
       "./node_modules/.pnpm/is-url@*/node_modules/is-url/**/*",
       "./node_modules/.pnpm/node-fetch@*/node_modules/node-fetch/**/*",
       "./node_modules/.pnpm/regenerator-runtime@*/node_modules/regenerator-runtime/**/*",
+      "./node_modules/.pnpm/sharp@*/node_modules/sharp/**/*",
       "./node_modules/.pnpm/tesseract.js-core@*/node_modules/tesseract.js-core/**/*",
       "./node_modules/.pnpm/tesseract.js@*/node_modules/tesseract.js/**/*",
       "./node_modules/.pnpm/wasm-feature-detect@*/node_modules/wasm-feature-detect/**/*",

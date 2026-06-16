@@ -365,6 +365,17 @@ function shouldRefreshKvkCheck(document: WorldlineDocument) {
   return checkResult.analysisVersion !== WORLDLINE_KVK_ANALYSIS_VERSION;
 }
 
+function shouldAutoCheckOcrDocument(document: WorldlineDocument) {
+  if (!getDocumentStoredOcrText(document)) return false;
+  if (document.check_status === "uploaded") return true;
+
+  const checkResult = document.check_result && typeof document.check_result === "object"
+    ? (document.check_result as WorldlineCheckResult)
+    : {};
+
+  return typeof checkResult.note === "string" && checkResult.note.startsWith("JPG/PNG is opgeslagen.");
+}
+
 function fileSizeLabel(size?: number | null) {
   if (!size) return "-";
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} kB`;
@@ -573,6 +584,7 @@ export default function WorldlineDashboard() {
   const [agreementFields, setAgreementFields] = useState<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
   const hydratedAgreementProjectId = useRef<string | null>(null);
   const autoCheckedKvkDocumentIds = useRef<Set<string>>(new Set());
+  const autoCheckedOcrDocumentIds = useRef<Set<string>>(new Set());
   const [searching, setSearching] = useState(false);
   const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -723,6 +735,7 @@ export default function WorldlineDashboard() {
   const activeProjectId = activeProject?.id;
   useEffect(() => {
     autoCheckedKvkDocumentIds.current.clear();
+    autoCheckedOcrDocumentIds.current.clear();
     if (activeProjectId) {
       void loadDocuments(activeProjectId);
     } else {
@@ -1228,8 +1241,23 @@ export default function WorldlineDashboard() {
   useEffect(() => {
     if (!activeProjectId || !canWriteWorldline || roleAccessLoading || busy) return;
 
+    const ocrDocumentToCheck = Object.values(latestDocumentsByType)
+      .flat()
+      .find((document) => (
+        shouldAutoCheckOcrDocument(document) && !autoCheckedOcrDocumentIds.current.has(document.id)
+      ));
+
+    if (!ocrDocumentToCheck) return;
+
+    autoCheckedOcrDocumentIds.current.add(ocrDocumentToCheck.id);
+    void runAutomatedDocumentCheck(ocrDocumentToCheck);
+  }, [activeProjectId, busy, canWriteWorldline, latestDocumentsByType, roleAccessLoading, runAutomatedDocumentCheck]);
+
+  useEffect(() => {
+    if (!activeProjectId || !canWriteWorldline || roleAccessLoading || busy) return;
+
     const staleKvkDocument = latestKvkDocuments.find((document) => (
-      shouldRefreshKvkCheck(document) && !autoCheckedKvkDocumentIds.current.has(document.id)
+      shouldRefreshKvkCheck(document) && !shouldAutoCheckOcrDocument(document) && !autoCheckedKvkDocumentIds.current.has(document.id)
     ));
 
     if (!staleKvkDocument) return;

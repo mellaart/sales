@@ -128,7 +128,7 @@ export async function POST(request: Request) {
     const documentText = await extractWorldlineDocumentText(document, file, documentTitle);
 
     if (!documentText) {
-      return jsonResponse({ error: `Geen tekst gevonden in ${documentTitle}. Controleer of het document goed leesbaar is.` }, 422);
+      return jsonResponse({ error: `Geen selecteerbare tekst gevonden in ${documentTitle}. Automatische controle werkt alleen met PDF's waarin tekst selecteerbaar is.` }, 422);
     }
 
     const currentResult = document.check_result && typeof document.check_result === "object"

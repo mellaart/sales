@@ -48,6 +48,10 @@ type RelationSearchResponse = {
 const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 6;
+const PDF_PAGE = {
+  portrait: { width: 595.28, height: 841.89 },
+  landscape: { width: 841.89, height: 595.28 },
+};
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -68,6 +72,48 @@ function withWorldlineTimeout<T>(request: PromiseLike<T>, action: string): Promi
         window.clearTimeout(timeoutId);
         reject(error);
       });
+  });
+}
+
+function isImageUploadFile(file: File) {
+  return file.type === "image/jpeg" || file.type === "image/png" || /\.(jpe?g|png)$/i.test(file.name);
+}
+
+function getPdfUploadFileName(fileName: string) {
+  return fileName.replace(/\.(jpe?g|png)$/i, "") + ".pdf";
+}
+
+async function convertImageFileToPdf(file: File) {
+  const { PDFDocument } = await import("pdf-lib");
+  const bytes = await file.arrayBuffer();
+  const pdfDoc = await PDFDocument.create();
+  const image = /\.png$/i.test(file.name) || file.type === "image/png"
+    ? await pdfDoc.embedPng(bytes)
+    : await pdfDoc.embedJpg(bytes);
+  const pageSize = image.width > image.height ? PDF_PAGE.landscape : PDF_PAGE.portrait;
+  const page = pdfDoc.addPage([pageSize.width, pageSize.height]);
+  const margin = 24;
+  const scale = Math.min(
+    (pageSize.width - margin * 2) / image.width,
+    (pageSize.height - margin * 2) / image.height,
+  );
+  const width = image.width * scale;
+  const height = image.height * scale;
+
+  page.drawImage(image, {
+    x: (pageSize.width - width) / 2,
+    y: (pageSize.height - height) / 2,
+    width,
+    height,
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  const pdfBuffer = new ArrayBuffer(pdfBytes.byteLength);
+  new Uint8Array(pdfBuffer).set(pdfBytes);
+
+  return new File([pdfBuffer], getPdfUploadFileName(file.name), {
+    type: "application/pdf",
+    lastModified: file.lastModified,
   });
 }
 
@@ -869,15 +915,33 @@ export default function WorldlineDashboard() {
       return null;
     }
 
+    let uploadFile = file;
+    let convertedToPdf = false;
+
+    if (isImageUploadFile(file)) {
+      setBusy(true);
+      setStatus("Afbeelding wordt omgezet naar PDF...");
+
+      try {
+        uploadFile = await convertImageFileToPdf(file);
+        convertedToPdf = true;
+      } catch (error) {
+        setStatus(`Afbeelding omzetten naar PDF mislukt: ${getErrorMessage(error, "bestand kon niet worden omgezet.")}`);
+        setBusy(false);
+        return null;
+      }
+    }
+
     const definition = getWorldlineDocumentDefinition(documentType);
-    const documentTitle = getDocumentTitleFromFileName(file.name);
+    const documentTitle = getDocumentTitleFromFileName(uploadFile.name);
     const documentTitleKey = getDocumentTitleKey(documentTitle);
     const kvkNumber = documentType === "kvk"
-      ? extractKvkNumberFromText(file.name)
+      ? extractKvkNumberFromText(uploadFile.name)
       : "";
 
     if (documentType === "kvk" && !kvkNumber) {
       setStatus("Gebruik voor KvK een bestandsnaam zoals 'Uittreksel - 58048472.pdf', zodat het uittrekselnummer automatisch herkend wordt.");
+      setBusy(false);
       return null;
     }
 
@@ -889,7 +953,7 @@ export default function WorldlineDashboard() {
     const latestVersion = Math.max(0, ...versionDocuments.map((document) => document.version));
     const nextVersion = latestVersion + 1;
     const storageGroup = documentType === "kvk" ? `${documentType}/${kvkNumber}` : `${documentType}/${documentTitleKey}`;
-    const storagePath = `${selectedRelation.id}/${activeProject.id}/${storageGroup}/v${nextVersion}-${Date.now()}-${sanitizeFileName(file.name)}`;
+    const storagePath = `${selectedRelation.id}/${activeProject.id}/${storageGroup}/v${nextVersion}-${Date.now()}-${sanitizeFileName(uploadFile.name)}`;
     const nextCheckResult: WorldlineCheckResult = {
       ...createInitialCheckResult(documentType),
       documentTitle,
@@ -901,8 +965,8 @@ export default function WorldlineDashboard() {
 
     const uploadResult = await supabase.storage
       .from(WORLDLINE_DOCUMENT_BUCKET)
-      .upload(storagePath, file, {
-        contentType: file.type || "application/octet-stream",
+      .upload(storagePath, uploadFile, {
+        contentType: uploadFile.type || "application/pdf",
         upsert: false,
       });
 
@@ -917,10 +981,10 @@ export default function WorldlineDashboard() {
       .insert({
         project_id: activeProject.id,
         document_type: documentType,
-        file_name: file.name,
+        file_name: uploadFile.name,
         storage_path: storagePath,
-        mime_type: file.type,
-        file_size: file.size,
+        mime_type: uploadFile.type,
+        file_size: uploadFile.size,
         version: nextVersion,
         check_status: "uploaded",
         check_result: nextCheckResult,
@@ -941,14 +1005,14 @@ export default function WorldlineDashboard() {
       const hasOtherKvkDocuments = sourceDocuments.some((document) => document.document_type === "kvk" && getDocumentKvkNumber(document) !== kvkNumber);
       setStatus(
         latestVersion > 0
-          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${nextVersion}.`
-          : `KvK-uittreksel ${kvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK.`
+          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${nextVersion}${convertedToPdf ? " en omgezet naar PDF" : ""}.`
+          : `KvK-uittreksel ${kvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK${convertedToPdf ? " en omgezet naar PDF" : ""}.`
       );
     } else {
       setStatus(
         latestVersion > 0
-          ? `${definition?.title ?? "Document"} '${documentTitle}' is opgeslagen als v${nextVersion}.`
-          : `${definition?.title ?? "Document"} '${documentTitle}' is toegevoegd aan dit Worldline-project.`
+          ? `${definition?.title ?? "Document"} '${documentTitle}' is opgeslagen als v${nextVersion}${convertedToPdf ? " en omgezet naar PDF" : ""}.`
+          : `${definition?.title ?? "Document"} '${documentTitle}' is toegevoegd aan dit Worldline-project${convertedToPdf ? " en omgezet naar PDF" : ""}.`
       );
     }
     setBusy(false);
@@ -1491,7 +1555,7 @@ export default function WorldlineDashboard() {
                 <div>
                   <div className="eyebrow">Documenten</div>
                   <h2 className="headline">Uploaden en controleren</h2>
-                  <p className="subtext">Sleep PDF-bestanden of afbeeldingen naar de juiste stap. Nieuwe uploads worden als nieuwe versie bewaard.</p>
+                  <p className="subtext">Sleep PDF-bestanden of afbeeldingen naar de juiste stap. JPG en PNG worden automatisch als PDF opgeslagen.</p>
                 </div>
                 <select
                   className="input worldline-status-select"
@@ -1539,7 +1603,7 @@ export default function WorldlineDashboard() {
                       >
                         <UploadCloud size={22} />
                         <span>{isRefundDisabled ? "Refund is niet geselecteerd" : "Sleep bestanden hierheen of kies bestanden"}</span>
-                        <small>{isRefundDisabled ? "Zet Refund op Ja om te uploaden" : definition.accept.includes("image") ? "PDF, JPG of PNG" : "PDF"}</small>
+                        <small>{isRefundDisabled ? "Zet Refund op Ja om te uploaden" : definition.accept.includes("image") ? "PDF, JPG/PNG wordt PDF" : "PDF"}</small>
                         <input
                           id={inputId}
                           type="file"

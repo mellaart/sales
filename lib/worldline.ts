@@ -8,10 +8,13 @@ export type WorldlineCheckResult = {
   analysisVersion?: number;
   bankName?: string;
   checklist?: Array<{ text: string; done: boolean; tone?: WorldlineCheckItemTone }>;
+  convertedFromImage?: boolean;
   documentTitle?: string;
   iban?: string;
   kvkNumber?: string;
   note?: string;
+  originalFileName?: string;
+  originalMimeType?: string;
   producedDate?: string;
   statementDate?: string;
   authorizedSigners?: string[];

@@ -192,6 +192,14 @@ function getDocumentTitle(document: WorldlineDocument) {
     : getDocumentTitleFromFileName(document.file_name);
 }
 
+function isConvertedImagePdfDocument(document: WorldlineDocument) {
+  const checkResult = document.check_result && typeof document.check_result === "object"
+    ? (document.check_result as WorldlineCheckResult)
+    : {};
+
+  return checkResult.convertedFromImage === true;
+}
+
 function getDocumentTitleKey(value: string) {
   return sanitizeFileName(value) || "document";
 }
@@ -256,10 +264,13 @@ function getCheckResult(document: WorldlineDocument | null, documentType: Worldl
     analysisVersion: typeof source.analysisVersion === "number" ? source.analysisVersion : undefined,
     bankName: typeof source.bankName === "string" ? source.bankName : undefined,
     checklist: Array.isArray(source.checklist) ? source.checklist : fallback.checklist,
+    convertedFromImage: source.convertedFromImage === true,
     documentTitle: typeof source.documentTitle === "string" ? source.documentTitle : undefined,
     iban: typeof source.iban === "string" ? source.iban : undefined,
     note: typeof source.note === "string" ? source.note : "",
     kvkNumber: typeof source.kvkNumber === "string" ? source.kvkNumber : undefined,
+    originalFileName: typeof source.originalFileName === "string" ? source.originalFileName : undefined,
+    originalMimeType: typeof source.originalMimeType === "string" ? source.originalMimeType : undefined,
     producedDate: typeof source.producedDate === "string" ? source.producedDate : undefined,
     statementDate: typeof source.statementDate === "string" ? source.statementDate : undefined,
     authorizedSigners: Array.isArray(source.authorizedSigners) ? source.authorizedSigners : undefined,
@@ -277,6 +288,8 @@ function getAggregateCheckStatus(documents: WorldlineDocument[]): WorldlineCheck
 
 function shouldRefreshKvkCheck(document: WorldlineDocument) {
   if (document.document_type !== "kvk") return false;
+  if (isConvertedImagePdfDocument(document)) return false;
+
   const checkResult = document.check_result && typeof document.check_result === "object"
     ? (document.check_result as WorldlineCheckResult)
     : {};
@@ -957,6 +970,14 @@ export default function WorldlineDashboard() {
     const nextCheckResult: WorldlineCheckResult = {
       ...createInitialCheckResult(documentType),
       documentTitle,
+      ...(convertedToPdf
+        ? {
+            convertedFromImage: true,
+            note: "JPG/PNG is automatisch als PDF opgeslagen. Automatische tekstcontrole is zonder OCR niet mogelijk; controleer dit document handmatig.",
+            originalFileName: file.name,
+            originalMimeType: file.type || "image",
+          }
+        : {}),
       ...(documentType === "kvk" ? { kvkNumber } : {}),
     };
 
@@ -1041,6 +1062,11 @@ export default function WorldlineDashboard() {
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
 
+    if (isConvertedImagePdfDocument(document)) {
+      setStatus(`${documentTitle} is opgeslagen als PDF, maar komt uit een JPG/PNG. Automatische controle werkt alleen met tekst-PDF's; controleer dit document handmatig.`);
+      return;
+    }
+
     setBusy(true);
     setStatus(`${documentTitle} wordt gecontroleerd...`);
 
@@ -1081,7 +1107,7 @@ export default function WorldlineDashboard() {
     }
   }, [canWriteWorldline, supabase]);
 
-  async function updateDocumentStatus(document: WorldlineDocument, nextStatus: WorldlineCheckStatus) {
+  async function updateDocumentStatus(document: WorldlineDocument, nextStatus: WorldlineCheckStatus, successMessage = "Documentstatus bijgewerkt.") {
     if (!supabase) return;
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
@@ -1104,12 +1130,21 @@ export default function WorldlineDashboard() {
 
     const nextDocument = data as WorldlineDocument;
     setDocuments((currentDocuments) => currentDocuments.map((item) => item.id === nextDocument.id ? nextDocument : item));
-    setStatus("Documentstatus bijgewerkt.");
+    setStatus(successMessage);
     setBusy(false);
   }
 
   async function checkDocument(document: WorldlineDocument) {
     if (document.document_type === "kvk" || document.document_type === "bank_statement") {
+      if (isConvertedImagePdfDocument(document)) {
+        await updateDocumentStatus(
+          document,
+          "checking",
+          "Document staat klaar voor handmatige controle. Het bestand is uit JPG/PNG naar PDF gezet en bevat geen selecteerbare tekst."
+        );
+        return;
+      }
+
       await runAutomatedDocumentCheck(document);
       return;
     }
@@ -1209,6 +1244,8 @@ export default function WorldlineDashboard() {
   function renderUploadedDocument(document: WorldlineDocument, title: string, documentType: WorldlineDocumentType) {
     const checkResult = getCheckResult(document, documentType);
     const isRefundDisabled = documentType === "refund" && !refundEnabled;
+    const isConvertedImagePdf = isConvertedImagePdfDocument(document);
+    const usesManualCheckOnly = isConvertedImagePdf && (documentType === "kvk" || documentType === "bank_statement");
 
     return (
       <div key={document.id} className="worldline-document-item">
@@ -1230,7 +1267,7 @@ export default function WorldlineDashboard() {
             Download
           </button>
           <button type="button" className="secondary-button" onClick={() => void checkDocument(document)} disabled={busy || !canWriteWorldline || isRefundDisabled}>
-            Controleren
+            {usesManualCheckOnly ? "Handmatig controleren" : "Controleren"}
           </button>
           <button type="button" className="secondary-button" onClick={() => void updateDocumentStatus(document, "approved")} disabled={busy || !canWriteWorldline || isRefundDisabled}>
             Akkoord

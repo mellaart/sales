@@ -36,6 +36,7 @@ export class DocumentTextExtractionError extends Error {
 }
 
 const require = createRequire(import.meta.url);
+const OPENAI_OCR_TIMEOUT_MS = 20_000;
 
 function getPdfParse() {
   return require("pdf-parse/lib/pdf-parse.js") as PdfParse;
@@ -60,6 +61,14 @@ function getTesseractCorePath() {
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function hasOpenAiOcrKey() {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 function getExtension(fileName: string) {
@@ -271,39 +280,47 @@ async function extractImageTextWithOpenAi(buffer: Buffer, documentTitle: string,
   const errors: string[] = [];
 
   for (const model of getOpenAiOcrModels()) {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_tokens: 2200,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: [
-                  "Lees alle zichtbare tekst uit deze afbeelding voor een documentcontrole.",
-                  "Geef alleen de gevonden tekst terug, zonder uitleg of samenvatting.",
-                  "Behoud belangrijke gegevens zoals datums, IBAN, banknaam, bedrijfsnaam, KvK-nummer, namen en adressen.",
-                ].join(" "),
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageUrl,
+    let response: Response;
+
+    try {
+      response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        signal: AbortSignal.timeout(OPENAI_OCR_TIMEOUT_MS),
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          max_tokens: 2200,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: [
+                    "Lees alle zichtbare tekst uit deze afbeelding voor een documentcontrole.",
+                    "Geef alleen de gevonden tekst terug, zonder uitleg of samenvatting.",
+                    "Behoud belangrijke gegevens zoals datums, IBAN, banknaam, bedrijfsnaam, KvK-nummer, namen en adressen.",
+                  ].join(" "),
                 },
-              },
-            ],
-          },
-        ],
-      }),
-    });
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: imageUrl,
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      });
+    } catch (error) {
+      errors.push(`${model}: geen antwoord binnen ${OPENAI_OCR_TIMEOUT_MS / 1000} seconden (${getErrorMessage(error)})`);
+      continue;
+    }
 
     const json = (await response.json().catch(() => ({}))) as OpenAiChatCompletionResponse;
     if (response.ok) {
@@ -334,6 +351,10 @@ async function extractImageTextWithOpenAi(buffer: Buffer, documentTitle: string,
 
 async function extractImageText(file: Blob, documentTitle: string, mimeType: string) {
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  if (hasOpenAiOcrKey()) {
+    return extractImageTextWithOpenAi(buffer, documentTitle, mimeType || file.type || "image/jpeg");
+  }
 
   try {
     const text = await extractImageTextWithTesseract(buffer);

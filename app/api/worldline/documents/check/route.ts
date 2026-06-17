@@ -32,6 +32,27 @@ function keepNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function readCheckResult(value: unknown) {
+  return value && typeof value === "object" ? value as WorldlineCheckResult : {};
+}
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const normalized = value.trim();
+    const key = normalized.toLowerCase();
+    if (!normalized || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
 async function verifyUser(request: Request, service: NonNullable<ReturnType<typeof getServiceClient>>) {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -122,9 +143,7 @@ export async function POST(request: Request) {
     }
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
-    const currentResult = document.check_result && typeof document.check_result === "object"
-      ? document.check_result as WorldlineCheckResult
-      : {};
+    const currentResult = readCheckResult(document.check_result);
     let documentText = normalizeText(currentResult.ocrText);
 
     if (!documentText) {
@@ -148,6 +167,39 @@ export async function POST(request: Request) {
       : {};
     const expectedCompanyName = normalizeText(agreementFields.companyName) || project.relation_name;
     const documentTitleFromResult = normalizeText(currentResult.documentTitle);
+    let expectedSignerNames = normalizeText(agreementFields.signers) || normalizeText(agreementFields.contactPerson);
+    let supportingIdentityDocumentNames: string[] = [];
+    let supportingIdentityOcrTexts: string[] = [];
+
+    if (document.document_type === "identity") {
+      const { data: projectDocuments } = await service
+        .from("worldline_documents")
+        .select("id,document_type,file_name,check_result")
+        .eq("project_id", document.project_id)
+        .in("document_type", ["identity", "kvk"]);
+
+      const rows = (projectDocuments ?? []) as Array<{
+        id?: string | null;
+        document_type?: WorldlineDocument["document_type"] | null;
+        file_name?: string | null;
+        check_result?: unknown;
+      }>;
+      const currentFileName = normalizeText(document.file_name).toLowerCase();
+      supportingIdentityDocumentNames = rows
+        .filter((item) => item.document_type === "identity" && item.id !== document.id)
+        .map((item) => normalizeText(item.file_name))
+        .filter((fileName) => fileName.toLowerCase() !== currentFileName)
+        .filter(Boolean);
+      supportingIdentityOcrTexts = rows
+        .filter((item) => item.document_type === "identity" && item.id !== document.id)
+        .map((item) => normalizeText(readCheckResult(item.check_result).ocrText))
+        .filter(Boolean);
+
+      const kvkSignerNames = rows
+        .filter((item) => item.document_type === "kvk")
+        .flatMap((item) => getStringArray(readCheckResult(item.check_result).authorizedSigners));
+      expectedSignerNames = uniqueStrings([expectedSignerNames, ...kvkSignerNames]).join(", ");
+    }
 
     const analysis = document.document_type === "kvk"
       ? (() => {
@@ -176,7 +228,9 @@ export async function POST(request: Request) {
         : Promise.resolve(analyzeWorldlineGenericDocumentText(document.document_type, documentText, {
             expectedCompanyName,
             expectedIban: normalizeText(agreementFields.iban),
-            expectedSignerNames: normalizeText(agreementFields.signers) || normalizeText(agreementFields.contactPerson),
+            expectedSignerNames,
+            supportingDocumentNames: supportingIdentityDocumentNames,
+            supportingOcrTexts: supportingIdentityOcrTexts,
           }));
     const resolvedAnalysis = await analysis;
     const nextCheckResult = {

@@ -15,6 +15,34 @@ type GenericDocumentAnalysisOptions = {
   expectedCompanyName?: string;
   expectedIban?: string;
   expectedSignerNames?: string;
+  supportingDocumentNames?: string[];
+  supportingOcrTexts?: string[];
+};
+
+const MONTHS: Record<string, number> = {
+  januari: 1,
+  jan: 1,
+  februari: 2,
+  feb: 2,
+  maart: 3,
+  mrt: 3,
+  april: 4,
+  apr: 4,
+  mei: 5,
+  juni: 6,
+  jun: 6,
+  juli: 7,
+  jul: 7,
+  augustus: 8,
+  aug: 8,
+  september: 9,
+  sep: 9,
+  oktober: 10,
+  okt: 10,
+  november: 11,
+  nov: 11,
+  december: 12,
+  dec: 12,
 };
 
 function normalizeWhitespace(value: string) {
@@ -71,6 +99,119 @@ function findDate(text: string) {
     /\b\d{1,2}\s+(?:jan|feb|mrt|maart|apr|mei|jun|jul|aug|sep|okt|nov|dec)[a-z]*\s+\d{4}\b/i.test(text);
 }
 
+function parseDate(day: string, month: string, year: string) {
+  const fullYear = Number(year.length === 2 ? `20${year}` : year);
+  const date = new Date(fullYear, Number(month) - 1, Number(day));
+  if (
+    date.getFullYear() !== fullYear ||
+    date.getMonth() !== Number(month) - 1 ||
+    date.getDate() !== Number(day)
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function formatDateNl(date: Date) {
+  return new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" }).format(date);
+}
+
+function extractDates(text: string) {
+  const dates: Date[] = [];
+  const numericPattern = /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/g;
+  const isoPattern = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g;
+  const monthNamePattern = /\b(\d{1,2})\s+(januari|jan|februari|feb|maart|mrt|april|apr|mei|juni|jun|juli|jul|augustus|aug|september|sep|oktober|okt|november|nov|december|dec)\s+(\d{4})\b/gi;
+
+  for (const match of text.matchAll(numericPattern)) {
+    const date = parseDate(match[1], match[2], match[3]);
+    if (date) dates.push(date);
+  }
+
+  for (const match of text.matchAll(isoPattern)) {
+    const date = parseDate(match[3], match[2], match[1]);
+    if (date) dates.push(date);
+  }
+
+  for (const match of text.matchAll(monthNamePattern)) {
+    const month = MONTHS[match[2].toLowerCase()];
+    const date = month ? parseDate(match[1], String(month), match[3]) : null;
+    if (date) dates.push(date);
+  }
+
+  const seen = new Set<string>();
+  return dates
+    .filter((date) => {
+      const key = date.toISOString().slice(0, 10);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b.getTime() - a.getTime());
+}
+
+function findIdentityExpiryDate(text: string, referenceDate = new Date()) {
+  const compact = normalizeWhitespace(text);
+  const labelledPattern = /\b(?:geldig\s*tot|date\s*of\s*expiry|expiry\s*date|expires|valid\s*until|verloopt\s*op|datum\s*verval)\b.{0,90}/gi;
+  const labelledDates: Date[] = [];
+
+  for (const match of compact.matchAll(labelledPattern)) {
+    labelledDates.push(...extractDates(match[0]));
+  }
+
+  if (labelledDates.length > 0) return labelledDates.sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  return extractDates(compact)
+    .filter((date) => date >= today)
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+}
+
+function splitExpectedNames(value?: string) {
+  return (value ?? "")
+    .split(/[,;\n]+|\s+en\s+/i)
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+function expectedNameMatches(text: string, expectedNames?: string) {
+  const textKey = normalizeSearchKey(text);
+  const names = splitExpectedNames(expectedNames);
+
+  for (const name of names) {
+    const fullNameKey = normalizeSearchKey(name);
+    if (fullNameKey.length >= 4 && textKey.includes(fullNameKey)) return name;
+
+    const words = name
+      .split(/[\s,-]+/)
+      .map(normalizeSearchKey)
+      .filter((word) => word.length >= 3 && !["van", "der", "den", "de", "het", "ten", "ter"].includes(word));
+
+    if (words.length >= 2 && words.filter((word) => textKey.includes(word)).length >= 2) return name;
+    if (words.length === 1 && textKey.includes(words[0])) return name;
+  }
+
+  return "";
+}
+
+function getIdentityDocumentKind(text: string) {
+  if (hasAny(text, [/\bpaspoort\b/i, /\bpassport\b/i, /\bpassport\s*no\b/i])) return "paspoort";
+  if (hasAny(text, [/\brijbewijs\b/i, /\bdriving\s*licen[cs]e\b/i, /\bdriver'?s\s*licen[cs]e\b/i])) return "rijbewijs";
+  if (hasAny(text, [/\bidentiteitskaart\b/i, /\bidentity\s*card\b/i, /\bnational\s*identity\b/i, /\bid\s*card\b/i])) return "identiteitskaart";
+  return "";
+}
+
+function hasBacksideDocument(options: GenericDocumentAnalysisOptions) {
+  const names = options.supportingDocumentNames ?? [];
+  if (names.some((name) => /\b(achterzijde|achterkant|back|backside|verso|zijde\s*2|pagina\s*2|page\s*2)\b/i.test(name))) return true;
+  return names.length >= 1;
+}
+
+function hasVisibleBsn(text: string) {
+  return /\b(?:BSN|persoonsnummer|personal\s*number)\b.{0,35}\d(?:[\s.-]?\d){7,8}\b/i.test(text);
+}
+
 function item(text: string, done: boolean, successText: string, warningText: string): NonNullable<WorldlineCheckResult["checklist"]>[number] {
   return {
     text: done ? successText : warningText,
@@ -97,25 +238,62 @@ function analyzeAgreement(text: string): NonNullable<WorldlineCheckResult["check
 }
 
 function analyzeIdentity(text: string, options: GenericDocumentAnalysisOptions): NonNullable<WorldlineCheckResult["checklist"]> {
-  const isIdentity = hasAny(text, [/\bpaspoort\b/i, /\bpassport\b/i, /\bidentiteitskaart\b/i, /\bidentity\s*card\b/i, /\brijbewijs\b/i, /\bdriving\s*licen[cs]e\b/i]);
-  const nameVisible = containsExpectedText(text, options.expectedSignerNames);
-  const validityVisible = hasAny(text, [/\bgeldig\s*tot\b/i, /\bdate\s*of\s*expiry\b/i, /\bexpiry\b/i, /\bexpires\b/i]) || findDate(text);
-  const bsnVisible = hasAny(text, [/\bBSN\b/i, /\bpersoonsnummer\b/i]);
+  const supportingText = normalizeWhitespace((options.supportingOcrTexts ?? []).join(" "));
+  const combinedText = normalizeWhitespace(`${text} ${supportingText}`);
+  const documentKind = getIdentityDocumentKind(combinedText);
+  const expiryDate = findIdentityExpiryDate(combinedText);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiryIsValid = expiryDate ? expiryDate >= today : false;
+  const matchedSignerName = expectedNameMatches(combinedText, options.expectedSignerNames);
+  const hasExpectedSignerName = splitExpectedNames(options.expectedSignerNames).length > 0;
+  const bsnVisible = hasVisibleBsn(combinedText);
+  const backsidePresent = hasBacksideDocument(options);
 
   return [
-    item(text, isIdentity && validityVisible, "Legitimatiebewijs en geldigheidsdatum lijken zichtbaar.", "Legitimatiebewijs of geldigheidsdatum niet duidelijk herkend."),
-    item(text, nameVisible, `Naam komt overeen met bekende tekenbevoegde: ${options.expectedSignerNames}.`, "Naam tekenbevoegde niet duidelijk herkend in ID-document."),
     {
-      text: bsnVisible
-        ? "BSN/persoonsnummer lijkt zichtbaar. Controleer visueel of alleen het BSN is afgeschermd."
-        : "BSN is niet duidelijk herkend. Controleer visueel of alleen het BSN is afgeschermd.",
-      done: !bsnVisible,
-      tone: bsnVisible ? "warning" : "success",
+      text: documentKind && expiryDate
+        ? expiryIsValid
+          ? `Legitimatiebewijs is geldig: ${documentKind}, geldig tot ${formatDateNl(expiryDate)}.`
+          : `Legitimatiebewijs is verlopen: ${documentKind}, geldig tot ${formatDateNl(expiryDate)}.`
+        : documentKind
+          ? `Legitimatiebewijs herkend: ${documentKind}. Geldigheidsdatum niet duidelijk herkend.`
+          : "Legitimatiebewijs of geldigheidsdatum niet duidelijk herkend.",
+      done: Boolean(documentKind && expiryIsValid),
+      tone: documentKind && expiryIsValid ? "success" : "danger",
     },
     {
-      text: "Controleer visueel of bij een identiteitskaart ook de achterkant aanwezig is.",
-      done: false,
-      tone: "warning",
+      text: matchedSignerName
+        ? `Naam komt overeen met bekende tekenbevoegde: ${matchedSignerName}.`
+        : hasExpectedSignerName
+          ? `Naam tekenbevoegde niet duidelijk herkend in ID-document: ${options.expectedSignerNames}.`
+          : "Naam tekenbevoegde niet gecontroleerd omdat er geen tekenbevoegde naam bekend is.",
+      done: Boolean(matchedSignerName),
+      tone: matchedSignerName ? "success" : "warning",
+    },
+    {
+      text: bsnVisible
+        ? "BSN/persoonsnummer lijkt zichtbaar. Scherm alleen het BSN af voordat dit naar Worldline gaat."
+        : "BSN/persoonsnummer is niet zichtbaar in de OCR-tekst. Controleer visueel of alleen het BSN is afgeschermd.",
+      done: !bsnVisible,
+      tone: bsnVisible ? "danger" : "success",
+    },
+    {
+      text: documentKind === "identiteitskaart"
+        ? backsidePresent
+          ? "Bij ID-kaart is ook een achterzijde/bijlage aanwezig."
+          : "Bij ID-kaart is de achterkant nog niet duidelijk aanwezig. Upload ook de achterkant."
+        : documentKind
+          ? `Achterkant is niet verplicht bij documenttype: ${documentKind}.`
+          : backsidePresent
+            ? "Extra ID-pagina/bijlage is aanwezig."
+            : "Controleer visueel of bij een identiteitskaart ook de achterkant aanwezig is.",
+      done: documentKind === "identiteitskaart" ? backsidePresent : Boolean(documentKind || backsidePresent),
+      tone: documentKind === "identiteitskaart" && !backsidePresent
+        ? "danger"
+        : documentKind || backsidePresent
+          ? "success"
+          : "warning",
     },
   ];
 }

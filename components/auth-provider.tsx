@@ -26,6 +26,9 @@ const AuthContext = createContext<AuthContextType>({
 const AUTH_REQUEST_TIMEOUT_MS = 10000;
 const SESSION_REFRESH_MARGIN_SECONDS = 90;
 const AUTH_TIMEOUT_RESULT = { timedOut: true } as const;
+const IDLE_LOGOUT_MS = 10 * 60 * 1000;
+const IDLE_CHECK_INTERVAL_MS = 15 * 1000;
+const LAST_ACTIVITY_STORAGE_KEY = "smarttrade-last-activity-at";
 
 function fallbackRole(user: User | null): UserRole | null {
   if (!user) return null;
@@ -62,12 +65,27 @@ function clearSupabaseAuthStorage() {
   }
 }
 
+function getLastActivityAt() {
+  if (typeof window === "undefined") return Date.now();
+
+  const storedValue = Number(window.localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY));
+  return Number.isFinite(storedValue) && storedValue > 0 ? storedValue : Date.now();
+}
+
+function setLastActivityAt(value = Date.now()) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(value));
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const userRef = useRef<User | null>(null);
+  const idleLogoutInProgressRef = useRef(false);
+  const lastActivityWriteRef = useRef(0);
 
   const applyUser = useCallback(async (nextUser: User | null, active = true) => {
     if (!active) return;
@@ -222,6 +240,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void cleanupPromise.then((cleanup) => cleanup?.());
     };
   }, [applyUser]);
+
+  useEffect(() => {
+    if (!user) {
+      idleLogoutInProgressRef.current = false;
+      return;
+    }
+
+    idleLogoutInProgressRef.current = false;
+    setLastActivityAt();
+
+    function recordActivity() {
+      const now = Date.now();
+      if (now - lastActivityWriteRef.current < 1000) return;
+
+      lastActivityWriteRef.current = now;
+      setLastActivityAt(now);
+    }
+
+    async function logoutAfterIdle() {
+      if (idleLogoutInProgressRef.current) return;
+
+      idleLogoutInProgressRef.current = true;
+      await signOut();
+
+      if (window.location.pathname !== "/login") {
+        window.location.replace("/login?timeout=1");
+      }
+    }
+
+    function checkIdleTime() {
+      if (Date.now() - getLastActivityAt() >= IDLE_LOGOUT_MS) {
+        void logoutAfterIdle();
+      }
+    }
+
+    function handleWindowFocus() {
+      checkIdleTime();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        checkIdleTime();
+      }
+    }
+
+    const activityEvents: Array<keyof WindowEventMap> = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "pointerdown"];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, recordActivity, { passive: true });
+    });
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const intervalId = window.setInterval(checkIdleTime, IDLE_CHECK_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, recordActivity);
+      });
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [signOut, user]);
 
   return (
     <AuthContext.Provider value={{ user, profile, role, loading, refreshProfile, signOut }}>

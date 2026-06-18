@@ -17,6 +17,12 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("timeout") === "1") {
+      setStatus("Je bent automatisch uitgelogd omdat de website langer dan 10 minuten niet is gebruikt.");
+    }
+  }, []);
+
+  useEffect(() => {
     if (!loading && user) {
       router.replace(mustSetPassword ? "/reset-password" : "/");
     }

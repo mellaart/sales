@@ -399,13 +399,6 @@ function getAgreementPdfValue(fields: WorldlineAgreementFields, definition: Worl
   return value;
 }
 
-function getMissingRequiredAgreementFields(fields: WorldlineAgreementFields) {
-  return WORLDLINE_AGREEMENT_FIELD_DEFINITIONS
-    .filter((definition) => definition.required)
-    .filter((definition) => !getAgreementPdfValue(fields, definition))
-    .map((definition) => definition.label);
-}
-
 function getAgreementRadioValue(definition: WorldlineAgreementFieldDefinition, value: string) {
   if (definition.key === "contactGender") {
     if (value === "M") return "Keuze1";
@@ -541,7 +534,6 @@ function renderAgreementFieldControl(
         className="input worldline-field-input"
         value={value}
         disabled={disabled}
-        required={definition.required}
         onChange={(event) => onChange(event.target.value)}
         onBlur={(event) => onCommit?.(event.target.value)}
       >
@@ -560,7 +552,6 @@ function renderAgreementFieldControl(
         className="textarea worldline-field-input"
         value={value}
         disabled={disabled}
-        required={definition.required}
         onChange={(event) => onChange(event.target.value)}
         onBlur={(event) => onCommit?.(event.target.value)}
       />
@@ -572,7 +563,6 @@ function renderAgreementFieldControl(
       className="input worldline-field-input"
       value={value}
       disabled={disabled}
-      required={definition.required}
       onChange={(event) => onChange(event.target.value)}
       onBlur={(event) => onCommit?.(event.target.value)}
     />
@@ -930,17 +920,7 @@ export default function WorldlineDashboard() {
     setSavingAgreementFields(false);
   }
 
-  function validateRequiredAgreementFields(nextAgreementFields: WorldlineAgreementFields) {
-    const missingFields = getMissingRequiredAgreementFields(nextAgreementFields);
-    if (missingFields.length === 0) return true;
-
-    setStatus(`Vul eerst verplicht in: ${missingFields.join(", ")}.`);
-    return false;
-  }
-
   async function saveAgreementFields() {
-    if (!validateRequiredAgreementFields(agreementFields)) return;
-
     await persistAgreementFields(agreementFields, {
       savingMessage: "Aansluitgegevens worden opgeslagen...",
       savedMessage: "Aansluitgegevens opgeslagen.",
@@ -977,8 +957,6 @@ export default function WorldlineDashboard() {
   }
 
   async function markAgreementSentToCustomer() {
-    if (!validateRequiredAgreementFields(agreementFields)) return;
-
     await updateProjectStatus("waiting_customer", "Aansluitovereenkomst gemarkeerd als verstuurd naar klant.");
   }
 
@@ -1290,7 +1268,6 @@ export default function WorldlineDashboard() {
 
   async function handleDownloadAgreementPdf() {
     if (!selectedRelation || !activeProject) return;
-    if (!validateRequiredAgreementFields(agreementFields)) return;
 
     setStatus("Aansluitovereenkomst wordt ingevuld...");
 
@@ -1694,7 +1671,6 @@ export default function WorldlineDashboard() {
                         <div key={definition.key} className="worldline-yellow-field">
                           <span className="worldline-field-label">
                             {definition.label}
-                            {definition.required ? <small className="worldline-field-required">Verplicht</small> : null}
                           </span>
                           <div className="worldline-field-control">
                             {renderAgreementFieldControl(

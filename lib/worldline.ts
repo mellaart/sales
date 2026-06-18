@@ -34,7 +34,6 @@ export type WorldlineAgreementFieldDefinition = {
   type: WorldlineAgreementFieldType;
   defaultValue?: string;
   options?: string[];
-  required?: boolean;
 };
 
 export type WorldlineAgreementFields = Record<string, string>;
@@ -85,7 +84,7 @@ export const WORLDLINE_AGREEMENT_FIELD_DEFINITIONS: WorldlineAgreementFieldDefin
   { key: "businessPostcode", pdfField: "Postcode 1", label: "Postcode vestiging", section: "Bedrijfsgegevens", type: "text" },
   { key: "businessCity", pdfField: "Plaats 1", label: "Plaats vestiging", section: "Bedrijfsgegevens", type: "text" },
   { key: "phoneNumber", pdfField: "Telefoonnummer", label: "Telefoonnummer", section: "Bedrijfsgegevens", type: "text" },
-  { key: "mobileNumber", pdfField: "Mobiel", label: "Mobiel", section: "Bedrijfsgegevens", type: "text", required: true },
+  { key: "mobileNumber", pdfField: "Mobiel", label: "Mobiel", section: "Bedrijfsgegevens", type: "text" },
   { key: "vatNumber", pdfField: "BTW-nummer", label: "BTW-nummer", section: "Bedrijfsgegevens", type: "text" },
   { key: "kvkNumber", pdfField: "KvKnummer", label: "KvK-nummer", section: "Bedrijfsgegevens", type: "text" },
   { key: "companyEmail", pdfField: "Emailadres 1", label: "E-mailadres", section: "Bedrijfsgegevens", type: "text" },

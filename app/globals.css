@@ -1839,15 +1839,6 @@ td {
   font-weight: 800;
 }
 
-.worldline-field-required {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(250,204,21,0.12);
-  color: #fde68a;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
 .worldline-field-control {
   min-width: 0;
 }

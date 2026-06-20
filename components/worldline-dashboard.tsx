@@ -1062,7 +1062,6 @@ export default function WorldlineDashboard() {
 
     const definition = getWorldlineDocumentDefinition(documentType);
     const documentTitle = getDocumentTitleFromFileName(uploadFile.name);
-    const documentTitleKey = getDocumentTitleKey(documentTitle);
     const kvkNumber = documentType === "kvk"
       ? extractKvkNumberFromText(uploadFile.name)
       : "";
@@ -1073,15 +1072,6 @@ export default function WorldlineDashboard() {
       return null;
     }
 
-    const versionDocuments = sourceDocuments.filter((document) => {
-      if (document.document_type !== documentType) return false;
-      if (documentType === "kvk") return getDocumentKvkNumber(document) === kvkNumber;
-      return getDocumentTitleKey(getDocumentTitle(document)) === documentTitleKey;
-    });
-    const latestVersion = Math.max(0, ...versionDocuments.map((document) => document.version));
-    const nextVersion = latestVersion + 1;
-    const storageGroup = documentType === "kvk" ? `${documentType}/${kvkNumber}` : `${documentType}/${documentTitleKey}`;
-    const storagePath = `${selectedRelation.id}/${activeProject.id}/${storageGroup}/v${nextVersion}-${Date.now()}-${sanitizeFileName(uploadFile.name)}`;
     const nextCheckResult: WorldlineCheckResult = {
       ...createInitialCheckResult(documentType),
       documentTitle,
@@ -1105,55 +1095,56 @@ export default function WorldlineDashboard() {
     setBusy(true);
     setStatus(`${definition?.title ?? "Document"} wordt geupload...`);
 
-    const uploadResult = await supabase.storage
-      .from(WORLDLINE_DOCUMENT_BUCKET)
-      .upload(storagePath, uploadFile, {
-        contentType: uploadFile.type || "application/octet-stream",
-        upsert: false,
-      });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
 
-    if (uploadResult.error) {
-      setStatus(`Upload mislukt: ${uploadResult.error.message}`);
+    if (!accessToken) {
+      setStatus("Je sessie is verlopen. Log opnieuw in om documenten te uploaden.");
       setBusy(false);
       return null;
     }
 
-    const { data, error } = await supabase
-      .from("worldline_documents")
-      .insert({
-        project_id: activeProject.id,
-        document_type: documentType,
-        file_name: uploadFile.name,
-        storage_path: storagePath,
-        mime_type: uploadFile.type,
-        file_size: uploadFile.size,
-        version: nextVersion,
-        check_status: "uploaded",
-        check_result: nextCheckResult,
-        uploaded_by: user.id,
-      } as never)
-      .select("*")
-      .single();
+    const formData = new FormData();
+    formData.append("projectId", activeProject.id);
+    formData.append("documentType", documentType);
+    formData.append("checkResult", JSON.stringify(nextCheckResult));
+    formData.append("file", uploadFile, uploadFile.name);
 
-    if (error) {
-      setStatus(`Document registreren mislukt: ${error.message}`);
+    const response = await withWorldlineTimeout(
+      fetch("/api/worldline/documents/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: formData,
+      }),
+      `${definition?.title ?? "Document"} uploaden`,
+    );
+    const json = (await response.json().catch(() => ({}))) as {
+      document?: WorldlineDocument;
+      error?: string;
+    };
+
+    if (!response.ok || !json.document) {
+      setStatus(`Upload mislukt: ${json.error ?? "geen document ontvangen"}.`);
       setBusy(false);
       return null;
     }
 
-    const nextDocument = data as WorldlineDocument;
+    const nextDocument = json.document;
+    const savedVersion = nextDocument.version;
     setDocuments((currentDocuments) => [nextDocument, ...currentDocuments]);
     if (documentType === "kvk") {
       const hasOtherKvkDocuments = sourceDocuments.some((document) => document.document_type === "kvk" && getDocumentKvkNumber(document) !== kvkNumber);
       setStatus(
-        latestVersion > 0
-          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${nextVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+        savedVersion > 1
+          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${savedVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
           : `KvK-uittreksel ${kvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
       );
     } else {
       setStatus(
-        latestVersion > 0
-          ? `${definition?.title ?? "Document"} '${documentTitle}' is opgeslagen als v${nextVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+        savedVersion > 1
+          ? `${definition?.title ?? "Document"} '${documentTitle}' is opgeslagen als v${savedVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
           : `${definition?.title ?? "Document"} '${documentTitle}' is toegevoegd aan dit Worldline-project${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
       );
     }

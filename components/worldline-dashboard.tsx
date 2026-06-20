@@ -73,6 +73,7 @@ const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 6;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund"];
+const PDF_OCR_MAX_PAGES = 6;
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -196,6 +197,69 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
   }
 }
 
+function canvasToPngBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("PDF-pagina kon niet als OCR-beeld worden gemaakt."));
+    }, "image/png");
+  });
+}
+
+async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: string) => void) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc ||= new URL("pdfjs-dist/legacy/build/pdf.worker.mjs", import.meta.url).toString();
+
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(await file.arrayBuffer()),
+    isImageDecoderSupported: false,
+  });
+  const pdf = await loadingTask.promise;
+  const textParts: string[] = [];
+
+  try {
+    const pageCount = Math.min(pdf.numPages, PDF_OCR_MAX_PAGES);
+
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      onProgress(`PDF-OCR leest pagina ${pageNumber}/${pageCount}...`);
+
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 2.4 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("PDF-pagina kon niet worden voorbereid voor OCR.");
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      await page.render({
+        canvas,
+        canvasContext: context,
+        viewport,
+        background: "#ffffff",
+      }).promise;
+
+      const pageBlob = await canvasToPngBlob(canvas);
+      const ocrResult = await extractImageTextWithBrowserOcr(
+        new File([pageBlob], `${file.name}-pagina-${pageNumber}.png`, { type: "image/png" }),
+        (message) => onProgress(`PDF-OCR pagina ${pageNumber}/${pageCount}: ${message.replace(/^Gratis OCR leest afbeelding\.\.\.\s*/i, "")}`),
+      );
+
+      if (ocrResult.text) textParts.push(ocrResult.text);
+      page.cleanup();
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  } finally {
+    await pdf.destroy();
+  }
+
+  return normalizeBrowserOcrText(textParts.join("\n\n"));
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
 
@@ -283,6 +347,11 @@ function isImageDocument(document: WorldlineDocument) {
     mimeType.startsWith("image/") ||
     /\.(jpe?g|png)$/i.test(document.file_name)
   );
+}
+
+function isPdfDocument(document: WorldlineDocument) {
+  const mimeType = (document.mime_type ?? "").toLowerCase();
+  return mimeType === "application/pdf" || /\.pdf$/i.test(document.file_name);
 }
 
 function getDocumentStoredOcrText(document: WorldlineDocument) {
@@ -1333,18 +1402,18 @@ export default function WorldlineDashboard() {
     }
   }
 
-  const runAutomatedDocumentCheck = useCallback(async (document: WorldlineDocument) => {
-    if (!supabase) return;
+  const runAutomatedDocumentCheck = useCallback(async (document: WorldlineDocument, options: { ocrText?: string } = {}) => {
+    if (!supabase) return { ok: false as const, error: "Supabase is niet beschikbaar." };
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
-      return;
+      return { ok: false as const, error: "Je hebt alleen leesrechten voor Worldline." };
     }
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
 
     if (isImageDocument(document) && !getDocumentStoredOcrText(document)) {
       setStatus(`${documentTitle} is opgeslagen als JPG/PNG, maar OCR kon geen tekst lezen. Controleer dit document handmatig.`);
-      return;
+      return { ok: false as const, error: "OCR kon geen tekst lezen." };
     }
 
     setBusy(true);
@@ -1356,7 +1425,7 @@ export default function WorldlineDashboard() {
 
       if (!accessToken) {
         setStatus(`Je sessie is verlopen. Log opnieuw in om ${documentTitle.toLowerCase()} te controleren.`);
-        return;
+        return { ok: false as const, error: "Je sessie is verlopen." };
       }
 
       const response = await fetch("/api/worldline/documents/check", {
@@ -1365,7 +1434,10 @@ export default function WorldlineDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ documentId: document.id }),
+        body: JSON.stringify({
+          documentId: document.id,
+          ...(options.ocrText ? { ocrText: options.ocrText } : {}),
+        }),
       });
       const json = (await response.json().catch(() => ({}))) as {
         document?: WorldlineDocument;
@@ -1374,14 +1446,18 @@ export default function WorldlineDashboard() {
       };
 
       if (!response.ok || !json.document) {
-        setStatus(`${documentTitle}-controle mislukt: ${json.error ?? "geen resultaat ontvangen"}.`);
-        return;
+        const errorMessage = json.error ?? "geen resultaat ontvangen";
+        setStatus(`${documentTitle}-controle mislukt: ${errorMessage}.`);
+        return { ok: false as const, error: errorMessage };
       }
 
       setDocuments((currentDocuments) => currentDocuments.map((item) => item.id === json.document?.id ? json.document : item));
       setStatus(json.message ?? `${documentTitle}-controle uitgevoerd.`);
+      return { ok: true as const, document: json.document };
     } catch (error) {
-      setStatus(`${documentTitle}-controle mislukt: ${getErrorMessage(error, "controle kon niet worden uitgevoerd.")}`);
+      const errorMessage = getErrorMessage(error, "controle kon niet worden uitgevoerd.");
+      setStatus(`${documentTitle}-controle mislukt: ${errorMessage}`);
+      return { ok: false as const, error: errorMessage };
     } finally {
       setBusy(false);
     }
@@ -1424,7 +1500,48 @@ export default function WorldlineDashboard() {
       return;
     }
 
-    await runAutomatedDocumentCheck(document);
+    const firstCheck = await runAutomatedDocumentCheck(document);
+    const firstError = firstCheck.ok ? "" : firstCheck.error;
+
+    if (
+      firstCheck.ok ||
+      !supabase ||
+      !isPdfDocument(document) ||
+      !firstError.includes("Geen selecteerbare tekst")
+    ) {
+      return;
+    }
+
+    const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
+    setBusy(true);
+    setStatus(`${documentTitle} heeft geen selecteerbare tekst. Gratis OCR leest de gescande PDF...`);
+
+    try {
+      const { data: pdfFile, error: downloadError } = await supabase.storage
+        .from(WORLDLINE_DOCUMENT_BUCKET)
+        .download(document.storage_path);
+
+      if (downloadError || !pdfFile) {
+        setStatus(`${documentTitle}-OCR mislukt: ${downloadError?.message ?? "PDF kon niet worden opgehaald"}.`);
+        return;
+      }
+
+      const ocrText = await extractPdfTextWithBrowserOcr(
+        new File([pdfFile], document.file_name, { type: document.mime_type || pdfFile.type || "application/pdf" }),
+        setStatus,
+      );
+
+      if (!ocrText) {
+        setStatus(`${documentTitle}-controle mislukt: OCR kon geen tekst lezen uit deze gescande PDF. Controleer dit document handmatig.`);
+        return;
+      }
+
+      await runAutomatedDocumentCheck(document, { ocrText });
+    } catch (error) {
+      setStatus(`${documentTitle}-OCR mislukt: ${getErrorMessage(error, "gescande PDF kon niet worden gelezen.")}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {

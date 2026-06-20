@@ -107,8 +107,9 @@ export async function POST(request: Request) {
       return jsonResponse({ error: verified.message }, 401);
     }
 
-    const body = (await request.json().catch(() => null)) as { documentId?: unknown } | null;
+    const body = (await request.json().catch(() => null)) as { documentId?: unknown; ocrText?: unknown } | null;
     const documentId = normalizeText(body?.documentId);
+    const incomingOcrText = normalizeText(body?.ocrText);
 
     if (!documentId) {
       return jsonResponse({ error: "Geen document ontvangen." }, 400);
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
     const currentResult = readCheckResult(document.check_result);
-    let documentText = normalizeText(currentResult.ocrText);
+    let documentText = incomingOcrText || normalizeText(currentResult.ocrText);
 
     if (!documentText) {
       const { data: file, error: storageError } = await service.storage
@@ -233,15 +234,16 @@ export async function POST(request: Request) {
             supportingOcrTexts: supportingIdentityOcrTexts,
           }));
     const resolvedAnalysis = await analysis;
+    const nextOcrText = incomingOcrText || keepString(currentResult.ocrText);
     const nextCheckResult = {
       ...resolvedAnalysis.result,
       ...(currentResult.convertedFromImage === true ? { convertedFromImage: true } : {}),
       ...(currentResult.uploadedAsImage === true ? { uploadedAsImage: true } : {}),
       ...(documentTitleFromResult ? { documentTitle: documentTitleFromResult } : {}),
       ...(keepNumber(currentResult.ocrConfidence) !== undefined ? { ocrConfidence: keepNumber(currentResult.ocrConfidence) } : {}),
-      ...(keepString(currentResult.ocrEngine) ? { ocrEngine: keepString(currentResult.ocrEngine) } : {}),
+      ...(incomingOcrText ? { ocrEngine: "tesseract.js/pdf" } : keepString(currentResult.ocrEngine) ? { ocrEngine: keepString(currentResult.ocrEngine) } : {}),
       ...(keepString(currentResult.ocrError) ? { ocrError: keepString(currentResult.ocrError) } : {}),
-      ...(keepString(currentResult.ocrText) ? { ocrText: keepString(currentResult.ocrText) } : {}),
+      ...(nextOcrText ? { ocrText: nextOcrText } : {}),
       ...(keepString(currentResult.originalFileName) ? { originalFileName: keepString(currentResult.originalFileName) } : {}),
       ...(keepString(currentResult.originalMimeType) ? { originalMimeType: keepString(currentResult.originalMimeType) } : {}),
     };

@@ -1,4 +1,5 @@
 import type { WorldlineCheckResult, WorldlineCheckStatus } from "@/lib/worldline";
+import { findIbanInText, normalizeIban } from "@/lib/iban";
 
 const BANK_PATTERNS: Array<{ name: string; patterns: RegExp[] }> = [
   { name: "ABN AMRO", patterns: [/\bABN\s*AMRO\b/i, /\bABNANL2A\b/i] },
@@ -153,15 +154,6 @@ function findStatementDate(text: string) {
   return candidates[0] ?? null;
 }
 
-function extractIban(text: string) {
-  const matches = text.match(/\b[A-Z]{2}\d{2}(?:[\s.-]?[A-Z0-9]){11,30}\b/gi) ?? [];
-  const normalizedIbans = matches
-    .map((match) => match.replace(/[^A-Z0-9]/gi, "").toUpperCase())
-    .filter((iban) => /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban) && iban.length >= 15 && iban.length <= 34);
-
-  return Array.from(new Set(normalizedIbans))[0] ?? "";
-}
-
 function findBankName(text: string) {
   for (const bank of BANK_PATTERNS) {
     if (bank.patterns.some((pattern) => pattern.test(text))) return bank.name;
@@ -193,11 +185,11 @@ export function analyzeWorldlineBankStatementText(
   const text = normalizeWhitespace(rawText);
   const bankName = findBankName(text);
   const statementDate = findStatementDate(text);
-  const iban = extractIban(text);
+  const expectedIban = normalizeIban(options.expectedIban);
+  const iban = findIbanInText(text, expectedIban);
   const cutoff = getTwoMonthCutoff(referenceDate);
   const expectedCompanyName = normalizeWhitespace(options.expectedCompanyName ?? "");
   const companyVisible = expectedCompanyName ? companyNameIsVisible(text, expectedCompanyName) : false;
-  const expectedIban = (options.expectedIban ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
   const ibanMatchesExpected = Boolean(expectedIban && iban && iban === expectedIban);
   const dateIsRecent = statementDate ? statementDate >= cutoff : false;
   const ibanAndDateVisible = Boolean(iban && statementDate);

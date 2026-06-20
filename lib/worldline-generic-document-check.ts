@@ -4,6 +4,7 @@ import {
   type WorldlineCheckStatus,
   type WorldlineDocumentType,
 } from "@/lib/worldline";
+import { textHasIban } from "@/lib/iban";
 
 export type GenericDocumentAnalysis = {
   status: WorldlineCheckStatus;
@@ -78,8 +79,8 @@ function hasAny(text: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-function findIban(text: string) {
-  return /\b[A-Z]{2}\d{2}(?:[\s.-]?[A-Z0-9]){11,30}\b/i.test(text);
+function findIban(text: string, expectedIban?: string) {
+  return textHasIban(text, expectedIban);
 }
 
 function findBic(text: string) {
@@ -301,7 +302,7 @@ function analyzeIdentity(text: string, options: GenericDocumentAnalysisOptions):
 function analyzeRefund(text: string, options: GenericDocumentAnalysisOptions): NonNullable<WorldlineCheckResult["checklist"]> {
   const isRefund = hasAny(text, [/\brefund\b/i, /\bterugbetaling\b/i, /\bretourbetaling\b/i]);
   const companyMatches = containsExpectedText(text, options.expectedCompanyName);
-  const requiredFields = findIban(text) || findEmail(text) || findDate(text);
+  const requiredFields = findIban(text, options.expectedIban) || findEmail(text) || findDate(text);
   const signatureFields = hasAny(text, [/\bhandtekening\b/i, /\bsignature\b/i, /\bondertekend\b/i]) || findDate(text);
 
   return [

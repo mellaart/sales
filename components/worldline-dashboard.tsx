@@ -45,7 +45,7 @@ type RelationSearchResponse = {
   relations?: RelationOption[];
 };
 
-const WORLDLINE_REQUEST_TIMEOUT_MS = 15000;
+const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 6;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund"];
@@ -57,7 +57,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 function withWorldlineTimeout<T>(request: PromiseLike<T>, action: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
-      reject(new Error(`${action} duurt te lang. Vernieuw de pagina en controleer of de Worldline SQL volledig in Supabase is uitgevoerd.`));
+      reject(new Error(`${action} duurt te lang. Vernieuw de pagina en probeer het opnieuw.`));
     }, WORLDLINE_REQUEST_TIMEOUT_MS);
 
     Promise.resolve(request)
@@ -845,29 +845,41 @@ export default function WorldlineDashboard() {
     setStatus("Worldline-project wordt aangemaakt...");
 
     try {
-      const { data, error } = await withWorldlineTimeout(
-        supabase
-          .from("worldline_projects")
-          .insert({
-            relation_id: selectedRelation.id,
-            relation_name: selectedRelation.name,
-            relation_email: selectedRelation.email,
-            debtor_number: selectedRelation.debtorNumber ? String(selectedRelation.debtorNumber) : null,
-            status: "concept",
-            agreement_fields: DEFAULT_WORLDLINE_AGREEMENT_FIELDS,
-            created_by: user.id,
-          } as never)
-          .select("*")
-          .single(),
-        "Worldline-project aanmaken",
-      );
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
 
-      if (error) {
-        setStatus(`Project aanmaken mislukt: ${error.message}`);
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in om een Worldline-project aan te maken.");
         return;
       }
 
-      const nextProject = data as WorldlineProject;
+      const response = await withWorldlineTimeout(
+        fetch("/api/worldline/projects/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            relationId: selectedRelation.id,
+            relationName: selectedRelation.name,
+            relationEmail: selectedRelation.email,
+            debtorNumber: selectedRelation.debtorNumber,
+          }),
+        }),
+        "Worldline-project aanmaken",
+      );
+      const json = (await response.json().catch(() => ({}))) as {
+        project?: WorldlineProject;
+        error?: string;
+      };
+
+      if (!response.ok || !json.project) {
+        setStatus(`Project aanmaken mislukt: ${json.error ?? "geen project ontvangen"}.`);
+        return;
+      }
+
+      const nextProject = json.project;
       setProjects((currentProjects) => [nextProject, ...currentProjects]);
       setActiveProject(nextProject);
       syncOngoingProject(nextProject);

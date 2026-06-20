@@ -221,6 +221,13 @@ function item(text: string, done: boolean, successText: string, warningText: str
   };
 }
 
+function normalizeChecklistTone(checklist: NonNullable<WorldlineCheckResult["checklist"]>) {
+  return checklist.map((check) => ({
+    ...check,
+    tone: check.done ? "success" as const : check.tone ?? "warning" as const,
+  }));
+}
+
 function analyzeAgreement(text: string): NonNullable<WorldlineCheckResult["checklist"]> {
   const vatAndEmail = findVatNumber(text) && findEmail(text);
   const cardsAndExpectedTransactions = hasAny(text, [/\b(mastercard|visa|unionpay|jcb|diners|discover)\b/i]) &&
@@ -319,7 +326,7 @@ export function analyzeWorldlineGenericDocumentText(
 ): GenericDocumentAnalysis {
   const text = normalizeWhitespace(rawText);
   const definition = getWorldlineDocumentDefinition(documentType);
-  const checklist = documentType === "agreement"
+  const checklist = normalizeChecklistTone(documentType === "agreement"
     ? analyzeAgreement(text)
     : documentType === "identity"
       ? analyzeIdentity(text, options)
@@ -329,7 +336,7 @@ export function analyzeWorldlineGenericDocumentText(
             text: `${label}: controleer visueel.`,
             done: false,
             tone: "warning" as const,
-          }));
+          })));
 
   const needsReview = checklist.some((check) => check.tone !== "success" || !check.done);
   const result: WorldlineCheckResult = {

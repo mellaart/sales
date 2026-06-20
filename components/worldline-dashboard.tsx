@@ -455,8 +455,8 @@ function renderCheckResult(checkResult: WorldlineCheckResult) {
       {checkResult.note ? <div className="worldline-check-note">{checkResult.note}</div> : null}
       <div className="worldline-checklist">
         {checkResult.checklist?.map((item) => {
-          const isDone = item.done || item.tone === "success";
-          const tone = item.tone ?? (isDone ? "success" : "warning");
+          const isDone = item.done === true || item.tone === "success";
+          const tone = isDone ? "success" : item.tone ?? "warning";
 
           return (
             <div key={item.text} className={`worldline-check-item ${tone}`}>

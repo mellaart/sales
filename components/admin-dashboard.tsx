@@ -24,6 +24,8 @@ import { RoleTabAccessOverview } from "@/components/role-tab-access-overview";
 import { StatusPill } from "@/components/ui";
 
 const roles: UserRole[] = USER_ROLES;
+const ADMIN_LOAD_RETRY_MS = 650;
+const ADMIN_LOAD_MAX_ATTEMPTS = 3;
 
 type LoadProfilesOptions = {
   keepStatus?: boolean;
@@ -39,6 +41,12 @@ type EditableProfileField = "job_title" | "workdays" | "mobile_phone";
 
 function isProtectedProfile(profile: Pick<ProfileRecord, "email">) {
   return isProtectedAdminEmail(profile.email);
+}
+
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
 
 function setRoleTabPermission(
@@ -88,38 +96,56 @@ export default function AdminDashboard() {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      for (let attempt = 1; attempt <= ADMIN_LOAD_MAX_ATTEMPTS; attempt += 1) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
 
-      if (!accessToken) {
-        setStatus("Je sessie is verlopen. Log opnieuw in.");
+        if (!accessToken) {
+          if (attempt < ADMIN_LOAD_MAX_ATTEMPTS) {
+            await wait(ADMIN_LOAD_RETRY_MS);
+            continue;
+          }
+
+          setStatus("Je sessie is verlopen. Log opnieuw in.");
+          return;
+        }
+
+        const response = await fetch("/api/admin/users/list", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
+        });
+
+        const json = (await response.json().catch(() => ({}))) as { error?: string; users?: ProfileRecord[] };
+
+        const shouldRetry =
+          attempt < ADMIN_LOAD_MAX_ATTEMPTS &&
+          (!response.ok || (json.users ?? []).length === 0);
+
+        if (shouldRetry) {
+          await wait(ADMIN_LOAD_RETRY_MS);
+          continue;
+        }
+
+        if (!response.ok) {
+          setStatus(json.error || "Profielen laden mislukt.");
+          return;
+        }
+
+        const loadedProfiles = ((json.users ?? []) as ProfileRecord[])
+          .map((profile) => ({
+            ...profile,
+            full_name: profile.full_name ?? null,
+            job_title: profile.job_title ?? null,
+            workdays: profile.workdays ?? null,
+            mobile_phone: profile.mobile_phone ?? null,
+            updated_at: profile.updated_at ?? null,
+          }))
+          .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+
+        setProfiles(loadedProfiles);
         return;
       }
-
-      const response = await fetch("/api/admin/users/list", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      const json = (await response.json().catch(() => ({}))) as { error?: string; users?: ProfileRecord[] };
-
-      if (!response.ok) {
-        setStatus(json.error || "Profielen laden mislukt.");
-        return;
-      }
-
-      const loadedProfiles = ((json.users ?? []) as ProfileRecord[])
-        .map((profile) => ({
-          ...profile,
-          full_name: profile.full_name ?? null,
-          job_title: profile.job_title ?? null,
-          workdays: profile.workdays ?? null,
-          mobile_phone: profile.mobile_phone ?? null,
-          updated_at: profile.updated_at ?? null,
-        }))
-        .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
-
-      setProfiles(loadedProfiles);
     } catch {
       setStatus("Er ging iets mis bij het laden van de profielen.");
     } finally {

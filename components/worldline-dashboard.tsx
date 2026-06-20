@@ -1583,19 +1583,7 @@ export default function WorldlineDashboard() {
     );
   }
 
-  if (authLoading) {
-    return (
-      <div className="page-shell">
-        <div className="container">
-          <section className="card panel">
-            <div className="eyebrow">Worldline</div>
-            <h1>Sessie controleren</h1>
-            <p className="subtext">Een moment, je rechten worden geladen.</p>
-          </section>
-        </div>
-      </div>
-    );
-  }
+  if (authLoading && !user) return null;
 
   if (!user) {
     return (
@@ -1611,21 +1599,7 @@ export default function WorldlineDashboard() {
     );
   }
 
-  if (roleAccessLoading) {
-    return (
-      <div className="page-shell">
-        <div className="container">
-          <section className="card panel">
-            <div className="eyebrow">Worldline</div>
-            <h1>Rechten laden</h1>
-            <p className="subtext">De Worldline-toegang wordt gecontroleerd.</p>
-          </section>
-        </div>
-      </div>
-    );
-  }
-
-  if (!canAccessWorldline) {
+  if (!roleAccessLoading && !canAccessWorldline) {
     return (
       <div className="page-shell">
         <div className="container">

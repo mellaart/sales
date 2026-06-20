@@ -906,23 +906,41 @@ export default function WorldlineDashboard() {
       setStatus(options.savingMessage);
     }
 
-    const { data, error } = await supabase
-      .from("worldline_projects")
-      .update({
-        agreement_fields: nextAgreementFields,
-        updated_at: new Date().toISOString(),
-      } as never)
-      .eq("id", activeProject.id)
-      .select("*")
-      .single();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
 
-    if (error) {
-      setStatus(`Aansluitgegevens opslaan mislukt: ${error.message}`);
+    if (!accessToken) {
+      setStatus("Je sessie is verlopen. Log opnieuw in om aansluitgegevens op te slaan.");
       setSavingAgreementFields(false);
       return;
     }
 
-    const nextProject = data as WorldlineProject;
+    const response = await withWorldlineTimeout(
+      fetch("/api/worldline/projects/update-agreement", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          projectId: activeProject.id,
+          agreementFields: nextAgreementFields,
+        }),
+      }),
+      "Aansluitgegevens opslaan",
+    );
+    const json = (await response.json().catch(() => ({}))) as {
+      project?: WorldlineProject;
+      error?: string;
+    };
+
+    if (!response.ok || !json.project) {
+      setStatus(`Aansluitgegevens opslaan mislukt: ${json.error ?? "geen project ontvangen"}.`);
+      setSavingAgreementFields(false);
+      return;
+    }
+
+    const nextProject = json.project;
     setActiveProject(nextProject);
     setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
     syncOngoingProject(nextProject);

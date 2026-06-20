@@ -45,6 +45,30 @@ type RelationSearchResponse = {
   relations?: RelationOption[];
 };
 
+type AgreementSaveOptions = {
+  savingMessage?: string;
+  savedMessage?: string;
+};
+
+type QueuedAgreementSave = {
+  projectId: string;
+  fields: WorldlineAgreementFields;
+  options: AgreementSaveOptions;
+};
+
+type SignedUploadResponse = {
+  upload?: {
+    storagePath: string;
+    signedPath: string;
+    token: string;
+    version: number;
+    mimeType: string;
+    documentTitle: string;
+    kvkNumber?: string;
+  };
+  error?: string;
+};
+
 const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 6;
@@ -582,6 +606,10 @@ export default function WorldlineDashboard() {
   const [activeProject, setActiveProject] = useState<WorldlineProject | null>(null);
   const [documents, setDocuments] = useState<WorldlineDocument[]>([]);
   const [agreementFields, setAgreementFields] = useState<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
+  const activeProjectRef = useRef<WorldlineProject | null>(null);
+  const agreementFieldsRef = useRef<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
+  const pendingAgreementSaveRef = useRef<QueuedAgreementSave | null>(null);
+  const agreementSavePromiseRef = useRef<Promise<void> | null>(null);
   const hydratedAgreementProjectId = useRef<string | null>(null);
   const autoCheckedKvkDocumentIds = useRef<Set<string>>(new Set());
   const autoCheckedOcrDocumentIds = useRef<Set<string>>(new Set());
@@ -605,6 +633,10 @@ export default function WorldlineDashboard() {
 
   const canAccessWorldline = canAccessTab(role, "worldline", roleTabAccess);
   const canWriteWorldline = canWriteTab(role, "worldline", roleTabAccess);
+
+  useEffect(() => {
+    activeProjectRef.current = activeProject;
+  }, [activeProject]);
 
   useEffect(() => {
     if (!user) {
@@ -646,7 +678,9 @@ export default function WorldlineDashboard() {
     const projectId = activeProject?.id ?? null;
     if (hydratedAgreementProjectId.current === projectId) return;
     hydratedAgreementProjectId.current = projectId;
-    setAgreementFields(normalizeWorldlineAgreementFields(activeProject?.agreement_fields));
+    const nextFields = normalizeWorldlineAgreementFields(activeProject?.agreement_fields);
+    agreementFieldsRef.current = nextFields;
+    setAgreementFields(nextFields);
   }, [activeProject]);
 
   const loadOngoingProjects = useCallback(async () => {
@@ -893,65 +927,92 @@ export default function WorldlineDashboard() {
 
   async function persistAgreementFields(
     nextAgreementFields: WorldlineAgreementFields,
-    options: { savingMessage?: string; savedMessage?: string } = {},
+    options: AgreementSaveOptions = {},
   ) {
-    if (!supabase || !activeProject) return;
+    if (!supabase || !activeProjectRef.current) return;
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
       return;
     }
 
-    setSavingAgreementFields(true);
-    if (options.savingMessage) {
-      setStatus(options.savingMessage);
-    }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-
-    if (!accessToken) {
-      setStatus("Je sessie is verlopen. Log opnieuw in om aansluitgegevens op te slaan.");
-      setSavingAgreementFields(false);
-      return;
-    }
-
-    const response = await withWorldlineTimeout(
-      fetch("/api/worldline/projects/update-agreement", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          projectId: activeProject.id,
-          agreementFields: nextAgreementFields,
-        }),
-      }),
-      "Aansluitgegevens opslaan",
-    );
-    const json = (await response.json().catch(() => ({}))) as {
-      project?: WorldlineProject;
-      error?: string;
+    pendingAgreementSaveRef.current = {
+      projectId: activeProjectRef.current.id,
+      fields: nextAgreementFields,
+      options,
     };
 
-    if (!response.ok || !json.project) {
-      setStatus(`Aansluitgegevens opslaan mislukt: ${json.error ?? "geen project ontvangen"}.`);
-      setSavingAgreementFields(false);
+    if (agreementSavePromiseRef.current) {
+      await agreementSavePromiseRef.current;
       return;
     }
 
-    const nextProject = json.project;
-    setActiveProject(nextProject);
-    setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
-    syncOngoingProject(nextProject);
-    if (options.savedMessage) {
-      setStatus(options.savedMessage);
-    }
-    setSavingAgreementFields(false);
+    agreementSavePromiseRef.current = (async () => {
+      setSavingAgreementFields(true);
+
+      try {
+        while (pendingAgreementSaveRef.current) {
+          const queuedSave = pendingAgreementSaveRef.current;
+          pendingAgreementSaveRef.current = null;
+
+          if (queuedSave.options.savingMessage) {
+            setStatus(queuedSave.options.savingMessage);
+          }
+
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+
+          if (!accessToken) {
+            setStatus("Je sessie is verlopen. Log opnieuw in om aansluitgegevens op te slaan.");
+            return;
+          }
+
+          const response = await withWorldlineTimeout(
+            fetch("/api/worldline/projects/update-agreement", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                projectId: queuedSave.projectId,
+                agreementFields: queuedSave.fields,
+              }),
+            }),
+            "Aansluitgegevens opslaan",
+          );
+          const json = (await response.json().catch(() => ({}))) as {
+            project?: WorldlineProject;
+            error?: string;
+          };
+
+          if (!response.ok || !json.project) {
+            setStatus(`Aansluitgegevens opslaan mislukt: ${json.error ?? "geen project ontvangen"}.`);
+            return;
+          }
+
+          const nextProject = json.project;
+          setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
+          if (activeProjectRef.current?.id === nextProject.id) {
+            setActiveProject(nextProject);
+          }
+          syncOngoingProject(nextProject);
+          if (queuedSave.options.savedMessage && !pendingAgreementSaveRef.current) {
+            setStatus(queuedSave.options.savedMessage);
+          }
+        }
+      } catch (error) {
+        setStatus(`Aansluitgegevens opslaan mislukt: ${getErrorMessage(error, "Supabase gaf geen antwoord.")}`);
+      } finally {
+        setSavingAgreementFields(false);
+        agreementSavePromiseRef.current = null;
+      }
+    })();
+
+    await agreementSavePromiseRef.current;
   }
 
   async function saveAgreementFields() {
-    await persistAgreementFields(agreementFields, {
+    await persistAgreementFields(agreementFieldsRef.current, {
       savingMessage: "Aansluitgegevens worden opgeslagen...",
       savedMessage: "Aansluitgegevens opgeslagen.",
     });
@@ -992,13 +1053,18 @@ export default function WorldlineDashboard() {
 
   function updateAgreementField(field: string, value: string) {
     if (!canWriteWorldline) return;
-    setAgreementFields((currentFields) => ({ ...currentFields, [field]: value }));
+    setAgreementFields((currentFields) => {
+      const nextFields = { ...currentFields, [field]: value };
+      agreementFieldsRef.current = nextFields;
+      return nextFields;
+    });
   }
 
   function commitAgreementField(field: string, value: string) {
     if (!canWriteWorldline) return;
 
-    const nextFields = { ...agreementFields, [field]: value };
+    const nextFields = { ...agreementFieldsRef.current, [field]: value };
+    agreementFieldsRef.current = nextFields;
     setAgreementFields(nextFields);
     void persistAgreementFields(nextFields, {
       savedMessage: "Aansluitgegevens automatisch opgeslagen.",
@@ -1009,13 +1075,14 @@ export default function WorldlineDashboard() {
     if (!canWriteWorldline) return;
 
     const nextFields = {
-      ...agreementFields,
-      shopName: agreementFields.companyName ?? "",
-      shopAddress: agreementFields.businessAddress ?? "",
-      shopPostcode: agreementFields.businessPostcode ?? "",
-      shopCity: agreementFields.businessCity ?? "",
+      ...agreementFieldsRef.current,
+      shopName: agreementFieldsRef.current.companyName ?? "",
+      shopAddress: agreementFieldsRef.current.businessAddress ?? "",
+      shopPostcode: agreementFieldsRef.current.businessPostcode ?? "",
+      shopCity: agreementFieldsRef.current.businessCity ?? "",
     };
 
+    agreementFieldsRef.current = nextFields;
     setAgreementFields(nextFields);
     void persistAgreementFields(nextFields, {
       savingMessage: "Shopgegevens worden overgenomen...",
@@ -1045,21 +1112,6 @@ export default function WorldlineDashboard() {
     let ocrError = "";
     let ocrText = "";
 
-    if (uploadedAsImage) {
-      if (OCR_DOCUMENT_TYPES.includes(documentType)) {
-        setBusy(true);
-        setStatus("Gratis OCR leest de JPG/PNG...");
-
-        try {
-          const ocrResult = await extractImageTextWithBrowserOcr(file, setStatus);
-          ocrText = ocrResult.text;
-          ocrConfidence = ocrResult.confidence;
-        } catch (error) {
-          ocrError = getErrorMessage(error, "OCR kon niet worden uitgevoerd.");
-        }
-      }
-    }
-
     const definition = getWorldlineDocumentDefinition(documentType);
     const documentTitle = getDocumentTitleFromFileName(uploadFile.name);
     const kvkNumber = documentType === "kvk"
@@ -1072,84 +1124,151 @@ export default function WorldlineDashboard() {
       return null;
     }
 
-    const nextCheckResult: WorldlineCheckResult = {
-      ...createInitialCheckResult(documentType),
-      documentTitle,
-      ...(uploadedAsImage
-        ? {
-            uploadedAsImage: true,
-            note: ocrText
-              ? "JPG/PNG is opgeslagen. Tekst is met gratis browser-OCR gelezen; controleer het resultaat bij twijfel."
-              : "JPG/PNG is opgeslagen. Gratis OCR kon geen tekst lezen; controleer dit document handmatig.",
-            ...(typeof ocrConfidence === "number" ? { ocrConfidence } : {}),
-            ocrEngine: "tesseract.js",
-            ...(ocrError ? { ocrError } : {}),
-            ...(ocrText ? { ocrText } : {}),
-            originalFileName: file.name,
-            originalMimeType: file.type || "image",
-          }
-        : {}),
-      ...(documentType === "kvk" ? { kvkNumber } : {}),
-    };
-
     setBusy(true);
-    setStatus(`${definition?.title ?? "Document"} wordt geupload...`);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
+    try {
+      if (uploadedAsImage && OCR_DOCUMENT_TYPES.includes(documentType)) {
+        setStatus("Gratis OCR leest de JPG/PNG...");
 
-    if (!accessToken) {
-      setStatus("Je sessie is verlopen. Log opnieuw in om documenten te uploaden.");
-      setBusy(false);
-      return null;
-    }
+        try {
+          const ocrResult = await extractImageTextWithBrowserOcr(file, setStatus);
+          ocrText = ocrResult.text;
+          ocrConfidence = ocrResult.confidence;
+        } catch (error) {
+          ocrError = getErrorMessage(error, "OCR kon niet worden uitgevoerd.");
+        }
+      }
 
-    const formData = new FormData();
-    formData.append("projectId", activeProject.id);
-    formData.append("documentType", documentType);
-    formData.append("checkResult", JSON.stringify(nextCheckResult));
-    formData.append("file", uploadFile, uploadFile.name);
+      const nextCheckResult: WorldlineCheckResult = {
+        ...createInitialCheckResult(documentType),
+        documentTitle,
+        ...(uploadedAsImage
+          ? {
+              uploadedAsImage: true,
+              note: ocrText
+                ? "JPG/PNG is opgeslagen. Tekst is met gratis browser-OCR gelezen; controleer het resultaat bij twijfel."
+                : "JPG/PNG is opgeslagen. Gratis OCR kon geen tekst lezen; controleer dit document handmatig.",
+              ...(typeof ocrConfidence === "number" ? { ocrConfidence } : {}),
+              ocrEngine: "tesseract.js",
+              ...(ocrError ? { ocrError } : {}),
+              ...(ocrText ? { ocrText } : {}),
+              originalFileName: file.name,
+              originalMimeType: file.type || "image",
+            }
+          : {}),
+        ...(documentType === "kvk" ? { kvkNumber } : {}),
+      };
 
-    const response = await withWorldlineTimeout(
-      fetch("/api/worldline/documents/upload", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: formData,
-      }),
-      `${definition?.title ?? "Document"} uploaden`,
-    );
-    const json = (await response.json().catch(() => ({}))) as {
-      document?: WorldlineDocument;
-      error?: string;
-    };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
 
-    if (!response.ok || !json.document) {
-      setStatus(`Upload mislukt: ${json.error ?? "geen document ontvangen"}.`);
-      setBusy(false);
-      return null;
-    }
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in om documenten te uploaden.");
+        return null;
+      }
 
-    const nextDocument = json.document;
-    const savedVersion = nextDocument.version;
-    setDocuments((currentDocuments) => [nextDocument, ...currentDocuments]);
-    if (documentType === "kvk") {
-      const hasOtherKvkDocuments = sourceDocuments.some((document) => document.document_type === "kvk" && getDocumentKvkNumber(document) !== kvkNumber);
-      setStatus(
-        savedVersion > 1
-          ? `KvK-uittreksel ${kvkNumber} is opgeslagen als v${savedVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
-          : `KvK-uittreksel ${kvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+      setStatus(`${definition?.title ?? "Document"} upload voorbereiden...`);
+      const prepareResponse = await withWorldlineTimeout(
+        fetch("/api/worldline/documents/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            action: "prepare",
+            projectId: activeProject.id,
+            documentType,
+            fileName: uploadFile.name,
+            fileSize: uploadFile.size,
+            mimeType: uploadFile.type,
+            checkResult: nextCheckResult,
+          }),
+        }),
+        `${definition?.title ?? "Document"} upload voorbereiden`,
       );
-    } else {
-      setStatus(
-        savedVersion > 1
-          ? `${definition?.title ?? "Document"} '${documentTitle}' is opgeslagen als v${savedVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
-          : `${definition?.title ?? "Document"} '${documentTitle}' is toegevoegd aan dit Worldline-project${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+      const prepareJson = (await prepareResponse.json().catch(() => ({}))) as SignedUploadResponse;
+
+      if (!prepareResponse.ok || !prepareJson.upload) {
+        throw new Error(prepareJson.error ?? "geen uploadlink ontvangen");
+      }
+
+      const preparedUpload = prepareJson.upload;
+      setStatus(`${definition?.title ?? "Document"} wordt geupload...`);
+      const storageUpload = await supabase.storage
+        .from(WORLDLINE_DOCUMENT_BUCKET)
+        .uploadToSignedUrl(preparedUpload.signedPath || preparedUpload.storagePath, preparedUpload.token, uploadFile, {
+          contentType: preparedUpload.mimeType || uploadFile.type || "application/octet-stream",
+          upsert: false,
+        });
+
+      if (storageUpload.error) {
+        throw new Error(storageUpload.error.message);
+      }
+
+      const completedCheckResult: WorldlineCheckResult = {
+        ...nextCheckResult,
+        documentTitle: preparedUpload.documentTitle || documentTitle,
+        ...(documentType === "kvk" ? { kvkNumber: preparedUpload.kvkNumber || kvkNumber } : {}),
+      };
+
+      setStatus(`${definition?.title ?? "Document"} wordt geregistreerd...`);
+      const completeResponse = await withWorldlineTimeout(
+        fetch("/api/worldline/documents/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            action: "complete",
+            projectId: activeProject.id,
+            documentType,
+            fileName: uploadFile.name,
+            fileSize: uploadFile.size,
+            mimeType: preparedUpload.mimeType || uploadFile.type,
+            storagePath: preparedUpload.storagePath,
+            version: preparedUpload.version,
+            checkResult: completedCheckResult,
+          }),
+        }),
+        `${definition?.title ?? "Document"} registreren`,
       );
+      const completeJson = (await completeResponse.json().catch(() => ({}))) as {
+        document?: WorldlineDocument;
+        error?: string;
+      };
+
+      if (!completeResponse.ok || !completeJson.document) {
+        throw new Error(completeJson.error ?? "geen document ontvangen");
+      }
+
+      const nextDocument = completeJson.document;
+      const savedVersion = nextDocument.version;
+      setDocuments((currentDocuments) => [nextDocument, ...currentDocuments]);
+      if (documentType === "kvk") {
+        const savedKvkNumber = preparedUpload.kvkNumber || kvkNumber;
+        const hasOtherKvkDocuments = sourceDocuments.some((document) => document.document_type === "kvk" && getDocumentKvkNumber(document) !== savedKvkNumber);
+        setStatus(
+          savedVersion > 1
+            ? `KvK-uittreksel ${savedKvkNumber} is opgeslagen als v${savedVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+            : `KvK-uittreksel ${savedKvkNumber} is toegevoegd als ${hasOtherKvkDocuments ? "extra" : "eerste"} KvK${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+        );
+      } else {
+        const savedDocumentTitle = preparedUpload.documentTitle || documentTitle;
+        setStatus(
+          savedVersion > 1
+            ? `${definition?.title ?? "Document"} '${savedDocumentTitle}' is opgeslagen als v${savedVersion}${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+            : `${definition?.title ?? "Document"} '${savedDocumentTitle}' is toegevoegd aan dit Worldline-project${uploadedAsImage ? `${ocrText ? " met OCR-tekst" : " als afbeelding"}` : ""}.`
+        );
+      }
+      return nextDocument;
+    } catch (error) {
+      setStatus(`Upload mislukt: ${getErrorMessage(error, "Supabase gaf geen antwoord.")}.`);
+      return null;
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    return nextDocument;
   }
 
   async function uploadDocuments(documentType: WorldlineDocumentType, fileList: FileList | File[] | null | undefined) {
@@ -1357,10 +1476,19 @@ export default function WorldlineDashboard() {
     setBusy(false);
   }
 
-  function handleDrop(event: DragEvent<HTMLLabelElement>, documentType: WorldlineDocumentType) {
+  function handleDragOver(event: DragEvent<HTMLElement>, documentType: WorldlineDocumentType) {
     event.preventDefault();
-    if (documentType === "refund" && !refundEnabled) return;
-    void uploadDocuments(documentType, event.dataTransfer.files);
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = busy || !canWriteWorldline || (documentType === "refund" && !refundEnabled) ? "none" : "copy";
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>, documentType: WorldlineDocumentType) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (busy || !canWriteWorldline || (documentType === "refund" && !refundEnabled)) return;
+
+    const droppedFiles = Array.from(event.dataTransfer.files ?? []);
+    void uploadDocuments(documentType, droppedFiles);
   }
 
   function renderUploadedDocument(document: WorldlineDocument, title: string, documentType: WorldlineDocumentType) {
@@ -1758,7 +1886,8 @@ export default function WorldlineDashboard() {
                       <label
                         className={`worldline-dropzone${isRefundDisabled ? " disabled" : ""}`}
                         htmlFor={inputId}
-                        onDragOver={(event) => event.preventDefault()}
+                        onDragEnter={(event) => handleDragOver(event, definition.key)}
+                        onDragOver={(event) => handleDragOver(event, definition.key)}
                         onDrop={(event) => handleDrop(event, definition.key)}
                       >
                         <UploadCloud size={22} />
@@ -1770,8 +1899,9 @@ export default function WorldlineDashboard() {
                           multiple
                           accept={definition.accept}
                           onChange={(event) => {
-                            void uploadDocuments(definition.key, event.target.files);
-                            event.target.value = "";
+                            const selectedFiles = Array.from(event.currentTarget.files ?? []);
+                            event.currentTarget.value = "";
+                            void uploadDocuments(definition.key, selectedFiles);
                           }}
                           disabled={busy || !canWriteWorldline || isRefundDisabled}
                         />

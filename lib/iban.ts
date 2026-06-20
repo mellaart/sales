@@ -71,8 +71,27 @@ export function normalizeIban(value: unknown) {
   return typeof value === "string" ? value.replace(/[^A-Z0-9]/gi, "").toUpperCase() : "";
 }
 
+function normalizeIbanCandidate(value: string) {
+  const compact = normalizeIban(value);
+  if (compact.length < 4) return compact;
+
+  const countryCode = compact
+    .slice(0, 2)
+    .replace(/0/g, "O")
+    .replace(/1/g, "I")
+    .replace(/5/g, "S");
+  const checkDigits = compact
+    .slice(2, 4)
+    .replace(/[OQ]/g, "0")
+    .replace(/[IL]/g, "1")
+    .replace(/S/g, "5")
+    .replace(/B/g, "8");
+
+  return `${countryCode}${checkDigits}${compact.slice(4)}`;
+}
+
 function normalizeCandidate(rawCandidate: string) {
-  const normalized = normalizeIban(rawCandidate);
+  const normalized = normalizeIbanCandidate(rawCandidate);
   const countryCode = normalized.slice(0, 2);
   const expectedLength = IBAN_LENGTHS[countryCode];
   const candidate = expectedLength ? normalized.slice(0, expectedLength) : normalized;
@@ -85,12 +104,17 @@ function normalizeCandidate(rawCandidate: string) {
 }
 
 export function extractIbansFromText(text: string) {
-  const matches = text.matchAll(/(?:^|[^A-Z0-9])([A-Z]\s*[A-Z]\s*\d\s*\d(?:[\s./-]*[A-Z0-9]){11,40})/gi);
   const ibans = new Set<string>();
+  const patterns = [
+    /(?:^|[^A-Z0-9])([A-Z]\s*[A-Z]\s*[0-9OQILSB]\s*[0-9OQILSB](?:[\s./|_-]*[A-Z0-9]){11,45})/gi,
+    /(?:^|[^A-Z0-9])((?:[A-Z]\s*){2}(?:[0-9OQILSB]\s*){2}(?:[A-Z0-9]\s*){11,45})/gi,
+  ];
 
-  for (const match of matches) {
-    const iban = normalizeCandidate(match[1] ?? "");
-    if (iban) ibans.add(iban);
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const iban = normalizeCandidate(match[1] ?? "");
+      if (iban) ibans.add(iban);
+    }
   }
 
   return Array.from(ibans);

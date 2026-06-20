@@ -71,7 +71,7 @@ type SignedUploadResponse = {
 
 const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
-const WORLDLINE_KVK_ANALYSIS_VERSION = 6;
+const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund"];
 const PDF_OCR_MAX_PAGES = 6;
 
@@ -515,7 +515,7 @@ function downloadBlob(blob: Blob, fileName: string) {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function renderCheckResult(checkResult: WorldlineCheckResult) {

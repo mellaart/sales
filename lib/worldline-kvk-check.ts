@@ -293,8 +293,8 @@ export function analyzeWorldlineKvkText(
     },
     {
       text: "Eventuele vervolguittreksels zijn aanwezig",
-      done: hasRequiredFollowUps,
-      tone: hasRequiredFollowUps ? "success" : "danger",
+      done: hasRequiredFollowUps || hasLegalShareholder,
+      tone: hasRequiredFollowUps || hasLegalShareholder ? "success" : "warning",
     },
   ];
 
@@ -339,11 +339,17 @@ export function analyzeWorldlineKvkText(
   }
 
   if (hasLegalShareholder) {
+    checklist.push({
+      text: `Aandeelhouder/holding gevonden: ${legalShareholders.join(", ")}.`,
+      done: true,
+      tone: "success",
+    });
+
     if (missingLegalShareholders.length > 0) {
       checklist.push({
-        text: `Aandeelhouder/holding gevonden: ${missingLegalShareholders.join(", ")}. Upload ook de KvK van deze entiteit; zonder die KvK is het contract niet compleet.`,
+        text: `Controleer of ook de KvK van ${missingLegalShareholders.join(", ")} is toegevoegd; zonder die KvK is het contract niet compleet.`,
         done: false,
-        tone: "danger",
+        tone: "warning",
       });
     } else {
       checklist.push({
@@ -361,20 +367,23 @@ export function analyzeWorldlineKvkText(
   }
 
   const hasBlockingIssue = checklist.some((item) => item.tone === "danger" && !item.done);
+  const needsReview = checklist.some((item) => item.tone === "warning" && !item.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: 6,
+    analysisVersion: 7,
     checklist,
     kvkNumber,
     note: hasBlockingIssue
       ? "KvK-controle uitgevoerd: actie nodig voordat dit Worldline-contract compleet is."
-      : "KvK-controle uitgevoerd: dit KvK-uittreksel voldoet aan de automatische controles.",
+      : needsReview
+        ? "KvK-controle uitgevoerd: controleer de aandachtspunten visueel."
+        : "KvK-controle uitgevoerd: dit KvK-uittreksel voldoet aan de automatische controles.",
     producedDate: producedDate ? formatDateIso(producedDate) : undefined,
     authorizedSigners,
     legalShareholders,
   };
 
   return {
-    status: hasBlockingIssue ? "rejected" : "approved",
+    status: hasBlockingIssue ? "rejected" : needsReview ? "checking" : "approved",
     result,
     message: result.note ?? "KvK-controle uitgevoerd.",
   };

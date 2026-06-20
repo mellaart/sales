@@ -34,6 +34,7 @@ const MONTHS: Record<string, number> = {
   jun: 6,
   juli: 7,
   jul: 7,
+  juil: 7,
   augustus: 8,
   aug: 8,
   september: 9,
@@ -122,7 +123,9 @@ function extractDates(text: string) {
   const dates: Date[] = [];
   const numericPattern = /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/g;
   const isoPattern = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g;
-  const monthNamePattern = /\b(\d{1,2})\s+(januari|jan|februari|feb|maart|mrt|april|apr|mei|juni|jun|juli|jul|augustus|aug|september|sep|oktober|okt|november|nov|december|dec)\s+(\d{4})\b/gi;
+  const monthNames = "januari|jan|februari|feb|maart|mrt|april|apr|mei|juni|jun|juli|jul|juil|augustus|aug|september|sep|oktober|okt|november|nov|december|dec";
+  const monthNamePattern = new RegExp(`\\b(\\d{1,2})\\s+(${monthNames})\\s+(\\d{4})\\b`, "gi");
+  const bilingualMonthNamePattern = new RegExp(`\\b(\\d{1,2})\\s+(${monthNames})\\s*[/|-]\\s*(${monthNames})\\s+(\\d{4})\\b`, "gi");
 
   for (const match of text.matchAll(numericPattern)) {
     const date = parseDate(match[1], match[2], match[3]);
@@ -131,6 +134,12 @@ function extractDates(text: string) {
 
   for (const match of text.matchAll(isoPattern)) {
     const date = parseDate(match[3], match[2], match[1]);
+    if (date) dates.push(date);
+  }
+
+  for (const match of text.matchAll(bilingualMonthNamePattern)) {
+    const month = MONTHS[match[2].toLowerCase()] ?? MONTHS[match[3].toLowerCase()];
+    const date = month ? parseDate(match[1], String(month), match[4]) : null;
     if (date) dates.push(date);
   }
 
@@ -176,8 +185,27 @@ function splitExpectedNames(value?: string) {
     .filter(Boolean);
 }
 
+function getSearchWords(value: string) {
+  return value
+    .split(/[^a-z0-9]+/i)
+    .map(normalizeSearchKey)
+    .filter(Boolean);
+}
+
+function looseWordMatches(textWords: string[], textKey: string, expectedWord: string) {
+  if (textKey.includes(expectedWord)) return true;
+
+  const prefix = expectedWord.length >= 5 ? expectedWord.slice(0, 4) : "";
+  return textWords.some((word) => {
+    if (prefix && word.startsWith(prefix)) return true;
+    if (expectedWord.length >= 5 && word.length >= 5 && word.includes(expectedWord.slice(0, 5))) return true;
+    return false;
+  });
+}
+
 function expectedNameMatches(text: string, expectedNames?: string) {
   const textKey = normalizeSearchKey(text);
+  const textWords = getSearchWords(text);
   const names = splitExpectedNames(expectedNames);
 
   for (const name of names) {
@@ -189,8 +217,12 @@ function expectedNameMatches(text: string, expectedNames?: string) {
       .map(normalizeSearchKey)
       .filter((word) => word.length >= 3 && !["van", "der", "den", "de", "het", "ten", "ter"].includes(word));
 
-    if (words.length >= 2 && words.filter((word) => textKey.includes(word)).length >= 2) return name;
-    if (words.length === 1 && textKey.includes(words[0])) return name;
+    const matchedWords = words.filter((word) => looseWordMatches(textWords, textKey, word));
+    const lastName = words[words.length - 1] ?? "";
+
+    if (words.length >= 2 && matchedWords.length >= 2) return name;
+    if (words.length >= 2 && lastName && looseWordMatches(textWords, textKey, lastName) && matchedWords.some((word) => word !== lastName)) return name;
+    if (words.length === 1 && looseWordMatches(textWords, textKey, words[0])) return name;
   }
 
   return "";

@@ -96,6 +96,12 @@ function withWorldlineTimeout<T>(request: PromiseLike<T>, action: string): Promi
   });
 }
 
+function allowUiToPaint() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+  });
+}
+
 function isImageUploadFile(file: File) {
   return file.type === "image/jpeg" || file.type === "image/png" || /\.(jpe?g|png)$/i.test(file.name);
 }
@@ -993,6 +999,7 @@ export default function WorldlineDashboard() {
           const nextProject = json.project;
           setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
           if (activeProjectRef.current?.id === nextProject.id) {
+            activeProjectRef.current = nextProject;
             setActiveProject(nextProject);
           }
           syncOngoingProject(nextProject);
@@ -1071,15 +1078,46 @@ export default function WorldlineDashboard() {
     });
   }
 
-  function copyBusinessDataToShop() {
+  async function refreshActiveProjectAgreementFields() {
+    if (!supabase || !activeProjectRef.current) return agreementFieldsRef.current;
+
+    const projectId = activeProjectRef.current.id;
+    const { data, error } = await supabase
+      .from("worldline_projects")
+      .select("*")
+      .eq("id", projectId)
+      .single();
+
+    if (error || !data) {
+      setStatus(`Laatste gegevens ophalen mislukt: ${error?.message ?? "geen project ontvangen"}.`);
+      return agreementFieldsRef.current;
+    }
+
+    const refreshedProject = data as WorldlineProject;
+    activeProjectRef.current = refreshedProject;
+    setActiveProject(refreshedProject);
+    setProjects((currentProjects) => currentProjects.map((project) => project.id === refreshedProject.id ? refreshedProject : project));
+    syncOngoingProject(refreshedProject);
+
+    const refreshedFields = normalizeWorldlineAgreementFields(refreshedProject.agreement_fields);
+    agreementFieldsRef.current = refreshedFields;
+    setAgreementFields(refreshedFields);
+    return refreshedFields;
+  }
+
+  async function copyBusinessDataToShop() {
     if (!canWriteWorldline) return;
 
+    setStatus("Laatste bedrijfsgegevens worden opgehaald...");
+    await persistAgreementFields(agreementFieldsRef.current);
+    const latestFields = await refreshActiveProjectAgreementFields();
+
     const nextFields = {
-      ...agreementFieldsRef.current,
-      shopName: agreementFieldsRef.current.companyName ?? "",
-      shopAddress: agreementFieldsRef.current.businessAddress ?? "",
-      shopPostcode: agreementFieldsRef.current.businessPostcode ?? "",
-      shopCity: agreementFieldsRef.current.businessCity ?? "",
+      ...latestFields,
+      shopName: latestFields.companyName ?? "",
+      shopAddress: latestFields.businessAddress ?? "",
+      shopPostcode: latestFields.businessPostcode ?? "",
+      shopCity: latestFields.businessCity ?? "",
     };
 
     agreementFieldsRef.current = nextFields;
@@ -1125,10 +1163,13 @@ export default function WorldlineDashboard() {
     }
 
     setBusy(true);
+    setStatus(`${definition?.title ?? "Document"} '${uploadFile.name}' is ontvangen...`);
+    await allowUiToPaint();
 
     try {
       if (uploadedAsImage && OCR_DOCUMENT_TYPES.includes(documentType)) {
         setStatus("Gratis OCR leest de JPG/PNG...");
+        await allowUiToPaint();
 
         try {
           const ocrResult = await extractImageTextWithBrowserOcr(file, setStatus);
@@ -1274,6 +1315,14 @@ export default function WorldlineDashboard() {
   async function uploadDocuments(documentType: WorldlineDocumentType, fileList: FileList | File[] | null | undefined) {
     const files = Array.from(fileList ?? []);
     if (!files.length) return;
+
+    const definition = getWorldlineDocumentDefinition(documentType);
+    setStatus(
+      files.length === 1
+        ? `${definition?.title ?? "Document"} '${files[0]?.name ?? "bestand"}' is geselecteerd.`
+        : `${files.length} bestanden geselecteerd voor ${definition?.title ?? "documenten"}.`
+    );
+    await allowUiToPaint();
 
     let knownDocuments = documents;
     for (const file of files) {
@@ -1807,7 +1856,7 @@ export default function WorldlineDashboard() {
                         <button
                           type="button"
                           className="secondary-button"
-                          onClick={copyBusinessDataToShop}
+                          onClick={() => void copyBusinessDataToShop()}
                           disabled={busy || savingAgreementFields || !canWriteWorldline}
                         >
                           <Copy size={16} />
@@ -1857,6 +1906,8 @@ export default function WorldlineDashboard() {
                   ))}
                 </select>
               </div>
+
+              {status ? <div className="save-status worldline-inline-status">{status}</div> : null}
 
               <div className="worldline-document-grid">
                 {WORLDLINE_DOCUMENT_DEFINITIONS.map((definition) => {

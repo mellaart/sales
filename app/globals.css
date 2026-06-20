@@ -1870,6 +1870,11 @@ td {
   max-width: 220px;
 }
 
+.worldline-inline-status {
+  margin-top: 12px;
+  margin-bottom: 14px;
+}
+
 .worldline-document-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

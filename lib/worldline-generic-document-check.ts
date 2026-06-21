@@ -227,6 +227,7 @@ function expectedNameMatches(text: string, expectedNames?: string) {
     const lastName = words[words.length - 1] ?? "";
 
     if (words.length >= 2 && matchedWords.length >= 2) return name;
+    if (matchedWords.some((word) => word.length >= 5)) return name;
     if (words.length >= 2 && lastName && looseWordMatches(textWords, textKey, lastName) && matchedWords.some((word) => word !== lastName)) return name;
     if (words.length === 1 && looseWordMatches(textWords, textKey, words[0])) return name;
   }
@@ -318,8 +319,8 @@ function analyzeAgreement(text: string): NonNullable<WorldlineCheckResult["check
 
 function analyzeIdentity(text: string, options: GenericDocumentAnalysisOptions): NonNullable<WorldlineCheckResult["checklist"]> {
   const supportingText = normalizeWhitespace((options.supportingOcrTexts ?? []).join(" "));
-  const combinedText = normalizeWhitespace(`${text} ${supportingText}`);
-  const nameEvidenceText = normalizeWhitespace(`${combinedText} ${options.documentName ?? ""} ${(options.supportingDocumentNames ?? []).join(" ")}`);
+  const combinedText = normalizeWhitespace(`${text} ${supportingText} ${options.documentName ?? ""}`);
+  const nameEvidenceText = normalizeWhitespace(`${combinedText} ${(options.supportingDocumentNames ?? []).join(" ")}`);
   const documentKind = getIdentityDocumentKind(combinedText);
   const expiryDate = findIdentityExpiryDate(combinedText);
   const today = new Date();

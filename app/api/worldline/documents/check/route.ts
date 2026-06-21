@@ -238,6 +238,7 @@ export async function POST(request: Request) {
     const nextOcrText = incomingOcrText || keepString(currentResult.ocrText);
     const nextCheckResult = {
       ...resolvedAnalysis.result,
+      checkedAt: new Date().toISOString(),
       ...(currentResult.convertedFromImage === true ? { convertedFromImage: true } : {}),
       ...(currentResult.uploadedAsImage === true ? { uploadedAsImage: true } : {}),
       ...(documentTitleFromResult ? { documentTitle: documentTitleFromResult } : {}),

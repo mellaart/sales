@@ -425,6 +425,7 @@ function getCheckResult(document: WorldlineDocument | null, documentType: Worldl
   return {
     analysisVersion: typeof source.analysisVersion === "number" ? source.analysisVersion : undefined,
     bankName: typeof source.bankName === "string" ? source.bankName : undefined,
+    checkedAt: typeof source.checkedAt === "string" ? source.checkedAt : undefined,
     checklist: Array.isArray(source.checklist) ? source.checklist : fallback.checklist,
     convertedFromImage: source.convertedFromImage === true,
     documentTitle: typeof source.documentTitle === "string" ? source.documentTitle : undefined,
@@ -522,6 +523,7 @@ function renderCheckResult(checkResult: WorldlineCheckResult) {
   return (
     <>
       {checkResult.note ? <div className="worldline-check-note">{checkResult.note}</div> : null}
+      {checkResult.checkedAt ? <div className="worldline-check-note">Laatst gecontroleerd: {formatDate(checkResult.checkedAt)}</div> : null}
       <div className="worldline-checklist">
         {checkResult.checklist?.map((item) => {
           const isDone = item.done === true || item.tone === "success";

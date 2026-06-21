@@ -8,6 +8,7 @@ export type WorldlineCheckResult = {
   analysisVersion?: number;
   bankName?: string;
   checklist?: Array<{ text: string; done: boolean; tone?: WorldlineCheckItemTone }>;
+  checkedAt?: string;
   convertedFromImage?: boolean;
   documentTitle?: string;
   iban?: string;

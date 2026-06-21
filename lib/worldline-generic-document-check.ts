@@ -104,9 +104,9 @@ function findDate(text: string) {
 }
 
 function parseDate(day: string, month: string, year: string) {
-  const normalizedDay = day.replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
-  const normalizedMonth = month.replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
-  const normalizedYear = year.replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
+  const normalizedDay = day.replace(/\s+/g, "").replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
+  const normalizedMonth = month.replace(/\s+/g, "").replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
+  const normalizedYear = year.replace(/\s+/g, "").replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
   const fullYear = Number(normalizedYear.length === 2 ? `20${normalizedYear}` : normalizedYear);
   const date = new Date(fullYear, Number(normalizedMonth) - 1, Number(normalizedDay));
   if (
@@ -164,6 +164,8 @@ function getMonthNumber(value: string) {
 function extractDates(text: string) {
   const dates: Date[] = [];
   const compactDateText = text
+    .replace(/\b([0-9OQDILSZ])\s+([0-9OQDILSZ])\s+([0-9OQDILSZ])\s+([0-9OQDILSZ])\b/gi, "$1$2$3$4")
+    .replace(/\b([0-9OQDILSZ]{2})\s+([0-9OQDILSZ]{2})\b/gi, "$1$2")
     .replace(/\bJ\s*U\s*[I1L]\s*[L1]?\b/gi, "JUL")
     .replace(/J\s*U\s*[I1L]\s*[L1]?\s*[/|\\-]?\s*J\s*U\s*[I1L]\s*[L1]?/gi, "JUL")
     .replace(/JUILJUL|JULJUIL|JULJUL|JUILJUIL/gi, "JUL")
@@ -171,7 +173,7 @@ function extractDates(text: string) {
     .replace(/\b([a-z])\s+([a-z])\s+([a-z])\b/gi, "$1$2$3");
   const variants = Array.from(new Set([text, compactDateText]));
   const dayToken = "[0-9OQDILSZ]{1,2}";
-  const yearToken = "[0-9OQDILSZ]{2,4}";
+  const yearToken = "[0-9OQDILSZ](?:\\s*[0-9OQDILSZ]){1,3}";
   const numericPattern = new RegExp(`\\b(${dayToken})[-/.](${dayToken})[-/.](${yearToken})\\b`, "gi");
   const spacedNumericPattern = new RegExp(`\\b(${dayToken})\\s+(${dayToken})\\s+(${yearToken})\\b`, "gi");
   const compactNumericPattern = new RegExp(`\\b([0-9OQDILSZ]{2})([0-9OQDILSZ]{2})([0-9OQDILSZ]{4})\\b`, "gi");

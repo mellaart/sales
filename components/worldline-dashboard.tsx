@@ -107,6 +107,15 @@ type BrowserOcrOptions = {
   documentType?: WorldlineDocumentType;
 };
 
+type OcrImageRegion = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  threshold?: boolean;
+  targetLongestSide?: number;
+};
+
 function isImageUploadFile(file: File) {
   return file.type === "image/jpeg" || file.type === "image/png" || /\.(jpe?g|png)$/i.test(file.name);
 }
@@ -134,14 +143,14 @@ async function loadImageForOcr(file: File) {
   }
 }
 
-async function createOcrReadyImage(file: File, region?: { x: number; y: number; width: number; height: number; threshold?: boolean }) {
+async function createOcrReadyImage(file: File, region?: OcrImageRegion) {
   const image = await loadImageForOcr(file);
   const sourceX = region ? Math.max(0, Math.round(image.naturalWidth * region.x)) : 0;
   const sourceY = region ? Math.max(0, Math.round(image.naturalHeight * region.y)) : 0;
   const sourceWidth = region ? Math.min(image.naturalWidth - sourceX, Math.round(image.naturalWidth * region.width)) : image.naturalWidth;
   const sourceHeight = region ? Math.min(image.naturalHeight - sourceY, Math.round(image.naturalHeight * region.height)) : image.naturalHeight;
   const longestSide = Math.max(sourceWidth, sourceHeight);
-  const targetLongestSide = Math.min(3200, Math.max(longestSide, 2200));
+  const targetLongestSide = Math.min(region?.targetLongestSide ?? 3200, Math.max(longestSide, 2200));
   const scale = targetLongestSide / longestSide;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sourceWidth * scale));
@@ -201,7 +210,7 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
     if (options.documentType === "identity") {
       onProgress("Gratis OCR leest paspoortregels extra...");
 
-      const identityTextImage = await createOcrReadyImage(file, { x: 0, y: 0, width: 1, height: 0.68 });
+      const identityTextImage = await createOcrReadyImage(file, { x: 0, y: 0, width: 1, height: 0.68, targetLongestSide: 4200 });
       await worker.setParameters({
         preserve_interword_spaces: "1",
         tessedit_pageseg_mode: PSM.SPARSE_TEXT,
@@ -211,7 +220,27 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
       const identityTextResult = await worker.recognize(identityTextImage);
       textParts.push(normalizeBrowserOcrText(identityTextResult.data.text));
 
-      const mrzImage = await createOcrReadyImage(file, { x: 0, y: 0.62, width: 1, height: 0.38, threshold: true });
+      const identityDateImage = await createOcrReadyImage(file, { x: 0, y: 0.22, width: 1, height: 0.56, targetLongestSide: 4200 });
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        tessedit_char_whitelist: "",
+        user_defined_dpi: "300",
+      });
+      const identityDateResult = await worker.recognize(identityDateImage);
+      textParts.push(normalizeBrowserOcrText(identityDateResult.data.text));
+
+      const mrzLooseImage = await createOcrReadyImage(file, { x: 0, y: 0.48, width: 1, height: 0.52, targetLongestSide: 4200 });
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<",
+        user_defined_dpi: "300",
+      });
+      const mrzLooseResult = await worker.recognize(mrzLooseImage);
+      textParts.push(normalizeBrowserOcrText(mrzLooseResult.data.text));
+
+      const mrzImage = await createOcrReadyImage(file, { x: 0, y: 0.58, width: 1, height: 0.42, threshold: true, targetLongestSide: 4200 });
       await worker.setParameters({
         preserve_interword_spaces: "1",
         tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
@@ -258,7 +287,7 @@ async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: st
       onProgress(`PDF-OCR leest pagina ${pageNumber}/${pageCount}...`);
 
       const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 2.4 });
+      const viewport = page.getViewport({ scale: options.documentType === "identity" ? 4 : 2.4 });
       const canvas = document.createElement("canvas");
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);

@@ -103,6 +103,10 @@ function allowUiToPaint() {
   });
 }
 
+type BrowserOcrOptions = {
+  documentType?: WorldlineDocumentType;
+};
+
 function isImageUploadFile(file: File) {
   return file.type === "image/jpeg" || file.type === "image/png" || /\.(jpe?g|png)$/i.test(file.name);
 }
@@ -130,31 +134,36 @@ async function loadImageForOcr(file: File) {
   }
 }
 
-async function createOcrReadyImage(file: File) {
+async function createOcrReadyImage(file: File, region?: { x: number; y: number; width: number; height: number; threshold?: boolean }) {
   const image = await loadImageForOcr(file);
-  const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+  const sourceX = region ? Math.max(0, Math.round(image.naturalWidth * region.x)) : 0;
+  const sourceY = region ? Math.max(0, Math.round(image.naturalHeight * region.y)) : 0;
+  const sourceWidth = region ? Math.min(image.naturalWidth - sourceX, Math.round(image.naturalWidth * region.width)) : image.naturalWidth;
+  const sourceHeight = region ? Math.min(image.naturalHeight - sourceY, Math.round(image.naturalHeight * region.height)) : image.naturalHeight;
+  const longestSide = Math.max(sourceWidth, sourceHeight);
   const targetLongestSide = Math.min(3200, Math.max(longestSide, 2200));
   const scale = targetLongestSide / longestSide;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
 
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("Afbeelding kon niet worden voorbereid voor OCR.");
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
 
   for (let index = 0; index < data.length; index += 4) {
     const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-    const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.18 + 128));
-    data[index] = contrast;
-    data[index + 1] = contrast;
-    data[index + 2] = contrast;
+    const contrast = Math.max(0, Math.min(255, (gray - 128) * (region?.threshold ? 1.65 : 1.18) + 128));
+    const value = region?.threshold ? (contrast > 170 ? 255 : 0) : contrast;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
     data[index + 3] = 255;
   }
 
@@ -168,7 +177,7 @@ async function createOcrReadyImage(file: File) {
   });
 }
 
-async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: string) => void) {
+async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: string) => void, options: BrowserOcrOptions = {}) {
   const { PSM, createWorker } = await import("tesseract.js");
   const ocrImage = await createOcrReadyImage(file);
   const worker = await createWorker(["nld", "eng"], 1, {
@@ -187,10 +196,35 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
     });
 
     const result = await worker.recognize(ocrImage);
+    const textParts = [normalizeBrowserOcrText(result.data.text)];
+
+    if (options.documentType === "identity") {
+      onProgress("Gratis OCR leest paspoortregels extra...");
+
+      const identityTextImage = await createOcrReadyImage(file, { x: 0, y: 0, width: 1, height: 0.68 });
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        tessedit_char_whitelist: "",
+        user_defined_dpi: "300",
+      });
+      const identityTextResult = await worker.recognize(identityTextImage);
+      textParts.push(normalizeBrowserOcrText(identityTextResult.data.text));
+
+      const mrzImage = await createOcrReadyImage(file, { x: 0, y: 0.62, width: 1, height: 0.38, threshold: true });
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<",
+        user_defined_dpi: "300",
+      });
+      const mrzResult = await worker.recognize(mrzImage);
+      textParts.push(normalizeBrowserOcrText(mrzResult.data.text));
+    }
 
     return {
       confidence: typeof result.data.confidence === "number" ? Math.round(result.data.confidence) : undefined,
-      text: normalizeBrowserOcrText(result.data.text),
+      text: normalizeBrowserOcrText(textParts.filter(Boolean).join("\n\n")),
     };
   } finally {
     await worker.terminate();
@@ -206,7 +240,7 @@ function canvasToPngBlob(canvas: HTMLCanvasElement) {
   });
 }
 
-async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: string) => void) {
+async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: string) => void, options: BrowserOcrOptions = {}) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc ||= new URL("pdfjs-dist/legacy/build/pdf.worker.mjs", import.meta.url).toString();
 
@@ -246,6 +280,7 @@ async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: st
       const ocrResult = await extractImageTextWithBrowserOcr(
         new File([pageBlob], `${file.name}-pagina-${pageNumber}.png`, { type: "image/png" }),
         (message) => onProgress(`PDF-OCR pagina ${pageNumber}/${pageCount}: ${message.replace(/^Gratis OCR leest afbeelding\.\.\.\s*/i, "")}`),
+        options,
       );
 
       if (ocrResult.text) textParts.push(ocrResult.text);
@@ -1243,7 +1278,7 @@ export default function WorldlineDashboard() {
         await allowUiToPaint();
 
         try {
-          const ocrResult = await extractImageTextWithBrowserOcr(file, setStatus);
+          const ocrResult = await extractImageTextWithBrowserOcr(file, setStatus, { documentType });
           ocrText = ocrResult.text;
           ocrConfidence = ocrResult.confidence;
         } catch (error) {
@@ -1465,6 +1500,38 @@ export default function WorldlineDashboard() {
     }
   }, [canWriteWorldline, supabase]);
 
+  async function rerunImageOcrForDocument(document: WorldlineDocument) {
+    if (!supabase || !isImageDocument(document) || !OCR_DOCUMENT_TYPES.includes(document.document_type)) return "";
+
+    const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
+    setBusy(true);
+    setStatus(`${documentTitle} wordt opnieuw met OCR gelezen...`);
+
+    try {
+      const { data: imageFile, error: downloadError } = await supabase.storage
+        .from(WORLDLINE_DOCUMENT_BUCKET)
+        .download(document.storage_path);
+
+      if (downloadError || !imageFile) {
+        setStatus(`${documentTitle}-OCR mislukt: ${downloadError?.message ?? "afbeelding kon niet worden opgehaald"}.`);
+        return "";
+      }
+
+      const ocrResult = await extractImageTextWithBrowserOcr(
+        new File([imageFile], document.file_name, { type: document.mime_type || imageFile.type || "image/png" }),
+        setStatus,
+        { documentType: document.document_type },
+      );
+
+      return ocrResult.text;
+    } catch (error) {
+      setStatus(`${documentTitle}-OCR mislukt: ${getErrorMessage(error, "afbeelding kon niet worden gelezen.")}`);
+      return "";
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function updateDocumentStatus(document: WorldlineDocument, nextStatus: WorldlineCheckStatus, successMessage = "Documentstatus bijgewerkt.") {
     if (!supabase) return;
     if (!canWriteWorldline) {
@@ -1493,6 +1560,15 @@ export default function WorldlineDashboard() {
   }
 
   async function checkDocument(document: WorldlineDocument) {
+    if (isImageDocument(document) && OCR_DOCUMENT_TYPES.includes(document.document_type)) {
+      const freshOcrText = await rerunImageOcrForDocument(document);
+
+      if (freshOcrText) {
+        await runAutomatedDocumentCheck(document, { ocrText: freshOcrText });
+        return;
+      }
+    }
+
     if (isImageDocument(document) && !getDocumentStoredOcrText(document)) {
       await updateDocumentStatus(
         document,
@@ -1531,6 +1607,7 @@ export default function WorldlineDashboard() {
       const ocrText = await extractPdfTextWithBrowserOcr(
         new File([pdfFile], document.file_name, { type: document.mime_type || pdfFile.type || "application/pdf" }),
         setStatus,
+        { documentType: document.document_type },
       );
 
       if (!ocrText) {

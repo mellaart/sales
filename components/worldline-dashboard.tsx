@@ -397,6 +397,19 @@ function getDocumentStoredOcrText(document: WorldlineDocument) {
   return normalizeBrowserOcrText(checkResult.ocrText);
 }
 
+function identityExpiryNeedsOcr(document: WorldlineDocument) {
+  if (document.document_type !== "identity") return false;
+
+  const checkResult = getCheckResult(document, "identity");
+  const identityCheck = checkResult.checklist?.[0];
+  const checkText = typeof identityCheck?.text === "string" ? identityCheck.text : "";
+
+  return (
+    identityCheck?.done !== true &&
+    /geldigheidsdatum\s+niet\s+duidelijk\s+herkend/i.test(checkText)
+  );
+}
+
 function getDocumentTitleKey(value: string) {
   return sanitizeFileName(value) || "document";
 }
@@ -1580,19 +1593,26 @@ export default function WorldlineDashboard() {
 
     const firstCheck = await runAutomatedDocumentCheck(document);
     const firstError = firstCheck.ok ? "" : firstCheck.error;
+    const checkedDocument = firstCheck.ok ? firstCheck.document : null;
+    const shouldTryPdfOcr = (
+      isPdfDocument(document) &&
+      (
+        firstError.includes("Geen selecteerbare tekst") ||
+        (checkedDocument && identityExpiryNeedsOcr(checkedDocument))
+      )
+    );
 
-    if (
-      firstCheck.ok ||
-      !supabase ||
-      !isPdfDocument(document) ||
-      !firstError.includes("Geen selecteerbare tekst")
-    ) {
+    if (!supabase || !shouldTryPdfOcr) {
       return;
     }
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
     setBusy(true);
-    setStatus(`${documentTitle} heeft geen selecteerbare tekst. Gratis OCR leest de gescande PDF...`);
+    setStatus(
+      firstError.includes("Geen selecteerbare tekst")
+        ? `${documentTitle} heeft geen selecteerbare tekst. Gratis OCR leest de gescande PDF...`
+        : `${documentTitle} mist de geldigheidsdatum in de PDF-tekst. Gratis OCR leest de PDF opnieuw...`
+    );
 
     try {
       const { data: pdfFile, error: downloadError } = await supabase.storage

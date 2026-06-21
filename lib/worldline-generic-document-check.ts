@@ -35,6 +35,7 @@ const MONTHS: Record<string, number> = {
   jun: 6,
   juli: 7,
   jul: 7,
+  jui: 7,
   juil: 7,
   augustus: 8,
   aug: 8,
@@ -103,12 +104,15 @@ function findDate(text: string) {
 }
 
 function parseDate(day: string, month: string, year: string) {
-  const fullYear = Number(year.length === 2 ? `20${year}` : year);
-  const date = new Date(fullYear, Number(month) - 1, Number(day));
+  const normalizedDay = day.replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
+  const normalizedMonth = month.replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
+  const normalizedYear = year.replace(/[OQD]/gi, "0").replace(/[IL]/gi, "1").replace(/S/gi, "5").replace(/Z/gi, "2");
+  const fullYear = Number(normalizedYear.length === 2 ? `20${normalizedYear}` : normalizedYear);
+  const date = new Date(fullYear, Number(normalizedMonth) - 1, Number(normalizedDay));
   if (
     date.getFullYear() !== fullYear ||
-    date.getMonth() !== Number(month) - 1 ||
-    date.getDate() !== Number(day)
+    date.getMonth() !== Number(normalizedMonth) - 1 ||
+    date.getDate() !== Number(normalizedDay)
   ) {
     return null;
   }
@@ -121,38 +125,51 @@ function formatDateNl(date: Date) {
 }
 
 function getMonthNumber(value: string) {
-  return MONTHS[value.toLowerCase().replace(/\.$/, "")];
+  const key = value
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/\.$/, "")
+    .replace(/1/g, "l")
+    .replace(/0/g, "o")
+    .replace(/5/g, "s");
+  return MONTHS[key];
 }
 
 function extractDates(text: string) {
   const dates: Date[] = [];
-  const numericPattern = /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/g;
-  const isoPattern = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g;
+  const compactDateText = text.replace(/\b([a-z])\s+([a-z])\s+([a-z])\b/gi, "$1$2$3");
+  const variants = Array.from(new Set([text, compactDateText]));
+  const dayToken = "[0-9OQDILSZ]{1,2}";
+  const yearToken = "[0-9OQDILSZ]{2,4}";
+  const numericPattern = new RegExp(`\\b(${dayToken})[-/.](${dayToken})[-/.](${yearToken})\\b`, "gi");
+  const isoPattern = new RegExp(`\\b(${yearToken})-(${dayToken})-(${dayToken})\\b`, "gi");
   const monthNames = "januari|jan|februari|feb|maart|mrt|april|apr|mei|juni|jun|juli|jul|juil|augustus|aug|september|sep|oktober|okt|november|nov|december|dec";
-  const monthToken = `(?:${monthNames})\\.?`;
-  const monthNamePattern = new RegExp(`\\b(\\d{1,2})\\s*(${monthToken})\\s*(\\d{4})\\b`, "gi");
-  const bilingualMonthNamePattern = new RegExp(`\\b(\\d{1,2})\\s*(${monthToken})\\s*[/|-]\\s*(${monthToken})\\s*(\\d{4})\\b`, "gi");
+  const monthToken = `(?:${monthNames}|ju[il1])\\.?`;
+  const monthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s*(${yearToken})\\b`, "gi");
+  const bilingualMonthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s*[/|-]\\s*(${monthToken})\\s*(${yearToken})\\b`, "gi");
 
-  for (const match of text.matchAll(numericPattern)) {
-    const date = parseDate(match[1], match[2], match[3]);
-    if (date) dates.push(date);
-  }
+  for (const value of variants) {
+    for (const match of value.matchAll(numericPattern)) {
+      const date = parseDate(match[1], match[2], match[3]);
+      if (date) dates.push(date);
+    }
 
-  for (const match of text.matchAll(isoPattern)) {
-    const date = parseDate(match[3], match[2], match[1]);
-    if (date) dates.push(date);
-  }
+    for (const match of value.matchAll(isoPattern)) {
+      const date = parseDate(match[3], match[2], match[1]);
+      if (date) dates.push(date);
+    }
 
-  for (const match of text.matchAll(bilingualMonthNamePattern)) {
-    const month = getMonthNumber(match[2]) ?? getMonthNumber(match[3]);
-    const date = month ? parseDate(match[1], String(month), match[4]) : null;
-    if (date) dates.push(date);
-  }
+    for (const match of value.matchAll(bilingualMonthNamePattern)) {
+      const month = getMonthNumber(match[2]) ?? getMonthNumber(match[3]);
+      const date = month ? parseDate(match[1], String(month), match[4]) : null;
+      if (date) dates.push(date);
+    }
 
-  for (const match of text.matchAll(monthNamePattern)) {
-    const month = getMonthNumber(match[2]);
-    const date = month ? parseDate(match[1], String(month), match[3]) : null;
-    if (date) dates.push(date);
+    for (const match of value.matchAll(monthNamePattern)) {
+      const month = getMonthNumber(match[2]);
+      const date = month ? parseDate(match[1], String(month), match[3]) : null;
+      if (date) dates.push(date);
+    }
   }
 
   const seen = new Set<string>();
@@ -168,7 +185,7 @@ function extractDates(text: string) {
 
 function findIdentityExpiryDate(text: string, referenceDate = new Date()) {
   const compact = normalizeWhitespace(text);
-  const labelledPattern = /\b(?:geldig\s*tot|date\s*of\s*expiry|expiry\s*date|expires|valid\s*until|verloopt\s*op|datum\s*verval)\b.{0,90}/gi;
+  const labelledPattern = /\b(?:geldig\s*tot|einde\s+geldigheid|datum\s+einde\s+geldigheid|date\s*of\s*expiry|expiry\s*date|expires|valid\s*until|validity|expiration|expiration\s+date|verloopt\s*op|datum\s*verval)\b.{0,140}/gi;
   const labelledDates: Date[] = [];
 
   for (const match of compact.matchAll(labelledPattern)) {

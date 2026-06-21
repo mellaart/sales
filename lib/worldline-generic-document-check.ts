@@ -165,21 +165,37 @@ function extractDates(text: string) {
   const dates: Date[] = [];
   const compactDateText = text
     .replace(/\bJ\s*U\s*[I1L]\s*[L1]?\b/gi, "JUL")
+    .replace(/J\s*U\s*[I1L]\s*[L1]?\s*[/|\\-]?\s*J\s*U\s*[I1L]\s*[L1]?/gi, "JUL")
+    .replace(/JUILJUL|JULJUIL|JULJUL|JUILJUIL/gi, "JUL")
     .replace(/JUL\s*JUIL/gi, "JUL")
     .replace(/\b([a-z])\s+([a-z])\s+([a-z])\b/gi, "$1$2$3");
   const variants = Array.from(new Set([text, compactDateText]));
   const dayToken = "[0-9OQDILSZ]{1,2}";
   const yearToken = "[0-9OQDILSZ]{2,4}";
   const numericPattern = new RegExp(`\\b(${dayToken})[-/.](${dayToken})[-/.](${yearToken})\\b`, "gi");
+  const spacedNumericPattern = new RegExp(`\\b(${dayToken})\\s+(${dayToken})\\s+(${yearToken})\\b`, "gi");
+  const compactNumericPattern = new RegExp(`\\b([0-9OQDILSZ]{2})([0-9OQDILSZ]{2})([0-9OQDILSZ]{4})\\b`, "gi");
   const isoPattern = new RegExp(`\\b(${yearToken})-(${dayToken})-(${dayToken})\\b`, "gi");
   const monthNames = "september|januari|februari|augustus|oktober|november|december|maart|april|juni|juli|juil|jan|feb|mrt|apr|mei|jun|jul|jui|aug|sep|okt|nov|dec";
   const monthToken = `(?:${monthNames}|ju[il1])\\.?`;
   const monthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s*(${yearToken})\\b`, "gi");
-  const bilingualMonthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s*[/|-]\\s*(${monthToken})\\s*(${yearToken})\\b`, "gi");
+  const bilingualSeparator = String.raw`(?:[/|\\-]|[0-9OQDILSZ]{1,2})`;
+  const bilingualMonthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s*${bilingualSeparator}\\s*(${monthToken})\\s*(${yearToken})\\b`, "gi");
   const doubleMonthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s+(${monthToken})\\s*(${yearToken})\\b`, "gi");
+  const looseMonthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken}).{0,18}?(${yearToken})\\b`, "gi");
 
   for (const value of variants) {
     for (const match of value.matchAll(numericPattern)) {
+      const date = parseDate(match[1], match[2], match[3]);
+      if (date) dates.push(date);
+    }
+
+    for (const match of value.matchAll(spacedNumericPattern)) {
+      const date = parseDate(match[1], match[2], match[3]);
+      if (date) dates.push(date);
+    }
+
+    for (const match of value.matchAll(compactNumericPattern)) {
       const date = parseDate(match[1], match[2], match[3]);
       if (date) dates.push(date);
     }
@@ -202,6 +218,12 @@ function extractDates(text: string) {
     }
 
     for (const match of value.matchAll(monthNamePattern)) {
+      const month = getMonthNumber(match[2]);
+      const date = month ? parseDate(match[1], String(month), match[3]) : null;
+      if (date) dates.push(date);
+    }
+
+    for (const match of value.matchAll(looseMonthNamePattern)) {
       const month = getMonthNumber(match[2]);
       const date = month ? parseDate(match[1], String(month), match[3]) : null;
       if (date) dates.push(date);

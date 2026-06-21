@@ -120,6 +120,32 @@ function parseDate(day: string, month: string, year: string) {
   return date;
 }
 
+function normalizeOcrDigits(value: string) {
+  return value
+    .replace(/[OQD]/gi, "0")
+    .replace(/[IL]/gi, "1")
+    .replace(/S/gi, "5")
+    .replace(/Z/gi, "2");
+}
+
+function parseFutureMrzDate(value: string, referenceDate: Date) {
+  const digits = normalizeOcrDigits(value);
+  if (!/^\d{6}$/.test(digits)) return null;
+
+  const year = 2000 + Number(digits.slice(0, 2));
+  const month = Number(digits.slice(2, 4));
+  const day = Number(digits.slice(4, 6));
+  const date = parseDate(String(day), String(month), String(year));
+  if (!date) return null;
+
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  const maxExpiry = new Date(today);
+  maxExpiry.setFullYear(maxExpiry.getFullYear() + 15);
+
+  return date >= today && date <= maxExpiry ? date : null;
+}
+
 function formatDateNl(date: Date) {
   return new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" }).format(date);
 }
@@ -137,16 +163,20 @@ function getMonthNumber(value: string) {
 
 function extractDates(text: string) {
   const dates: Date[] = [];
-  const compactDateText = text.replace(/\b([a-z])\s+([a-z])\s+([a-z])\b/gi, "$1$2$3");
+  const compactDateText = text
+    .replace(/\bJ\s*U\s*[I1L]\s*[L1]?\b/gi, "JUL")
+    .replace(/JUL\s*JUIL/gi, "JUL")
+    .replace(/\b([a-z])\s+([a-z])\s+([a-z])\b/gi, "$1$2$3");
   const variants = Array.from(new Set([text, compactDateText]));
   const dayToken = "[0-9OQDILSZ]{1,2}";
   const yearToken = "[0-9OQDILSZ]{2,4}";
   const numericPattern = new RegExp(`\\b(${dayToken})[-/.](${dayToken})[-/.](${yearToken})\\b`, "gi");
   const isoPattern = new RegExp(`\\b(${yearToken})-(${dayToken})-(${dayToken})\\b`, "gi");
-  const monthNames = "januari|jan|februari|feb|maart|mrt|april|apr|mei|juni|jun|juli|jul|juil|augustus|aug|september|sep|oktober|okt|november|nov|december|dec";
+  const monthNames = "september|januari|februari|augustus|oktober|november|december|maart|april|juni|juli|juil|jan|feb|mrt|apr|mei|jun|jul|jui|aug|sep|okt|nov|dec";
   const monthToken = `(?:${monthNames}|ju[il1])\\.?`;
   const monthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s*(${yearToken})\\b`, "gi");
   const bilingualMonthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s*[/|-]\\s*(${monthToken})\\s*(${yearToken})\\b`, "gi");
+  const doubleMonthNamePattern = new RegExp(`\\b(${dayToken})\\s*(${monthToken})\\s+(${monthToken})\\s*(${yearToken})\\b`, "gi");
 
   for (const value of variants) {
     for (const match of value.matchAll(numericPattern)) {
@@ -160,6 +190,12 @@ function extractDates(text: string) {
     }
 
     for (const match of value.matchAll(bilingualMonthNamePattern)) {
+      const month = getMonthNumber(match[2]) ?? getMonthNumber(match[3]);
+      const date = month ? parseDate(match[1], String(month), match[4]) : null;
+      if (date) dates.push(date);
+    }
+
+    for (const match of value.matchAll(doubleMonthNamePattern)) {
       const month = getMonthNumber(match[2]) ?? getMonthNumber(match[3]);
       const date = month ? parseDate(match[1], String(month), match[4]) : null;
       if (date) dates.push(date);
@@ -196,9 +232,24 @@ function findIdentityExpiryDate(text: string, referenceDate = new Date()) {
 
   const today = new Date(referenceDate);
   today.setHours(0, 0, 0, 0);
-  return extractDates(compact)
+  const explicitFutureDate = extractDates(compact)
     .filter((date) => date >= today)
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  if (explicitFutureDate) return explicitFutureDate;
+
+  const mrzText = compact.replace(/[^A-Z0-9<]/gi, "");
+  const mrzDates: Date[] = [];
+  for (const match of mrzText.matchAll(/[MF<]([0-9OQDILSZ]{6})[0-9OQDILSZ]/gi)) {
+    const date = parseFutureMrzDate(match[1], referenceDate);
+    if (date) mrzDates.push(date);
+  }
+
+  for (const match of mrzText.matchAll(/([0-9OQDILSZ]{6})/gi)) {
+    const date = parseFutureMrzDate(match[1], referenceDate);
+    if (date) mrzDates.push(date);
+  }
+
+  return mrzDates.sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 }
 
 function splitExpectedNames(value?: string) {

@@ -13,6 +13,7 @@ export type GenericDocumentAnalysis = {
 };
 
 type GenericDocumentAnalysisOptions = {
+  documentName?: string;
   expectedCompanyName?: string;
   expectedIban?: string;
   expectedSignerNames?: string;
@@ -119,13 +120,18 @@ function formatDateNl(date: Date) {
   return new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" }).format(date);
 }
 
+function getMonthNumber(value: string) {
+  return MONTHS[value.toLowerCase().replace(/\.$/, "")];
+}
+
 function extractDates(text: string) {
   const dates: Date[] = [];
   const numericPattern = /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/g;
   const isoPattern = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g;
   const monthNames = "januari|jan|februari|feb|maart|mrt|april|apr|mei|juni|jun|juli|jul|juil|augustus|aug|september|sep|oktober|okt|november|nov|december|dec";
-  const monthNamePattern = new RegExp(`\\b(\\d{1,2})\\s+(${monthNames})\\s+(\\d{4})\\b`, "gi");
-  const bilingualMonthNamePattern = new RegExp(`\\b(\\d{1,2})\\s+(${monthNames})\\s*[/|-]\\s*(${monthNames})\\s+(\\d{4})\\b`, "gi");
+  const monthToken = `(?:${monthNames})\\.?`;
+  const monthNamePattern = new RegExp(`\\b(\\d{1,2})\\s*(${monthToken})\\s*(\\d{4})\\b`, "gi");
+  const bilingualMonthNamePattern = new RegExp(`\\b(\\d{1,2})\\s*(${monthToken})\\s*[/|-]\\s*(${monthToken})\\s*(\\d{4})\\b`, "gi");
 
   for (const match of text.matchAll(numericPattern)) {
     const date = parseDate(match[1], match[2], match[3]);
@@ -138,13 +144,13 @@ function extractDates(text: string) {
   }
 
   for (const match of text.matchAll(bilingualMonthNamePattern)) {
-    const month = MONTHS[match[2].toLowerCase()] ?? MONTHS[match[3].toLowerCase()];
+    const month = getMonthNumber(match[2]) ?? getMonthNumber(match[3]);
     const date = month ? parseDate(match[1], String(month), match[4]) : null;
     if (date) dates.push(date);
   }
 
   for (const match of text.matchAll(monthNamePattern)) {
-    const month = MONTHS[match[2].toLowerCase()];
+    const month = getMonthNumber(match[2]);
     const date = month ? parseDate(match[1], String(month), match[3]) : null;
     if (date) dates.push(date);
   }
@@ -245,6 +251,39 @@ function hasVisibleBsn(text: string) {
   return /\b(?:BSN|persoonsnummer|personal\s*number)\b.{0,35}\d(?:[\s.-]?\d){7,8}\b/i.test(text);
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getValueAfterLabel(text: string, labels: string[]) {
+  const compact = normalizeWhitespace(text).replace(/[＿_]{2,}/g, " ");
+  const labelPattern = labels.map(escapeRegExp).join("|").replace(/\\ /g, "\\s+");
+  const stopLabels = [
+    "plaats",
+    "place",
+    "datum",
+    "date",
+    "handtekening",
+    "signature",
+    "naam\\s+tekenbevoegde",
+    "naam\\s+ondertekenaar",
+    "name",
+  ].join("|");
+  const match = compact.match(new RegExp(`\\b(?:${labelPattern})\\s*:?\\s*(.{0,120})`, "i"));
+  if (!match) return "";
+
+  const stopPattern = new RegExp(`\\b(?:${stopLabels})\\b.*$`, "i");
+  const value = normalizeWhitespace(
+    (match[1] ?? "")
+      .replace(stopPattern, "")
+      .replace(/[_—–-]{2,}/g, " ")
+      .replace(/^[.:|/\s]+|[.:|/\s]+$/g, ""),
+  );
+
+  if (!value || /^(nvt|n\/a|geen|niet ingevuld)$/i.test(value)) return "";
+  return /[a-z0-9]{2,}/i.test(value) ? value : "";
+}
+
 function item(text: string, done: boolean, successText: string, warningText: string): NonNullable<WorldlineCheckResult["checklist"]>[number] {
   return {
     text: done ? successText : warningText,
@@ -280,12 +319,13 @@ function analyzeAgreement(text: string): NonNullable<WorldlineCheckResult["check
 function analyzeIdentity(text: string, options: GenericDocumentAnalysisOptions): NonNullable<WorldlineCheckResult["checklist"]> {
   const supportingText = normalizeWhitespace((options.supportingOcrTexts ?? []).join(" "));
   const combinedText = normalizeWhitespace(`${text} ${supportingText}`);
+  const nameEvidenceText = normalizeWhitespace(`${combinedText} ${options.documentName ?? ""} ${(options.supportingDocumentNames ?? []).join(" ")}`);
   const documentKind = getIdentityDocumentKind(combinedText);
   const expiryDate = findIdentityExpiryDate(combinedText);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const expiryIsValid = expiryDate ? expiryDate >= today : false;
-  const matchedSignerName = expectedNameMatches(combinedText, options.expectedSignerNames);
+  const matchedSignerName = expectedNameMatches(nameEvidenceText, options.expectedSignerNames);
   const hasExpectedSignerName = splitExpectedNames(options.expectedSignerNames).length > 0;
   const bsnVisible = hasVisibleBsn(combinedText);
   const backsidePresent = hasBacksideDocument(options);
@@ -342,12 +382,26 @@ function analyzeRefund(text: string, options: GenericDocumentAnalysisOptions): N
   const isRefund = hasAny(text, [/\brefund\b/i, /\bterugbetaling\b/i, /\bretourbetaling\b/i]);
   const companyMatches = containsExpectedText(text, options.expectedCompanyName);
   const requiredFields = findIban(text, options.expectedIban) || findEmail(text) || findDate(text);
-  const signatureFields = hasAny(text, [/\bhandtekening\b/i, /\bsignature\b/i, /\bondertekend\b/i]) || findDate(text);
+  const placeValue = getValueAfterLabel(text, ["plaats", "place"]);
+  const signatureValue = getValueAfterLabel(text, ["handtekening", "signature"]);
+  const signerNameValue = getValueAfterLabel(text, ["naam tekenbevoegde", "naam ondertekenaar", "name"]);
+  const missingLeftFields = [
+    placeValue ? "" : "Plaats",
+    signatureValue ? "" : "Handtekening",
+    signerNameValue ? "" : "Naam tekenbevoegde",
+  ].filter(Boolean);
 
   return [
     item(text, isRefund, "Refund formulier lijkt aanwezig.", "Refund formulier niet duidelijk herkend."),
     item(text, companyMatches, `Formulier lijkt bij de juiste relatie te horen: ${options.expectedCompanyName}.`, "Relatienaam niet duidelijk herkend op het refund formulier."),
-    item(text, requiredFields && signatureFields, "Vereiste velden en handtekeningvelden lijken aanwezig.", "Vereiste velden of handtekeningvelden niet duidelijk herkend."),
+    item(text, requiredFields, "Vereiste velden lijken aanwezig.", "Vereiste velden niet duidelijk herkend."),
+    {
+      text: missingLeftFields.length
+        ? `Niet ingevuld aan linkerzijde: ${missingLeftFields.join(", ")}.`
+        : "Plaats, handtekening en naam tekenbevoegde lijken ingevuld.",
+      done: missingLeftFields.length === 0,
+      tone: missingLeftFields.length === 0 ? "success" : "danger",
+    },
   ];
 }
 

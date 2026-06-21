@@ -71,21 +71,42 @@ export function normalizeIban(value: unknown) {
   return typeof value === "string" ? value.replace(/[^A-Z0-9]/gi, "").toUpperCase() : "";
 }
 
+function normalizeDutchAccountDigits(value: string) {
+  return value
+    .replace(/[OQD]/g, "0")
+    .replace(/[IL]/g, "1")
+    .replace(/S/g, "5")
+    .replace(/B/g, "8");
+}
+
 function normalizeIbanCandidate(value: string) {
   const compact = normalizeIban(value);
   if (compact.length < 4) return compact;
 
-  const countryCode = compact
-    .slice(0, 2)
-    .replace(/0/g, "O")
-    .replace(/1/g, "I")
-    .replace(/5/g, "S");
+  const rawCountryCode = compact.slice(0, 2);
+  const countryCode = /^N[LI1]$/i.test(rawCountryCode)
+    ? "NL"
+    : rawCountryCode
+      .replace(/0/g, "O")
+      .replace(/1/g, "I")
+      .replace(/5/g, "S");
   const checkDigits = compact
     .slice(2, 4)
     .replace(/[OQ]/g, "0")
     .replace(/[IL]/g, "1")
     .replace(/S/g, "5")
     .replace(/B/g, "8");
+
+  if (countryCode === "NL") {
+    const bankCode = compact
+      .slice(4, 8)
+      .replace(/0/g, "O")
+      .replace(/1/g, "I")
+      .replace(/5/g, "S");
+    const accountDigits = normalizeDutchAccountDigits(compact.slice(8, 18));
+
+    return `${countryCode}${checkDigits}${bankCode}${accountDigits}${compact.slice(18)}`;
+  }
 
   return `${countryCode}${checkDigits}${compact.slice(4)}`;
 }
@@ -94,8 +115,11 @@ function normalizeCandidate(rawCandidate: string) {
   const normalized = normalizeIbanCandidate(rawCandidate);
   const countryCode = normalized.slice(0, 2);
   const expectedLength = IBAN_LENGTHS[countryCode];
+  if (!expectedLength) return "";
+
   const candidate = expectedLength ? normalized.slice(0, expectedLength) : normalized;
 
+  if (countryCode === "NL" && !/^NL\d{2}[A-Z]{4}\d{10}$/.test(candidate)) return "";
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(candidate)) return "";
   if (candidate.length < 15 || candidate.length > 34) return "";
   if (expectedLength && candidate.length !== expectedLength) return "";
@@ -105,6 +129,7 @@ function normalizeCandidate(rawCandidate: string) {
 
 export function extractIbansFromText(text: string) {
   const ibans = new Set<string>();
+  const compactText = normalizeIban(text);
   const patterns = [
     /(?:^|[^A-Z0-9])([A-Z]\s*[A-Z]\s*[0-9OQILSB]\s*[0-9OQILSB](?:[\s./|_-]*[A-Z0-9]){11,45})/gi,
     /(?:^|[^A-Z0-9])((?:[A-Z]\s*){2}(?:[0-9OQILSB]\s*){2}(?:[A-Z0-9]\s*){11,45})/gi,
@@ -115,6 +140,18 @@ export function extractIbansFromText(text: string) {
       const iban = normalizeCandidate(match[1] ?? "");
       if (iban) ibans.add(iban);
     }
+  }
+
+  for (let index = 0; index <= compactText.length - 15; index += 1) {
+    const countryCode = /^N[LI1]$/i.test(compactText.slice(index, index + 2))
+      ? "NL"
+      : normalizeIbanCandidate(compactText.slice(index, index + 4)).slice(0, 2);
+    const expectedLength = IBAN_LENGTHS[countryCode];
+
+    if (!expectedLength) continue;
+
+    const iban = normalizeCandidate(compactText.slice(index, index + expectedLength));
+    if (iban) ibans.add(iban);
   }
 
   return Array.from(ibans);

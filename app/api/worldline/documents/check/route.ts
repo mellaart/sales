@@ -230,6 +230,7 @@ export async function POST(request: Request) {
             expectedCompanyName,
             expectedIban: normalizeText(agreementFields.iban),
             expectedSignerNames,
+            documentName: normalizeText(document.file_name),
             supportingDocumentNames: supportingIdentityDocumentNames,
             supportingOcrTexts: supportingIdentityOcrTexts,
           }));

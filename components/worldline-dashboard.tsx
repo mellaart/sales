@@ -70,6 +70,7 @@ type SignedUploadResponse = {
 };
 
 const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
+const AGREEMENT_AUTOSAVE_DELAY_MS = 500;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund"];
@@ -764,6 +765,8 @@ export default function WorldlineDashboard() {
   const agreementFieldsRef = useRef<WorldlineAgreementFields>(DEFAULT_WORLDLINE_AGREEMENT_FIELDS);
   const pendingAgreementSaveRef = useRef<QueuedAgreementSave | null>(null);
   const agreementSavePromiseRef = useRef<Promise<void> | null>(null);
+  const agreementAutosaveTimerRef = useRef<number | null>(null);
+  const agreementFieldsDirtyRef = useRef(false);
   const hydratedAgreementProjectId = useRef<string | null>(null);
   const autoCheckedKvkDocumentIds = useRef<Set<string>>(new Set());
   const autoCheckedOcrDocumentIds = useRef<Set<string>>(new Set());
@@ -832,6 +835,11 @@ export default function WorldlineDashboard() {
     const projectId = activeProject?.id ?? null;
     if (hydratedAgreementProjectId.current === projectId) return;
     hydratedAgreementProjectId.current = projectId;
+    agreementFieldsDirtyRef.current = false;
+    if (agreementAutosaveTimerRef.current) {
+      window.clearTimeout(agreementAutosaveTimerRef.current);
+      agreementAutosaveTimerRef.current = null;
+    }
     const nextFields = normalizeWorldlineAgreementFields(activeProject?.agreement_fields);
     agreementFieldsRef.current = nextFields;
     setAgreementFields(nextFields);
@@ -933,6 +941,7 @@ export default function WorldlineDashboard() {
 
   async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
     setSearching(true);
     setStatus("");
     setRelations([]);
@@ -962,11 +971,13 @@ export default function WorldlineDashboard() {
   }
 
   async function selectRelation(relation: RelationOption) {
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
     setSelectedRelation(relation);
     await loadProjects(relation);
   }
 
   async function openProject(project: WorldlineProject) {
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
     const relation = getRelationFromProject(project);
     setSelectedRelation(relation);
     setQuery("");
@@ -1029,6 +1040,7 @@ export default function WorldlineDashboard() {
       return;
     }
 
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
     setBusy(true);
     setStatus("Worldline-project wordt aangemaakt...");
 
@@ -1116,6 +1128,7 @@ export default function WorldlineDashboard() {
           const accessToken = sessionData.session?.access_token;
 
           if (!accessToken) {
+            agreementFieldsDirtyRef.current = true;
             setStatus("Je sessie is verlopen. Log opnieuw in om aansluitgegevens op te slaan.");
             return;
           }
@@ -1140,6 +1153,7 @@ export default function WorldlineDashboard() {
           };
 
           if (!response.ok || !json.project) {
+            agreementFieldsDirtyRef.current = true;
             setStatus(`Aansluitgegevens opslaan mislukt: ${json.error ?? "geen project ontvangen"}.`);
             return;
           }
@@ -1156,6 +1170,7 @@ export default function WorldlineDashboard() {
           }
         }
       } catch (error) {
+        agreementFieldsDirtyRef.current = true;
         setStatus(`Aansluitgegevens opslaan mislukt: ${getErrorMessage(error, "Supabase gaf geen antwoord.")}`);
       } finally {
         setSavingAgreementFields(false);
@@ -1166,8 +1181,36 @@ export default function WorldlineDashboard() {
     await agreementSavePromiseRef.current;
   }
 
+  async function flushAgreementFields(options: AgreementSaveOptions = {}) {
+    if (agreementAutosaveTimerRef.current) {
+      window.clearTimeout(agreementAutosaveTimerRef.current);
+      agreementAutosaveTimerRef.current = null;
+    }
+
+    if (!agreementFieldsDirtyRef.current && !pendingAgreementSaveRef.current && !agreementSavePromiseRef.current) {
+      return;
+    }
+
+    agreementFieldsDirtyRef.current = false;
+    await persistAgreementFields(agreementFieldsRef.current, options);
+  }
+
+  function scheduleAgreementAutosave() {
+    if (!canWriteWorldline || !activeProjectRef.current) return;
+
+    if (agreementAutosaveTimerRef.current) {
+      window.clearTimeout(agreementAutosaveTimerRef.current);
+    }
+
+    agreementAutosaveTimerRef.current = window.setTimeout(() => {
+      agreementAutosaveTimerRef.current = null;
+      void flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
+    }, AGREEMENT_AUTOSAVE_DELAY_MS);
+  }
+
   async function saveAgreementFields() {
-    await persistAgreementFields(agreementFieldsRef.current, {
+    agreementFieldsDirtyRef.current = true;
+    await flushAgreementFields({
       savingMessage: "Aansluitgegevens worden opgeslagen...",
       savedMessage: "Aansluitgegevens opgeslagen.",
     });
@@ -1180,6 +1223,7 @@ export default function WorldlineDashboard() {
       return;
     }
 
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
     setBusy(true);
     const { data, error } = await supabase
       .from("worldline_projects")
@@ -1213,6 +1257,8 @@ export default function WorldlineDashboard() {
       agreementFieldsRef.current = nextFields;
       return nextFields;
     });
+    agreementFieldsDirtyRef.current = true;
+    scheduleAgreementAutosave();
   }
 
   function commitAgreementField(field: string, value: string) {
@@ -1221,7 +1267,8 @@ export default function WorldlineDashboard() {
     const nextFields = { ...agreementFieldsRef.current, [field]: value };
     agreementFieldsRef.current = nextFields;
     setAgreementFields(nextFields);
-    void persistAgreementFields(nextFields, {
+    agreementFieldsDirtyRef.current = true;
+    void flushAgreementFields({
       savedMessage: "Aansluitgegevens automatisch opgeslagen.",
     });
   }
@@ -1703,10 +1750,11 @@ export default function WorldlineDashboard() {
   async function handleDownloadAgreementPdf() {
     if (!selectedRelation || !activeProject) return;
 
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
     setStatus("Aansluitovereenkomst wordt ingevuld...");
 
     try {
-      await downloadAgreementPdf(selectedRelation, activeProject, agreementFields);
+      await downloadAgreementPdf(selectedRelation, activeProject, agreementFieldsRef.current);
       setStatus("Aansluitovereenkomst gedownload.");
     } catch (error) {
       setStatus(`Aansluitovereenkomst downloaden mislukt: ${getErrorMessage(error, "PDF kon niet worden ingevuld.")}`);

@@ -10,6 +10,7 @@ export type OfferModule = {
   monthlyPrice: number;
   qty: number;
   total: number;
+  noPackageSwitch?: boolean;
   workItems?: string[];
 };
 
@@ -62,14 +63,69 @@ export function getFreeModules(selectedModules: OfferModule[]) {
   return selectedModules.filter((module) => module.monthlyPrice === 0);
 }
 
+const DEFAULT_NO_PACKAGE_SWITCH_KEYS = new Set(["mailchimp", "postnl", "suiteMkb", "powerbi", "leverschema"]);
+
+function isPackageRelevantModule(module: OfferModule) {
+  return module.monthlyPrice > 0 && !Boolean(module.noPackageSwitch ?? DEFAULT_NO_PACKAGE_SWITCH_KEYS.has(module.key));
+}
+
+function getModuleUnits(selectedModules: OfferModule[]) {
+  return selectedModules.flatMap((module) => {
+    const quantity = Math.max(0, Math.floor(Number(module.qty) || 0));
+    return Array.from({ length: quantity }, () => ({
+      ...module,
+      qty: 1,
+      total: module.monthlyPrice,
+    }));
+  });
+}
+
+function sortByHighestModulePrice(modules: OfferModule[]) {
+  return [...modules].sort(
+    (left, right) => right.monthlyPrice - left.monthlyPrice || left.name.localeCompare(right.name, "nl"),
+  );
+}
+
+function groupModuleUnits(modules: OfferModule[]) {
+  const grouped = new Map<string, OfferModule>();
+
+  modules.forEach((module) => {
+    const key = `${module.key}:${module.monthlyPrice}`;
+    const current = grouped.get(key);
+
+    if (current) {
+      current.qty += 1;
+      current.total = current.qty * current.monthlyPrice;
+      return;
+    }
+
+    grouped.set(key, { ...module, qty: 1, total: module.monthlyPrice });
+  });
+
+  return Array.from(grouped.values());
+}
+
+function formatModuleList(modules: OfferModule[]) {
+  return modules.map((module) => `${module.qty > 1 ? `${module.qty}x ` : ""}${module.name}`).join(", ");
+}
+
 export function getBillableModulesForPackage(selectedModules: OfferModule[], result: PricingResult) {
-  const paidModules = getSelectedPaidModules(selectedModules);
-  return paidModules.slice(result.includedModules);
+  const includedModules = Math.max(0, Math.floor(result.includedModules));
+  const units = getModuleUnits(selectedModules);
+  const packageRelevantUnits = sortByHighestModulePrice(units.filter(isPackageRelevantModule));
+  const standaloneUnits = sortByHighestModulePrice(units.filter((module) => module.monthlyPrice > 0 && !isPackageRelevantModule(module)));
+
+  return groupModuleUnits([
+    ...packageRelevantUnits.slice(includedModules),
+    ...standaloneUnits,
+  ]);
 }
 
 export function getIncludedModulesForPackage(selectedModules: OfferModule[], result: PricingResult) {
-  const paidModules = getSelectedPaidModules(selectedModules);
-  return paidModules.slice(0, result.includedModules);
+  const includedModules = Math.max(0, Math.floor(result.includedModules));
+  const packageRelevantUnits = sortByHighestModulePrice(getModuleUnits(selectedModules).filter(isPackageRelevantModule));
+
+  return groupModuleUnits(packageRelevantUnits.slice(0, includedModules));
 }
 
 export function getModuleSummaryText(selectedModules: OfferModule[], result: PricingResult) {
@@ -80,11 +136,11 @@ export function getModuleSummaryText(selectedModules: OfferModule[], result: Pri
   const lines: string[] = [];
 
   if (included.length > 0) {
-    lines.push(`Inbegrepen betaalde modules: ${included.map((module) => module.name).join(", ")}.`);
+    lines.push(`Inbegrepen betaalde modules: ${formatModuleList(included)}.`);
   }
 
   if (billable.length > 0) {
-    lines.push(`Extra betaalde modules: ${billable.map((module) => module.name).join(", ")}.`);
+    lines.push(`Extra betaalde modules: ${formatModuleList(billable)}.`);
   }
 
   if (free.length > 0) {

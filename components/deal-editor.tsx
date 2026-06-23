@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, CloudUpload, Download, FileText, Package, SlidersHorizontal, Users } from "lucide-react";
+import { ArrowLeft, Boxes, Calculator, CheckCircle2, CloudUpload, Download, FileText, LifeBuoy, Package, SlidersHorizontal, Users } from "lucide-react";
 import { exportQuotePdf } from "@/lib/pdf";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { calculatePricing, euro, getRecommendation, MODULES, type ModuleConfig } from "@/lib/pricing";
+import type { SmartConnectPriceTier } from "@/lib/price-config";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
@@ -26,11 +27,18 @@ function toQuantities(dealModules: DealRecord["modules"] | undefined, modules: M
 }
 
 function normalizeInputs(deal: DealRecord, modules: ModuleConfig[]): DealCalculatorInputs {
+  const customerPortalOptionKeys = deal.calculator_inputs?.customerPortalOptionKeys;
+
   return {
     extraUsers: Math.max(0, Number(deal.calculator_inputs?.extraUsers ?? Number(deal.total_users || 1) - 1)),
     selectedPackage: String(deal.calculator_inputs?.selectedPackage || deal.package_key || "enterprise"),
     manualImplementationAdjustment: Number(deal.calculator_inputs?.manualImplementationAdjustment ?? deal.manual_implementation_adjustment ?? 0),
     includeVat: Boolean(deal.calculator_inputs?.includeVat ?? deal.include_vat ?? false),
+    includeSupport: deal.calculator_inputs?.includeSupport ?? true,
+    customerPortalOptionKeys: Array.isArray(customerPortalOptionKeys)
+      ? customerPortalOptionKeys.filter((key): key is string => typeof key === "string")
+      : [],
+    smartConnectConnections: Math.max(0, Number(deal.calculator_inputs?.smartConnectConnections ?? 0)),
     quantities: deal.calculator_inputs?.quantities ?? toQuantities(deal.modules, modules),
     quoteLayout: normalizeQuoteLayout(deal.calculator_inputs?.quoteLayout),
     assetsExpansion: deal.calculator_inputs?.assetsExpansion ?? null,
@@ -46,6 +54,41 @@ function getExpansionCadenceLabel(line: AssetExpansionLine) {
   if (line.cadence === "monthly") return "Per maand";
   if (line.cadence === "annual") return "Per jaar";
   return "Eenmalig";
+}
+
+function formatConnectionCount(count: number) {
+  return count === 1 ? "1 connectie" : `${count} connecties`;
+}
+
+function getSmartConnectPricing(
+  connectionCount: number,
+  tiers: SmartConnectPriceTier[],
+  extraConnectionPrice: number,
+) {
+  const safeConnectionCount = Math.max(0, Math.floor(connectionCount));
+
+  if (safeConnectionCount === 0) {
+    return {
+      connectionCount: 0,
+      baseTier: null,
+      extraConnections: 0,
+      extraMonthly: 0,
+      monthlyTotal: 0,
+    };
+  }
+
+  const baseTier = tiers.find((tier) => safeConnectionCount <= tier.connections)
+    ?? tiers[tiers.length - 1];
+  const extraConnections = Math.max(0, safeConnectionCount - tiers[tiers.length - 1].connections);
+  const extraMonthly = extraConnections * extraConnectionPrice;
+
+  return {
+    connectionCount: safeConnectionCount,
+    baseTier,
+    extraConnections,
+    extraMonthly,
+    monthlyTotal: baseTier.monthlyPrice + extraMonthly,
+  };
 }
 
 export default function DealEditor({ dealId }: { dealId: string }) {
@@ -67,6 +110,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [selectedPackage, setSelectedPackage] = useState("enterprise");
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
   const [includeVat, setIncludeVat] = useState(false);
+  const [includeSupport, setIncludeSupport] = useState(true);
+  const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
+  const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(modules.map((module) => [module.key, 0])));
   const [quoteLayout, setQuoteLayout] = useState<QuoteLayoutKey>("standard");
   const [assetsExpansion, setAssetsExpansion] = useState<AssetExpansionSummary | null>(null);
@@ -104,6 +150,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setSelectedPackage(inputs.selectedPackage);
       setManualImplementationAdjustment(inputs.manualImplementationAdjustment);
       setIncludeVat(inputs.includeVat);
+      setIncludeSupport(inputs.includeSupport ?? true);
+      setSelectedCustomerPortalOptionKeys(inputs.customerPortalOptionKeys ?? []);
+      setSmartConnectConnections(inputs.smartConnectConnections ?? 0);
       setQuantities(inputs.quantities);
       setQuoteLayout(normalizeQuoteLayout(inputs.quoteLayout));
       setAssetsExpansion(inputs.assetsExpansion ?? null);
@@ -123,11 +172,48 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const recommendation = getRecommendation(results);
   const isAssetsExpansionDeal = quoteLayout === "assets-expansion" && Boolean(assetsExpansion?.lines?.length);
   const expansionTotals = useMemo(() => getAssetExpansionTotals(assetsExpansion?.lines ?? []), [assetsExpansion]);
+  const selectedCustomerPortalOptions = useMemo(
+    () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
+    [pricingConfig.customerPortalOptions, selectedCustomerPortalOptionKeys],
+  );
+  const smartConnectPricing = useMemo(
+    () => getSmartConnectPricing(
+      smartConnectConnections,
+      pricingConfig.smartConnectTiers,
+      pricingConfig.smartConnectExtraConnectionPrice,
+    ),
+    [pricingConfig.smartConnectExtraConnectionPrice, pricingConfig.smartConnectTiers, smartConnectConnections],
+  );
+  const supportMonthly = includeSupport ? activeResult.supportMonthly : 0;
+  const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
+  const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
+  const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
+  const adjustedResult = useMemo(() => ({
+    ...activeResult,
+    supportMonthly,
+    monthlyBase: monthlyTotal,
+    monthlyAfterDiscount: monthlyTotal,
+    recurringTotalContract: monthlyTotal,
+    contractValue: monthlyTotal + activeResult.implementationAfterAdjustment,
+    annualRecurring: monthlyTotal * 12,
+    monthlyInclVat: monthlyTotal * activeResult.vatMultiplier,
+    contractValueInclVat: (monthlyTotal + activeResult.implementationAfterAdjustment) * activeResult.vatMultiplier,
+  }), [activeResult, monthlyTotal, supportMonthly]);
   const selectedModuleRows = modules.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
     ...module,
     qty: quantities[module.key] ?? 0,
     total: module.monthlyPrice * (quantities[module.key] ?? 0),
   }));
+
+  function toggleCustomerPortalOption(optionKey: string, checked: boolean) {
+    setSelectedCustomerPortalOptionKeys((currentKeys) => {
+      if (checked) {
+        return currentKeys.includes(optionKey) ? currentKeys : [...currentKeys, optionKey];
+      }
+
+      return currentKeys.filter((key) => key !== optionKey);
+    });
+  }
 
   async function handleSave() {
     if (!user) {
@@ -180,11 +266,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       include_vat: includeVat,
       manual_monthly_adjustment: 0,
       manual_implementation_adjustment: manualImplementationAdjustment,
-      monthly_base: activeResult.monthlyBase,
-      monthly_total: activeResult.monthlyAfterDiscount,
+      monthly_base: monthlyTotal,
+      monthly_total: monthlyTotal,
       implementation_total: activeResult.implementationAfterAdjustment,
-      contract_value: activeResult.contractValue,
-      annual_recurring: activeResult.annualRecurring,
+      contract_value: monthlyTotal * 12 + activeResult.implementationAfterAdjustment,
+      annual_recurring: monthlyTotal * 12,
       modules: selectedModuleRows,
       notes,
       calculator_inputs: {
@@ -192,6 +278,15 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         selectedPackage,
         manualImplementationAdjustment,
         includeVat,
+        includeSupport,
+        customerPortalOptionKeys: selectedCustomerPortalOptionKeys,
+        customerPortalOptions: selectedCustomerPortalOptions.map((option) => ({
+          key: option.key,
+          name: option.name,
+          monthlyPrice: option.monthlyPrice,
+        })),
+        smartConnectConnections,
+        smartConnectPricing,
         quantities,
         quoteLayout,
         assetsExpansion,
@@ -223,7 +318,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         includeVat,
         totalUsers,
         selectedModules: selectedModuleRows,
-        result: activeResult,
+        result: adjustedResult,
         quoteLayout,
         assetsExpansion,
         expansionWorkItems: pricingConfig.expansionWorkItems,
@@ -267,7 +362,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           ) : (
             <>
               <StatCard title="Gebruikers" value={String(totalUsers)} icon={Users} sublabel="1 hoofdgebruiker + extra gebruikers" />
-              <StatCard title="Maandprijs" value={euro.format(includeVat ? activeResult.monthlyInclVat : activeResult.monthlyAfterDiscount)} icon={FileText} sublabel={includeVat ? "incl. BTW" : "ex. BTW"} />
+              <StatCard title="Maandprijs" value={euro.format(includeVat ? adjustedResult.monthlyInclVat : monthlyTotal)} icon={FileText} sublabel={includeVat ? "incl. BTW" : "ex. BTW"} />
               <StatCard title="Implementatie" value={euro.format(includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)} icon={Package} sublabel={`${activeResult.visits} bezoeken × ${euro.format(pricingConfig.implementationDayRate)}`} />
             </>
           )}
@@ -322,6 +417,83 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     <NumberInput label="Extra gebruikers" value={extraUsers} onChange={(v) => setExtraUsers(Math.max(0, v))} />
                     <Toggle label="Bedragen incl. BTW tonen" checked={includeVat} onChange={setIncludeVat} />
                     <NumberInput label="Correctie implementatie (€)" value={manualImplementationAdjustment} onChange={setManualImplementationAdjustment} step={0.01} />
+                  </div>
+                </div>
+
+                <div className="section">
+                  <div className="section-title"><LifeBuoy size={16} /> Support</div>
+                  <div className="calculator-module-grid">
+                    <label className={`calculator-module-card ${includeSupport ? "active" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={includeSupport}
+                        onChange={(event) => setIncludeSupport(event.target.checked)}
+                      />
+                      <span className="calculator-module-main">
+                        <strong>Supportcontract Smart Trade {activeResult.name}</strong>
+                        <span>{euro.format(activeResult.supportMonthly)} p/m voor {totalUsers} gebruikers</span>
+                      </span>
+                      <span className="calculator-module-state">{includeSupport ? "Aan" : "Uit"}</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="section">
+                  <div className="section-title"><Boxes size={16} /> Klantportaal</div>
+                  <div className="calculator-module-grid">
+                    {pricingConfig.customerPortalOptions.map((option) => {
+                      const active = selectedCustomerPortalOptionKeys.includes(option.key);
+
+                      return (
+                        <label key={option.key} className={`calculator-module-card ${active ? "active" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={active}
+                            onChange={(event) => toggleCustomerPortalOption(option.key, event.target.checked)}
+                          />
+                          <span className="calculator-module-main">
+                            <strong>{option.name}</strong>
+                            <span>{euro.format(option.monthlyPrice)} p/m</span>
+                          </span>
+                          <span className="calculator-module-state">{active ? "Aan" : "Uit"}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="section">
+                  <div className="section-title"><Calculator size={16} /> Smart Connect</div>
+                  <div className="field-grid-2">
+                    <label className="input-wrap">
+                      <span className="input-label">Connecties</span>
+                      <NumberStepper
+                        ariaLabel="Smart Connect connecties"
+                        min={0}
+                        value={smartConnectConnections}
+                        onChange={(nextValue) => setSmartConnectConnections(Math.max(0, Math.floor(nextValue)))}
+                      />
+                    </label>
+
+                    <div className="input-wrap">
+                      <span className="input-label">Prijs</span>
+                      <div className="summary-list">
+                        <div><span>Aantal</span><strong>{formatConnectionCount(smartConnectPricing.connectionCount)}</strong></div>
+                        {smartConnectPricing.baseTier ? (
+                          <div>
+                            <span>Staffel {formatConnectionCount(smartConnectPricing.baseTier.connections)}</span>
+                            <strong>{euro.format(smartConnectPricing.baseTier.monthlyPrice)} p/m</strong>
+                          </div>
+                        ) : null}
+                        {smartConnectPricing.extraConnections > 0 ? (
+                          <div>
+                            <span>{smartConnectPricing.extraConnections} extra connecties</span>
+                            <strong>{euro.format(smartConnectPricing.extraMonthly)} p/m</strong>
+                          </div>
+                        ) : null}
+                        <div className="total-row"><span>Smart Connect</span><strong>{euro.format(smartConnectPricing.monthlyTotal)} p/m</strong></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -388,9 +560,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 ) : (
                   <>
                     <div className="soft-card"><div className="kpi-title">Licentie p/m</div><div className="big-number">{euro.format(activeResult.licenseMonthly)}</div></div>
-                    <div className="soft-card"><div className="kpi-title">Support p/m</div><div className="big-number">{euro.format(activeResult.supportMonthly)}</div></div>
+                    <div className="soft-card"><div className="kpi-title">Support p/m</div><div className="big-number">{euro.format(supportMonthly)}</div></div>
                     <div className="soft-card"><div className="kpi-title">Modules p/m</div><div className="big-number">{euro.format(activeResult.moduleMonthly)}</div></div>
-                    <div className="soft-card"><div className="kpi-title">Maandprijs</div><div className="big-number">{euro.format(activeResult.monthlyAfterDiscount)}</div></div>
+                    <div className="soft-card"><div className="kpi-title">Uitbreidingen p/m</div><div className="big-number">{euro.format(expansionMonthlyTotal)}</div></div>
                   </>
                 )}
               </div>
@@ -408,9 +580,15 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     ) : (
                       <>
                         <div><span>Licentie p/m</span><strong>{euro.format(activeResult.licenseMonthly)}</strong></div>
-                        <div><span>Support p/m</span><strong>{euro.format(activeResult.supportMonthly)}</strong></div>
+                        <div><span>Support p/m</span><strong>{euro.format(supportMonthly)}</strong></div>
                         <div><span>Modules p/m</span><strong>{euro.format(activeResult.moduleMonthly)}</strong></div>
-                        <div className="total-row"><span>Maandprijs</span><strong>{euro.format(activeResult.monthlyAfterDiscount)}</strong></div>
+                        {customerPortalMonthlyTotal > 0 ? (
+                          <div><span>Klantportaal p/m</span><strong>{euro.format(customerPortalMonthlyTotal)}</strong></div>
+                        ) : null}
+                        {smartConnectPricing.monthlyTotal > 0 ? (
+                          <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
+                        ) : null}
+                        <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
                         <div><span>Implementatie basis</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
                         <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
                       </>
@@ -422,7 +600,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <div className="proposal-brand">{isAssetsExpansionDeal ? "Offerte samenvatting" : quoteTitle || "Prijsvoorstel"}</div>
                   <div className="proposal-title">{isAssetsExpansionDeal ? quoteTitle || "Uitbreiding" : activeResult.name}</div>
                   <div className="proposal-meta">{customerName || "Nog niet ingevuld"} · {contactName || "Geen contactpersoon"}</div>
-                  <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionTotals.monthly : includeVat ? activeResult.monthlyInclVat : activeResult.monthlyAfterDiscount)} p/m</div>
+                  <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionTotals.monthly : includeVat ? adjustedResult.monthlyInclVat : monthlyTotal)} p/m</div>
                   {isAssetsExpansionDeal && expansionTotals.once === 0 ? (
                     <div className="proposal-sub">{assetsExpansion?.lines.length ?? 0} uitbreidingsregel{assetsExpansion?.lines.length === 1 ? "" : "s"}</div>
                   ) : (

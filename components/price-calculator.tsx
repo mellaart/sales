@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
@@ -16,6 +17,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
+import { createDealWithFallback } from "@/lib/deal-storage";
 import {
   calculatePricing,
   euro,
@@ -23,7 +25,7 @@ import {
   type PackageConfig,
 } from "@/lib/pricing";
 import type { SmartConnectPriceTier } from "@/lib/price-config";
-import { getUserDisplayName } from "@/lib/supabase";
+import { getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -69,8 +71,10 @@ function getSmartConnectPricing(
 }
 
 export default function PriceCalculator() {
+  const router = useRouter();
   const { user, profile } = useAuth();
   const { pricingConfig } = usePricingConfig();
+  const supabase = getSupabaseClient();
   const modules = pricingConfig.modules;
   const calculatorPackages = useMemo(
     () => pricingConfig.packages.filter((packageConfig) => packageConfig.key !== "lite"),
@@ -91,6 +95,8 @@ export default function PriceCalculator() {
   const [notes, setNotes] = useState(
     "Bedragen zijn gebaseerd op het automatisch gekozen pakket, support, gekozen modules, uitbreidingen en de huidige implementatie-inschatting.",
   );
+  const [savingDeal, setSavingDeal] = useState(false);
+  const [status, setStatus] = useState("");
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
@@ -151,6 +157,69 @@ export default function PriceCalculator() {
 
       return currentKeys.filter((key) => key !== optionKey);
     });
+  }
+
+  async function handleSaveCalculation() {
+    if (!user) {
+      setStatus("Je moet ingelogd zijn om deze berekening op te slaan.");
+      return;
+    }
+
+    setSavingDeal(true);
+    setStatus("Berekening wordt opgeslagen...");
+
+    const implementationTotal = activeResult.implementationAfterAdjustment;
+    const payload = {
+      user_id: user.id,
+      customer_name: customerName.trim() || null,
+      quote_title: quoteTitle.trim() || "Prijsvoorstel Smart Trade",
+      contact_name: contactName.trim() || null,
+      sales_name: salesName.trim() || currentSalesName || null,
+      package_key: activeResult.key,
+      package_name: activeResult.name,
+      total_users: totalUsers,
+      contract_months: 1,
+      discount_pct: 0,
+      include_vat: false,
+      manual_monthly_adjustment: 0,
+      manual_implementation_adjustment: manualImplementationAdjustment,
+      monthly_base: monthlyTotal,
+      monthly_total: monthlyTotal,
+      implementation_total: implementationTotal,
+      contract_value: monthlyTotal * 12 + implementationTotal,
+      annual_recurring: monthlyTotal * 12,
+      modules: selectedModuleRows,
+      notes: notes.trim() || null,
+      calculator_inputs: {
+        extraUsers,
+        selectedPackage: activeResult.key,
+        manualImplementationAdjustment,
+        includeVat: false,
+        includeSupport,
+        customerPortalOptionKeys: selectedCustomerPortalOptionKeys,
+        customerPortalOptions: selectedCustomerPortalOptions.map((option) => ({
+          key: option.key,
+          name: option.name,
+          monthlyPrice: option.monthlyPrice,
+        })),
+        smartConnectConnections,
+        smartConnectPricing,
+        quantities,
+        quoteLayout: "standard" as const,
+        assetsExpansion: null,
+      },
+    };
+
+    const result = await createDealWithFallback(supabase, payload);
+    setSavingDeal(false);
+
+    if (result.error || !result.deal?.id) {
+      setStatus(`Opslaan mislukt: ${result.error ?? "Geen deal aangemaakt."}`);
+      return;
+    }
+
+    setStatus(result.warning ?? "Berekening opgeslagen als deal.");
+    router.push(`/deals/${result.deal.id}`);
   }
 
   return (
@@ -456,8 +525,11 @@ export default function PriceCalculator() {
 
             <div className="button-row">
               <button type="button" className="primary-button"><Download size={16} /> Exporteer PDF</button>
-              <button type="button" className="secondary-button"><CloudUpload size={16} /> Opslaan in Supabase</button>
+              <button type="button" className="secondary-button" onClick={() => void handleSaveCalculation()} disabled={savingDeal}>
+                <CloudUpload size={16} /> {savingDeal ? "Opslaan..." : "Opslaan in Deals"}
+              </button>
             </div>
+            {status ? <div className="save-status">{status}</div> : null}
           </section>
         </div>
       </div>

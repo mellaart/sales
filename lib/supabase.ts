@@ -41,6 +41,9 @@ export type DealCalculatorInputs = {
   manualImplementationAdjustment: number;
   includeVat: boolean;
   quantities: Record<string, number>;
+  includeSupport?: boolean;
+  customerPortalOptionKeys?: string[];
+  smartConnectConnections?: number;
   quoteLayout?: QuoteLayoutKey;
   assetsExpansion?: AssetExpansionSummary | null;
 };

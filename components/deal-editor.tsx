@@ -11,7 +11,7 @@ import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConne
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
-import { NumberInput, StatCard, StatusPill, TextArea, TextInput, Toggle } from "@/components/ui";
+import { NumberInput, StatCard, StatusPill, TextArea, TextInput } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
 
@@ -117,7 +117,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [extraUsers, setExtraUsers] = useState(1);
   const [selectedPackage, setSelectedPackage] = useState("enterprise");
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
-  const [includeVat, setIncludeVat] = useState(false);
+  const includeVat = false;
   const [includeSupport, setIncludeSupport] = useState(true);
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
@@ -159,7 +159,6 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setExtraUsers(inputs.extraUsers);
       setSelectedPackage(inputs.selectedPackage);
       setManualImplementationAdjustment(inputs.manualImplementationAdjustment);
-      setIncludeVat(inputs.includeVat);
       setIncludeSupport(inputs.includeSupport ?? true);
       setIncludeTravelCosts(inputs.includeTravelCosts ?? true);
       setTravelPostcodePrefix(inputs.travelPostcodePrefix ?? "");
@@ -177,8 +176,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
 
   const totalUsers = extraUsers + 1;
   const results = useMemo(
-    () => calculatePricing({ extraUsers, manualImplementationAdjustment, includeVat, quantities }, pricingConfig),
-    [extraUsers, includeVat, manualImplementationAdjustment, pricingConfig, quantities],
+    () => calculatePricing({ extraUsers, manualImplementationAdjustment, includeVat: false, quantities }, pricingConfig),
+    [extraUsers, manualImplementationAdjustment, pricingConfig, quantities],
   );
   const activeResult = results.find((pkg) => pkg.key === selectedPackage) ?? results[0];
   const recommendation = getRecommendation(results);
@@ -428,8 +427,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           ) : (
             <>
               <StatCard title="Gebruikers" value={String(totalUsers)} icon={Users} sublabel="1 hoofdgebruiker + extra gebruikers" />
-              <StatCard title="Maandprijs" value={euro.format(includeVat ? adjustedResult.monthlyInclVat : monthlyTotal)} icon={FileText} sublabel={includeVat ? "incl. BTW" : "ex. BTW"} />
-              <StatCard title="Implementatie" value={euro.format(includeVat ? adjustedResult.implementationInclVat : implementationTotal)} icon={Package} sublabel={`${formatDays(implementationDays)} incl. extra modules`} />
+              <StatCard title="Maandprijs" value={euro.format(monthlyTotal)} icon={FileText} sublabel="ex. BTW" />
+              <StatCard title="Implementatie" value={euro.format(implementationTotal)} icon={Package} sublabel={`${formatDays(implementationDays)} implementatie`} />
             </>
           )}
         </div>
@@ -481,7 +480,6 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <div className="section">
                   <div className="field-grid-2">
                     <NumberInput label="Extra gebruikers" value={extraUsers} onChange={(v) => setExtraUsers(Math.max(0, v))} />
-                    <Toggle label="Bedragen incl. BTW tonen" checked={includeVat} onChange={setIncludeVat} />
                     <NumberInput label="Correctie implementatie (€)" value={manualImplementationAdjustment} onChange={setManualImplementationAdjustment} step={0.01} />
                   </div>
                 </div>
@@ -639,20 +637,25 @@ export default function DealEditor({ dealId }: { dealId: string }) {
 
                 <div className="section">
                   <div className="section-title"><SlidersHorizontal size={16} /> Modules</div>
-                  <div className="module-grid">
-                    {modules.map((module) => (
-                      <div key={module.key} className="module-card">
-                        <div className="package-name">{module.name}</div>
-                        <div className="muted small-gap">{euro.format(module.monthlyPrice)} per stuk / maand</div>
-                        <NumberStepper
-                          ariaLabel={`Aantal ${module.name}`}
-                          className="small-gap"
-                          min={0}
-                          value={quantities[module.key] ?? 0}
-                          onChange={(nextValue) => setQuantities((prev) => ({ ...prev, [module.key]: Math.max(0, Math.floor(nextValue)) }))}
-                        />
-                      </div>
-                    ))}
+                  <div className="calculator-module-grid">
+                    {modules.map((module) => {
+                      const active = (quantities[module.key] ?? 0) > 0;
+
+                      return (
+                        <label key={module.key} className={`calculator-module-card ${active ? "active" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={active}
+                            onChange={(event) => setQuantities((prev) => ({ ...prev, [module.key]: event.target.checked ? 1 : 0 }))}
+                          />
+                          <span className="calculator-module-main">
+                            <strong>{module.name}</strong>
+                            <span>{euro.format(module.monthlyPrice)} p/m</span>
+                          </span>
+                          <span className="calculator-module-state">{active ? "Aan" : "Uit"}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               </>
@@ -709,10 +712,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                           <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
                         ) : null}
                         <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
-                        <div><span>Implementatie pakket</span><strong>{euro.format(activeResult.packageImplementationBase)}</strong></div>
-                        {activeResult.moduleImplementationExtra > 0 ? (
-                          <div><span>Implementatie extra modules</span><strong>{euro.format(activeResult.moduleImplementationExtra)}</strong></div>
-                        ) : null}
+                        <div><span>Implementatie</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
                         <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
                         {travelCostTotal > 0 ? (
                           <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div>
@@ -727,11 +727,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <div className="proposal-brand">{isAssetsExpansionDeal ? "Offerte samenvatting" : quoteTitle || "Prijsvoorstel"}</div>
                   <div className="proposal-title">{isAssetsExpansionDeal ? quoteTitle || "Uitbreiding" : activeResult.name}</div>
                   <div className="proposal-meta">{customerName || "Nog niet ingevuld"} · {contactName || "Geen contactpersoon"}</div>
-                  <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionTotals.monthly : includeVat ? adjustedResult.monthlyInclVat : monthlyTotal)} p/m</div>
+                  <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionTotals.monthly : monthlyTotal)} p/m</div>
                   {isAssetsExpansionDeal && expansionTotals.once === 0 ? (
                     <div className="proposal-sub">{assetsExpansion?.lines.length ?? 0} uitbreidingsregel{assetsExpansion?.lines.length === 1 ? "" : "s"}</div>
                   ) : (
-                    <div className="proposal-sub">Eenmalig: {euro.format(isAssetsExpansionDeal ? expansionTotals.once : includeVat ? adjustedResult.implementationInclVat : implementationTotal)}</div>
+                    <div className="proposal-sub">Eenmalig: {euro.format(isAssetsExpansionDeal ? expansionTotals.once : implementationTotal)}</div>
                   )}
                 </div>
               </div>

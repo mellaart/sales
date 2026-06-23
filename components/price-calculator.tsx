@@ -696,10 +696,7 @@ export default function PriceCalculator() {
                     <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
                   ) : null}
                   <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
-                  <div><span>Implementatie pakket</span><strong>{euro.format(activeResult.packageImplementationBase)}</strong></div>
-                  {activeResult.moduleImplementationExtra > 0 ? (
-                    <div><span>Implementatie extra modules</span><strong>{euro.format(activeResult.moduleImplementationExtra)}</strong></div>
-                  ) : null}
+                  <div><span>Implementatie</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
                   <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
                   {travelCostTotal > 0 ? (
                     <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div>

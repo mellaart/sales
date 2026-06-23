@@ -190,15 +190,45 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
   const adjustedResult = useMemo(() => ({
     ...activeResult,
+    supportFirst: includeSupport ? activeResult.supportFirst : 0,
+    supportExtra: includeSupport ? activeResult.supportExtra : 0,
     supportMonthly,
     monthlyBase: monthlyTotal,
     monthlyAfterDiscount: monthlyTotal,
     recurringTotalContract: monthlyTotal,
-    contractValue: monthlyTotal + activeResult.implementationAfterAdjustment,
+    contractValue: monthlyTotal * 12 + activeResult.implementationAfterAdjustment,
     annualRecurring: monthlyTotal * 12,
     monthlyInclVat: monthlyTotal * activeResult.vatMultiplier,
-    contractValueInclVat: (monthlyTotal + activeResult.implementationAfterAdjustment) * activeResult.vatMultiplier,
-  }), [activeResult, monthlyTotal, supportMonthly]);
+    contractValueInclVat: (monthlyTotal * 12 + activeResult.implementationAfterAdjustment) * activeResult.vatMultiplier,
+  }), [activeResult, includeSupport, monthlyTotal, supportMonthly]);
+  const extraMonthlyRows = useMemo(() => {
+    const rows = selectedCustomerPortalOptions.map((option) => ({
+      amount: "1x",
+      description: `Smart Trade - ${option.name}`,
+      price: option.monthlyPrice,
+      total: option.monthlyPrice,
+    }));
+
+    if (smartConnectPricing.baseTier) {
+      rows.push({
+        amount: "1x",
+        description: `Smart Connect - ${formatConnectionCount(smartConnectPricing.baseTier.connections)}`,
+        price: smartConnectPricing.baseTier.monthlyPrice,
+        total: smartConnectPricing.baseTier.monthlyPrice,
+      });
+    }
+
+    if (smartConnectPricing.extraConnections > 0) {
+      rows.push({
+        amount: `${smartConnectPricing.extraConnections}x`,
+        description: "Smart Connect extra connectie",
+        price: pricingConfig.smartConnectExtraConnectionPrice,
+        total: smartConnectPricing.extraMonthly,
+      });
+    }
+
+    return rows;
+  }, [pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
   const selectedModuleRows = modules.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
     ...module,
     qty: quantities[module.key] ?? 0,
@@ -318,6 +348,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         includeVat,
         totalUsers,
         selectedModules: selectedModuleRows,
+        extraMonthlyRows,
         result: adjustedResult,
         quoteLayout,
         assetsExpansion,
@@ -363,7 +394,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             <>
               <StatCard title="Gebruikers" value={String(totalUsers)} icon={Users} sublabel="1 hoofdgebruiker + extra gebruikers" />
               <StatCard title="Maandprijs" value={euro.format(includeVat ? adjustedResult.monthlyInclVat : monthlyTotal)} icon={FileText} sublabel={includeVat ? "incl. BTW" : "ex. BTW"} />
-              <StatCard title="Implementatie" value={euro.format(includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)} icon={Package} sublabel={`${activeResult.visits} bezoeken × ${euro.format(pricingConfig.implementationDayRate)}`} />
+              <StatCard title="Implementatie" value={euro.format(includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)} icon={Package} sublabel={`${activeResult.visits} bezoeken + extra modules`} />
             </>
           )}
         </div>
@@ -589,7 +620,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                           <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
                         ) : null}
                         <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
-                        <div><span>Implementatie basis</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
+                        <div><span>Implementatie pakket</span><strong>{euro.format(activeResult.packageImplementationBase)}</strong></div>
+                        {activeResult.moduleImplementationExtra > 0 ? (
+                          <div><span>Implementatie extra modules</span><strong>{euro.format(activeResult.moduleImplementationExtra)}</strong></div>
+                        ) : null}
                         <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
                       </>
                     )}

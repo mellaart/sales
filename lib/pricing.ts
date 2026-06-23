@@ -172,6 +172,8 @@ export type PricingResult = PackageConfig & {
   monthlyDiscountAmount: number;
   monthlyAfterDiscount: number;
   visits: number;
+  packageImplementationBase: number;
+  moduleImplementationExtra: number;
   implementationBase: number;
   implementationAfterAdjustment: number;
   recurringTotalContract: number;
@@ -210,6 +212,13 @@ function safeNumber(value: unknown, fallback = 0) {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function getSelectedModuleUnits(modules: ModuleConfig[], quantities: Record<string, number>) {
+  return modules.flatMap((module) => {
+    const quantity = Math.max(0, Math.floor(safeNumber(quantities[module.key], 0)));
+    return Array.from({ length: quantity }, () => module);
+  });
+}
+
 function resolvePricingCatalog(catalog?: Partial<PricingCatalog>) {
   return {
     implementationDayRate: catalog?.implementationDayRate ?? IMPLEMENTATION_DAY_RATE,
@@ -230,6 +239,7 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
 
   const totalUsers = extraUsers + 1;
   const selectedModules = resolvedCatalog.modules.filter((module) => (quantities[module.key] ?? 0) > 0);
+  const selectedModuleUnits = getSelectedModuleUnits(resolvedCatalog.modules, quantities);
   const paidSelectedUnits = getPaidSelectedModuleCount(quantities, resolvedCatalog.modules);
   const grossModuleMonthly = selectedModules.reduce(
     (sum, module) => sum + module.monthlyPrice * Math.max(0, safeNumber(quantities[module.key], 0)),
@@ -242,10 +252,16 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
     // Alleen modules met een prijs boven 0 en zonder "geen pakketwissel" tellen mee voor de inbegrepen pakketmodules.
     // Gratis en losse modules mogen geen inbegrepen betaalde module "opmaken".
     const freeModulesApplied = Math.min(pkg.includedModules, paidSelectedUnits);
-    const includedModuleDiscount = selectedModules
+    const packageRelevantUnits = selectedModuleUnits
       .filter((module) => module.monthlyPrice > 0 && !module.noPackageSwitch)
       .slice()
-      .sort((a, b) => b.monthlyPrice - a.monthlyPrice)
+      .sort((a, b) => b.monthlyPrice - a.monthlyPrice);
+    const standaloneUnits = selectedModuleUnits.filter((module) => module.monthlyPrice > 0 && module.noPackageSwitch);
+    const extraModuleUnits = [
+      ...packageRelevantUnits.slice(freeModulesApplied),
+      ...standaloneUnits,
+    ];
+    const includedModuleDiscount = packageRelevantUnits
       .slice(0, freeModulesApplied)
       .reduce((sum, module) => sum + module.monthlyPrice, 0);
 
@@ -254,7 +270,9 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
     const monthlyDiscountAmount = monthlyBase * (discountPct / 100);
     const monthlyAfterDiscount = Math.max(0, monthlyBase - monthlyDiscountAmount + manualMonthlyAdjustment);
     const visits = getVisitsForUsers(pkg, totalUsers);
-    const implementationBase = visits * resolvedCatalog.implementationDayRate;
+    const packageImplementationBase = visits * resolvedCatalog.implementationDayRate;
+    const moduleImplementationExtra = extraModuleUnits.reduce((sum, module) => sum + (module.setupCost ?? 0), 0);
+    const implementationBase = packageImplementationBase + moduleImplementationExtra;
     const implementationAfterAdjustment = Math.max(0, implementationBase + manualImplementationAdjustment);
     const recurringTotalContract = monthlyAfterDiscount * contractMonths;
     const contractValue = recurringTotalContract + implementationAfterAdjustment;
@@ -270,6 +288,8 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
       monthlyDiscountAmount,
       monthlyAfterDiscount,
       visits,
+      packageImplementationBase,
+      moduleImplementationExtra,
       implementationBase,
       implementationAfterAdjustment,
       recurringTotalContract,

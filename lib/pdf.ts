@@ -470,6 +470,8 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   const licenseRows = getLicenseRows(input);
   const supportRows = getSupportRows(input);
   const moduleRows = getModuleRows(input);
+  const extraMonthlyRows = input.extraMonthlyRows ?? [];
+  const supportTotal = supportRows.reduce((sum, row) => sum + row.total, 0);
   const logoDataUrl = await getSmartTradeLogoDataUrl();
 
   let y = addQuoteHeader(doc, input, layout.name, logoDataUrl);
@@ -515,7 +517,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
     y = addBullets(doc, moduleSummary, y);
   }
 
-  if (!isCompactLayout) {
+  if (!isCompactLayout && supportTotal > 0) {
     y = addSectionTitle(doc, "Support", y + 1);
     y = addParagraph(doc, text.supportIntro, y);
     y = addParagraph(doc, "Met support bedoelen wij:", y);
@@ -524,10 +526,16 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
 
   y = addSectionTitle(doc, "Smart Trade maandtarief", y + 1);
   y = addPriceTable(doc, "Licentie", licenseRows, y);
-  y = addPriceTable(doc, "Support", supportRows, y);
+  if (supportTotal > 0) {
+    y = addPriceTable(doc, "Support", supportRows, y);
+  }
 
   if (moduleRows.length > 0) {
     y = addPriceTable(doc, "Extra modules", moduleRows, y);
+  }
+
+  if (extraMonthlyRows.length > 0) {
+    y = addPriceTable(doc, "Uitbreidingen", extraMonthlyRows, y);
   }
 
   y = ensurePage(doc, y, 20);
@@ -537,7 +545,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(17, 58, 86);
-  doc.text(`Totaal licentie Smart Trade ${input.result.name} met supportcontract`, 20, y + 9);
+  doc.text(`Totaal licentie Smart Trade ${input.result.name} ${supportTotal > 0 ? "met" : "zonder"} supportcontract`, 20, y + 9);
   doc.text(euro.format(input.result.monthlyAfterDiscount), 160, y + 9);
   y += 22;
 

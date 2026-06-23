@@ -18,11 +18,13 @@ import {
   WalletCards,
 } from "lucide-react";
 import { createDealWithFallback } from "@/lib/deal-storage";
+import { exportQuotePdf } from "@/lib/pdf";
 import {
   calculatePricing,
   euro,
   getPaidSelectedModuleCount,
   type PackageConfig,
+  type PricingResult,
 } from "@/lib/pricing";
 import type { SmartConnectPriceTier } from "@/lib/price-config";
 import { getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
@@ -70,6 +72,38 @@ function getSmartConnectPricing(
   };
 }
 
+function withDealSaveTimeout<T>(promise: Promise<T>) {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      setTimeout(() => {
+        resolve({ error: "Opslaan duurt te lang. Controleer je verbinding en probeer opnieuw." } as T);
+      }, 15000);
+    }),
+  ]);
+}
+
+function getCalculatorPdfResult(
+  result: PricingResult,
+  supportMonthly: number,
+  monthlyTotal: number,
+  includeSupport: boolean,
+) {
+  return {
+    ...result,
+    supportFirst: includeSupport ? result.supportFirst : 0,
+    supportExtra: includeSupport ? result.supportExtra : 0,
+    supportMonthly,
+    monthlyBase: monthlyTotal,
+    monthlyAfterDiscount: monthlyTotal,
+    recurringTotalContract: monthlyTotal,
+    contractValue: monthlyTotal * 12 + result.implementationAfterAdjustment,
+    annualRecurring: monthlyTotal * 12,
+    monthlyInclVat: monthlyTotal * result.vatMultiplier,
+    contractValueInclVat: (monthlyTotal * 12 + result.implementationAfterAdjustment) * result.vatMultiplier,
+  };
+}
+
 export default function PriceCalculator() {
   const router = useRouter();
   const { user, profile } = useAuth();
@@ -96,9 +130,14 @@ export default function PriceCalculator() {
     "Bedragen zijn gebaseerd op het automatisch gekozen pakket, support, gekozen modules, uitbreidingen en de huidige implementatie-inschatting.",
   );
   const [savingDeal, setSavingDeal] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [status, setStatus] = useState("");
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
+  const currentSalesEmail = useMemo(() => user?.email ?? profile?.email ?? "", [profile, user]);
+  const currentSalesTitle = profile?.job_title ?? "";
+  const currentSalesWorkdays = profile?.workdays ?? "";
+  const currentSalesPhone = profile?.mobile_phone ?? "";
 
   useEffect(() => {
     if (currentSalesName && !salesName) {
@@ -141,6 +180,38 @@ export default function PriceCalculator() {
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
   const selectedExpansionCount = selectedCustomerPortalOptions.length + (smartConnectPricing.connectionCount > 0 ? 1 : 0);
+  const extraMonthlyRows = useMemo(() => {
+    const rows = selectedCustomerPortalOptions.map((option) => ({
+      amount: "1x",
+      description: `Smart Trade - ${option.name}`,
+      price: option.monthlyPrice,
+      total: option.monthlyPrice,
+    }));
+
+    if (smartConnectPricing.baseTier) {
+      rows.push({
+        amount: "1x",
+        description: `Smart Connect - ${formatConnectionCount(smartConnectPricing.baseTier.connections)}`,
+        price: smartConnectPricing.baseTier.monthlyPrice,
+        total: smartConnectPricing.baseTier.monthlyPrice,
+      });
+    }
+
+    if (smartConnectPricing.extraConnections > 0) {
+      rows.push({
+        amount: `${smartConnectPricing.extraConnections}x`,
+        description: "Smart Connect extra connectie",
+        price: pricingConfig.smartConnectExtraConnectionPrice,
+        total: smartConnectPricing.extraMonthly,
+      });
+    }
+
+    return rows;
+  }, [pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
+  const pdfResult = useMemo(
+    () => getCalculatorPdfResult(activeResult, supportMonthly, monthlyTotal, includeSupport),
+    [activeResult, includeSupport, monthlyTotal, supportMonthly],
+  );
 
   function setModuleChecked(moduleKey: string, checked: boolean) {
     setQuantities((currentQuantities) => ({
@@ -168,58 +239,95 @@ export default function PriceCalculator() {
     setSavingDeal(true);
     setStatus("Berekening wordt opgeslagen...");
 
-    const implementationTotal = activeResult.implementationAfterAdjustment;
-    const payload = {
-      user_id: user.id,
-      customer_name: customerName.trim() || null,
-      quote_title: quoteTitle.trim() || "Prijsvoorstel Smart Trade",
-      contact_name: contactName.trim() || null,
-      sales_name: salesName.trim() || currentSalesName || null,
-      package_key: activeResult.key,
-      package_name: activeResult.name,
-      total_users: totalUsers,
-      contract_months: 1,
-      discount_pct: 0,
-      include_vat: false,
-      manual_monthly_adjustment: 0,
-      manual_implementation_adjustment: manualImplementationAdjustment,
-      monthly_base: monthlyTotal,
-      monthly_total: monthlyTotal,
-      implementation_total: implementationTotal,
-      contract_value: monthlyTotal * 12 + implementationTotal,
-      annual_recurring: monthlyTotal * 12,
-      modules: selectedModuleRows,
-      notes: notes.trim() || null,
-      calculator_inputs: {
-        extraUsers,
-        selectedPackage: activeResult.key,
-        manualImplementationAdjustment,
-        includeVat: false,
-        includeSupport,
-        customerPortalOptionKeys: selectedCustomerPortalOptionKeys,
-        customerPortalOptions: selectedCustomerPortalOptions.map((option) => ({
-          key: option.key,
-          name: option.name,
-          monthlyPrice: option.monthlyPrice,
-        })),
-        smartConnectConnections,
-        smartConnectPricing,
-        quantities,
-        quoteLayout: "standard" as const,
-        assetsExpansion: null,
-      },
-    };
+    try {
+      const implementationTotal = activeResult.implementationAfterAdjustment;
+      const payload = {
+        user_id: user.id,
+        customer_name: customerName.trim() || null,
+        quote_title: quoteTitle.trim() || "Prijsvoorstel Smart Trade",
+        contact_name: contactName.trim() || null,
+        sales_name: salesName.trim() || currentSalesName || null,
+        package_key: activeResult.key,
+        package_name: activeResult.name,
+        total_users: totalUsers,
+        contract_months: 1,
+        discount_pct: 0,
+        include_vat: false,
+        manual_monthly_adjustment: 0,
+        manual_implementation_adjustment: manualImplementationAdjustment,
+        monthly_base: monthlyTotal,
+        monthly_total: monthlyTotal,
+        implementation_total: implementationTotal,
+        contract_value: monthlyTotal * 12 + implementationTotal,
+        annual_recurring: monthlyTotal * 12,
+        modules: selectedModuleRows,
+        notes: notes.trim() || null,
+        calculator_inputs: {
+          extraUsers,
+          selectedPackage: activeResult.key,
+          manualImplementationAdjustment,
+          includeVat: false,
+          includeSupport,
+          customerPortalOptionKeys: selectedCustomerPortalOptionKeys,
+          customerPortalOptions: selectedCustomerPortalOptions.map((option) => ({
+            key: option.key,
+            name: option.name,
+            monthlyPrice: option.monthlyPrice,
+          })),
+          smartConnectConnections,
+          smartConnectPricing,
+          quantities,
+          quoteLayout: "standard" as const,
+          assetsExpansion: null,
+        },
+      };
 
-    const result = await createDealWithFallback(supabase, payload);
-    setSavingDeal(false);
+      const result = await withDealSaveTimeout(createDealWithFallback(supabase, payload));
 
-    if (result.error || !result.deal?.id) {
-      setStatus(`Opslaan mislukt: ${result.error ?? "Geen deal aangemaakt."}`);
-      return;
+      if (result.error || !result.deal?.id) {
+        setStatus(`Opslaan mislukt: ${result.error ?? "Geen deal aangemaakt."}`);
+        return;
+      }
+
+      setStatus(result.warning ?? "Berekening opgeslagen als deal.");
+      router.push(`/deals/${result.deal.id}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? `Opslaan mislukt: ${error.message}` : "Opslaan mislukt.");
+    } finally {
+      setSavingDeal(false);
     }
+  }
 
-    setStatus(result.warning ?? "Berekening opgeslagen als deal.");
-    router.push(`/deals/${result.deal.id}`);
+  async function handlePdfExport() {
+    setExportingPdf(true);
+    setStatus("PDF wordt gemaakt...");
+
+    try {
+      await exportQuotePdf({
+        quoteTitle,
+        customerName,
+        contactName,
+        salesName: currentSalesName || salesName,
+        salesEmail: currentSalesEmail,
+        salesPhone: currentSalesPhone,
+        salesTitle: currentSalesTitle,
+        salesWorkdays: currentSalesWorkdays,
+        notes,
+        includeVat: false,
+        totalUsers,
+        selectedModules: selectedModuleRows,
+        extraMonthlyRows,
+        result: pdfResult,
+        quoteLayout: "standard",
+        assetsExpansion: null,
+        expansionWorkItems: pricingConfig.expansionWorkItems,
+      });
+      setStatus("PDF is gemaakt.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "PDF maken mislukt.");
+    } finally {
+      setExportingPdf(false);
+    }
   }
 
   return (
@@ -502,7 +610,10 @@ export default function PriceCalculator() {
                     <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
                   ) : null}
                   <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
-                  <div><span>Implementatie basis</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
+                  <div><span>Implementatie pakket</span><strong>{euro.format(activeResult.packageImplementationBase)}</strong></div>
+                  {activeResult.moduleImplementationExtra > 0 ? (
+                    <div><span>Implementatie extra modules</span><strong>{euro.format(activeResult.moduleImplementationExtra)}</strong></div>
+                  ) : null}
                   <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
                 </div>
               </div>
@@ -524,7 +635,9 @@ export default function PriceCalculator() {
             </div>
 
             <div className="button-row">
-              <button type="button" className="primary-button"><Download size={16} /> Exporteer PDF</button>
+              <button type="button" className="primary-button" onClick={() => void handlePdfExport()} disabled={exportingPdf}>
+                <Download size={16} /> {exportingPdf ? "PDF maken..." : "Exporteer PDF"}
+              </button>
               <button type="button" className="secondary-button" onClick={() => void handleSaveCalculation()} disabled={savingDeal}>
                 <CloudUpload size={16} /> {savingDeal ? "Opslaan..." : "Opslaan in Deals"}
               </button>

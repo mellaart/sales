@@ -13,6 +13,13 @@ export type OfferModule = {
   workItems?: string[];
 };
 
+export type OfferMonthlyRow = {
+  amount: string;
+  description: string;
+  price: number;
+  total: number;
+};
+
 export type OfferTemplateInput = {
   quoteTitle: string;
   customerName: string;
@@ -26,6 +33,7 @@ export type OfferTemplateInput = {
   includeVat: boolean;
   totalUsers: number;
   selectedModules: OfferModule[];
+  extraMonthlyRows?: OfferMonthlyRow[];
   result: PricingResult;
   quoteLayout?: QuoteLayoutKey;
   assetsExpansion?: AssetExpansionSummary | null;

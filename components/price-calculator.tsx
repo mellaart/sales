@@ -188,6 +188,7 @@ export default function PriceCalculator() {
     [pricingConfig.smartConnectExtraConnectionPrice, pricingConfig.smartConnectTiers, smartConnectConnections],
   );
   const supportMonthly = includeSupport ? activeResult.supportMonthly : 0;
+  const licenseWithModulesMonthly = activeResult.licenseMonthly + activeResult.moduleMonthly;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
@@ -491,8 +492,8 @@ export default function PriceCalculator() {
 
             <div className="section">
               <div className="section-title"><MapPin size={16} /> Reiskosten</div>
-              <div className="calculator-module-grid">
-                <label className={`calculator-module-card ${includeTravelCosts ? "active" : ""}`}>
+              <div className="calculator-module-grid travel-toggle-grid">
+                <label className={`calculator-module-card travel-toggle-card ${includeTravelCosts ? "active" : ""}`}>
                   <input
                     type="checkbox"
                     checked={includeTravelCosts}
@@ -506,8 +507,8 @@ export default function PriceCalculator() {
                 </label>
               </div>
 
-              <div className="field-grid-2">
-                <label className="input-wrap">
+              <div className="travel-cost-layout">
+                <label className="input-wrap travel-postcode-field">
                   <span className="input-label">Postcode eerste 2 cijfers</span>
                   <input
                     className="input"
@@ -519,7 +520,7 @@ export default function PriceCalculator() {
                   />
                 </label>
 
-                <div className="input-wrap">
+                <div className="input-wrap travel-price-summary">
                   <span className="input-label">Prijs</span>
                   <div className="summary-list">
                     <div>
@@ -676,9 +677,8 @@ export default function PriceCalculator() {
             </div>
 
             <div className="stats-grid">
-              <div className="soft-card"><div className="kpi-title">Licentie p/m</div><div className="big-number">{euro.format(activeResult.licenseMonthly)}</div></div>
+              <div className="soft-card"><div className="kpi-title">Licentie p/m</div><div className="big-number">{euro.format(licenseWithModulesMonthly)}</div></div>
               <div className="soft-card"><div className="kpi-title">Support p/m</div><div className="big-number">{euro.format(supportMonthly)}</div></div>
-              <div className="soft-card"><div className="kpi-title">Modules p/m</div><div className="big-number">{euro.format(activeResult.moduleMonthly)}</div></div>
               <div className="soft-card"><div className="kpi-title">Uitbreidingen p/m</div><div className="big-number">{euro.format(expansionMonthlyTotal)}</div></div>
             </div>
 
@@ -686,9 +686,8 @@ export default function PriceCalculator() {
               <div className="soft-card">
                 <div className="section-title"><FileText size={16} /> Prijsopbouw</div>
                 <div className="summary-list">
-                  <div><span>Licentie p/m</span><strong>{euro.format(activeResult.licenseMonthly)}</strong></div>
+                  <div><span>Licentie p/m</span><strong>{euro.format(licenseWithModulesMonthly)}</strong></div>
                   <div><span>Support p/m</span><strong>{euro.format(supportMonthly)}</strong></div>
-                  <div><span>Modules p/m</span><strong>{euro.format(activeResult.moduleMonthly)}</strong></div>
                   {customerPortalMonthlyTotal > 0 ? (
                     <div><span>Klantportaal p/m</span><strong>{euro.format(customerPortalMonthlyTotal)}</strong></div>
                   ) : null}

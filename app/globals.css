@@ -1013,8 +1013,14 @@ td {
   .kpi-grid,
   .quote-layout-grid,
   .quote-price-strip,
-  .quote-facts {
+  .quote-facts,
+  .travel-cost-layout {
     grid-template-columns: 1fr;
+  }
+
+  .travel-postcode-field .input {
+    max-width: 100%;
+    text-align: left;
   }
 
   .expansion-line-row {
@@ -1486,6 +1492,47 @@ td {
 .calculator-module-card.active .calculator-module-state {
   background: rgba(16,185,129,0.14);
   color: #86efac;
+}
+
+.travel-toggle-grid {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.travel-toggle-card {
+  min-height: 54px;
+  padding: 12px 14px;
+}
+
+.travel-cost-layout {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.travel-postcode-field .input {
+  max-width: 150px;
+  min-height: 52px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.travel-price-summary {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .travel-cost-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-postcode-field .input {
+    max-width: 100%;
+    text-align: left;
+  }
 }
 
 .prices-page {

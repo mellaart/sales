@@ -35,6 +35,13 @@ export type OfferTemplateInput = {
   selectedModules: OfferModule[];
   extraMonthlyRows?: OfferMonthlyRow[];
   result: PricingResult;
+  includeTravelCosts?: boolean;
+  travelPostcodePrefix?: string;
+  travelRegion?: number | null;
+  travelDescription?: string;
+  travelCostPerDay?: number;
+  travelCostTotal?: number;
+  implementationDays?: number;
   quoteLayout?: QuoteLayoutKey;
   assetsExpansion?: AssetExpansionSummary | null;
   expansionWorkItems?: ExpansionWorkItemConfig[];
@@ -145,9 +152,13 @@ export function getModuleRows(input: OfferTemplateInput) {
 }
 
 export function getImplementationText(input: OfferTemplateInput) {
+  const travelText = input.includeTravelCosts && input.travelCostTotal && input.travelCostTotal > 0
+    ? " inclusief reiskosten"
+    : "";
+
   return `Implementatie Smart Trade ${input.result.name} – ${input.totalUsers} gebruikers – implementatieplan: ${euro.format(
     input.result.implementationAfterAdjustment,
-  )} exclusief reiskosten`;
+  )}${travelText} exclusief btw`;
 }
 
 export function getOfferTextBlocks(input: OfferTemplateInput) {

@@ -44,6 +44,11 @@ export type DealCalculatorInputs = {
   includeSupport?: boolean;
   customerPortalOptionKeys?: string[];
   smartConnectConnections?: number;
+  includeTravelCosts?: boolean;
+  travelPostcodePrefix?: string;
+  travelCostPerDay?: number;
+  travelCostTotal?: number;
+  travelRegion?: number | null;
   quoteLayout?: QuoteLayoutKey;
   assetsExpansion?: AssetExpansionSummary | null;
 };

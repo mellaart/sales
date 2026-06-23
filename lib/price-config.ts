@@ -60,6 +60,38 @@ export type EditablePricingConfig = PricingCatalog & {
   updatedAt?: string | null;
 };
 
+export type TravelCostQuote = {
+  postcodePrefix: string;
+  postcodeRow: PostcodeRegion | null;
+  travelRegion: TravelCostRegion | null;
+  pricePerDay: number;
+};
+
+export function normalizePostcodePrefix(value: string) {
+  return value.replace(/\D/g, "").slice(0, 2);
+}
+
+export function getTravelCostQuoteForPostcode(
+  config: Pick<EditablePricingConfig, "postcodeRegions" | "travelCostRegions">,
+  value: string,
+): TravelCostQuote | null {
+  const postcodePrefix = normalizePostcodePrefix(value);
+  if (postcodePrefix.length !== 2) return null;
+
+  const postcode = Number(postcodePrefix);
+  const postcodeRow = config.postcodeRegions.find((row) => row.postcode === postcode) ?? null;
+  const travelRegion = postcodeRow
+    ? config.travelCostRegions.find((row) => row.region === postcodeRow.region) ?? null
+    : null;
+
+  return {
+    postcodePrefix,
+    postcodeRow,
+    travelRegion,
+    pricePerDay: travelRegion?.price ?? 0,
+  };
+}
+
 const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependencyNote" | "noPackageSwitch">> = {
   mailchimp: { setupCost: 360, noPackageSwitch: true },
   rapportage: { setupCost: 360 },

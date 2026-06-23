@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Boxes, Calculator, CheckCircle2, CloudUpload, Download, FileText, LifeBuoy, Package, SlidersHorizontal, Users } from "lucide-react";
+import { ArrowLeft, Boxes, Calculator, CheckCircle2, CloudUpload, Download, FileText, LifeBuoy, MapPin, Package, SlidersHorizontal, Users } from "lucide-react";
 import { exportQuotePdf } from "@/lib/pdf";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { calculatePricing, euro, getRecommendation, MODULES, type ModuleConfig } from "@/lib/pricing";
-import type { SmartConnectPriceTier } from "@/lib/price-config";
+import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
@@ -35,6 +35,8 @@ function normalizeInputs(deal: DealRecord, modules: ModuleConfig[]): DealCalcula
     manualImplementationAdjustment: Number(deal.calculator_inputs?.manualImplementationAdjustment ?? deal.manual_implementation_adjustment ?? 0),
     includeVat: Boolean(deal.calculator_inputs?.includeVat ?? deal.include_vat ?? false),
     includeSupport: deal.calculator_inputs?.includeSupport ?? true,
+    includeTravelCosts: deal.calculator_inputs?.includeTravelCosts ?? true,
+    travelPostcodePrefix: normalizePostcodePrefix(deal.calculator_inputs?.travelPostcodePrefix ?? ""),
     customerPortalOptionKeys: Array.isArray(customerPortalOptionKeys)
       ? customerPortalOptionKeys.filter((key): key is string => typeof key === "string")
       : [],
@@ -58,6 +60,12 @@ function getExpansionCadenceLabel(line: AssetExpansionLine) {
 
 function formatConnectionCount(count: number) {
   return count === 1 ? "1 connectie" : `${count} connecties`;
+}
+
+function formatDays(days: number) {
+  const roundedDays = Math.round(days * 100) / 100;
+  const label = roundedDays === 1 ? "dag" : "dagen";
+  return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
 }
 
 function getSmartConnectPricing(
@@ -111,6 +119,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
   const [includeVat, setIncludeVat] = useState(false);
   const [includeSupport, setIncludeSupport] = useState(true);
+  const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
+  const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(modules.map((module) => [module.key, 0])));
@@ -151,6 +161,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setManualImplementationAdjustment(inputs.manualImplementationAdjustment);
       setIncludeVat(inputs.includeVat);
       setIncludeSupport(inputs.includeSupport ?? true);
+      setIncludeTravelCosts(inputs.includeTravelCosts ?? true);
+      setTravelPostcodePrefix(inputs.travelPostcodePrefix ?? "");
       setSelectedCustomerPortalOptionKeys(inputs.customerPortalOptionKeys ?? []);
       setSmartConnectConnections(inputs.smartConnectConnections ?? 0);
       setQuantities(inputs.quantities);
@@ -188,6 +200,15 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
+  const implementationDays = Math.max(0, activeResult.implementationAfterAdjustment / pricingConfig.implementationDayRate);
+  const travelCostQuote = useMemo(
+    () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
+    [pricingConfig, travelPostcodePrefix],
+  );
+  const travelCostTotal = includeTravelCosts && travelCostQuote
+    ? implementationDays * travelCostQuote.pricePerDay
+    : 0;
+  const implementationTotal = activeResult.implementationAfterAdjustment + travelCostTotal;
   const adjustedResult = useMemo(() => ({
     ...activeResult,
     supportFirst: includeSupport ? activeResult.supportFirst : 0,
@@ -196,11 +217,13 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     monthlyBase: monthlyTotal,
     monthlyAfterDiscount: monthlyTotal,
     recurringTotalContract: monthlyTotal,
-    contractValue: monthlyTotal * 12 + activeResult.implementationAfterAdjustment,
+    implementationAfterAdjustment: implementationTotal,
+    contractValue: monthlyTotal * 12 + implementationTotal,
     annualRecurring: monthlyTotal * 12,
     monthlyInclVat: monthlyTotal * activeResult.vatMultiplier,
-    contractValueInclVat: (monthlyTotal * 12 + activeResult.implementationAfterAdjustment) * activeResult.vatMultiplier,
-  }), [activeResult, includeSupport, monthlyTotal, supportMonthly]);
+    implementationInclVat: implementationTotal * activeResult.vatMultiplier,
+    contractValueInclVat: (monthlyTotal * 12 + implementationTotal) * activeResult.vatMultiplier,
+  }), [activeResult, implementationTotal, includeSupport, monthlyTotal, supportMonthly]);
   const extraMonthlyRows = useMemo(() => {
     const rows = selectedCustomerPortalOptions.map((option) => ({
       amount: "1x",
@@ -298,8 +321,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       manual_implementation_adjustment: manualImplementationAdjustment,
       monthly_base: monthlyTotal,
       monthly_total: monthlyTotal,
-      implementation_total: activeResult.implementationAfterAdjustment,
-      contract_value: monthlyTotal * 12 + activeResult.implementationAfterAdjustment,
+      implementation_total: implementationTotal,
+      contract_value: monthlyTotal * 12 + implementationTotal,
       annual_recurring: monthlyTotal * 12,
       modules: selectedModuleRows,
       notes,
@@ -309,6 +332,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         manualImplementationAdjustment,
         includeVat,
         includeSupport,
+        includeTravelCosts,
+        travelPostcodePrefix,
+        travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
+        travelCostTotal,
+        travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
         customerPortalOptionKeys: selectedCustomerPortalOptionKeys,
         customerPortalOptions: selectedCustomerPortalOptions.map((option) => ({
           key: option.key,
@@ -350,6 +378,13 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         selectedModules: selectedModuleRows,
         extraMonthlyRows,
         result: adjustedResult,
+        includeTravelCosts,
+        travelPostcodePrefix,
+        travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
+        travelDescription: travelCostQuote?.postcodeRow?.description ?? "",
+        travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
+        travelCostTotal,
+        implementationDays,
         quoteLayout,
         assetsExpansion,
         expansionWorkItems: pricingConfig.expansionWorkItems,
@@ -394,7 +429,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             <>
               <StatCard title="Gebruikers" value={String(totalUsers)} icon={Users} sublabel="1 hoofdgebruiker + extra gebruikers" />
               <StatCard title="Maandprijs" value={euro.format(includeVat ? adjustedResult.monthlyInclVat : monthlyTotal)} icon={FileText} sublabel={includeVat ? "incl. BTW" : "ex. BTW"} />
-              <StatCard title="Implementatie" value={euro.format(includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)} icon={Package} sublabel={`${activeResult.visits} bezoeken + extra modules`} />
+              <StatCard title="Implementatie" value={euro.format(includeVat ? adjustedResult.implementationInclVat : implementationTotal)} icon={Package} sublabel={`${formatDays(implementationDays)} incl. extra modules`} />
             </>
           )}
         </div>
@@ -448,6 +483,60 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     <NumberInput label="Extra gebruikers" value={extraUsers} onChange={(v) => setExtraUsers(Math.max(0, v))} />
                     <Toggle label="Bedragen incl. BTW tonen" checked={includeVat} onChange={setIncludeVat} />
                     <NumberInput label="Correctie implementatie (€)" value={manualImplementationAdjustment} onChange={setManualImplementationAdjustment} step={0.01} />
+                  </div>
+                </div>
+
+                <div className="section">
+                  <div className="section-title"><MapPin size={16} /> Reiskosten</div>
+                  <div className="calculator-module-grid">
+                    <label className={`calculator-module-card ${includeTravelCosts ? "active" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={includeTravelCosts}
+                        onChange={(event) => setIncludeTravelCosts(event.target.checked)}
+                      />
+                      <span className="calculator-module-main">
+                        <strong>Prijs implementatie inclusief reiskosten</strong>
+                        <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                      </span>
+                      <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
+                    </label>
+                  </div>
+
+                  <div className="field-grid-2">
+                    <label className="input-wrap">
+                      <span className="input-label">Postcode eerste 2 cijfers</span>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        maxLength={2}
+                        value={travelPostcodePrefix}
+                        onChange={(event) => setTravelPostcodePrefix(normalizePostcodePrefix(event.target.value))}
+                        placeholder="Bijv. 22"
+                      />
+                    </label>
+
+                    <div className="input-wrap">
+                      <span className="input-label">Prijs</span>
+                      <div className="summary-list">
+                        <div>
+                          <span>Regio</span>
+                          <strong>{travelCostQuote?.postcodeRow ? travelCostQuote.postcodeRow.region : "-"}</strong>
+                        </div>
+                        <div>
+                          <span>Omschrijving</span>
+                          <strong>{travelCostQuote?.postcodeRow?.description ?? "Geen postcode gekozen"}</strong>
+                        </div>
+                        <div>
+                          <span>Prijs per dag</span>
+                          <strong>{euro.format(travelCostQuote?.pricePerDay ?? 0)}</strong>
+                        </div>
+                        <div className="total-row">
+                          <span>Reiskosten</span>
+                          <strong>{euro.format(travelCostTotal)}</strong>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -625,6 +714,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                           <div><span>Implementatie extra modules</span><strong>{euro.format(activeResult.moduleImplementationExtra)}</strong></div>
                         ) : null}
                         <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
+                        {travelCostTotal > 0 ? (
+                          <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div>
+                        ) : null}
+                        <div className="total-row"><span>Implementatie totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
                       </>
                     )}
                   </div>
@@ -638,7 +731,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   {isAssetsExpansionDeal && expansionTotals.once === 0 ? (
                     <div className="proposal-sub">{assetsExpansion?.lines.length ?? 0} uitbreidingsregel{assetsExpansion?.lines.length === 1 ? "" : "s"}</div>
                   ) : (
-                    <div className="proposal-sub">Eenmalig: {euro.format(isAssetsExpansionDeal ? expansionTotals.once : includeVat ? activeResult.implementationInclVat : activeResult.implementationAfterAdjustment)}</div>
+                    <div className="proposal-sub">Eenmalig: {euro.format(isAssetsExpansionDeal ? expansionTotals.once : includeVat ? adjustedResult.implementationInclVat : implementationTotal)}</div>
                   )}
                 </div>
               </div>

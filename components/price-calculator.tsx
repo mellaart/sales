@@ -12,6 +12,7 @@ import {
   Download,
   FileText,
   LifeBuoy,
+  MapPin,
   Package,
   SlidersHorizontal,
   Users,
@@ -26,7 +27,7 @@ import {
   type PackageConfig,
   type PricingResult,
 } from "@/lib/pricing";
-import type { SmartConnectPriceTier } from "@/lib/price-config";
+import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
@@ -88,6 +89,7 @@ function getCalculatorPdfResult(
   supportMonthly: number,
   monthlyTotal: number,
   includeSupport: boolean,
+  implementationTotal: number,
 ) {
   return {
     ...result,
@@ -97,11 +99,19 @@ function getCalculatorPdfResult(
     monthlyBase: monthlyTotal,
     monthlyAfterDiscount: monthlyTotal,
     recurringTotalContract: monthlyTotal,
-    contractValue: monthlyTotal * 12 + result.implementationAfterAdjustment,
+    implementationAfterAdjustment: implementationTotal,
+    contractValue: monthlyTotal * 12 + implementationTotal,
     annualRecurring: monthlyTotal * 12,
     monthlyInclVat: monthlyTotal * result.vatMultiplier,
-    contractValueInclVat: (monthlyTotal * 12 + result.implementationAfterAdjustment) * result.vatMultiplier,
+    implementationInclVat: implementationTotal * result.vatMultiplier,
+    contractValueInclVat: (monthlyTotal * 12 + implementationTotal) * result.vatMultiplier,
   };
+}
+
+function formatDays(days: number) {
+  const roundedDays = Math.round(days * 100) / 100;
+  const label = roundedDays === 1 ? "dag" : "dagen";
+  return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
 }
 
 export default function PriceCalculator() {
@@ -120,6 +130,8 @@ export default function PriceCalculator() {
   const [salesName, setSalesName] = useState("");
   const [extraUsers, setExtraUsers] = useState(1);
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
+  const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
+  const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [includeSupport, setIncludeSupport] = useState(true);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
@@ -179,6 +191,15 @@ export default function PriceCalculator() {
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
+  const implementationDays = Math.max(0, activeResult.implementationAfterAdjustment / pricingConfig.implementationDayRate);
+  const travelCostQuote = useMemo(
+    () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
+    [pricingConfig, travelPostcodePrefix],
+  );
+  const travelCostTotal = includeTravelCosts && travelCostQuote
+    ? implementationDays * travelCostQuote.pricePerDay
+    : 0;
+  const implementationTotal = activeResult.implementationAfterAdjustment + travelCostTotal;
   const selectedExpansionCount = selectedCustomerPortalOptions.length + (smartConnectPricing.connectionCount > 0 ? 1 : 0);
   const extraMonthlyRows = useMemo(() => {
     const rows = selectedCustomerPortalOptions.map((option) => ({
@@ -209,8 +230,8 @@ export default function PriceCalculator() {
     return rows;
   }, [pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
   const pdfResult = useMemo(
-    () => getCalculatorPdfResult(activeResult, supportMonthly, monthlyTotal, includeSupport),
-    [activeResult, includeSupport, monthlyTotal, supportMonthly],
+    () => getCalculatorPdfResult(activeResult, supportMonthly, monthlyTotal, includeSupport, implementationTotal),
+    [activeResult, implementationTotal, includeSupport, monthlyTotal, supportMonthly],
   );
 
   function setModuleChecked(moduleKey: string, checked: boolean) {
@@ -240,7 +261,6 @@ export default function PriceCalculator() {
     setStatus("Berekening wordt opgeslagen...");
 
     try {
-      const implementationTotal = activeResult.implementationAfterAdjustment;
       const payload = {
         user_id: user.id,
         customer_name: customerName.trim() || null,
@@ -268,6 +288,11 @@ export default function PriceCalculator() {
           manualImplementationAdjustment,
           includeVat: false,
           includeSupport,
+          includeTravelCosts,
+          travelPostcodePrefix,
+          travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
+          travelCostTotal,
+          travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
           customerPortalOptionKeys: selectedCustomerPortalOptionKeys,
           customerPortalOptions: selectedCustomerPortalOptions.map((option) => ({
             key: option.key,
@@ -318,6 +343,13 @@ export default function PriceCalculator() {
         selectedModules: selectedModuleRows,
         extraMonthlyRows,
         result: pdfResult,
+        includeTravelCosts,
+        travelPostcodePrefix,
+        travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
+        travelDescription: travelCostQuote?.postcodeRow?.description ?? "",
+        travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
+        travelCostTotal,
+        implementationDays,
         quoteLayout: "standard",
         assetsExpansion: null,
         expansionWorkItems: pricingConfig.expansionWorkItems,
@@ -372,7 +404,7 @@ export default function PriceCalculator() {
             <div className="stat-icon"><BarChart3 size={18} /></div>
             <div>
               <span>Implementatie</span>
-              <strong>{euro.format(activeResult.implementationAfterAdjustment)}</strong>
+              <strong>{euro.format(implementationTotal)}</strong>
             </div>
           </article>
         </section>
@@ -454,6 +486,60 @@ export default function PriceCalculator() {
                     onChange={setManualImplementationAdjustment}
                   />
                 </label>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title"><MapPin size={16} /> Reiskosten</div>
+              <div className="calculator-module-grid">
+                <label className={`calculator-module-card ${includeTravelCosts ? "active" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={includeTravelCosts}
+                    onChange={(event) => setIncludeTravelCosts(event.target.checked)}
+                  />
+                  <span className="calculator-module-main">
+                    <strong>Prijs implementatie inclusief reiskosten</strong>
+                    <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                  </span>
+                  <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
+                </label>
+              </div>
+
+              <div className="field-grid-2">
+                <label className="input-wrap">
+                  <span className="input-label">Postcode eerste 2 cijfers</span>
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={travelPostcodePrefix}
+                    onChange={(event) => setTravelPostcodePrefix(normalizePostcodePrefix(event.target.value))}
+                    placeholder="Bijv. 22"
+                  />
+                </label>
+
+                <div className="input-wrap">
+                  <span className="input-label">Prijs</span>
+                  <div className="summary-list">
+                    <div>
+                      <span>Regio</span>
+                      <strong>{travelCostQuote?.postcodeRow ? travelCostQuote.postcodeRow.region : "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Omschrijving</span>
+                      <strong>{travelCostQuote?.postcodeRow?.description ?? "Geen postcode gekozen"}</strong>
+                    </div>
+                    <div>
+                      <span>Prijs per dag</span>
+                      <strong>{euro.format(travelCostQuote?.pricePerDay ?? 0)}</strong>
+                    </div>
+                    <div className="total-row">
+                      <span>Reiskosten</span>
+                      <strong>{euro.format(travelCostTotal)}</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -615,6 +701,10 @@ export default function PriceCalculator() {
                     <div><span>Implementatie extra modules</span><strong>{euro.format(activeResult.moduleImplementationExtra)}</strong></div>
                   ) : null}
                   <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
+                  {travelCostTotal > 0 ? (
+                    <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div>
+                  ) : null}
+                  <div className="total-row"><span>Implementatie totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
                 </div>
               </div>
 
@@ -623,7 +713,7 @@ export default function PriceCalculator() {
                 <div className="proposal-title">{quoteTitle || "Prijsvoorstel"}</div>
                 <div className="proposal-meta">{customerName || "Nog geen klant ingevuld"} · {contactName || "Geen contactpersoon"}</div>
                 <div className="proposal-total">{euro.format(monthlyTotal)} p/m</div>
-                <div className="proposal-sub">Setup: {euro.format(activeResult.implementationAfterAdjustment)} · {totalUsers} gebruikers · {includeSupport ? "met support" : "zonder support"} · {selectedExpansionCount} uitbreidingen</div>
+                <div className="proposal-sub">Setup: {euro.format(implementationTotal)} · {totalUsers} gebruikers · {includeSupport ? "met support" : "zonder support"} · {selectedExpansionCount} uitbreidingen</div>
               </div>
             </div>
 

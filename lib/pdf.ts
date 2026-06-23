@@ -460,6 +460,12 @@ function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhon
   }
 }
 
+function formatDays(days: number) {
+  const roundedDays = Math.round(days * 100) / 100;
+  const label = roundedDays === 1 ? "dag" : "dagen";
+  return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
+}
+
 export async function exportQuotePdf(input: OfferTemplateInput) {
   const doc = new jsPDF();
   const layout = getQuoteLayout(input.quoteLayout);
@@ -566,7 +572,18 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
     y = addBullets(doc, text.implementationOptions, y);
   }
   y = addParagraph(doc, getImplementationText(input), y);
-  y = addParagraph(doc, "Reiskosten worden separaat afgestemd en zijn exclusief btw.", y);
+  if (input.includeTravelCosts && input.travelCostTotal && input.travelCostTotal > 0) {
+    const postcodeText = input.travelPostcodePrefix ? `postcode ${input.travelPostcodePrefix}` : "postcode onbekend";
+    const regionText = input.travelRegion ? `regio ${input.travelRegion}` : "regio onbekend";
+    const descriptionText = input.travelDescription ? ` (${input.travelDescription})` : "";
+    y = addParagraph(
+      doc,
+      `Reiskosten zijn meegenomen: ${formatDays(input.implementationDays ?? 0)} x ${euro.format(input.travelCostPerDay ?? 0)} = ${euro.format(input.travelCostTotal)} op basis van ${postcodeText}, ${regionText}${descriptionText}.`,
+      y,
+    );
+  } else {
+    y = addParagraph(doc, "Reiskosten worden separaat afgestemd en zijn exclusief btw.", y);
+  }
 
   if (!isCompactLayout && !isAssetsExpansionLayout) {
     y = addSectionTitle(doc, "Financieel pakket", y + 2);

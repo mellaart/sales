@@ -12,9 +12,13 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
+alter table public.profiles add column if not exists email text;
+alter table public.profiles add column if not exists full_name text;
 alter table public.profiles add column if not exists job_title text;
 alter table public.profiles add column if not exists workdays text;
 alter table public.profiles add column if not exists mobile_phone text;
+alter table public.profiles add column if not exists role text not null default 'sales';
+alter table public.profiles add column if not exists created_at timestamptz not null default now();
 
 create or replace function public.handle_new_user_profile()
 returns trigger
@@ -31,18 +35,40 @@ begin
     new.raw_user_meta_data->>'job_title',
     new.raw_user_meta_data->>'workdays',
     new.raw_user_meta_data->>'mobile_phone',
-    'sales'
+    case
+      when new.raw_user_meta_data->>'role' in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')
+        then new.raw_user_meta_data->>'role'
+      else 'sales'
+    end
   )
   on conflict (id) do update
     set email = excluded.email,
         full_name = coalesce(public.profiles.full_name, excluded.full_name),
         job_title = coalesce(public.profiles.job_title, excluded.job_title),
         workdays = coalesce(public.profiles.workdays, excluded.workdays),
-        mobile_phone = coalesce(public.profiles.mobile_phone, excluded.mobile_phone);
+        mobile_phone = coalesce(public.profiles.mobile_phone, excluded.mobile_phone),
+        role = coalesce(public.profiles.role, excluded.role);
   return new;
 end;
 $$;
 
+do $$
+declare
+  trigger_record record;
+begin
+  for trigger_record in
+    select trigger_name
+    from information_schema.triggers
+    where event_object_schema = 'auth'
+      and event_object_table = 'users'
+      and action_statement ilike '%public.handle_new_user%'
+  loop
+    execute format('drop trigger if exists %I on auth.users', trigger_record.trigger_name);
+  end loop;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
 drop trigger if exists on_auth_user_created_profile on auth.users;
 create trigger on_auth_user_created_profile
   after insert on auth.users

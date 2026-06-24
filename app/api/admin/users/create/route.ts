@@ -241,7 +241,7 @@ export async function POST(request: Request) {
     const redirectTo = `${new URL(request.url).origin}/reset-password`;
 
     const { data, error } = await verified.service.auth.admin.inviteUserByEmail(email, {
-      data: { role, full_name: fullName, must_set_password: true },
+      data: { role: "sales", full_name: fullName, must_set_password: true },
       redirectTo,
     });
 
@@ -264,7 +264,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Gebruiker aangemaakt, profiel bijwerken mislukt: ${profileError.message}` }, { status: 500 });
     }
 
-    return NextResponse.json({ id: data.user.id, existing: false });
+    const metadataError = await updateUserMetadata(verified.service, data.user.id, { fullName, role });
+
+    return NextResponse.json({
+      id: data.user.id,
+      existing: false,
+      metadataWarning: metadataError?.message ?? null,
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Gebruiker aanmaken mislukt." }, { status: 500 });
   }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getEffectiveUserRole, isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
+import { createLocalServiceClient } from "@/lib/local-service-client";
 import type { UserRole } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,7 @@ function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceRoleKey) return null;
+  if (!url || !serviceRoleKey) return createLocalServiceClient() as unknown as ReturnType<typeof createClient>;
 
   return createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -38,7 +39,7 @@ function getAnonClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !anonKey) return null;
+  if (!url || !anonKey) return createLocalServiceClient() as unknown as ReturnType<typeof createClient>;
 
   return createClient(url, anonKey);
 }
@@ -47,7 +48,7 @@ function getSessionClient(token: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !anonKey) return null;
+  if (!url || !anonKey) return createLocalServiceClient() as unknown as ReturnType<typeof createClient>;
 
   return createClient(url, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -215,11 +216,8 @@ export async function GET(request: Request) {
       return jsonResponse({ error: verified.message }, 401);
     }
 
-    const profileClient = verified.service ?? verified.sessionClient;
-    const rows = await loadProfiles(profileClient);
-    const authMetadataById = verified.service
-      ? await loadAuthMetadata(verified.service, rows)
-      : new Map<string, AuthMetadata>();
+    const rows = await loadProfiles(verified.service);
+    const authMetadataById = await loadAuthMetadata(verified.service, rows);
 
     const users = rows.map((profileRow) => {
       const profile = profileRow as {

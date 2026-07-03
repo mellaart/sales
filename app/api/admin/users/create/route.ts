@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { USER_ROLES } from "@/lib/role-tabs";
+import { createLocalServiceClient } from "@/lib/local-service-client";
 import type { UserRole } from "@/lib/supabase";
 
 const allowedRoles: UserRole[] = USER_ROLES;
@@ -39,7 +40,7 @@ function getServiceClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error("Supabase server keys ontbreken.");
+    return createLocalServiceClient() as unknown as ReturnType<typeof createClient>;
   }
 
   return createClient(url, serviceRoleKey, {
@@ -52,7 +53,7 @@ function getAnonClient() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    throw new Error("Supabase client keys ontbreken.");
+    return createLocalServiceClient() as unknown as ReturnType<typeof createClient>;
   }
 
   return createClient(url, anonKey);

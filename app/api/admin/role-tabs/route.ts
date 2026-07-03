@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { ROLE_TAB_ACCESS, normalizeRoleTabAccess } from "@/lib/role-tabs";
+import { createLocalServiceClient } from "@/lib/local-service-client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +16,9 @@ function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceRoleKey) return null;
+  if (!url || !serviceRoleKey) {
+    return createLocalServiceClient() as unknown as ReturnType<typeof createClient>;
+  }
 
   return createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },

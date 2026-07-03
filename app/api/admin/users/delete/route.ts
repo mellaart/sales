@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
+import { createLocalServiceClient } from "@/lib/local-service-client";
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error("Supabase server keys ontbreken.");
+    return createLocalServiceClient() as unknown as ReturnType<typeof createClient>;
   }
 
   return createClient(url, serviceRoleKey, {

@@ -1,6 +1,7 @@
 import { createClient, type User } from "@supabase/supabase-js";
 import { getEffectiveUserRole } from "@/lib/protected-admin";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
+import { getLocalBrowserClient } from "@/lib/local-browser-client";
 
 export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant" | "worldline";
 
@@ -93,7 +94,8 @@ export function getSupabaseClient() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    return null;
+    if (typeof window === "undefined") return null;
+    return getLocalBrowserClient() as unknown as ReturnType<typeof createClient>;
   }
 
   if (!client) {

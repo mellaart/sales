@@ -263,6 +263,23 @@ export async function updateLocalPassword(token: string | null, password: string
   return {};
 }
 
+export async function updateLocalPasswordForUser(userId: string, password: string, mustSetPassword = false) {
+  await ensureLocalSchema();
+  if (password.length < 6) return { error: "Wachtwoord moet minimaal 6 tekens zijn." };
+
+  const { rowCount } = await queryWithoutSchema(
+    `update public.profiles
+     set password_hash = $2,
+         must_set_password = $3,
+         updated_at = now()
+     where id = $1`,
+    [userId, hashPassword(password), mustSetPassword],
+  );
+
+  if (!rowCount) return { error: "Gebruiker niet gevonden." };
+  return {};
+}
+
 export async function createLocalUser(input: {
   email: string;
   fullName?: string | null;
@@ -285,7 +302,12 @@ export async function createLocalUser(input: {
            job_title = excluded.job_title,
            workdays = excluded.workdays,
            mobile_phone = excluded.mobile_phone,
+           password_hash = coalesce(public.profiles.password_hash, excluded.password_hash),
            role = excluded.role,
+           must_set_password = case
+             when public.profiles.password_hash is null then excluded.must_set_password
+             else public.profiles.must_set_password
+           end,
            updated_at = now()
      returning *`,
     [

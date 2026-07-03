@@ -4,7 +4,7 @@ import {
   getLocalProfile,
   getLocalSession,
   toLocalUser,
-  updateLocalPassword,
+  updateLocalPasswordForUser,
   type LocalUser,
 } from "@/lib/local-auth";
 import { blobToBuffer, ensureBucket, readStoredFile, removeStoredFiles, writeStoredFile } from "@/lib/local-storage";
@@ -164,7 +164,11 @@ export function createLocalServiceClient() {
         },
         async updateUserById(userId: string, payload: { password?: string; user_metadata?: Record<string, unknown> }) {
           if (payload.password) {
-            await updateLocalPassword(null, payload.password);
+            const mustSetPassword = typeof payload.user_metadata?.must_set_password === "boolean"
+              ? payload.user_metadata.must_set_password
+              : false;
+            const passwordResult = await updateLocalPasswordForUser(userId, payload.password, mustSetPassword);
+            if (passwordResult.error) return { data: { user: null }, error: { message: passwordResult.error } };
           }
 
           const metadata = payload.user_metadata ?? {};

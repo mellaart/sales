@@ -220,7 +220,11 @@ export default function AdminDashboard() {
         body: JSON.stringify({ email, fullName, role: newRole }),
       });
 
-      const json = (await response.json().catch(() => ({}))) as { error?: string; existing?: boolean };
+      const json = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        existing?: boolean;
+        temporaryPassword?: string | null;
+      };
 
       if (!response.ok) {
         setCreateStatus(json.error || `Gebruiker aanmaken mislukt (${response.status}).`);
@@ -230,11 +234,19 @@ export default function AdminDashboard() {
       setEmail("");
       setFullName("");
       setNewRole("sales");
-      setCreateStatus(
-        json.existing
-          ? "Gebruiker bestond al. Profiel en rol zijn bijgewerkt."
-          : "Gebruiker uitgenodigd. Er is een activatiemail verstuurd.",
-      );
+      if (json.temporaryPassword) {
+        setCreateStatus(
+          json.existing
+            ? `Gebruiker bestond al. Profiel is bijgewerkt. Tijdelijk wachtwoord: ${json.temporaryPassword}`
+            : `Gebruiker aangemaakt. Tijdelijk wachtwoord: ${json.temporaryPassword}`,
+        );
+      } else {
+        setCreateStatus(
+          json.existing
+            ? "Gebruiker bestond al. Profiel en rol zijn bijgewerkt."
+            : "Gebruiker uitgenodigd. Er is een activatiemail verstuurd.",
+        );
+      }
       await loadProfiles({ keepStatus: true });
       router.refresh();
     } catch {

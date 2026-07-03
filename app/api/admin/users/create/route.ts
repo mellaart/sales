@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { USER_ROLES } from "@/lib/role-tabs";
 import { createLocalServiceClient } from "@/lib/local-service-client";
+import { isSelfHostedMode } from "@/lib/local-db";
 import type { UserRole } from "@/lib/supabase";
 
 const allowedRoles: UserRole[] = USER_ROLES;
@@ -188,6 +190,10 @@ async function updateUserMetadata(
   return error;
 }
 
+function createTemporaryPassword() {
+  return randomBytes(12).toString("base64url");
+}
+
 export async function POST(request: Request) {
   try {
     const verified = await verifyAdmin(request);
@@ -231,10 +237,24 @@ export async function POST(request: Request) {
       }
 
       const metadataError = await updateUserMetadata(verified.service, existingProfile.id, { fullName, role });
+      let temporaryPassword: string | null = null;
+
+      if (isSelfHostedMode()) {
+        temporaryPassword = createTemporaryPassword();
+        const { error: passwordError } = await verified.service.auth.admin.updateUserById(existingProfile.id, {
+          password: temporaryPassword,
+          user_metadata: { full_name: fullName, role, must_set_password: true },
+        });
+
+        if (passwordError) {
+          return NextResponse.json({ error: `Tijdelijk wachtwoord instellen mislukt: ${passwordError.message}` }, { status: 500 });
+        }
+      }
 
       return NextResponse.json({
         id: existingProfile.id,
         existing: true,
+        temporaryPassword,
         metadataWarning: metadataError?.message ?? null,
       });
     }
@@ -266,10 +286,12 @@ export async function POST(request: Request) {
     }
 
     const metadataError = await updateUserMetadata(verified.service, data.user.id, { fullName, role });
+    const localTemporaryPassword = (data as unknown as { temporaryPassword?: unknown }).temporaryPassword;
 
     return NextResponse.json({
       id: data.user.id,
       existing: false,
+      temporaryPassword: typeof localTemporaryPassword === "string" ? localTemporaryPassword : null,
       metadataWarning: metadataError?.message ?? null,
     });
   } catch (error) {

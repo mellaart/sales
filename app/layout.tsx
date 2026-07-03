@@ -8,6 +8,10 @@ import { PricingProvider } from "@/components/pricing-provider";
 export const metadata: Metadata = {
   title: "Smart Trade",
   description: "Smart Trade offerteplatform",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function RootLayout({

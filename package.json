@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "import:supabase": "node scripts/import-supabase-data.mjs",
     "lint": "next lint"
   },
   "dependencies": {

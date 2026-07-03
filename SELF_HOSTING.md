@@ -47,3 +47,19 @@ De database-tabellen worden automatisch aangemaakt bij de eerste server-aanroep.
 ```
 
 Maak van zowel PostgreSQL als deze map een back-up.
+
+## Supabase import
+
+Zet de Supabase gegevens tijdelijk in de shell en start daarna de import:
+
+```sh
+export SUPABASE_URL="https://..."
+export SUPABASE_SERVICE_ROLE_KEY="..."
+npm run import:supabase
+unset SUPABASE_URL
+unset SUPABASE_SERVICE_ROLE_KEY
+```
+
+De import neemt `profiles`, `deals`, `worldline_projects`, `worldline_documents`, prijsinstellingen,
+rolrechten en Worldline-documentbestanden mee. Bestaande lokale gebruikers worden gekoppeld op e-mailadres,
+zodat `erik@smarttrade.nl` admin blijft en oude deals naar de juiste lokale gebruiker verwijzen.

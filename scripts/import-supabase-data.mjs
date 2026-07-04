@@ -125,6 +125,117 @@ async function fetchAll(table) {
   return rows;
 }
 
+async function ensureLocalSchema(client) {
+  await client.query(`
+    create extension if not exists pgcrypto;
+
+    create table if not exists public.profiles (
+      id uuid primary key default gen_random_uuid(),
+      email text unique,
+      password_hash text,
+      full_name text,
+      job_title text,
+      workdays text,
+      mobile_phone text,
+      role text not null default 'sales'
+        check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')),
+      must_set_password boolean not null default false,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists public.app_sessions (
+      token_hash text primary key,
+      user_id uuid not null references public.profiles(id) on delete cascade,
+      expires_at timestamptz not null,
+      created_at timestamptz not null default now(),
+      last_seen_at timestamptz not null default now()
+    );
+
+    create index if not exists app_sessions_user_id_idx on public.app_sessions(user_id);
+    create index if not exists app_sessions_expires_at_idx on public.app_sessions(expires_at);
+
+    create table if not exists public.deals (
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null references public.profiles(id) on delete cascade,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      customer_name text,
+      quote_title text,
+      contact_name text,
+      sales_name text,
+      valid_until text,
+      package_key text,
+      package_name text,
+      selected_package text,
+      total_users integer,
+      extra_users integer,
+      contract_months integer,
+      discount_pct numeric not null default 0,
+      include_vat boolean not null default false,
+      manual_monthly_adjustment numeric not null default 0,
+      manual_implementation_adjustment numeric not null default 0,
+      monthly_base numeric,
+      monthly_price numeric,
+      monthly_total numeric,
+      implementation_base numeric,
+      implementation_price numeric,
+      implementation_total numeric,
+      contract_value numeric,
+      annual_recurring numeric,
+      modules jsonb not null default '[]'::jsonb,
+      notes text,
+      calculator_inputs jsonb not null default '{}'::jsonb
+    );
+
+    create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
+
+    create table if not exists public.worldline_projects (
+      id uuid primary key default gen_random_uuid(),
+      relation_id text not null,
+      relation_name text not null,
+      relation_email text,
+      debtor_number text,
+      status text not null default 'concept'
+        check (status in ('concept', 'waiting_customer', 'checking', 'complete', 'submitted')),
+      agreement_fields jsonb not null default '{}'::jsonb,
+      created_by uuid not null references public.profiles(id) on delete cascade,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists public.worldline_documents (
+      id uuid primary key default gen_random_uuid(),
+      project_id uuid not null references public.worldline_projects(id) on delete cascade,
+      document_type text not null
+        check (document_type in ('kvk', 'agreement', 'identity', 'bank_statement', 'refund')),
+      file_name text not null,
+      storage_path text not null,
+      mime_type text,
+      file_size bigint,
+      version integer not null default 1,
+      check_status text not null default 'uploaded'
+        check (check_status in ('missing', 'uploaded', 'checking', 'approved', 'rejected')),
+      check_result jsonb not null default '{}'::jsonb,
+      uploaded_by uuid not null references public.profiles(id) on delete cascade,
+      uploaded_at timestamptz not null default now()
+    );
+
+    create index if not exists worldline_projects_relation_idx
+      on public.worldline_projects(relation_id, updated_at desc);
+    create index if not exists worldline_projects_created_by_idx
+      on public.worldline_projects(created_by, updated_at desc);
+    create index if not exists worldline_documents_project_idx
+      on public.worldline_documents(project_id, document_type, version desc);
+
+    create table if not exists public.app_settings (
+      key text primary key,
+      payload jsonb not null default '{}'::jsonb,
+      updated_at timestamptz not null default now()
+    );
+  `);
+}
+
 async function upsertRow(client, table, columns, row) {
   const values = columns.map((column) => row[column] ?? null);
   const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
@@ -271,6 +382,9 @@ async function main() {
       fetchAll("worldline_projects"),
       fetchAll("worldline_documents"),
     ]);
+
+    console.log("Lokale database voorbereiden...");
+    await ensureLocalSchema(client);
 
     console.log("Lokale database vullen...");
     await client.query("begin");

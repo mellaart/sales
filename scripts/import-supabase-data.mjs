@@ -102,6 +102,10 @@ function jsonValue(value, fallback) {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
+function timestampValue(value, fallback = null) {
+  return value || fallback || new Date().toISOString();
+}
+
 function cleanSafePath(filePath) {
   const normalized = path.posix.normalize(filePath).replace(/^\/+/, "");
   if (!normalized || normalized.startsWith("../") || normalized.includes("/../")) {
@@ -258,6 +262,21 @@ async function loadLocalProfiles(client) {
   return rows;
 }
 
+async function getFallbackUserId(client) {
+  const { rows } = await client.query(
+    `select id
+     from public.profiles
+     order by case when lower(email) = 'erik@smarttrade.nl' then 0 else 1 end, created_at
+     limit 1`,
+  );
+
+  if (!rows[0]?.id) {
+    throw new Error("Geen lokale gebruiker gevonden om oude records aan te koppelen.");
+  }
+
+  return rows[0].id;
+}
+
 async function importProfiles(client, sourceProfiles) {
   const localProfiles = await loadLocalProfiles(client);
   const localByEmail = new Map(localProfiles.map((profile) => [normalizeEmail(profile.email), profile]));
@@ -308,10 +327,15 @@ async function importProfiles(client, sourceProfiles) {
 }
 
 async function importDeals(client, sourceDeals, idMap) {
+  const fallbackUserId = await getFallbackUserId(client);
+
   for (const deal of sourceDeals) {
+    const createdAt = timestampValue(deal.created_at);
     await upsertRow(client, "deals", dealColumns, {
       ...deal,
-      user_id: idMap.get(deal.user_id) ?? deal.user_id,
+      user_id: idMap.get(deal.user_id) ?? deal.user_id ?? fallbackUserId,
+      created_at: createdAt,
+      updated_at: timestampValue(deal.updated_at, createdAt),
       modules: jsonValue(deal.modules, "[]"),
       calculator_inputs: jsonValue(deal.calculator_inputs, "{}"),
       discount_pct: deal.discount_pct ?? 0,
@@ -323,20 +347,28 @@ async function importDeals(client, sourceDeals, idMap) {
 }
 
 async function importWorldlineProjects(client, sourceProjects, idMap) {
+  const fallbackUserId = await getFallbackUserId(client);
+
   for (const project of sourceProjects) {
+    const createdAt = timestampValue(project.created_at);
     await upsertRow(client, "worldline_projects", worldlineProjectColumns, {
       ...project,
-      created_by: idMap.get(project.created_by) ?? project.created_by,
+      created_by: idMap.get(project.created_by) ?? project.created_by ?? fallbackUserId,
+      created_at: createdAt,
+      updated_at: timestampValue(project.updated_at, createdAt),
       agreement_fields: jsonValue(project.agreement_fields, "{}"),
     });
   }
 }
 
 async function importWorldlineDocuments(client, sourceDocuments, idMap) {
+  const fallbackUserId = await getFallbackUserId(client);
+
   for (const document of sourceDocuments) {
     await upsertRow(client, "worldline_documents", worldlineDocumentColumns, {
       ...document,
-      uploaded_by: idMap.get(document.uploaded_by) ?? document.uploaded_by,
+      uploaded_by: idMap.get(document.uploaded_by) ?? document.uploaded_by ?? fallbackUserId,
+      uploaded_at: timestampValue(document.uploaded_at),
       check_result: jsonValue(document.check_result, "{}"),
     });
   }

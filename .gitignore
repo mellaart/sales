@@ -4,4 +4,8 @@ node_modules
 .env.local
 .DS_Store
 *.zip
+*.log
+*.tsbuildinfo
+.next-server.pid
+storage
 EOF

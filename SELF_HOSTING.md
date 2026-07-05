@@ -63,3 +63,47 @@ unset SUPABASE_SERVICE_ROLE_KEY
 De import neemt `profiles`, `deals`, `worldline_projects`, `worldline_documents`, prijsinstellingen,
 rolrechten en Worldline-documentbestanden mee. Bestaande lokale gebruikers worden gekoppeld op e-mailadres,
 zodat `erik@smarttrade.nl` admin blijft en oude deals naar de juiste lokale gebruiker verwijzen.
+
+## Automatische deploy via cron
+
+De server kan automatisch nieuwe versies van `main` ophalen en live zetten. Het deployscript staat in:
+
+```text
+/hosting/sales.troublefree.nl/apps/sales/scripts/deploy-production.sh
+```
+
+Het script doet alleen iets wanneer `origin/main` nieuwer is dan de versie op de server. Bij een nieuwe versie voert het uit:
+
+- `git pull --ff-only`
+- `npm install --no-package-lock`
+- `npm run build`
+- app herstarten op poort `3007`
+- healthcheck op `http://127.0.0.1:3007`
+
+Eerste keer testen op de server:
+
+```sh
+cd "$HOME/apps/sales"
+git pull
+chmod +x scripts/deploy-production.sh
+scripts/deploy-production.sh
+```
+
+Cronregel toevoegen:
+
+```sh
+crontab -e
+```
+
+Voeg deze regel toe om elke 2 minuten te controleren op een nieuwe versie:
+
+```cron
+*/2 * * * * /hosting/sales.troublefree.nl/apps/sales/scripts/deploy-production.sh >/dev/null 2>&1
+```
+
+Logs staan hier:
+
+```text
+/hosting/sales.troublefree.nl/logs/sales-deploy.log
+/hosting/sales.troublefree.nl/logs/sales-next.log
+```

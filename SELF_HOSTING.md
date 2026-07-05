@@ -107,3 +107,10 @@ Logs staan hier:
 /hosting/sales.troublefree.nl/logs/sales-deploy.log
 /hosting/sales.troublefree.nl/logs/sales-next.log
 ```
+
+Wanneer `git pull` al is uitgevoerd maar de app nog niet opnieuw is gebouwd of gestart, kun je een deploy forceren:
+
+```sh
+cd "$HOME/apps/sales"
+scripts/deploy-production.sh --force
+```

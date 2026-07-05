@@ -9,13 +9,20 @@ LOG_DIR="${SALES_LOG_DIR:-/hosting/sales.troublefree.nl/logs}"
 DEPLOY_LOG="${SALES_DEPLOY_LOG:-$LOG_DIR/sales-deploy.log}"
 APP_LOG="${SALES_APP_LOG:-$LOG_DIR/sales-next.log}"
 PID_FILE="${SALES_PID_FILE:-$APP_DIR/.next-server.pid}"
+DEPLOYED_FILE="${SALES_DEPLOYED_FILE:-$APP_DIR/.last-deployed-commit}"
 LOCK_DIR="${SALES_DEPLOY_LOCK_DIR:-/tmp/sales-deploy.lock}"
+FORCE_DEPLOY="${SALES_FORCE_DEPLOY:-0}"
+
+if [ "${1:-}" = "--force" ]; then
+  FORCE_DEPLOY="1"
+fi
 
 log() {
-  printf "%s %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$*" | tee -a "$DEPLOY_LOG"
+  printf "%s %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$*"
 }
 
 mkdir -p "$LOG_DIR"
+exec > >(tee -a "$DEPLOY_LOG") 2>&1
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   log "Deploy is al bezig."
@@ -25,20 +32,35 @@ fi
 cleanup() {
   rmdir "$LOCK_DIR" 2>/dev/null || true
 }
+
+on_error() {
+  status=$?
+  log "Deploy mislukt bij regel $1 (exit $status). Bekijk bovenstaande foutmelding."
+  exit "$status"
+}
+
 trap cleanup EXIT
+trap 'on_error $LINENO' ERR
 
 cd "$APP_DIR"
 
 CURRENT_COMMIT="$(git rev-parse HEAD)"
 git fetch "$REMOTE" "$BRANCH"
 REMOTE_COMMIT="$(git rev-parse "$REMOTE/$BRANCH")"
+DEPLOYED_COMMIT="$(cat "$DEPLOYED_FILE" 2>/dev/null || true)"
 
-if [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ]; then
+if [ "$FORCE_DEPLOY" != "1" ] && [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ] && [ "$DEPLOYED_COMMIT" = "$REMOTE_COMMIT" ]; then
   log "Geen nieuwe versie ($CURRENT_COMMIT)."
   exit 0
 fi
 
-log "Nieuwe versie gevonden: $CURRENT_COMMIT -> $REMOTE_COMMIT"
+if [ "$FORCE_DEPLOY" = "1" ]; then
+  log "Deploy geforceerd voor $CURRENT_COMMIT."
+elif [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ]; then
+  log "Versie staat al op de server, maar is nog niet succesvol live gezet: $CURRENT_COMMIT."
+else
+  log "Nieuwe versie gevonden: $CURRENT_COMMIT -> $REMOTE_COMMIT"
+fi
 
 git checkout "$BRANCH"
 git pull --ff-only "$REMOTE" "$BRANCH"
@@ -97,6 +119,7 @@ start_app() {
 
   if command -v curl >/dev/null 2>&1; then
     if curl -fsS "http://127.0.0.1:$PORT" >/dev/null; then
+      git rev-parse HEAD > "$DEPLOYED_FILE"
       log "Deploy klaar: $(git rev-parse --short HEAD)"
       exit 0
     fi
@@ -105,6 +128,7 @@ start_app() {
     exit 1
   fi
 
+  git rev-parse HEAD > "$DEPLOYED_FILE"
   log "Deploy klaar: $(git rev-parse --short HEAD)"
 }
 

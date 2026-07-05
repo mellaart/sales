@@ -7,5 +7,6 @@ node_modules
 *.log
 *.tsbuildinfo
 .next-server.pid
+.last-deployed-commit
 storage
 EOF

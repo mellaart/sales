@@ -17,7 +17,7 @@ if [ "${1:-}" = "--force" ]; then
   FORCE_DEPLOY="1"
 fi
 
-export PATH="$HOME/.local/bin:$HOME/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="$HOME/.local/node20/bin:$HOME/.local/node/bin:$HOME/.local/bin:$HOME/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 for NODE_BIN_DIR in "$HOME"/.nvm/versions/node/*/bin; do
   if [ -d "$NODE_BIN_DIR" ]; then
@@ -82,18 +82,35 @@ git checkout "$BRANCH"
 git pull --ff-only "$REMOTE" "$BRANCH"
 
 NPM_BIN="$(command -v npm || true)"
-NODE_BIN="$(command -v node || true)"
 
 if [ -z "$NPM_BIN" ]; then
   log "npm niet gevonden. PATH=$PATH"
   exit 127
 fi
 
-log "Node: $("$NODE_BIN" -v 2>/dev/null || echo onbekend)"
-log "NPM: $("$NPM_BIN" -v 2>/dev/null || echo onbekend)"
+NPM_REAL="$NPM_BIN"
+if command -v readlink >/dev/null 2>&1; then
+  NPM_REAL="$(readlink -f "$NPM_BIN" 2>/dev/null || printf "%s" "$NPM_BIN")"
+fi
 
-"$NPM_BIN" install --no-package-lock
-"$NPM_BIN" run build
+NPM_DIR="$(dirname "$NPM_REAL")"
+if [ -x "$NPM_DIR/node" ]; then
+  export PATH="$NPM_DIR:$PATH"
+  NODE_BIN="$NPM_DIR/node"
+else
+  NODE_BIN="$(command -v node || true)"
+fi
+
+if [ -z "$NODE_BIN" ]; then
+  log "node niet gevonden. PATH=$PATH"
+  exit 127
+fi
+
+log "Node: $("$NODE_BIN" -v 2>/dev/null || echo onbekend) ($NODE_BIN)"
+log "NPM: $(env PATH="$NPM_DIR:$PATH" "$NPM_BIN" -v 2>/dev/null || echo onbekend) ($NPM_BIN)"
+
+env PATH="$NPM_DIR:$PATH" "$NPM_BIN" install --no-package-lock
+env PATH="$NPM_DIR:$PATH" "$NPM_BIN" run build
 
 stop_app() {
   if [ -f "$PID_FILE" ]; then
@@ -135,7 +152,7 @@ stop_app() {
 
 start_app() {
   log "Start app op poort $PORT"
-  nohup env PORT="$PORT" "$NPM_BIN" run start > "$APP_LOG" 2>&1 &
+  nohup env PORT="$PORT" PATH="$NPM_DIR:$PATH" "$NPM_BIN" run start > "$APP_LOG" 2>&1 &
   echo "$!" > "$PID_FILE"
   sleep 3
 

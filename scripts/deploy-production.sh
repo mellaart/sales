@@ -17,6 +17,22 @@ if [ "${1:-}" = "--force" ]; then
   FORCE_DEPLOY="1"
 fi
 
+export PATH="$HOME/.local/bin:$HOME/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+for NODE_BIN_DIR in "$HOME"/.nvm/versions/node/*/bin; do
+  if [ -d "$NODE_BIN_DIR" ]; then
+    export PATH="$NODE_BIN_DIR:$PATH"
+  fi
+done
+
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  set +u
+  # shellcheck disable=SC1091
+  . "$HOME/.nvm/nvm.sh"
+  nvm use 20 >/dev/null 2>&1 || true
+  set -u
+fi
+
 log() {
   printf "%s %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$*"
 }
@@ -64,8 +80,20 @@ fi
 
 git checkout "$BRANCH"
 git pull --ff-only "$REMOTE" "$BRANCH"
-npm install --no-package-lock
-npm run build
+
+NPM_BIN="$(command -v npm || true)"
+NODE_BIN="$(command -v node || true)"
+
+if [ -z "$NPM_BIN" ]; then
+  log "npm niet gevonden. PATH=$PATH"
+  exit 127
+fi
+
+log "Node: $("$NODE_BIN" -v 2>/dev/null || echo onbekend)"
+log "NPM: $("$NPM_BIN" -v 2>/dev/null || echo onbekend)"
+
+"$NPM_BIN" install --no-package-lock
+"$NPM_BIN" run build
 
 stop_app() {
   if [ -f "$PID_FILE" ]; then
@@ -107,7 +135,7 @@ stop_app() {
 
 start_app() {
   log "Start app op poort $PORT"
-  nohup env PORT="$PORT" npm run start > "$APP_LOG" 2>&1 &
+  nohup env PORT="$PORT" "$NPM_BIN" run start > "$APP_LOG" 2>&1 &
   echo "$!" > "$PID_FILE"
   sleep 3
 

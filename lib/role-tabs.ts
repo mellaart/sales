@@ -45,6 +45,17 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
 
 const VALID_TAB_KEYS = new Set<AppTabKey>(APP_TABS.map((tab) => tab.key));
 const VALID_TAB_PERMISSIONS = new Set<TabPermission>(["none", "read", "write"]);
+const PERMISSION_LEVEL: Record<TabPermission, number> = {
+  none: 0,
+  read: 1,
+  write: 2,
+};
+const MINIMUM_ROLE_TAB_ACCESS: Partial<Record<UserRole, Partial<Record<AppTabKey, TabPermission>>>> = {
+  consultant: {
+    prices: "read",
+    postcode: "read",
+  },
+};
 
 function buildRoleAccess(writeTabs: AppTabKey[], readTabs: AppTabKey[] = []): Record<AppTabKey, TabPermission> {
   const writeTabSet = new Set(writeTabs);
@@ -65,10 +76,37 @@ function normalizePermission(value: unknown): TabPermission {
   return "none";
 }
 
+function maxPermission(currentPermission: TabPermission, minimumPermission: TabPermission) {
+  return PERMISSION_LEVEL[currentPermission] >= PERMISSION_LEVEL[minimumPermission]
+    ? currentPermission
+    : minimumPermission;
+}
+
+function applyMinimumRoleTabAccess(access: RoleTabAccessMap) {
+  return USER_ROLES.reduce((nextAccess, role) => {
+    const minimumAccess = MINIMUM_ROLE_TAB_ACCESS[role];
+
+    if (!minimumAccess) {
+      nextAccess[role] = access[role];
+      return nextAccess;
+    }
+
+    nextAccess[role] = APP_TABS.reduce((roleAccess, tab) => {
+      const minimumPermission = minimumAccess[tab.key];
+      roleAccess[tab.key] = minimumPermission
+        ? maxPermission(access[role][tab.key], minimumPermission)
+        : access[role][tab.key];
+      return roleAccess;
+    }, {} as Record<AppTabKey, TabPermission>);
+
+    return nextAccess;
+  }, {} as RoleTabAccessMap);
+}
+
 export function normalizeRoleTabAccess(input: unknown): RoleTabAccessMap {
   const source = input && typeof input === "object" ? (input as Partial<Record<UserRole, unknown>>) : {};
 
-  return USER_ROLES.reduce((access, role) => {
+  const normalizedAccess = USER_ROLES.reduce((access, role) => {
     const rawRoleAccess = source[role];
 
     if (Array.isArray(rawRoleAccess)) {
@@ -95,6 +133,8 @@ export function normalizeRoleTabAccess(input: unknown): RoleTabAccessMap {
 
     return access;
   }, {} as RoleTabAccessMap);
+
+  return applyMinimumRoleTabAccess(normalizedAccess);
 }
 
 export function getTabPermission(

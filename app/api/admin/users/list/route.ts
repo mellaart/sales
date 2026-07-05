@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getEffectiveUserRole, isProtectedAdminEmail } from "@/lib/protected-admin";
+import { getEffectiveUserRole, getProtectedAdminProfile, isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { createLocalServiceClient } from "@/lib/local-service-client";
 import type { UserRole } from "@/lib/supabase";
@@ -233,7 +233,9 @@ export async function GET(request: Request) {
 
       const authMetadata = authMetadataById.get(profile.id);
       const email = authMetadata?.email ?? normalizeText(profile.email) ?? null;
+      const protectedProfile = getProtectedAdminProfile(email);
       const fullName =
+        protectedProfile?.fullName ??
         authMetadata?.fullName ??
         normalizeText(profile.full_name) ??
         (email ? email.split("@")[0] : null);
@@ -242,9 +244,9 @@ export async function GET(request: Request) {
         id: profile.id,
         email,
         full_name: fullName,
-        job_title: normalizeText(profile.job_title) ?? authMetadata?.jobTitle ?? null,
-        workdays: normalizeText(profile.workdays) ?? authMetadata?.workdays ?? null,
-        mobile_phone: normalizeText(profile.mobile_phone) ?? authMetadata?.mobilePhone ?? null,
+        job_title: protectedProfile?.jobTitle ?? normalizeText(profile.job_title) ?? authMetadata?.jobTitle ?? null,
+        workdays: protectedProfile?.workdays ?? normalizeText(profile.workdays) ?? authMetadata?.workdays ?? null,
+        mobile_phone: protectedProfile?.mobilePhone ?? normalizeText(profile.mobile_phone) ?? authMetadata?.mobilePhone ?? null,
         role: getEffectiveUserRole(profile.role ?? "sales", email) ?? "sales",
         created_at: profile.created_at ?? null,
         updated_at: null,

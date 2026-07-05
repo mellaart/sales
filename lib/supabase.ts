@@ -1,5 +1,5 @@
 import { createClient, type User } from "@supabase/supabase-js";
-import { getEffectiveUserRole } from "@/lib/protected-admin";
+import { getEffectiveUserRole, getProtectedAdminProfile } from "@/lib/protected-admin";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 import { getLocalBrowserClient } from "@/lib/local-browser-client";
 
@@ -125,6 +125,9 @@ function getEmailFallback(value: unknown) {
 }
 
 export function getProfileDisplayName(profile: Pick<ProfileRecord, "email" | "full_name"> | null | undefined) {
+  const protectedProfile = getProtectedAdminProfile(profile?.email);
+  if (protectedProfile) return protectedProfile.fullName;
+
   return normalizeText(profile?.full_name) ?? getEmailFallback(profile?.email);
 }
 
@@ -133,6 +136,9 @@ export function getUserDisplayName(
   profile?: Pick<ProfileRecord, "email" | "full_name"> | null,
 ) {
   const metadata = user?.user_metadata ?? {};
+  const protectedProfile = getProtectedAdminProfile(user?.email ?? profile?.email);
+
+  if (protectedProfile) return protectedProfile.fullName;
 
   return (
     normalizeText(metadata.full_name) ??
@@ -191,14 +197,15 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
     }
 
     const profile = data as ProfileRecord;
+    const protectedProfile = getProtectedAdminProfile(profile.email);
 
     return {
       id: profile.id,
       email: profile.email,
-      full_name: profile.full_name ?? null,
-      job_title: profile.job_title ?? null,
-      workdays: profile.workdays ?? null,
-      mobile_phone: profile.mobile_phone ?? null,
+      full_name: protectedProfile?.fullName ?? profile.full_name ?? null,
+      job_title: protectedProfile?.jobTitle ?? profile.job_title ?? null,
+      workdays: protectedProfile?.workdays ?? profile.workdays ?? null,
+      mobile_phone: protectedProfile?.mobilePhone ?? profile.mobile_phone ?? null,
       role: getEffectiveUserRole(profile.role, profile.email) ?? profile.role,
       created_at: profile.created_at,
       updated_at: profile.updated_at ?? null,

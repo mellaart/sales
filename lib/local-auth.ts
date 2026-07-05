@@ -2,7 +2,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { NextResponse } from "next/server";
 import { LOCAL_SESSION_COOKIE } from "@/lib/local-auth-shared";
 import { createId, ensureLocalSchema, query, queryWithoutSchema } from "@/lib/local-db";
-import { getEffectiveUserRole, isProtectedAdminEmail } from "@/lib/protected-admin";
+import { getEffectiveUserRole, getProtectedAdminProfile, isProtectedAdminEmail } from "@/lib/protected-admin";
 import type { ProfileRecord, UserRole } from "@/lib/supabase";
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
@@ -60,17 +60,19 @@ function verifyPassword(password: string, storedHash: string | null | undefined)
 
 export function toLocalUser(profile: DbProfile): LocalUser {
   const role = getEffectiveUserRole(profile.role, profile.email) ?? profile.role;
+  const protectedProfile = getProtectedAdminProfile(profile.email);
+  const fullName = protectedProfile?.fullName ?? profile.full_name ?? null;
 
   return {
     id: profile.id,
     email: profile.email,
     user_metadata: {
-      full_name: profile.full_name ?? null,
-      display_name: profile.full_name ?? null,
-      name: profile.full_name ?? null,
-      job_title: profile.job_title ?? null,
-      workdays: profile.workdays ?? null,
-      mobile_phone: profile.mobile_phone ?? null,
+      full_name: fullName,
+      display_name: fullName,
+      name: fullName,
+      job_title: protectedProfile?.jobTitle ?? profile.job_title ?? null,
+      workdays: protectedProfile?.workdays ?? profile.workdays ?? null,
+      mobile_phone: protectedProfile?.mobilePhone ?? profile.mobile_phone ?? null,
       role,
       must_set_password: profile.must_set_password ?? false,
     },
@@ -92,7 +94,16 @@ export async function getLocalProfile(userId: string) {
   if (!profile) return null;
 
   const role = getEffectiveUserRole(profile.role, profile.email) ?? profile.role;
-  return { ...profile, role };
+  const protectedProfile = getProtectedAdminProfile(profile.email);
+
+  return {
+    ...profile,
+    full_name: protectedProfile?.fullName ?? profile.full_name,
+    job_title: protectedProfile?.jobTitle ?? profile.job_title,
+    workdays: protectedProfile?.workdays ?? profile.workdays,
+    mobile_phone: protectedProfile?.mobilePhone ?? profile.mobile_phone,
+    role,
+  };
 }
 
 async function countUsers() {
@@ -121,15 +132,27 @@ async function ensureBootstrapAdmin(email: string, password: string) {
   if (existingRows[0]) {
     const existing = existingRows[0];
     const passwordHash = existing.password_hash || hashPassword(password);
+    const protectedProfile = getProtectedAdminProfile(bootstrapEmail);
     const { rows } = await queryWithoutSchema<DbProfile>(
       `update public.profiles
        set role = 'admin',
+           full_name = $3,
+           job_title = $4,
+           workdays = $5,
+           mobile_phone = $6,
            password_hash = $2,
            must_set_password = false,
            updated_at = now()
        where id = $1
        returning *`,
-      [existing.id, passwordHash],
+      [
+        existing.id,
+        passwordHash,
+        protectedProfile?.fullName ?? "Erik Mellaart",
+        protectedProfile?.jobTitle ?? "IT Sales Consultant",
+        protectedProfile?.workdays ?? "di - wo - do - vr",
+        protectedProfile?.mobilePhone ?? "+31 630 050 413",
+      ],
     );
     return rows[0] ?? null;
   }
@@ -291,6 +314,7 @@ export async function createLocalUser(input: {
   mustSetPassword?: boolean;
 }) {
   const email = normalizeEmail(input.email);
+  const protectedProfile = getProtectedAdminProfile(email);
   const password = input.password || randomBytes(12).toString("base64url");
 
   const { rows } = await query<DbProfile>(
@@ -314,11 +338,11 @@ export async function createLocalUser(input: {
       createId(),
       email,
       hashPassword(password),
-      input.fullName || email.split("@")[0],
-      input.jobTitle || null,
-      input.workdays || null,
-      input.mobilePhone || null,
-      input.role || "sales",
+      protectedProfile?.fullName ?? input.fullName ?? email.split("@")[0],
+      protectedProfile?.jobTitle ?? input.jobTitle ?? null,
+      protectedProfile?.workdays ?? input.workdays ?? null,
+      protectedProfile?.mobilePhone ?? input.mobilePhone ?? null,
+      protectedProfile ? "admin" : input.role || "sales",
       input.mustSetPassword ?? true,
     ],
   );

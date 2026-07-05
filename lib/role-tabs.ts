@@ -36,7 +36,7 @@ export const APP_TABS: AppTabConfig[] = [
 
 export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   sales: buildRoleAccess(["calculator", "deals", "assets"]),
-  consultant: buildRoleAccess(["calculator", "deals", "assets"]),
+  consultant: buildRoleAccess(["calculator", "deals", "assets"], ["prices", "postcode"]),
   support: buildRoleAccess(["deals", "assets", "testen"]),
   worldline: buildRoleAccess(["worldline"]),
   manager: buildRoleAccess(["calculator", "deals", "assets", "testen"]),
@@ -46,11 +46,12 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
 const VALID_TAB_KEYS = new Set<AppTabKey>(APP_TABS.map((tab) => tab.key));
 const VALID_TAB_PERMISSIONS = new Set<TabPermission>(["none", "read", "write"]);
 
-function buildRoleAccess(writeTabs: AppTabKey[]): Record<AppTabKey, TabPermission> {
+function buildRoleAccess(writeTabs: AppTabKey[], readTabs: AppTabKey[] = []): Record<AppTabKey, TabPermission> {
   const writeTabSet = new Set(writeTabs);
+  const readTabSet = new Set(readTabs);
 
   return APP_TABS.reduce((access, tab) => {
-    access[tab.key] = writeTabSet.has(tab.key) ? "write" : "none";
+    access[tab.key] = writeTabSet.has(tab.key) ? "write" : readTabSet.has(tab.key) ? "read" : "none";
     return access;
   }, {} as Record<AppTabKey, TabPermission>);
 }

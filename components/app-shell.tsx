@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, UserRound, Users2 } from "lucide-react";
+import { ChevronDown, KeyRound, LogOut, UserRound, Users2 } from "lucide-react";
 import {
   ROLE_LABELS,
   ROLE_TAB_ACCESS,
@@ -18,12 +18,16 @@ export function AppShellHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
+  const [roleTabAccessLoaded, setRoleTabAccessLoaded] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
     let active = true;
+    setRoleTabAccessLoaded(false);
 
     async function loadRoleTabAccess() {
       try {
@@ -37,11 +41,14 @@ export function AppShellHeader() {
         if (active) {
           setRoleTabAccess(ROLE_TAB_ACCESS);
         }
+      } finally {
+        if (active) setRoleTabAccessLoaded(true);
       }
     }
 
     function handleRoleTabAccessUpdated(event: Event) {
       setRoleTabAccess(normalizeRoleTabAccess((event as CustomEvent).detail));
+      setRoleTabAccessLoaded(true);
     }
 
     void loadRoleTabAccess();
@@ -53,9 +60,35 @@ export function AppShellHeader() {
     };
   }, [user]);
 
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [pathname, user?.id]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+
+    function handleDocumentClick(event: MouseEvent) {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [accountMenuOpen]);
+
   if (!user) return null;
 
-  const accessibleTabs = getAccessibleTabs(role ?? "sales", roleTabAccess);
+  const accessibleTabs = roleTabAccessLoaded ? getAccessibleTabs(role ?? "sales", roleTabAccess) : [];
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -96,10 +129,28 @@ export function AppShellHeader() {
             <span>{role ? ROLE_LABELS[role] : "Sales"}</span>
           </span>
 
-          <span className="user-chip email-chip">
-            <UserRound size={13} />
-            <span>{user.email}</span>
-          </span>
+          <div className="account-menu" ref={accountMenuRef}>
+            <button
+              type="button"
+              className={`user-chip email-chip account-menu-trigger ${accountMenuOpen ? "active" : ""}`}
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+            >
+              <UserRound size={13} />
+              <span>{user.email}</span>
+              <ChevronDown size={13} className="account-menu-chevron" />
+            </button>
+
+            {accountMenuOpen ? (
+              <div className="account-menu-panel" role="menu">
+                <Link href="/reset-password" className="account-menu-item" role="menuitem">
+                  <KeyRound size={15} />
+                  <span>Wachtwoord wijzigen</span>
+                </Link>
+              </div>
+            ) : null}
+          </div>
 
           <button type="button" className="logout-button nav-logout-button" onClick={handleLogout} disabled={loggingOut}>
             <LogOut size={15} />

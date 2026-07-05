@@ -9,6 +9,7 @@ type NumberStepperProps = {
   inputMode?: "decimal" | "numeric";
   inputType?: "number" | "text";
   inputClassName?: string;
+  disabled?: boolean;
   min?: number;
   max?: number;
   onBlur?: () => void;
@@ -42,6 +43,7 @@ export function NumberStepper({
   inputMode,
   inputType = "number",
   inputClassName = "",
+  disabled = false,
   min,
   max,
   onBlur,
@@ -53,8 +55,8 @@ export function NumberStepper({
   value,
   onChange,
 }: NumberStepperProps) {
-  const canIncrease = typeof max !== "number" || value < max;
-  const canDecrease = typeof min !== "number" || value > min;
+  const canIncrease = !disabled && (typeof max !== "number" || value < max);
+  const canDecrease = !disabled && (typeof min !== "number" || value > min);
 
   const updateValue = (nextValue: number) => {
     const precision = getStepPrecision(step);
@@ -72,6 +74,7 @@ export function NumberStepper({
         min={min}
         max={max}
         step={step}
+        disabled={disabled}
         value={displayValue ?? value}
         onBlur={onBlur}
         onChange={(event) => {

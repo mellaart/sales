@@ -512,9 +512,37 @@ select option {
   max-width: 240px;
 }
 
+.account-menu {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.account-menu-trigger {
+  width: 100%;
+  cursor: pointer;
+  appearance: none;
+}
+
+.account-menu-trigger:hover,
+.account-menu-trigger.active {
+  color: var(--text);
+  border-color: rgba(96,165,250,0.42);
+  background: rgba(37,99,235,0.14);
+}
+
 .email-chip svg,
 .user-chip svg {
   flex: 0 0 auto;
+}
+
+.account-menu-chevron {
+  margin-left: 2px;
+  transition: transform 160ms ease;
+}
+
+.account-menu-trigger.active .account-menu-chevron {
+  transform: rotate(180deg);
 }
 
 .email-chip span {
@@ -522,6 +550,40 @@ select option {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.account-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+
+  background: rgba(15,23,42,0.98);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  width: 100%;
+  padding: 10px 11px;
+  border-radius: 9px;
+
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.account-menu-item:hover {
+  background: rgba(37,99,235,0.16);
 }
 
 .nav-logout-button {
@@ -776,7 +838,7 @@ td {
   .app-nav-account {
     width: 100%;
     justify-content: flex-start;
-    overflow-x: auto;
+    overflow: visible;
     scrollbar-width: none;
   }
 
@@ -787,6 +849,11 @@ td {
 
   .email-chip {
     max-width: 220px;
+  }
+
+  .account-menu-panel {
+    left: 0;
+    right: auto;
   }
   
 }

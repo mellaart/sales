@@ -10,7 +10,14 @@ import {
   type PostcodeRegion,
 } from "@/lib/price-config";
 import { euro } from "@/lib/pricing";
-import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
+import {
+  ROLE_TAB_ACCESS,
+  canAccessTab,
+  canWriteTab,
+  normalizeRoleTabAccess,
+  type RoleTabAccessMap,
+} from "@/lib/role-tabs";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
@@ -66,11 +73,13 @@ function NumberCellInput({
   value,
   onChange,
   decimals = 0,
+  disabled = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   decimals?: number;
+  disabled?: boolean;
 }) {
   const safeValue = Number.isFinite(value) ? value : 0;
   const formattedValue = formatFixedNumber(safeValue, decimals);
@@ -94,6 +103,7 @@ function NumberCellInput({
     <input
       aria-label={label}
       className="price-table-input price-table-input-number"
+      disabled={disabled}
       inputMode={decimals > 0 ? "decimal" : "numeric"}
       type="text"
       value={draftValue}
@@ -111,15 +121,18 @@ function TextCellInput({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <input
       aria-label={label}
       className="price-table-input text postcode-description-input"
+      disabled={disabled}
       value={value}
       onChange={(event) => onChange(event.target.value)}
     />
@@ -132,10 +145,14 @@ export default function PostcodeDashboard() {
   const supabase = getSupabaseClient();
   const { pricingConfig, refreshPricingConfig } = usePricingConfig();
   const [draftConfig, setDraftConfig] = useState<EditablePricingConfig>(DEFAULT_PRICE_CONFIG);
+  const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
+  const [roleAccessLoading, setRoleAccessLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [filters, setFilters] = useState<PostcodeFilters>(EMPTY_FILTERS);
+  const canViewPostcode = canAccessTab(role, "postcode", roleTabAccess);
+  const canEditPostcode = canWriteTab(role, "postcode", roleTabAccess);
 
   const regionCount = useMemo(
     () => new Set(draftConfig.postcodeRegions.map((row) => row.region)).size,
@@ -173,6 +190,42 @@ export default function PostcodeDashboard() {
     setLoading(false);
   }, [pricingConfig]);
 
+  useEffect(() => {
+    if (!role) return;
+
+    let active = true;
+    setRoleAccessLoading(true);
+
+    async function loadRoleTabAccess() {
+      try {
+        const response = await fetch("/api/admin/role-tabs", { cache: "no-store" });
+        const json = (await response.json().catch(() => ({}))) as { roleTabAccess?: unknown };
+
+        if (active && response.ok) {
+          setRoleTabAccess(normalizeRoleTabAccess(json.roleTabAccess));
+        }
+      } catch {
+        if (active) {
+          setRoleTabAccess(ROLE_TAB_ACCESS);
+        }
+      } finally {
+        if (active) setRoleAccessLoading(false);
+      }
+    }
+
+    function handleRoleTabAccessUpdated(event: Event) {
+      setRoleTabAccess(normalizeRoleTabAccess((event as CustomEvent).detail));
+    }
+
+    void loadRoleTabAccess();
+    window.addEventListener("role-tab-access-updated", handleRoleTabAccessUpdated);
+
+    return () => {
+      active = false;
+      window.removeEventListener("role-tab-access-updated", handleRoleTabAccessUpdated);
+    };
+  }, [role]);
+
   function updateDraft(updater: (currentConfig: EditablePricingConfig) => EditablePricingConfig) {
     setDraftConfig((currentConfig) => normalizePricingConfig(updater(clonePricingConfig(currentConfig))));
   }
@@ -199,6 +252,11 @@ export default function PostcodeDashboard() {
   }
 
   async function savePostcodes() {
+    if (!canEditPostcode) {
+      setStatus("Je hebt alleen leesrechten voor Postcode.");
+      return;
+    }
+
     if (!supabase) {
       setStatus("Supabase client ontbreekt.");
       return;
@@ -221,7 +279,7 @@ export default function PostcodeDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ pricingConfig: draftConfig }),
+        body: JSON.stringify({ pricingConfig: draftConfig, tabKey: "postcode" }),
       });
 
       const json = (await response.json().catch(() => ({}))) as PricesResponse;
@@ -242,7 +300,24 @@ export default function PostcodeDashboard() {
     }
   }
 
-  if (!canManageRoles(role)) {
+  if (roleAccessLoading) {
+    return (
+      <div className="page-shell">
+        <div className="container">
+          <section className="card panel">
+            <div className="top-row">
+              <div>
+                <div className="eyebrow">Postcode</div>
+                <h1>Postcodes worden geladen...</h1>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canViewPostcode) {
     return (
       <div className="page-shell">
         <div className="container">
@@ -251,7 +326,7 @@ export default function PostcodeDashboard() {
               <div>
                 <div className="eyebrow">Geen toegang</div>
                 <h1>Postcode</h1>
-                <p className="subtext">Alleen admin gebruikers mogen postcodes bekijken en aanpassen.</p>
+                <p className="subtext">Je rol heeft geen leesrechten voor deze pagina.</p>
               </div>
               <div className="icon-badge"><ShieldAlert size={24} /></div>
             </div>
@@ -272,7 +347,7 @@ export default function PostcodeDashboard() {
           </div>
 
           <div className="brand-actions">
-            <StatusPill tone={loading ? "warning" : "success"}>{loading ? "Laden" : "Admin only"}</StatusPill>
+            <StatusPill tone={loading ? "warning" : "success"}>{loading ? "Laden" : canEditPostcode ? "Schrijven" : "Lezen"}</StatusPill>
             <button
               type="button"
               className="secondary-button"
@@ -286,7 +361,7 @@ export default function PostcodeDashboard() {
               type="button"
               className="primary-button"
               onClick={() => void savePostcodes()}
-              disabled={loading || saving}
+              disabled={loading || saving || !canEditPostcode}
             >
               <Save size={16} />
               {saving ? "Opslaan..." : "Opslaan"}
@@ -393,6 +468,7 @@ export default function PostcodeDashboard() {
                       <NumberCellInput
                         label={`Postcode regel ${index + 1}`}
                         value={postcodeRow.postcode}
+                        disabled={!canEditPostcode}
                         onChange={(value) => updatePostcodeRow(index, { postcode: value })}
                       />
                     </td>
@@ -400,6 +476,7 @@ export default function PostcodeDashboard() {
                       <TextCellInput
                         label={`Omschrijving postcode ${postcodeRow.postcode}`}
                         value={postcodeRow.description}
+                        disabled={!canEditPostcode}
                         onChange={(value) => updatePostcodeRow(index, { description: value })}
                       />
                     </td>
@@ -407,6 +484,7 @@ export default function PostcodeDashboard() {
                       <NumberCellInput
                         label={`Regio postcode ${postcodeRow.postcode}`}
                         value={postcodeRow.region}
+                        disabled={!canEditPostcode}
                         onChange={(value) => updatePostcodeRow(index, { region: value })}
                       />
                     </td>
@@ -414,6 +492,7 @@ export default function PostcodeDashboard() {
                       <NumberCellInput
                         label={`Kilometers postcode ${postcodeRow.postcode}`}
                         value={postcodeRow.kilometers}
+                        disabled={!canEditPostcode}
                         onChange={(value) => updatePostcodeRow(index, { kilometers: value })}
                       />
                     </td>

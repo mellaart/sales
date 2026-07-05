@@ -11,7 +11,14 @@ import {
   type TravelCostRegion,
 } from "@/lib/price-config";
 import { euro, getVisitsForUsers, type ModuleConfig, type PackageConfig } from "@/lib/pricing";
-import { canManageRoles, getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
+import {
+  ROLE_TAB_ACCESS,
+  canAccessTab,
+  canWriteTab,
+  normalizeRoleTabAccess,
+  type RoleTabAccessMap,
+} from "@/lib/role-tabs";
 import { useAuth } from "@/components/auth-provider";
 import { NumberStepper } from "@/components/number-stepper";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -69,12 +76,14 @@ function PriceInput({
   onChange,
   decimals = 2,
   step = 0.01,
+  disabled = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   decimals?: number;
   step?: number;
+  disabled?: boolean;
 }) {
   const safeValue = Number.isFinite(value) ? value : 0;
   const formattedValue = formatFixedNumber(safeValue, decimals);
@@ -106,6 +115,7 @@ function PriceInput({
       inputClassName="price-table-input price-table-input-number"
       inputMode={decimals > 0 ? "decimal" : "numeric"}
       inputType="text"
+      disabled={disabled}
       min={0}
       onBlur={handleBlur}
       onDisplayValueChange={setDraftValue}
@@ -126,15 +136,18 @@ function TextPriceInput({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <input
       aria-label={label}
       className="price-table-input text"
+      disabled={disabled}
       value={value}
       onChange={(event) => onChange(event.target.value)}
     />
@@ -145,15 +158,18 @@ function WorkItemsInput({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string[];
   onChange: (value: string[]) => void;
+  disabled?: boolean;
 }) {
   return (
     <textarea
       aria-label={label}
       className="price-table-input price-work-items-input"
+      disabled={disabled}
       rows={Math.max(2, value.length)}
       value={value.join("\n")}
       onChange={(event) => onChange(event.target.value.split(/\r?\n/))}
@@ -167,11 +183,15 @@ export default function PricesDashboard() {
   const supabase = getSupabaseClient();
   const { pricingConfig, refreshPricingConfig } = usePricingConfig();
   const [draftConfig, setDraftConfig] = useState<EditablePricingConfig>(DEFAULT_PRICE_CONFIG);
+  const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
+  const [roleAccessLoading, setRoleAccessLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
   const editablePackages = useMemo(() => getEditablePackages(draftConfig), [draftConfig]);
+  const canViewPrices = canAccessTab(role, "prices", roleTabAccess);
+  const canEditPrices = canWriteTab(role, "prices", roleTabAccess);
   const implementationTiers = editablePackages[0]?.implementationVisits ?? [];
   const updatedLabel = draftConfig.updatedAt
     ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draftConfig.updatedAt))
@@ -181,6 +201,42 @@ export default function PricesDashboard() {
     setDraftConfig(clonePricingConfig(pricingConfig));
     setLoading(false);
   }, [pricingConfig]);
+
+  useEffect(() => {
+    if (!role) return;
+
+    let active = true;
+    setRoleAccessLoading(true);
+
+    async function loadRoleTabAccess() {
+      try {
+        const response = await fetch("/api/admin/role-tabs", { cache: "no-store" });
+        const json = (await response.json().catch(() => ({}))) as { roleTabAccess?: unknown };
+
+        if (active && response.ok) {
+          setRoleTabAccess(normalizeRoleTabAccess(json.roleTabAccess));
+        }
+      } catch {
+        if (active) {
+          setRoleTabAccess(ROLE_TAB_ACCESS);
+        }
+      } finally {
+        if (active) setRoleAccessLoading(false);
+      }
+    }
+
+    function handleRoleTabAccessUpdated(event: Event) {
+      setRoleTabAccess(normalizeRoleTabAccess((event as CustomEvent).detail));
+    }
+
+    void loadRoleTabAccess();
+    window.addEventListener("role-tab-access-updated", handleRoleTabAccessUpdated);
+
+    return () => {
+      active = false;
+      window.removeEventListener("role-tab-access-updated", handleRoleTabAccessUpdated);
+    };
+  }, [role]);
 
   function updateDraft(updater: (currentConfig: EditablePricingConfig) => EditablePricingConfig) {
     setDraftConfig((currentConfig) => normalizePricingConfig(updater(clonePricingConfig(currentConfig))));
@@ -283,6 +339,11 @@ export default function PricesDashboard() {
   }
 
   async function savePrices() {
+    if (!canEditPrices) {
+      setStatus("Je hebt alleen leesrechten voor Prijzen.");
+      return;
+    }
+
     if (!supabase) {
       setStatus("Supabase client ontbreekt.");
       return;
@@ -305,7 +366,7 @@ export default function PricesDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ pricingConfig: draftConfig }),
+        body: JSON.stringify({ pricingConfig: draftConfig, tabKey: "prices" }),
       });
 
       const json = (await response.json().catch(() => ({}))) as PricesResponse;
@@ -326,7 +387,24 @@ export default function PricesDashboard() {
     }
   }
 
-  if (!canManageRoles(role)) {
+  if (roleAccessLoading) {
+    return (
+      <div className="page-shell">
+        <div className="container">
+          <section className="card panel">
+            <div className="top-row">
+              <div>
+                <div className="eyebrow">Prijzen</div>
+                <h1>Prijzen worden geladen...</h1>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canViewPrices) {
     return (
       <div className="page-shell">
         <div className="container">
@@ -335,7 +413,7 @@ export default function PricesDashboard() {
               <div>
                 <div className="eyebrow">Geen toegang</div>
                 <h1>Prijzen</h1>
-                <p className="subtext">Alleen admin gebruikers mogen prijzen bekijken en aanpassen.</p>
+                <p className="subtext">Je rol heeft geen leesrechten voor deze pagina.</p>
               </div>
               <div className="icon-badge"><ShieldAlert size={24} /></div>
             </div>
@@ -356,12 +434,12 @@ export default function PricesDashboard() {
           </div>
 
           <div className="brand-actions">
-            <StatusPill tone={loading ? "warning" : "success"}>{loading ? "Laden" : "Admin only"}</StatusPill>
+            <StatusPill tone={loading ? "warning" : "success"}>{loading ? "Laden" : canEditPrices ? "Schrijven" : "Lezen"}</StatusPill>
             <button type="button" className="secondary-button" onClick={() => void reloadPrices()} disabled={loading || saving}>
               <RefreshCw size={16} />
               Vernieuwen
             </button>
-            <button type="button" className="primary-button" onClick={() => void savePrices()} disabled={loading || saving}>
+            <button type="button" className="primary-button" onClick={() => void savePrices()} disabled={loading || saving || !canEditPrices}>
               <Save size={16} />
               {saving ? "Opslaan..." : "Opslaan"}
             </button>
@@ -428,6 +506,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${packageConfig.name} licentie eerste gebruiker`}
                         value={packageConfig.licenseFirst}
+                        disabled={!canEditPrices}
                         onChange={(value) => updatePackage(packageConfig.key, "licenseFirst", value)}
                       />
                     </td>
@@ -440,6 +519,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${packageConfig.name} licentie extra gebruiker`}
                         value={packageConfig.licenseExtra}
+                        disabled={!canEditPrices}
                         onChange={(value) => updatePackage(packageConfig.key, "licenseExtra", value)}
                       />
                     </td>
@@ -454,6 +534,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${packageConfig.name} support eerste gebruiker`}
                         value={packageConfig.supportFirst}
+                        disabled={!canEditPrices}
                         onChange={(value) => updatePackage(packageConfig.key, "supportFirst", value)}
                       />
                     </td>
@@ -466,6 +547,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${packageConfig.name} support volgende gebruiker`}
                         value={packageConfig.supportExtra}
+                        disabled={!canEditPrices}
                         onChange={(value) => updatePackage(packageConfig.key, "supportExtra", value)}
                       />
                     </td>
@@ -479,6 +561,7 @@ export default function PricesDashboard() {
                     <PriceInput
                       label="Dagtarief implementatie"
                       value={draftConfig.implementationDayRate}
+                      disabled={!canEditPrices}
                       onChange={(value) => updateDraft((currentConfig) => ({ ...currentConfig, implementationDayRate: value }))}
                     />
                   </td>
@@ -510,6 +593,7 @@ export default function PricesDashboard() {
                             decimals={0}
                             step={1}
                             value={packageConfig.implementationVisits[tierIndex]?.visits ?? 0}
+                            disabled={!canEditPrices}
                             onChange={(value) => updatePackageVisits(packageConfig.key, tierIndex, value)}
                           />
                         </td>
@@ -550,6 +634,7 @@ export default function PricesDashboard() {
                       <TextPriceInput
                         label={`${moduleConfig.name} vereiste`}
                         value={moduleConfig.dependencyNote ?? ""}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateModule(moduleConfig.key, "dependencyNote", value || null)}
                       />
                     </td>
@@ -557,6 +642,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${moduleConfig.name} maandprijs`}
                         value={moduleConfig.monthlyPrice}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateModule(moduleConfig.key, "monthlyPrice", value)}
                       />
                     </td>
@@ -565,6 +651,7 @@ export default function PricesDashboard() {
                         <input
                           type="checkbox"
                           checked={Boolean(moduleConfig.noPackageSwitch)}
+                          disabled={!canEditPrices}
                           onChange={(event) => updateModule(moduleConfig.key, "noPackageSwitch", event.target.checked)}
                         />
                         Geen pakketwissel nodig
@@ -574,6 +661,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${moduleConfig.name} setupkosten`}
                         value={moduleConfig.setupCost ?? 0}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateModule(moduleConfig.key, "setupCost", value)}
                       />
                     </td>
@@ -610,6 +698,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${option.name} maandprijs`}
                         value={option.monthlyPrice}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateCustomerPortalOption(option.key, value)}
                       />
                     </td>
@@ -624,6 +713,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`Smart Connect ${tier.connections} connecties`}
                         value={tier.monthlyPrice}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateSmartConnectTier(index, value)}
                       />
                     </td>
@@ -635,6 +725,7 @@ export default function PricesDashboard() {
                     <PriceInput
                       label="Smart Connect extra connectie"
                       value={draftConfig.smartConnectExtraConnectionPrice}
+                      disabled={!canEditPrices}
                       onChange={(value) => updateDraft((currentConfig) => ({ ...currentConfig, smartConnectExtraConnectionPrice: value }))}
                     />
                   </td>
@@ -647,6 +738,7 @@ export default function PricesDashboard() {
                     <PriceInput
                       label="Planningapp gebruiker"
                       value={draftConfig.planningAppUserMonthly}
+                      disabled={!canEditPrices}
                       onChange={(value) => updateDraft((currentConfig) => ({ ...currentConfig, planningAppUserMonthly: value }))}
                     />
                   </td>
@@ -659,6 +751,7 @@ export default function PricesDashboard() {
                     <PriceInput
                       label="Twinfield connectie"
                       value={draftConfig.twinfieldConnectionMonthly}
+                      disabled={!canEditPrices}
                       onChange={(value) => updateDraft((currentConfig) => ({ ...currentConfig, twinfieldConnectionMonthly: value }))}
                     />
                   </td>
@@ -672,6 +765,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`${option.name} servicekosten per jaar`}
                         value={option.annualPrice}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateServiceCostOption(option.key, value)}
                       />
                     </td>
@@ -697,6 +791,7 @@ export default function PricesDashboard() {
                       <WorkItemsInput
                         label={`${item.name} werkzaamheden offerte`}
                         value={item.workItems}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateExpansionWorkItems(item.key, value)}
                       />
                     </td>
@@ -710,6 +805,7 @@ export default function PricesDashboard() {
                       <WorkItemsInput
                         label={`${moduleConfig.name} werkzaamheden offerte`}
                         value={moduleConfig.workItems ?? []}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateModuleWorkItems(moduleConfig.key, value)}
                       />
                     </td>
@@ -737,6 +833,7 @@ export default function PricesDashboard() {
                         <TextPriceInput
                           label={`Reiskosten regio ${travelRegion.region} omschrijving`}
                           value={travelRegion.label}
+                          disabled={!canEditPrices}
                           onChange={(value) => updateTravelCostRegion(travelRegion.region, { label: value || null })}
                         />
                       </td>
@@ -748,6 +845,7 @@ export default function PricesDashboard() {
                             decimals={0}
                             step={1}
                             value={travelRegion.fromKm ?? 0}
+                            disabled={!canEditPrices}
                             onChange={(value) => updateTravelCostRegion(travelRegion.region, { fromKm: value })}
                           />
                         </td>
@@ -757,6 +855,7 @@ export default function PricesDashboard() {
                             decimals={0}
                             step={1}
                             value={travelRegion.toKm ?? 0}
+                            disabled={!canEditPrices}
                             onChange={(value) => updateTravelCostRegion(travelRegion.region, { toKm: value })}
                           />
                         </td>
@@ -766,6 +865,7 @@ export default function PricesDashboard() {
                       <PriceInput
                         label={`Reiskosten regio ${travelRegion.region} prijs`}
                         value={travelRegion.price}
+                        disabled={!canEditPrices}
                         onChange={(value) => updateTravelCostRegion(travelRegion.region, { price: value })}
                       />
                     </td>

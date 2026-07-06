@@ -790,6 +790,8 @@ export default function WorldlineDashboard() {
 
   const canAccessWorldline = canAccessTab(role, "worldline", roleTabAccess);
   const canWriteWorldline = canWriteTab(role, "worldline", roleTabAccess);
+  const canViewAllWorldlineProjects = role === "admin" || role === "manager" || role === "worldline";
+  const projectOverviewLabel = canViewAllWorldlineProjects ? "Alle projecten" : "Lopende projecten";
 
   useEffect(() => {
     activeProjectRef.current = activeProject;
@@ -850,15 +852,20 @@ export default function WorldlineDashboard() {
 
     setLoadingOngoingProjects(true);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("worldline_projects")
       .select("*")
-      .in("status", ONGOING_WORLDLINE_STATUSES)
       .order("updated_at", { ascending: false })
-      .limit(100);
+      .limit(canViewAllWorldlineProjects ? 250 : 100);
+
+    if (!canViewAllWorldlineProjects) {
+      query = query.in("status", ONGOING_WORLDLINE_STATUSES);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
-      setStatus(`Lopende projecten laden mislukt: ${error.message}`);
+      setStatus(`${projectOverviewLabel} laden mislukt: ${error.message}`);
       setOngoingProjects([]);
       setLoadingOngoingProjects(false);
       return;
@@ -866,7 +873,7 @@ export default function WorldlineDashboard() {
 
     setOngoingProjects((data ?? []) as WorldlineProject[]);
     setLoadingOngoingProjects(false);
-  }, [supabase]);
+  }, [canViewAllWorldlineProjects, projectOverviewLabel, supabase]);
 
   useEffect(() => {
     if (!supabase || roleAccessLoading || !canAccessWorldline) return;
@@ -1940,9 +1947,13 @@ export default function WorldlineDashboard() {
         <section className="card panel worldline-ongoing-panel">
           <div className="top-row">
             <div>
-              <div className="eyebrow">Lopende projecten</div>
+              <div className="eyebrow">{projectOverviewLabel}</div>
               <h2 className="headline">Worldline-projecten</h2>
-              <p className="subtext">Open direct een lopend dossier of verwijder een project dat niet meer nodig is.</p>
+              <p className="subtext">
+                {canViewAllWorldlineProjects
+                  ? "Open direct elk Worldline-dossier, ook als het door een andere gebruiker is aangemaakt."
+                  : "Open direct een lopend dossier of verwijder een project dat niet meer nodig is."}
+              </p>
             </div>
             <div className="button-row compact">
               <StatusPill tone="warning">{ongoingProjects.length} project(en)</StatusPill>
@@ -1953,10 +1964,10 @@ export default function WorldlineDashboard() {
             </div>
           </div>
 
-          {loadingOngoingProjects ? <div className="save-status">Lopende projecten worden geladen...</div> : null}
+          {loadingOngoingProjects ? <div className="save-status">{projectOverviewLabel} worden geladen...</div> : null}
 
           {!loadingOngoingProjects && ongoingProjects.length === 0 ? (
-            <div className="empty-state">Geen lopende Worldline-projecten gevonden.</div>
+            <div className="empty-state">Geen Worldline-projecten gevonden.</div>
           ) : null}
 
           {ongoingProjects.length > 0 ? (

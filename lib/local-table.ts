@@ -106,6 +106,19 @@ const TABLES = {
 
 type TableName = keyof typeof TABLES;
 
+const JSON_COLUMNS: Partial<Record<TableName, Record<string, unknown>>> = {
+  deals: {
+    modules: [],
+    calculator_inputs: {},
+  },
+  worldline_projects: {
+    agreement_fields: {},
+  },
+  worldline_documents: {
+    check_result: {},
+  },
+};
+
 function isTableName(value: string): value is TableName {
   return value in TABLES;
 }
@@ -135,15 +148,36 @@ function normalizeSelect(table: TableName, select?: string) {
   return columns.length ? columns.map((column) => `"${column}"`).join(", ") : "*";
 }
 
+function normalizeJsonValue(value: unknown, fallback: unknown) {
+  if (value === undefined || value === null || value === "") return JSON.stringify(fallback);
+
+  if (typeof value === "string") {
+    try {
+      JSON.parse(value);
+      return value;
+    } catch {
+      return JSON.stringify(value);
+    }
+  }
+
+  return JSON.stringify(value);
+}
+
 function cleanPayload(table: TableName, payload: unknown, actor?: Actor | null) {
   const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
   const next: Record<string, unknown> = {};
+  const jsonColumns = JSON_COLUMNS[table] ?? {};
 
   for (const [key, value] of Object.entries(source)) {
     if (key === "id" && (value === null || value === undefined || value === "")) continue;
     if (!TABLES[table].has(key as never)) continue;
     if (key === "password_hash") continue;
-    next[key] = value;
+
+    if (Object.prototype.hasOwnProperty.call(jsonColumns, key)) {
+      next[key] = normalizeJsonValue(value, jsonColumns[key]);
+    } else {
+      next[key] = value;
+    }
   }
 
   if (table === "deals" && actor && !next.user_id) next.user_id = actor.user.id;

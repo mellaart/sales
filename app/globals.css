@@ -508,6 +508,56 @@ select option {
   color: white;
 }
 
+.nav-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.nav-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.nav-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+
+  min-width: 170px;
+  padding: 6px;
+  border-radius: 12px;
+
+  background: rgba(15,23,42,0.98);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.nav-menu-item {
+  display: flex;
+  align-items: center;
+
+  width: 100%;
+  padding: 10px 11px;
+  border-radius: 9px;
+
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.nav-menu-item:hover,
+.nav-menu-item.active {
+  background: rgba(37,99,235,0.16);
+}
+
 .email-chip {
   max-width: 240px;
 }
@@ -852,6 +902,11 @@ td {
   }
 
   .account-menu-panel {
+    left: 0;
+    right: auto;
+  }
+
+  .nav-menu-panel {
     left: 0;
     right: auto;
   }

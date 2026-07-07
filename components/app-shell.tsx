@@ -20,7 +20,9 @@ export function AppShellHeader() {
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [roleTabAccessLoaded, setRoleTabAccessLoaded] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const adminMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -61,20 +63,27 @@ export function AppShellHeader() {
   }, [user]);
 
   useEffect(() => {
+    setAdminMenuOpen(false);
     setAccountMenuOpen(false);
   }, [pathname, user?.id]);
 
   useEffect(() => {
-    if (!accountMenuOpen) return;
+    if (!adminMenuOpen && !accountMenuOpen) return;
 
     function handleDocumentClick(event: MouseEvent) {
-      if (!accountMenuRef.current?.contains(event.target as Node)) {
-        setAccountMenuOpen(false);
-      }
+      const target = event.target as Node;
+      const clickedAdminMenu = Boolean(adminMenuRef.current?.contains(target));
+      const clickedAccountMenu = Boolean(accountMenuRef.current?.contains(target));
+
+      if (!clickedAdminMenu) setAdminMenuOpen(false);
+      if (!clickedAccountMenu) setAccountMenuOpen(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setAccountMenuOpen(false);
+      if (event.key === "Escape") {
+        setAdminMenuOpen(false);
+        setAccountMenuOpen(false);
+      }
     }
 
     document.addEventListener("mousedown", handleDocumentClick);
@@ -84,11 +93,22 @@ export function AppShellHeader() {
       document.removeEventListener("mousedown", handleDocumentClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [accountMenuOpen]);
+  }, [adminMenuOpen, accountMenuOpen]);
 
   if (!user) return null;
 
   const accessibleTabs = roleTabAccessLoaded ? getAccessibleTabs(role ?? "sales", roleTabAccess) : [];
+  const adminTab = accessibleTabs.find((tab) => tab.key === "admin") ?? null;
+  const adminUtilityTabs = adminTab
+    ? accessibleTabs.filter((tab) => tab.key === "postcode" || tab.key === "testen")
+    : [];
+  const mainTabs = accessibleTabs.filter((tab) => {
+    if (tab.key === "admin") return false;
+    if (adminTab && (tab.key === "postcode" || tab.key === "testen")) return false;
+    return true;
+  });
+  const adminMenuTabs = adminTab ? [adminTab, ...adminUtilityTabs] : [];
+  const adminMenuActive = adminMenuTabs.some((tab) => pathname.startsWith(tab.pathPrefix));
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -112,7 +132,7 @@ export function AppShellHeader() {
             Dashboard
           </Link>
 
-          {accessibleTabs.map((tab) => (
+          {mainTabs.map((tab) => (
             <Link
               key={tab.key}
               href={tab.href}
@@ -121,6 +141,39 @@ export function AppShellHeader() {
               {tab.label}
             </Link>
           ))}
+
+          {adminMenuTabs.length > 0 ? (
+            <div className="nav-menu" ref={adminMenuRef}>
+              <button
+                type="button"
+                className={`nav-button nav-menu-trigger ${adminMenuOpen || adminMenuActive ? "active" : ""}`}
+                onClick={() => {
+                  setAccountMenuOpen(false);
+                  setAdminMenuOpen((open) => !open);
+                }}
+                aria-haspopup="menu"
+                aria-expanded={adminMenuOpen}
+              >
+                Admin
+                <ChevronDown size={13} className="account-menu-chevron" />
+              </button>
+
+              {adminMenuOpen ? (
+                <div className="nav-menu-panel" role="menu">
+                  {adminMenuTabs.map((tab) => (
+                    <Link
+                      key={tab.key}
+                      href={tab.href}
+                      className={`nav-menu-item ${pathname.startsWith(tab.pathPrefix) ? "active" : ""}`}
+                      role="menuitem"
+                    >
+                      {tab.label}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </nav>
 
         <div className="app-nav-account">
@@ -133,7 +186,10 @@ export function AppShellHeader() {
             <button
               type="button"
               className={`user-chip email-chip account-menu-trigger ${accountMenuOpen ? "active" : ""}`}
-              onClick={() => setAccountMenuOpen((open) => !open)}
+              onClick={() => {
+                setAdminMenuOpen(false);
+                setAccountMenuOpen((open) => !open);
+              }}
               aria-haspopup="menu"
               aria-expanded={accountMenuOpen}
             >

@@ -119,11 +119,32 @@ export async function ensureLocalSchema() {
         );
 
         alter table public.deals add column if not exists updated_at timestamptz not null default now();
+        alter table public.deals add column if not exists customer_name text;
+        alter table public.deals add column if not exists quote_title text;
+        alter table public.deals add column if not exists contact_name text;
+        alter table public.deals add column if not exists sales_name text;
+        alter table public.deals add column if not exists valid_until text;
+        alter table public.deals add column if not exists package_key text;
+        alter table public.deals add column if not exists package_name text;
         alter table public.deals add column if not exists selected_package text;
+        alter table public.deals add column if not exists total_users integer;
         alter table public.deals add column if not exists extra_users integer;
+        alter table public.deals add column if not exists contract_months integer;
+        alter table public.deals add column if not exists discount_pct numeric not null default 0;
+        alter table public.deals add column if not exists include_vat boolean not null default false;
+        alter table public.deals add column if not exists manual_monthly_adjustment numeric not null default 0;
+        alter table public.deals add column if not exists manual_implementation_adjustment numeric not null default 0;
+        alter table public.deals add column if not exists monthly_base numeric;
         alter table public.deals add column if not exists monthly_price numeric;
+        alter table public.deals add column if not exists monthly_total numeric;
         alter table public.deals add column if not exists implementation_base numeric;
         alter table public.deals add column if not exists implementation_price numeric;
+        alter table public.deals add column if not exists implementation_total numeric;
+        alter table public.deals add column if not exists contract_value numeric;
+        alter table public.deals add column if not exists annual_recurring numeric;
+        alter table public.deals add column if not exists modules jsonb not null default '[]'::jsonb;
+        alter table public.deals add column if not exists notes text;
+        alter table public.deals add column if not exists calculator_inputs jsonb not null default '{}'::jsonb;
 
         create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
 

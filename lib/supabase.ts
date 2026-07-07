@@ -64,6 +64,7 @@ export type DealRecord = {
 
   sales_name?: string | null;
   notes?: string | null;
+  valid_until?: string | null;
 
   package_key?: string | null;
   package_name?: string | null;
@@ -71,12 +72,19 @@ export type DealRecord = {
 
   total_users?: number | null;
   extra_users?: number | null;
+  contract_months?: number | null;
+  discount_pct?: number | null;
 
+  monthly_base?: number | null;
   monthly_price?: number | null;
   monthly_total?: number | null;
   implementation_price?: number | null;
   implementation_base?: number | null;
+  implementation_total?: number | null;
+  manual_monthly_adjustment?: number | null;
   manual_implementation_adjustment?: number | null;
+  contract_value?: number | null;
+  annual_recurring?: number | null;
 
   include_vat?: boolean | null;
 

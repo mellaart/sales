@@ -1630,18 +1630,32 @@ td {
 .travel-toggle-grid {
   max-height: none;
   overflow: visible;
+  margin-bottom: 14px;
   padding-right: 0;
 }
 
 .travel-toggle-card {
   min-height: 54px;
-  padding: 12px 14px;
+  padding: 16px 18px;
+}
+
+.travel-toggle-card .calculator-module-main {
+  gap: 7px;
+}
+
+.travel-toggle-card .calculator-module-main strong {
+  line-height: 1.35;
+}
+
+.travel-toggle-card .calculator-module-main span {
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .travel-cost-layout {
   display: grid;
   grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
-  gap: 18px;
+  gap: 24px;
   align-items: start;
 }
 
@@ -1655,6 +1669,10 @@ td {
 
 .travel-price-summary {
   min-width: 0;
+}
+
+.travel-price-summary .summary-list > div {
+  padding: 13px 0;
 }
 
 @media (max-width: 720px) {

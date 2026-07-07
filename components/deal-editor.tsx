@@ -6,7 +6,7 @@ import { ArrowLeft, Boxes, Calculator, CheckCircle2, CloudUpload, Download, File
 import { exportQuotePdf } from "@/lib/pdf";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
-import { calculatePricing, euro, getRecommendation, MODULES, type ModuleConfig } from "@/lib/pricing";
+import { calculatePricing, euro, getMinimumPackageForPaidModules, getPaidSelectedModuleCount, MODULES, type ModuleConfig } from "@/lib/pricing";
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
@@ -103,7 +103,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const { user, profile } = useAuth();
   const { pricingConfig } = usePricingConfig();
   const modules = pricingConfig.modules;
-  const packages = pricingConfig.packages;
+  const packages = useMemo(
+    () => pricingConfig.packages.filter((packageConfig) => packageConfig.key !== "lite"),
+    [pricingConfig.packages],
+  );
   const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -179,8 +182,12 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     () => calculatePricing({ extraUsers, manualImplementationAdjustment, includeVat: false, quantities }, pricingConfig),
     [extraUsers, manualImplementationAdjustment, pricingConfig, quantities],
   );
-  const activeResult = results.find((pkg) => pkg.key === selectedPackage) ?? results[0];
-  const recommendation = getRecommendation(results);
+  const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
+  const minimumPackage = getMinimumPackageForPaidModules(paidModuleCount, packages);
+  const selectedPackageIndex = packages.findIndex((pkg) => pkg.key === selectedPackage);
+  const minimumPackageIndex = packages.findIndex((pkg) => pkg.key === minimumPackage.key);
+  const activePackage = packages[Math.max(selectedPackageIndex, minimumPackageIndex, 0)] ?? minimumPackage;
+  const activeResult = results.find((pkg) => pkg.key === activePackage.key) ?? results[0];
   const isAssetsExpansionDeal = quoteLayout === "assets-expansion" && Boolean(assetsExpansion?.lines?.length);
   const expansionTotals = useMemo(() => getAssetExpansionTotals(assetsExpansion?.lines ?? []), [assetsExpansion]);
   const selectedCustomerPortalOptions = useMemo(
@@ -297,7 +304,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           notes,
           calculator_inputs: {
             extraUsers,
-            selectedPackage,
+            selectedPackage: activeResult.key,
             manualImplementationAdjustment: expansionTotals.once,
             includeVat,
             quantities,
@@ -328,7 +335,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       notes,
       calculator_inputs: {
         extraUsers,
-        selectedPackage,
+        selectedPackage: activeResult.key,
         manualImplementationAdjustment,
         includeVat,
         includeSupport,
@@ -446,7 +453,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     : "Je werkt hier weer vanuit de originele invoervelden, niet alleen op de eindbedragen."}
                 </div>
               </div>
-              <StatusPill tone="warning">{isAssetsExpansionDeal ? "Uitbreiding" : `Aanbevolen: ${recommendation.name}`}</StatusPill>
+              <StatusPill tone="warning">{isAssetsExpansionDeal ? "Uitbreiding" : `Automatisch: ${activeResult.name}`}</StatusPill>
             </div>
 
             <div className="section">
@@ -620,7 +627,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <div className="section-title"><Package size={16} /> Pakket</div>
                   <div className="package-grid">
                     {packages.map((pkg) => {
-                      const isActive = pkg.key === selectedPackage;
+                      const isActive = pkg.key === activeResult.key;
                       return (
                         <button key={pkg.key} type="button" className={`package-button ${isActive ? "active" : ""}`} onClick={() => setSelectedPackage(pkg.key)}>
                           <div className="package-header">

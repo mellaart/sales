@@ -286,7 +286,7 @@ function getExpansionWorkItems(input: OfferTemplateInput) {
   return uniqueWorkItems(workItems);
 }
 
-function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansionLine[], y: number) {
+function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansionLine[], y: number, travelCostTotal = 0) {
   y = addSectionTitle(doc, title, y);
 
   const x = 16;
@@ -340,8 +340,18 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
     y += 8;
   }
 
+  if (travelCostTotal > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(25, 40, 55);
+    doc.text("Reiskosten", x + 2, y + 3);
+    doc.text(euro.format(travelCostTotal), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+    y += 8;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(17, 58, 86);
+  }
+
   doc.text("Setupkosten:", x + 2, y + 3);
-  doc.text(euro.format(totals.once), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+  doc.text(euro.format(totals.once + travelCostTotal), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
 
   return y + 13;
 }
@@ -486,7 +496,19 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   y = addParagraph(doc, isAssetsExpansionLayout ? "Zoals besproken hierbij een offerte over wat jullie besproken hebben:" : text.intro, y);
 
   if (isAssetsExpansionLayout && expansionLines.length > 0) {
-    y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2);
+    const expansionTravelCostTotal = input.includeTravelCosts ? input.travelCostTotal ?? 0 : 0;
+    y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2, expansionTravelCostTotal);
+
+    if (expansionTravelCostTotal > 0) {
+      const postcodeText = input.travelPostcodePrefix ? `postcode ${input.travelPostcodePrefix}` : "postcode onbekend";
+      const regionText = input.travelRegion ? `regio ${input.travelRegion}` : "regio onbekend";
+      const descriptionText = input.travelDescription ? ` (${input.travelDescription})` : "";
+      y = addParagraph(
+        doc,
+        `Reiskosten zijn meegenomen: ${formatDays(input.implementationDays ?? 0)} x ${euro.format(input.travelCostPerDay ?? 0)} = ${euro.format(expansionTravelCostTotal)} op basis van ${postcodeText}, ${regionText}${descriptionText}.`,
+        y,
+      );
+    }
 
     const expansionWorkItems = getExpansionWorkItems(input);
     if (expansionWorkItems.length > 0) {

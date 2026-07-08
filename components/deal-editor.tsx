@@ -207,7 +207,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
-  const implementationDays = Math.max(0, activeResult.implementationAfterAdjustment / pricingConfig.implementationDayRate);
+  const implementationBaseTotal = isAssetsExpansionDeal ? expansionTotals.once : activeResult.implementationAfterAdjustment;
+  const implementationDays = Math.max(0, implementationBaseTotal / pricingConfig.implementationDayRate);
   const travelCostQuote = useMemo(
     () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
     [pricingConfig, travelPostcodePrefix],
@@ -215,7 +216,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const travelCostTotal = includeTravelCosts && travelCostQuote
     ? implementationDays * travelCostQuote.pricePerDay
     : 0;
-  const implementationTotal = activeResult.implementationAfterAdjustment + travelCostTotal;
+  const implementationTotal = implementationBaseTotal + travelCostTotal;
   const adjustedResult = useMemo(() => ({
     ...activeResult,
     supportFirst: includeSupport ? activeResult.supportFirst : 0,
@@ -297,8 +298,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           manual_implementation_adjustment: expansionTotals.once,
           monthly_base: expansionTotals.monthly,
           monthly_total: expansionTotals.monthly,
-          implementation_total: expansionTotals.once,
-          contract_value: expansionTotals.monthly + expansionTotals.annual + expansionTotals.once,
+          implementation_total: implementationTotal,
+          contract_value: expansionTotals.monthly + expansionTotals.annual + implementationTotal,
           annual_recurring: expansionTotals.monthly * 12 + expansionTotals.annual,
           modules: selectedModuleRows,
           notes,
@@ -307,6 +308,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             selectedPackage: activeResult.key,
             manualImplementationAdjustment: expansionTotals.once,
             includeVat,
+            includeTravelCosts,
+            travelPostcodePrefix,
+            travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
+            travelCostTotal,
+            travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
             quantities,
             quoteLayout,
             assetsExpansion,
@@ -430,7 +436,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             <>
               <StatCard title="Regels" value={String(assetsExpansion?.lines.length ?? 0)} icon={FileText} sublabel="Geselecteerde uitbreidingen" />
               <StatCard title="Maandbedrag" value={euro.format(expansionTotals.monthly)} icon={Users} sublabel="Alleen deze uitbreiding" />
-              <StatCard title="Setup" value={euro.format(expansionTotals.once)} icon={Package} sublabel="Eenmalige kosten" />
+              <StatCard title="Setup" value={euro.format(implementationTotal)} icon={Package} sublabel={travelCostTotal > 0 ? "Incl. reiskosten" : "Eenmalige kosten"} />
             </>
           ) : (
             <>
@@ -466,23 +472,79 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             </div>
 
             {isAssetsExpansionDeal ? (
-              <div className="section">
-                <div className="section-title"><FileText size={16} /> Uitbreidingsregels</div>
-                <div className="expansion-line-list">
-                  {assetsExpansion?.lines.map((line, index) => (
-                    <div key={`${line.group}-${line.label}-${index}`} className="expansion-line-row">
-                      <div className="expansion-line-main">
-                        <strong className="expansion-line-title">{line.quantity}x {line.label}</strong>
-                        <span className="expansion-line-meta">
-                          {line.group} · {getExpansionCadenceLabel(line)}
-                          {line.note ? ` · ${line.note}` : ""}
-                        </span>
+              <>
+                <div className="section">
+                  <div className="section-title"><FileText size={16} /> Uitbreidingsregels</div>
+                  <div className="expansion-line-list">
+                    {assetsExpansion?.lines.map((line, index) => (
+                      <div key={`${line.group}-${line.label}-${index}`} className="expansion-line-row">
+                        <div className="expansion-line-main">
+                          <strong className="expansion-line-title">{line.quantity}x {line.label}</strong>
+                          <span className="expansion-line-meta">
+                            {line.group} · {getExpansionCadenceLabel(line)}
+                            {line.note ? ` · ${line.note}` : ""}
+                          </span>
+                        </div>
+                        <strong className="expansion-line-price">{formatExpansionAmount(line)}</strong>
                       </div>
-                      <strong className="expansion-line-price">{formatExpansionAmount(line)}</strong>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+
+                <div className="section">
+                  <div className="section-title"><MapPin size={16} /> Reiskosten</div>
+                  <div className="calculator-module-grid travel-toggle-grid">
+                    <label className={`calculator-module-card travel-toggle-card ${includeTravelCosts ? "active" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={includeTravelCosts}
+                        onChange={(event) => setIncludeTravelCosts(event.target.checked)}
+                      />
+                      <span className="calculator-module-main">
+                        <strong>Setup inclusief reiskosten</strong>
+                        <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                      </span>
+                      <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
+                    </label>
+                  </div>
+
+                  <div className="travel-cost-layout">
+                    <label className="input-wrap travel-postcode-field">
+                      <span className="input-label">Postcode eerste 2 cijfers</span>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        maxLength={2}
+                        value={travelPostcodePrefix}
+                        onChange={(event) => setTravelPostcodePrefix(normalizePostcodePrefix(event.target.value))}
+                        placeholder="Bijv. 22"
+                      />
+                    </label>
+
+                    <div className="input-wrap travel-price-summary">
+                      <span className="input-label">Prijs</span>
+                      <div className="summary-list">
+                        <div>
+                          <span>Regio</span>
+                          <strong>{travelCostQuote?.postcodeRow ? travelCostQuote.postcodeRow.region : "-"}</strong>
+                        </div>
+                        <div>
+                          <span>Omschrijving</span>
+                          <strong>{travelCostQuote?.postcodeRow?.description ?? "Geen postcode gekozen"}</strong>
+                        </div>
+                        <div>
+                          <span>Prijs per dag</span>
+                          <strong>{euro.format(travelCostQuote?.pricePerDay ?? 0)}</strong>
+                        </div>
+                        <div className="total-row">
+                          <span>Reiskosten</span>
+                          <strong>{euro.format(travelCostTotal)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 <div className="section">
@@ -685,7 +747,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <>
                     <div className="soft-card"><div className="kpi-title">Maand</div><div className="big-number">{euro.format(expansionTotals.monthly)}</div></div>
                     <div className="soft-card"><div className="kpi-title">Jaar</div><div className="big-number">{euro.format(expansionTotals.annual)}</div></div>
-                    <div className="soft-card"><div className="kpi-title">Setup</div><div className="big-number">{euro.format(expansionTotals.once)}</div></div>
+                    <div className="soft-card"><div className="kpi-title">Setup</div><div className="big-number">{euro.format(implementationTotal)}</div></div>
                     <div className="soft-card"><div className="kpi-title">Regels</div><div className="big-number">{assetsExpansion?.lines.length ?? 0}</div></div>
                   </>
                 ) : (
@@ -705,7 +767,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                       <>
                         <div className="total-row"><span>Maandbedrag</span><strong>{euro.format(expansionTotals.monthly)}</strong></div>
                         {expansionTotals.annual > 0 ? <div><span>Jaarbedrag</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
-                        {expansionTotals.once > 0 ? <div><span>Eenmalig</span><strong>{euro.format(expansionTotals.once)}</strong></div> : null}
+                        {expansionTotals.once > 0 ? <div><span>Setup</span><strong>{euro.format(expansionTotals.once)}</strong></div> : null}
+                        {travelCostTotal > 0 ? <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div> : null}
+                        <div className="total-row"><span>Eenmalig totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
                       </>
                     ) : (
                       <>
@@ -734,10 +798,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <div className="proposal-title">{isAssetsExpansionDeal ? quoteTitle || "Uitbreiding" : activeResult.name}</div>
                   <div className="proposal-meta">{customerName || "Nog niet ingevuld"} · {contactName || "Geen contactpersoon"}</div>
                   <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionTotals.monthly : monthlyTotal)} p/m</div>
-                  {isAssetsExpansionDeal && expansionTotals.once === 0 ? (
+                  {isAssetsExpansionDeal && implementationTotal === 0 ? (
                     <div className="proposal-sub">{assetsExpansion?.lines.length ?? 0} uitbreidingsregel{assetsExpansion?.lines.length === 1 ? "" : "s"}</div>
                   ) : (
-                    <div className="proposal-sub">Eenmalig: {euro.format(isAssetsExpansionDeal ? expansionTotals.once : implementationTotal)}</div>
+                    <div className="proposal-sub">Eenmalig: {euro.format(implementationTotal)}</div>
                   )}
                 </div>
               </div>

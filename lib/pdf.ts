@@ -24,6 +24,7 @@ type PdfTableRow = {
 type LoadedLogo = string | null;
 
 const SMART_TRADE_LOGO_URL = "/smart-trade-logo.png";
+const TROUBLEFREE_BADGE_URL = "/troublefree-software-badge.png";
 const COMPANY_CONTACT_LINES = [
   "Smart Trade",
   "Pletterij 1A",
@@ -53,7 +54,8 @@ const SALES_SIGNATURE_PRESETS: Record<string, Partial<{
   },
 };
 
-let logoDataUrlPromise: Promise<LoadedLogo> | null = null;
+let smartTradeLogoDataUrlPromise: Promise<LoadedLogo> | null = null;
+let troublefreeBadgeDataUrlPromise: Promise<LoadedLogo> | null = null;
 
 function valueOrDash(value: string) {
   return value?.trim() ? value : "-";
@@ -69,20 +71,32 @@ function blobToDataUrl(blob: Blob) {
   });
 }
 
-async function getSmartTradeLogoDataUrl(): Promise<LoadedLogo> {
+async function loadImageDataUrl(url: string): Promise<LoadedLogo> {
   if (typeof window === "undefined") return null;
 
-  if (!logoDataUrlPromise) {
-    logoDataUrlPromise = fetch(SMART_TRADE_LOGO_URL)
-      .then((response) => {
-        if (!response.ok) throw new Error("Logo kon niet worden geladen.");
-        return response.blob();
-      })
-      .then(blobToDataUrl)
-      .catch(() => null);
+  return fetch(url)
+    .then((response) => {
+      if (!response.ok) throw new Error("Afbeelding kon niet worden geladen.");
+      return response.blob();
+    })
+    .then(blobToDataUrl)
+    .catch(() => null);
+}
+
+async function getSmartTradeLogoDataUrl(): Promise<LoadedLogo> {
+  if (!smartTradeLogoDataUrlPromise) {
+    smartTradeLogoDataUrlPromise = loadImageDataUrl(SMART_TRADE_LOGO_URL);
   }
 
-  return logoDataUrlPromise;
+  return smartTradeLogoDataUrlPromise;
+}
+
+async function getTroublefreeBadgeDataUrl(): Promise<LoadedLogo> {
+  if (!troublefreeBadgeDataUrlPromise) {
+    troublefreeBadgeDataUrlPromise = loadImageDataUrl(TROUBLEFREE_BADGE_URL);
+  }
+
+  return troublefreeBadgeDataUrlPromise;
 }
 
 function addWrappedText(doc: jsPDF, text: string, x: number, y: number, width: number, lineHeight = 5) {
@@ -378,78 +392,84 @@ function addContactLine(doc: jsPDF, label: string, value: string, x: number, y: 
   doc.text(label, x, y);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...color);
-  doc.text(value, x + 8, y);
+  doc.text(value, x + 5.2, y);
 
-  return y + 6;
+  return y + 4.1;
 }
 
-function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number, logoDataUrl: LoadedLogo) {
+function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number, logoDataUrl: LoadedLogo, troublefreeBadgeDataUrl: LoadedLogo) {
   const signature = getSignatureDetails(input);
 
-  y = ensurePage(doc, y, 120);
+  y = ensurePage(doc, y, 78);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(8.3);
   doc.setTextColor(25, 40, 55);
   doc.text("Met vriendelijke groet,", 16, y);
-  y += 12;
+  y += 7;
 
   const signatureTop = y;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(17);
+  doc.setFontSize(11.2);
   doc.setTextColor(38, 121, 214);
   doc.text(signature.name, 16, y);
-  y += 7;
+  y += 5;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
+  doc.setFontSize(8.2);
   doc.setTextColor(25, 40, 55);
   doc.text(signature.title, 16, y);
-  y += 14;
+  y += 8;
 
   if (signature.workdays) {
+    doc.setFontSize(7.6);
     doc.setFont("helvetica", "bold");
     doc.text("Werkdagen", 16, y);
     doc.setFont("helvetica", "normal");
-    doc.text(`| ${signature.workdays}`, 43, y);
-    y += 14;
+    doc.text(`| ${signature.workdays}`, 36, y);
+    y += 8;
   }
 
+  doc.setFontSize(7.6);
   y = addContactLine(doc, "M", signature.mobilePhone, 16, y, [64, 122, 145]);
   y = addContactLine(doc, "T", signature.officePhone, 16, y, [64, 122, 145]);
   y = addContactLine(doc, "E", signature.email, 16, y);
   y = addContactLine(doc, "W", signature.website, 16, y);
 
-  const companyY = Math.max(y + 8, signatureTop + 62);
-  doc.setFontSize(11);
+  const companyY = Math.max(y + 5, signatureTop + 36);
+  if (troublefreeBadgeDataUrl) {
+    doc.addImage(troublefreeBadgeDataUrl, "PNG", 16, companyY - 3, 13, 14.5);
+  }
+
+  doc.setFontSize(8);
   doc.setTextColor(25, 40, 55);
   doc.setFont("helvetica", "bold");
-  doc.text("Troublefree B.V.", 52, companyY);
+  doc.text("Troublefree B.V.", 35, companyY);
   doc.setFont("helvetica", "normal");
-  doc.text("Pletterij 1A", 52, companyY + 7);
-  doc.text("2211 JT Noordwijkerhout", 52, companyY + 14);
-  doc.text("Nederland", 52, companyY + 21);
+  doc.text("Pletterij 1A", 35, companyY + 5);
+  doc.text("2211 JT Noordwijkerhout", 35, companyY + 10);
+  doc.text("Nederland", 35, companyY + 15);
 
   doc.setDrawColor(38, 121, 214);
   doc.setLineWidth(0.35);
-  doc.line(105, signatureTop - 10, 105, signatureTop + 76);
+  doc.line(105, signatureTop - 4, 105, signatureTop + 46);
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", 121, signatureTop + 20, 58, 40);
+    doc.addImage(logoDataUrl, "PNG", 124, signatureTop + 12, 34, 24);
   } else {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
+    doc.setFontSize(12);
     doc.setTextColor(17, 58, 86);
-    doc.text("Smart Trade", 122, signatureTop + 40);
+    doc.text("Smart Trade", 124, signatureTop + 27);
   }
 
-  const disclaimerY = signatureTop + 96;
+  const disclaimerY = signatureTop + 57;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(6);
   doc.setTextColor(25, 40, 55);
-  addWrappedText(doc, SIGNATURE_DISCLAIMER, 16, disclaimerY, 178, 4.5);
+  addWrappedText(doc, SIGNATURE_DISCLAIMER, 16, disclaimerY, 178, 3.1);
 
-  return disclaimerY + 28;
+  return disclaimerY + 18;
 }
 
 function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhone?: string) {
@@ -488,7 +508,10 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   const moduleRows = getModuleRows(input);
   const extraMonthlyRows = input.extraMonthlyRows ?? [];
   const supportTotal = supportRows.reduce((sum, row) => sum + row.total, 0);
-  const logoDataUrl = await getSmartTradeLogoDataUrl();
+  const [logoDataUrl, troublefreeBadgeDataUrl] = await Promise.all([
+    getSmartTradeLogoDataUrl(),
+    getTroublefreeBadgeDataUrl(),
+  ]);
 
   let y = addQuoteHeader(doc, input, layout.name, logoDataUrl);
 
@@ -520,7 +543,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
     y = addParagraph(doc, text.closing, y);
     y = addParagraph(doc, text.contact, y);
 
-    addSignature(doc, input, y, logoDataUrl);
+    addSignature(doc, input, y, logoDataUrl, troublefreeBadgeDataUrl);
     addFooter(doc, input.salesName, input.salesEmail, input.salesPhone);
 
     const fileName = `${(input.customerName || "offerte-uitbreiding-smart-trade")
@@ -622,7 +645,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   y = addParagraph(doc, text.closing, y);
   y = addParagraph(doc, text.contact, y);
 
-  addSignature(doc, input, y, logoDataUrl);
+  addSignature(doc, input, y, logoDataUrl, troublefreeBadgeDataUrl);
 
   addFooter(doc, input.salesName, input.salesEmail, input.salesPhone);
 

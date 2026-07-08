@@ -181,8 +181,9 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { region: 9, fromKm: 160, toKm: 180, price: 214 },
     { region: 10, fromKm: 180, toKm: 200, price: 239 },
     { region: 11, fromKm: 200, toKm: 220, price: 264 },
-    { region: 12, fromKm: 220, toKm: 246, price: 289 },
-    { region: 13, fromKm: null, toKm: null, label: "Eilanden / maatwerk", price: 399 },
+    { region: 12, fromKm: 220, toKm: 240, price: 289 },
+    { region: 13, fromKm: 241, toKm: 260, price: 305 },
+    { region: 14, fromKm: null, toKm: null, label: "Eilanden / maatwerk", price: 399 },
   ],
   postcodeRegions: [
     { postcode: 10, description: "Amsterdam", region: 2, kilometers: 38.96 },
@@ -193,7 +194,7 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { postcode: 15, description: "Zaandam", region: 3, kilometers: 50.81 },
     { postcode: 16, description: "Hoorn", region: 5, kilometers: 83.63 },
     { postcode: 17, description: "Schagen", region: 5, kilometers: 91.2 },
-    { postcode: 17, description: "Texel", region: 13, kilometers: 333 },
+    { postcode: 17, description: "Texel", region: 14, kilometers: 333 },
     { postcode: 18, description: "Alkmaar", region: 4, kilometers: 66.21 },
     { postcode: 19, description: "IJmuiden - Egmond", region: 3, kilometers: 49.79 },
     { postcode: 20, description: "Haarlem", region: 2, kilometers: 26.09 },
@@ -239,9 +240,9 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { postcode: 59, description: "Venlo", region: 11, kilometers: 205.02 },
     { postcode: 60, description: "Weert", region: 10, kilometers: 195.51 },
     { postcode: 61, description: "Geleen", region: 12, kilometers: 220.7 },
-    { postcode: 62, description: "Maastricht", region: 12, kilometers: 242.14 },
-    { postcode: 63, description: "Valkenburg", region: 12, kilometers: 241.15 },
-    { postcode: 64, description: "Heerlen", region: 12, kilometers: 240.29 },
+    { postcode: 62, description: "Maastricht", region: 13, kilometers: 242.14 },
+    { postcode: 63, description: "Valkenburg", region: 13, kilometers: 241.15 },
+    { postcode: 64, description: "Heerlen", region: 13, kilometers: 240.29 },
     { postcode: 65, description: "Nijmegen", region: 8, kilometers: 152.81 },
     { postcode: 66, description: "Wijchen", region: 7, kilometers: 138.34 },
     { postcode: 67, description: "Ede", region: 6, kilometers: 110.42 },
@@ -266,16 +267,16 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { postcode: 86, description: "Sneek", region: 8, kilometers: 159.18 },
     { postcode: 87, description: "Bolsward", region: 8, kilometers: 151.33 },
     { postcode: 88, description: "Harlingen", region: 8, kilometers: 156 },
-    { postcode: 88, description: "Vlieland / Terschelling", region: 13, kilometers: 333 },
+    { postcode: 88, description: "Vlieland / Terschelling", region: 14, kilometers: 333 },
     { postcode: 89, description: "Leeuwarden", region: 9, kilometers: 172.75 },
     { postcode: 90, description: "Grouw", region: 9, kilometers: 173.02 },
-    { postcode: 91, description: "Ameland / Schiermonnikoog", region: 13, kilometers: 333 },
+    { postcode: 91, description: "Ameland / Schiermonnikoog", region: 14, kilometers: 333 },
     { postcode: 91, description: "Dokkum", region: 11, kilometers: 209.9 },
     { postcode: 92, description: "Drachten", region: 10, kilometers: 189.2 },
     { postcode: 93, description: "Roden", region: 11, kilometers: 202.11 },
     { postcode: 94, description: "Assen", region: 12, kilometers: 221.75 },
-    { postcode: 95, description: "Stadskanaal", region: 12, kilometers: 246.43 },
-    { postcode: 96, description: "Veendam", region: 12, kilometers: 242.99 },
+    { postcode: 95, description: "Stadskanaal", region: 13, kilometers: 246.43 },
+    { postcode: 96, description: "Veendam", region: 13, kilometers: 242.99 },
     { postcode: 97, description: "Groningen", region: 11, kilometers: 215.27 },
     { postcode: 98, description: "Zuidhorn", region: 11, kilometers: 204.9 },
     { postcode: 99, description: "Delftzijl", region: 12, kilometers: 239.86 },
@@ -378,6 +379,81 @@ function normalizeTravelCostRegion(input: unknown, fallback: TravelCostRegion): 
   };
 }
 
+function migrateTravelCostRows(input: unknown[]) {
+  if (input.length === 0) return input;
+
+  const rows = input.map((row) => {
+    if (!row || typeof row !== "object") return row;
+
+    const source = row as Partial<TravelCostRegion>;
+    const label = typeof source.label === "string" ? source.label.trim().toLowerCase() : "";
+    const region = Number(source.region);
+    const fromKm = Number(source.fromKm);
+    const toKm = Number(source.toKm);
+
+    if (region === 13 && label.includes("eilanden")) {
+      return { ...source, region: 14 };
+    }
+
+    if (region === 12 && fromKm === 220 && toKm === 246) {
+      return { ...source, toKm: 240 };
+    }
+
+    return row;
+  });
+
+  const hasDistanceRegion13 = rows.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    const source = row as Partial<TravelCostRegion>;
+    const label = typeof source.label === "string" ? source.label.trim() : "";
+    return Number(source.region) === 13 && !label;
+  });
+
+  if (hasDistanceRegion13) return rows;
+
+  const islandIndex = rows.findIndex((row) => {
+    if (!row || typeof row !== "object") return false;
+    const source = row as Partial<TravelCostRegion>;
+    const label = typeof source.label === "string" ? source.label.trim().toLowerCase() : "";
+    return Number(source.region) === 14 && label.includes("eilanden");
+  });
+
+  if (islandIndex === -1) return rows;
+
+  return [
+    ...rows.slice(0, islandIndex),
+    { region: 13, fromKm: 241, toKm: 260, price: 305 },
+    ...rows.slice(islandIndex),
+  ];
+}
+
+function migratePostcodeRows(input: unknown[]) {
+  return input.map((row) => {
+    if (!row || typeof row !== "object") return row;
+
+    const source = row as Partial<PostcodeRegion>;
+    const description = typeof source.description === "string" ? source.description.toLowerCase() : "";
+    const region = Number(source.region);
+    const kilometers = Number(source.kilometers);
+    const isIsland =
+      description.includes("texel") ||
+      description.includes("vlieland") ||
+      description.includes("terschelling") ||
+      description.includes("ameland") ||
+      description.includes("schiermonnikoog");
+
+    if (region === 13 && isIsland) {
+      return { ...source, region: 14 };
+    }
+
+    if (region === 12 && Number.isFinite(kilometers) && kilometers > 240) {
+      return { ...source, region: 13 };
+    }
+
+    return row;
+  });
+}
+
 function normalizePostcodeRegion(input: unknown, fallback: PostcodeRegion): PostcodeRegion {
   const source = input && typeof input === "object" ? (input as Partial<PostcodeRegion>) : {};
 
@@ -419,10 +495,10 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
   const serviceCostByKey = mapByKey(source.serviceCostOptions);
   const expansionWorkItemsByKey = mapByKey(source.expansionWorkItems);
   const smartConnectRows = Array.isArray(source.smartConnectTiers) ? source.smartConnectTiers : [];
-  const travelCostRows = Array.isArray(source.travelCostRegions) ? source.travelCostRegions : [];
+  const travelCostRows = migrateTravelCostRows(Array.isArray(source.travelCostRegions) ? source.travelCostRegions : []);
   const postcodeRows =
     Array.isArray(source.postcodeRegions) && source.postcodeRegions.length > 0
-      ? source.postcodeRegions
+      ? migratePostcodeRows(source.postcodeRegions)
       : DEFAULT_PRICE_CONFIG.postcodeRegions;
 
   return {

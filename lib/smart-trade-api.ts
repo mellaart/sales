@@ -286,6 +286,32 @@ function getHeaders(config: SmartTradeConfig) {
   };
 }
 
+function getSmartTradeHost(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function getSmartTradeFetchErrorDetail(error: unknown) {
+  if (!(error instanceof Error)) return String(error);
+
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (cause instanceof Error && cause.message && cause.message !== error.message) {
+    return `${error.message}: ${cause.message}`;
+  }
+
+  if (cause && typeof cause === "object") {
+    const causeMessage = "message" in cause ? String(cause.message) : "";
+    const causeCode = "code" in cause ? String(cause.code) : "";
+    const detail = [causeCode, causeMessage].filter(Boolean).join(" ");
+    if (detail && detail !== error.message) return `${error.message}: ${detail}`;
+  }
+
+  return error.message;
+}
+
 async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs: number) {
   const safeTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
@@ -304,7 +330,9 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>, ti
       throw new Error(`Smart Trade API timeout na ${safeTimeoutMs}ms.`);
     }
 
-    throw error;
+    throw new Error(
+      `Smart Trade API verbinding mislukt naar ${getSmartTradeHost(url)}: ${getSmartTradeFetchErrorDetail(error)}. Controleer SMART_TRADE_API_BASE_URL, DNS/SSL en firewall vanaf de server.`,
+    );
   } finally {
     clearTimeout(timeout);
   }

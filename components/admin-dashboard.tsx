@@ -79,6 +79,7 @@ export default function AdminDashboard() {
   const [newRole, setNewRole] = useState<UserRole>("sales");
   const [busy, setBusy] = useState(false);
   const [profileSavingId, setProfileSavingId] = useState<string | null>(null);
+  const [twoFactorResettingId, setTwoFactorResettingId] = useState<string | null>(null);
 
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [roleTabsLoading, setRoleTabsLoading] = useState(true);
@@ -139,6 +140,9 @@ export default function AdminDashboard() {
             job_title: profile.job_title ?? null,
             workdays: profile.workdays ?? null,
             mobile_phone: profile.mobile_phone ?? null,
+            two_factor_enabled: profile.two_factor_enabled ?? false,
+            two_factor_enabled_at: profile.two_factor_enabled_at ?? null,
+            two_factor_last_verified_at: profile.two_factor_last_verified_at ?? null,
             updated_at: profile.updated_at ?? null,
           }))
           .sort((a, b) => (a.email || "").localeCompare(b.email || ""));
@@ -447,6 +451,50 @@ export default function AdminDashboard() {
     await loadProfiles({ keepStatus: true });
   }
 
+  async function resetTwoFactor(profileId: string) {
+    if (!supabase) return;
+
+    const profile = profiles.find((item) => item.id === profileId);
+    const confirmed = confirm(`2FA resetten voor ${profile?.email || "deze gebruiker"}? Bij de volgende login moet 2FA opnieuw ingesteld worden.`);
+    if (!confirmed) return;
+
+    setTwoFactorResettingId(profileId);
+    setStatus("2FA wordt gereset...");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/users/reset-2fa", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ userId: profileId }),
+      });
+
+      const json = (await response.json().catch(() => ({}))) as { error?: string };
+
+      if (!response.ok) {
+        setStatus(json.error || "2FA resetten mislukt.");
+        return;
+      }
+
+      setStatus("2FA is gereset. De gebruiker moet bij de volgende login opnieuw scannen.");
+      await loadProfiles({ keepStatus: true });
+    } catch {
+      setStatus("Er ging iets mis bij het resetten van 2FA.");
+    } finally {
+      setTwoFactorResettingId(null);
+    }
+  }
+
   if (authLoading) {
     return (
       <div className="page-shell">
@@ -593,6 +641,9 @@ export default function AdminDashboard() {
                     {profile.full_name || profile.email || profile.id}
                   </div>
                   <div className="subtext">{profile.email || "Geen e-mail"}</div>
+                  <div className="subtext">
+                    {profile.two_factor_enabled ? "2FA actief" : "2FA nog niet ingesteld"}
+                  </div>
                   {protectedProfile ? <div className="subtext">Beschermde admin - niet aanpasbaar</div> : null}
                 </div>
 
@@ -670,6 +721,16 @@ export default function AdminDashboard() {
                     onClick={() => deleteUser(profile.id)}
                   >
                     Verwijderen
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!profile.two_factor_enabled || twoFactorResettingId === profile.id}
+                    onClick={() => void resetTwoFactor(profile.id)}
+                  >
+                    <ShieldCheck size={15} />
+                    {twoFactorResettingId === profile.id ? "2FA resetten..." : "2FA resetten"}
                   </button>
                 </div>
               </div>

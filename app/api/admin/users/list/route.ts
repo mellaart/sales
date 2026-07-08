@@ -162,6 +162,7 @@ async function loadAuthMetadata(
 
 async function loadProfiles(client: SupabaseClient) {
   const profileSelects = [
+    "id,role,full_name,job_title,workdays,mobile_phone,email,two_factor_enabled,two_factor_enabled_at,two_factor_last_verified_at,created_at",
     "id,role,full_name,job_title,workdays,mobile_phone,email,created_at",
     "id,role,full_name,job_title,workdays,mobile_phone,email",
     "id,role,full_name,email,created_at",
@@ -185,6 +186,9 @@ async function loadProfiles(client: SupabaseClient) {
       isMissingColumnError(result.error.message, "job_title") ||
       isMissingColumnError(result.error.message, "workdays") ||
       isMissingColumnError(result.error.message, "mobile_phone") ||
+      isMissingColumnError(result.error.message, "two_factor_enabled") ||
+      isMissingColumnError(result.error.message, "two_factor_enabled_at") ||
+      isMissingColumnError(result.error.message, "two_factor_last_verified_at") ||
       isMissingColumnError(result.error.message, "created_at");
 
     if (!isSchemaError) {
@@ -228,6 +232,9 @@ export async function GET(request: Request) {
         workdays?: string | null;
         mobile_phone?: string | null;
         email?: string | null;
+        two_factor_enabled?: boolean | null;
+        two_factor_enabled_at?: string | null;
+        two_factor_last_verified_at?: string | null;
         created_at?: string | null;
       };
 
@@ -248,6 +255,9 @@ export async function GET(request: Request) {
         workdays: protectedProfile?.workdays ?? normalizeText(profile.workdays) ?? authMetadata?.workdays ?? null,
         mobile_phone: protectedProfile?.mobilePhone ?? normalizeText(profile.mobile_phone) ?? authMetadata?.mobilePhone ?? null,
         role: getEffectiveUserRole(profile.role ?? "sales", email) ?? "sales",
+        two_factor_enabled: profile.two_factor_enabled ?? false,
+        two_factor_enabled_at: profile.two_factor_enabled_at ?? null,
+        two_factor_last_verified_at: profile.two_factor_last_verified_at ?? null,
         created_at: profile.created_at ?? null,
         updated_at: null,
       };

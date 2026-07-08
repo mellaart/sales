@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { setLocalSessionCookie, signInLocal } from "@/lib/local-auth";
+import { signInLocal } from "@/lib/local-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,7 +25,9 @@ export async function POST(request: Request) {
     return jsonResponse({ error: result.error }, 401);
   }
 
-  const response = jsonResponse({ data: { session: result.session, user: result.session.user } });
-  setLocalSessionCookie(response, result.session.access_token, result.session.expires_at);
-  return response;
+  if ("twoFactor" in result) {
+    return jsonResponse({ data: { twoFactor: result.twoFactor } });
+  }
+
+  return jsonResponse({ error: "2FA-controle kon niet gestart worden." }, 500);
 }

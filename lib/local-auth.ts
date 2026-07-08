@@ -4,12 +4,24 @@ import { LOCAL_SESSION_COOKIE } from "@/lib/local-auth-shared";
 import { createId, ensureLocalSchema, query, queryWithoutSchema } from "@/lib/local-db";
 import { getEffectiveUserRole, getProtectedAdminProfile, isProtectedAdminEmail } from "@/lib/protected-admin";
 import type { ProfileRecord, UserRole } from "@/lib/supabase";
+import {
+  createOtpAuthUrl,
+  decryptTwoFactorSecret,
+  encryptTwoFactorSecret,
+  generateTwoFactorSecret,
+  verifyTotpCode,
+} from "@/lib/two-factor";
 
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
+const TWO_FACTOR_CHALLENGE_TTL_SECONDS = 10 * 60;
 
 type DbProfile = ProfileRecord & {
   password_hash?: string | null;
   must_set_password?: boolean | null;
+  two_factor_secret?: string | null;
+  two_factor_enabled?: boolean | null;
+  two_factor_enabled_at?: string | null;
+  two_factor_last_verified_at?: string | null;
 };
 
 export type LocalUser = {
@@ -24,6 +36,7 @@ export type LocalUser = {
     mobile_phone?: string | null;
     role?: UserRole | null;
     must_set_password?: boolean | null;
+    two_factor_enabled?: boolean | null;
   };
 };
 
@@ -75,6 +88,7 @@ export function toLocalUser(profile: DbProfile): LocalUser {
       mobile_phone: protectedProfile?.mobilePhone ?? profile.mobile_phone ?? null,
       role,
       must_set_password: profile.must_set_password ?? false,
+      two_factor_enabled: profile.two_factor_enabled ?? false,
     },
   };
 }
@@ -83,7 +97,9 @@ export async function getLocalProfile(userId: string) {
   await ensureLocalSchema();
 
   const { rows } = await queryWithoutSchema<DbProfile>(
-    `select id, email, full_name, job_title, workdays, mobile_phone, role, must_set_password, created_at, updated_at
+    `select id, email, full_name, job_title, workdays, mobile_phone, role, must_set_password,
+            two_factor_enabled, two_factor_secret, two_factor_enabled_at, two_factor_last_verified_at,
+            created_at, updated_at
      from public.profiles
      where id = $1
      limit 1`,
@@ -122,7 +138,9 @@ async function ensureBootstrapAdmin(email: string, password: string) {
   }
 
   const { rows: existingRows } = await queryWithoutSchema<DbProfile>(
-    `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, role, must_set_password, created_at, updated_at
+    `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, role, must_set_password,
+            two_factor_enabled, two_factor_secret, two_factor_enabled_at, two_factor_last_verified_at,
+            created_at, updated_at
      from public.profiles
      where lower(email) = lower($1)
      limit 1`,
@@ -170,6 +188,49 @@ async function ensureBootstrapAdmin(email: string, password: string) {
   return rows[0] ?? null;
 }
 
+async function createSession(profile: DbProfile) {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
+
+  await queryWithoutSchema(
+    `insert into public.app_sessions (token_hash, user_id, expires_at)
+     values ($1, $2, to_timestamp($3))`,
+    [hashToken(token), profile.id, expiresAt],
+  );
+
+  return {
+    access_token: token,
+    expires_at: expiresAt,
+    user: toLocalUser(profile),
+  } satisfies LocalSession;
+}
+
+async function createTwoFactorChallenge(profile: DbProfile, mode: "setup" | "verify") {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = Math.floor(Date.now() / 1000) + TWO_FACTOR_CHALLENGE_TTL_SECONDS;
+  const setupSecret = mode === "setup" ? generateTwoFactorSecret() : null;
+
+  await queryWithoutSchema("delete from public.app_2fa_challenges where user_id = $1 or expires_at <= now()", [
+    profile.id,
+  ]);
+
+  await queryWithoutSchema(
+    `insert into public.app_2fa_challenges (token_hash, user_id, mode, secret, expires_at)
+     values ($1, $2, $3, $4, to_timestamp($5))`,
+    [hashToken(token), profile.id, mode, setupSecret ? encryptTwoFactorSecret(setupSecret) : null, expiresAt],
+  );
+
+  return {
+    challengeToken: token,
+    expiresAt,
+    mode,
+    manualEntryKey: setupSecret,
+    otpAuthUrl: setupSecret && profile.email
+      ? createOtpAuthUrl({ issuer: "Smart Trade Sales", email: profile.email, secret: setupSecret })
+      : null,
+  };
+}
+
 export async function signInLocal(email: string, password: string) {
   await ensureLocalSchema();
 
@@ -178,7 +239,9 @@ export async function signInLocal(email: string, password: string) {
   const { rows } = bootstrapped
     ? { rows: [bootstrapped] }
     : await queryWithoutSchema<DbProfile>(
-        `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, role, must_set_password, created_at, updated_at
+        `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, role, must_set_password,
+                two_factor_enabled, two_factor_secret, two_factor_enabled_at, two_factor_last_verified_at,
+                created_at, updated_at
          from public.profiles
          where lower(email) = lower($1)
          limit 1`,
@@ -190,21 +253,95 @@ export async function signInLocal(email: string, password: string) {
     return { error: "E-mailadres of wachtwoord klopt niet." };
   }
 
-  const token = randomBytes(32).toString("base64url");
-  const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
-
-  await queryWithoutSchema(
-    `insert into public.app_sessions (token_hash, user_id, expires_at)
-     values ($1, $2, to_timestamp($3))`,
-    [hashToken(token), profile.id, expiresAt],
+  const challenge = await createTwoFactorChallenge(
+    profile,
+    profile.two_factor_enabled && profile.two_factor_secret ? "verify" : "setup",
   );
 
   return {
-    session: {
-      access_token: token,
-      expires_at: expiresAt,
-      user: toLocalUser(profile),
-    } satisfies LocalSession,
+    twoFactor: {
+      challengeToken: challenge.challengeToken,
+      expiresAt: challenge.expiresAt,
+      mode: challenge.mode,
+      email: profile.email,
+      manualEntryKey: challenge.manualEntryKey,
+      otpAuthUrl: challenge.otpAuthUrl,
+    },
+  };
+}
+
+export async function verifyLocalTwoFactor(challengeToken: string, code: string) {
+  await ensureLocalSchema();
+
+  const { rows } = await queryWithoutSchema<
+    DbProfile & {
+      challenge_mode: "setup" | "verify";
+      challenge_secret?: string | null;
+    }
+  >(
+    `select p.id, p.email, p.password_hash, p.full_name, p.job_title, p.workdays, p.mobile_phone, p.role,
+            p.must_set_password, p.two_factor_enabled, p.two_factor_secret,
+            p.two_factor_enabled_at, p.two_factor_last_verified_at, p.created_at, p.updated_at,
+            c.mode as challenge_mode, c.secret as challenge_secret
+     from public.app_2fa_challenges c
+     join public.profiles p on p.id = c.user_id
+     where c.token_hash = $1
+       and c.expires_at > now()
+     limit 1`,
+    [hashToken(challengeToken)],
+  );
+
+  const profile = rows[0] ?? null;
+  if (!profile) {
+    return { error: "2FA-controle is verlopen. Log opnieuw in." };
+  }
+
+  const secretSource = profile.challenge_mode === "setup" ? profile.challenge_secret : profile.two_factor_secret;
+  if (!secretSource) {
+    return { error: "2FA sleutel ontbreekt. Log opnieuw in." };
+  }
+
+  let secret: string;
+  try {
+    secret = decryptTwoFactorSecret(secretSource);
+  } catch {
+    return { error: "2FA sleutel kon niet gelezen worden. Laat een admin 2FA resetten." };
+  }
+
+  if (!verifyTotpCode(secret, code)) {
+    return { error: "2FA-code klopt niet." };
+  }
+
+  if (profile.challenge_mode === "setup") {
+    const encryptedSecret = encryptTwoFactorSecret(secret);
+    await queryWithoutSchema(
+      `update public.profiles
+       set two_factor_enabled = true,
+           two_factor_secret = $2,
+           two_factor_enabled_at = coalesce(two_factor_enabled_at, now()),
+           two_factor_last_verified_at = now(),
+           updated_at = now()
+       where id = $1`,
+      [profile.id, encryptedSecret],
+    );
+    profile.two_factor_enabled = true;
+    profile.two_factor_secret = encryptedSecret;
+    profile.two_factor_enabled_at = new Date().toISOString();
+    profile.two_factor_last_verified_at = new Date().toISOString();
+  } else {
+    await queryWithoutSchema(
+      `update public.profiles
+       set two_factor_last_verified_at = now(),
+           updated_at = now()
+       where id = $1`,
+      [profile.id],
+    );
+  }
+
+  await queryWithoutSchema("delete from public.app_2fa_challenges where token_hash = $1", [hashToken(challengeToken)]);
+
+  return {
+    session: await createSession(profile),
   };
 }
 
@@ -227,7 +364,8 @@ export async function getLocalSession(token: string | null) {
 
   const { rows } = await queryWithoutSchema<DbProfile & { expires_at_epoch: number }>(
     `select p.id, p.email, p.full_name, p.job_title, p.workdays, p.mobile_phone, p.role,
-            p.must_set_password, p.created_at, p.updated_at,
+            p.must_set_password, p.two_factor_enabled, p.two_factor_secret,
+            p.two_factor_enabled_at, p.two_factor_last_verified_at, p.created_at, p.updated_at,
             extract(epoch from s.expires_at)::integer as expires_at_epoch
      from public.app_sessions s
      join public.profiles p on p.id = s.user_id
@@ -298,6 +436,26 @@ export async function updateLocalPasswordForUser(userId: string, password: strin
      where id = $1`,
     [userId, hashPassword(password), mustSetPassword],
   );
+
+  if (!rowCount) return { error: "Gebruiker niet gevonden." };
+  return {};
+}
+
+export async function resetLocalTwoFactorForUser(userId: string) {
+  await ensureLocalSchema();
+
+  const { rowCount } = await queryWithoutSchema(
+    `update public.profiles
+     set two_factor_enabled = false,
+         two_factor_secret = null,
+         two_factor_enabled_at = null,
+         two_factor_last_verified_at = null,
+         updated_at = now()
+     where id = $1`,
+    [userId],
+  );
+
+  await queryWithoutSchema("delete from public.app_2fa_challenges where user_id = $1", [userId]);
 
   if (!rowCount) return { error: "Gebruiker niet gevonden." };
   return {};

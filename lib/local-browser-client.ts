@@ -212,8 +212,28 @@ function createLocalBrowserClient() {
           return { data: null, error: { message: payload?.error || "Inloggen mislukt." } };
         }
         const token = payload?.data?.session?.access_token ?? null;
-        setStoredToken(token);
-        window.dispatchEvent(new CustomEvent("smarttrade-auth-change", { detail: payload?.data?.session ?? null }));
+        if (token) {
+          setStoredToken(token);
+          window.dispatchEvent(new CustomEvent("smarttrade-auth-change", { detail: payload?.data?.session ?? null }));
+        }
+        return { data: payload?.data ?? null, error: null };
+      },
+      async verifyTwoFactor(input: { challengeToken: string; code: string }) {
+        const response = await fetch("/api/local/auth/2fa/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          return { data: null, error: { message: payload?.error || "2FA-controle mislukt." } };
+        }
+        const token = payload?.data?.session?.access_token ?? null;
+        if (token) {
+          setStoredToken(token);
+          window.dispatchEvent(new CustomEvent("smarttrade-auth-change", { detail: payload?.data?.session ?? null }));
+        }
         return { data: payload?.data ?? null, error: null };
       },
       async getSession() {

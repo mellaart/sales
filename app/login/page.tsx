@@ -2,9 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, LockKeyhole } from "lucide-react";
+import QRCode from "qrcode";
+import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-provider";
+
+type TwoFactorChallenge = {
+  challengeToken: string;
+  mode: "setup" | "verify";
+  email?: string | null;
+  manualEntryKey?: string | null;
+  otpAuthUrl?: string | null;
+  expiresAt?: number;
+};
+
+type TwoFactorAuthClient = {
+  verifyTwoFactor?: (input: { challengeToken: string; code: string }) => Promise<{
+    data: unknown;
+    error: { message: string } | null;
+  }>;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +32,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [twoFactor, setTwoFactor] = useState<TwoFactorChallenge | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("timeout") === "1") {
@@ -27,6 +47,32 @@ export default function LoginPage() {
       router.replace(mustSetPassword ? "/reset-password" : "/");
     }
   }, [loading, mustSetPassword, router, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setQrDataUrl("");
+
+    if (!twoFactor?.otpAuthUrl) return;
+
+    QRCode.toDataURL(twoFactor.otpAuthUrl, {
+      margin: 2,
+      width: 220,
+      color: {
+        dark: "#0f172a",
+        light: "#ffffff",
+      },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("QR-code maken mislukt. Gebruik de setupcode hieronder.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [twoFactor]);
 
   async function handleResetPassword() {
     setStatus("");
@@ -66,10 +112,13 @@ export default function LoginPage() {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
-    });
+    }) as {
+      data: { twoFactor?: TwoFactorChallenge } | null;
+      error: { message: string } | null;
+    };
 
     setBusy(false);
 
@@ -78,7 +127,120 @@ export default function LoginPage() {
       return;
     }
 
+    if (data?.twoFactor?.challengeToken) {
+      setTwoFactor(data.twoFactor);
+      setTwoFactorCode("");
+      setPassword("");
+      setStatus(data.twoFactor.mode === "setup"
+        ? "Scan de QR-code en vul daarna de 6-cijferige code in."
+        : "Vul de 6-cijferige code uit je authenticator-app in.");
+      return;
+    }
+
     router.replace("/");
+  }
+
+  async function handleTwoFactorSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!twoFactor) return;
+
+    setBusy(true);
+    setStatus("");
+
+    const supabase = getSupabaseClient();
+    const authClient = supabase?.auth as TwoFactorAuthClient | undefined;
+
+    if (!authClient?.verifyTwoFactor) {
+      setStatus("2FA is alleen beschikbaar op de eigen server.");
+      setBusy(false);
+      return;
+    }
+
+    const { error } = await authClient.verifyTwoFactor({
+      challengeToken: twoFactor.challengeToken,
+      code: twoFactorCode,
+    });
+
+    setBusy(false);
+
+    if (error) {
+      setStatus(`2FA mislukt: ${error.message}`);
+      return;
+    }
+
+    router.replace("/");
+  }
+
+  function resetTwoFactorStep() {
+    setTwoFactor(null);
+    setTwoFactorCode("");
+    setQrDataUrl("");
+    setStatus("");
+  }
+
+  if (twoFactor) {
+    return (
+      <div className="modern-auth-page">
+        <section className="modern-auth-card">
+          <div className="modern-auth-brand">SMART TRADE</div>
+
+          <h1>{twoFactor.mode === "setup" ? "2FA instellen" : "2FA controle"}</h1>
+
+          <p className="modern-auth-subtitle">
+            {twoFactor.mode === "setup"
+              ? "Scan deze QR-code met je authenticator-app en bevestig daarna met de 6-cijferige code."
+              : "Open je authenticator-app en vul de 6-cijferige code in."}
+          </p>
+
+          {twoFactor.mode === "setup" ? (
+            <div className="two-factor-setup">
+              {qrDataUrl ? (
+                <div className="two-factor-qr">
+                  <img src={qrDataUrl} alt="2FA QR-code" />
+                </div>
+              ) : (
+                <div className="modern-auth-status">QR-code wordt gemaakt...</div>
+              )}
+
+              {twoFactor.manualEntryKey ? (
+                <label className="two-factor-secret">
+                  <span>Setupcode</span>
+                  <input type="text" value={twoFactor.manualEntryKey} readOnly />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+
+          <form onSubmit={handleTwoFactorSubmit} className="modern-auth-form">
+            <label>
+              <span>2FA-code</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={twoFactorCode}
+                onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                minLength={6}
+                maxLength={6}
+                autoComplete="one-time-code"
+              />
+            </label>
+
+            <button type="submit" className="modern-auth-primary" disabled={busy}>
+              <ShieldCheck size={18} />
+              {busy ? "Controleren..." : "Bevestigen"}
+            </button>
+
+            <button type="button" className="modern-auth-secondary" onClick={resetTwoFactorStep}>
+              Terug naar inloggen
+            </button>
+          </form>
+
+          {status ? <div className="modern-auth-status">{status}</div> : null}
+        </section>
+      </div>
+    );
   }
 
   return (

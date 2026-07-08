@@ -62,6 +62,10 @@ export async function ensureLocalSchema() {
           role text not null default 'sales'
             check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')),
           must_set_password boolean not null default false,
+          two_factor_enabled boolean not null default false,
+          two_factor_secret text,
+          two_factor_enabled_at timestamptz,
+          two_factor_last_verified_at timestamptz,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -72,6 +76,10 @@ export async function ensureLocalSchema() {
         alter table public.profiles add column if not exists workdays text;
         alter table public.profiles add column if not exists mobile_phone text;
         alter table public.profiles add column if not exists must_set_password boolean not null default false;
+        alter table public.profiles add column if not exists two_factor_enabled boolean not null default false;
+        alter table public.profiles add column if not exists two_factor_secret text;
+        alter table public.profiles add column if not exists two_factor_enabled_at timestamptz;
+        alter table public.profiles add column if not exists two_factor_last_verified_at timestamptz;
         alter table public.profiles add column if not exists updated_at timestamptz not null default now();
 
         create table if not exists public.app_sessions (
@@ -84,6 +92,18 @@ export async function ensureLocalSchema() {
 
         create index if not exists app_sessions_user_id_idx on public.app_sessions(user_id);
         create index if not exists app_sessions_expires_at_idx on public.app_sessions(expires_at);
+
+        create table if not exists public.app_2fa_challenges (
+          token_hash text primary key,
+          user_id uuid not null references public.profiles(id) on delete cascade,
+          mode text not null check (mode in ('setup', 'verify')),
+          secret text,
+          expires_at timestamptz not null,
+          created_at timestamptz not null default now()
+        );
+
+        create index if not exists app_2fa_challenges_user_id_idx on public.app_2fa_challenges(user_id);
+        create index if not exists app_2fa_challenges_expires_at_idx on public.app_2fa_challenges(expires_at);
 
         create table if not exists public.deals (
           id uuid primary key default gen_random_uuid(),

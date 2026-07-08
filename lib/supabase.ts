@@ -13,6 +13,9 @@ export type ProfileRecord = {
   workdays?: string | null;
   mobile_phone?: string | null;
   role: UserRole;
+  two_factor_enabled?: boolean | null;
+  two_factor_enabled_at?: string | null;
+  two_factor_last_verified_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

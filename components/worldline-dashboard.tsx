@@ -12,7 +12,7 @@ import {
   type RoleTabAccessMap,
 } from "@/lib/role-tabs";
 import { getSupabaseClient } from "@/lib/supabase";
-import { WORLDLINE_MCC_RECORDS } from "@/lib/worldline-mcc-data";
+import { WORLDLINE_MCC_RECORDS, WORLDLINE_MCC_RECORDS_BY_DESCRIPTION } from "@/lib/worldline-mcc-data";
 import {
   DEFAULT_WORLDLINE_AGREEMENT_FIELDS,
   WORLDLINE_AGREEMENT_FIELD_DEFINITIONS,
@@ -663,7 +663,7 @@ function renderWorldlineMccFieldControl({
           {value}
         </option>
       ) : null}
-      {WORLDLINE_MCC_RECORDS.map((record) => (
+      {WORLDLINE_MCC_RECORDS_BY_DESCRIPTION.map((record) => (
         <option key={record.mcc} value={record.mcc}>
           {record.descriptionNl}
         </option>

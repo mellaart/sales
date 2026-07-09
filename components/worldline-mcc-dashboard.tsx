@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Hash, Search, ShieldAlert, Table2 } from "lucide-react";
-import { WORLDLINE_MCC_RECORDS } from "@/lib/worldline-mcc-data";
+import { WORLDLINE_MCC_RECORDS, WORLDLINE_MCC_RECORDS_BY_DESCRIPTION } from "@/lib/worldline-mcc-data";
 import {
   ROLE_TAB_ACCESS,
   canAccessTab,
@@ -44,7 +44,7 @@ export default function WorldlineMccDashboard() {
     const descriptionFilter = normalizeFilterValue(filters.descriptionNl);
     const actSectorFilter = normalizeFilterValue(filters.actSector);
 
-    return WORLDLINE_MCC_RECORDS.filter((record) => {
+    return WORLDLINE_MCC_RECORDS_BY_DESCRIPTION.filter((record) => {
       return (
         record.mcc.toLowerCase().includes(mccFilter) &&
         record.descriptionNl.toLowerCase().includes(descriptionFilter) &&

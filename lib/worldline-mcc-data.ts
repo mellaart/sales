@@ -1396,3 +1396,11 @@ export const WORLDLINE_MCC_RECORDS: WorldlineMccRecord[] = [
     "actSector": "17"
   }
 ];
+
+export const WORLDLINE_MCC_RECORDS_BY_DESCRIPTION: WorldlineMccRecord[] = [...WORLDLINE_MCC_RECORDS].sort(
+  (leftRecord, rightRecord) =>
+    leftRecord.descriptionNl.localeCompare(rightRecord.descriptionNl, "nl-NL", {
+      numeric: true,
+      sensitivity: "base",
+    }),
+);

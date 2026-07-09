@@ -638,37 +638,51 @@ async function downloadAgreementPdf(
   pdfDoc.setSubject(`Worldline project ${project.id}`);
   const form = pdfDoc.getForm();
 
+  function fillPdfField(definition: WorldlineAgreementFieldDefinition, fieldName: string, value: string) {
+    const field = form.getField(fieldName);
+
+    if (field instanceof PDFCheckBox) {
+      if (value === "Ja") {
+        field.check();
+      } else {
+        field.uncheck();
+      }
+      return;
+    }
+
+    if (field instanceof PDFRadioGroup) {
+      const radioValue = getAgreementRadioValue(definition, fields[definition.key] ?? "");
+      if (radioValue) field.select(radioValue);
+      return;
+    }
+
+    if (field instanceof PDFDropdown) {
+      if (value) field.select(value);
+      return;
+    }
+
+    if (field instanceof PDFTextField) {
+      field.setText(value);
+    }
+  }
+
   WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.forEach((definition) => {
     const value = getAgreementPdfValue(fields, definition);
+    const pdfFieldNames = [definition.pdfField, ...(definition.pdfFieldAliases ?? [])];
+    let filledField = false;
+    let lastError: unknown = null;
 
-    try {
-      const field = form.getField(definition.pdfField);
-
-      if (field instanceof PDFCheckBox) {
-        if (value === "Ja") {
-          field.check();
-        } else {
-          field.uncheck();
-        }
-        return;
+    for (const pdfFieldName of pdfFieldNames) {
+      try {
+        fillPdfField(definition, pdfFieldName, value);
+        filledField = true;
+      } catch (error) {
+        lastError = error;
       }
+    }
 
-      if (field instanceof PDFRadioGroup) {
-        const radioValue = getAgreementRadioValue(definition, fields[definition.key] ?? "");
-        if (radioValue) field.select(radioValue);
-        return;
-      }
-
-      if (field instanceof PDFDropdown) {
-        if (value) field.select(value);
-        return;
-      }
-
-      if (field instanceof PDFTextField) {
-        field.setText(value);
-      }
-    } catch (error) {
-      console.warn(`Worldline PDF-veld niet gevuld: ${definition.pdfField}`, error);
+    if (!filledField) {
+      console.warn(`Worldline PDF-veld niet gevuld: ${pdfFieldNames.join(", ")}`, lastError);
     }
   });
 

@@ -30,6 +30,7 @@ export type WorldlineCheckResult = {
 export type WorldlineAgreementFieldDefinition = {
   key: string;
   pdfField: string;
+  pdfFieldAliases?: string[];
   label: string;
   section: string;
   type: WorldlineAgreementFieldType;
@@ -77,7 +78,14 @@ export const WORLDLINE_AGREEMENT_FIELD_DEFINITIONS: WorldlineAgreementFieldDefin
   { key: "existingCustomer", pdfField: "Bestaande klant", label: "Bestaande klant", section: "In te vullen door Worldline", type: "select", defaultValue: "nee", options: ["nee", "ja"] },
   { key: "allianceCode", pdfField: "Alliance code", label: "Alliance code", section: "In te vullen door Worldline", type: "text", defaultValue: "NL_Troublefree" },
   { key: "mcc", pdfField: "MCC", label: "MCC", section: "In te vullen door Worldline", type: "text" },
-  { key: "actSector", pdfField: "Act sector", label: "Act sector", section: "In te vullen door Worldline", type: "text" },
+  {
+    key: "actSector",
+    pdfField: "Act sector",
+    pdfFieldAliases: ["acc", "ACC"],
+    label: "Act sector",
+    section: "In te vullen door Worldline",
+    type: "text",
+  },
 
   { key: "companyName", pdfField: "Bedrijfsnaam", label: "Bedrijfsnaam", section: "Bedrijfsgegevens", type: "text" },
   { key: "contactPerson", pdfField: "Contactpersoon", label: "Contactpersoon", section: "Bedrijfsgegevens", type: "text" },

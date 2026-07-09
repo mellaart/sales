@@ -26,7 +26,7 @@ const AuthContext = createContext<AuthContextType>({
 const AUTH_REQUEST_TIMEOUT_MS = 10000;
 const SESSION_REFRESH_MARGIN_SECONDS = 90;
 const AUTH_TIMEOUT_RESULT = { timedOut: true } as const;
-const IDLE_LOGOUT_MS = 10 * 60 * 1000;
+const IDLE_LOGOUT_MS = 60 * 60 * 1000;
 const IDLE_CHECK_INTERVAL_MS = 15 * 1000;
 const LAST_ACTIVITY_STORAGE_KEY = "smarttrade-last-activity-at";
 

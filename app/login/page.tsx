@@ -38,7 +38,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("timeout") === "1") {
-      setStatus("Je bent automatisch uitgelogd omdat de website langer dan 10 minuten niet is gebruikt.");
+      setStatus("Je bent automatisch uitgelogd omdat de website langer dan 1 uur niet is gebruikt.");
     }
   }, []);
 

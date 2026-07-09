@@ -12,6 +12,7 @@ import {
   type RoleTabAccessMap,
 } from "@/lib/role-tabs";
 import { getSupabaseClient } from "@/lib/supabase";
+import { WORLDLINE_MCC_RECORDS } from "@/lib/worldline-mcc-data";
 import {
   DEFAULT_WORLDLINE_AGREEMENT_FIELDS,
   WORLDLINE_AGREEMENT_FIELD_DEFINITIONS,
@@ -571,6 +572,12 @@ function getAgreementSections() {
 
 function getAgreementPdfValue(fields: WorldlineAgreementFields, definition: WorldlineAgreementFieldDefinition) {
   const value = (fields[definition.key] ?? definition.defaultValue ?? "").trim();
+  if (definition.key === "mcc") {
+    return getWorldlineMccRecord(value)?.mcc ?? value;
+  }
+  if (definition.key === "actSector" && !value) {
+    return getWorldlineMccRecord(fields.mcc)?.actSector ?? "";
+  }
   if (definition.type === "checkbox") return value === "ja" ? "Ja" : "Nee";
   if (value === "ja") return "Ja";
   if (value === "nee") return "Nee";
@@ -595,6 +602,74 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function getWorldlineMccRecord(value?: string | null) {
+  const normalizedValue = (value ?? "").trim().toLowerCase();
+  if (!normalizedValue) return null;
+
+  return (
+    WORLDLINE_MCC_RECORDS.find(
+      (record) =>
+        record.mcc.toLowerCase() === normalizedValue ||
+        record.descriptionNl.toLowerCase() === normalizedValue,
+    ) ?? null
+  );
+}
+
+function getWorldlineMccFieldUpdates(value: string): Record<string, string> {
+  const normalizedValue = value.trim();
+  const selectedRecord = getWorldlineMccRecord(normalizedValue);
+
+  if (!normalizedValue) {
+    return { mcc: "", actSector: "" };
+  }
+
+  if (selectedRecord) {
+    return {
+      mcc: selectedRecord.mcc,
+      actSector: selectedRecord.actSector,
+    };
+  }
+
+  return { mcc: normalizedValue };
+}
+
+function renderWorldlineMccFieldControl({
+  value,
+  disabled,
+  onChange,
+  onCommit,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onCommit?: (value: string) => void;
+}) {
+  const selectedRecord = getWorldlineMccRecord(value);
+  const selectValue = selectedRecord?.mcc ?? value.trim();
+
+  return (
+    <select
+      className="input worldline-field-input"
+      value={selectValue}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      onBlur={(event) => onCommit?.(event.target.value)}
+    >
+      <option value="">-</option>
+      {value && !selectedRecord ? (
+        <option value={value}>
+          {value}
+        </option>
+      ) : null}
+      {WORLDLINE_MCC_RECORDS.map((record) => (
+        <option key={record.mcc} value={record.mcc}>
+          {record.descriptionNl}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function renderCheckResult(checkResult: WorldlineCheckResult) {
@@ -1272,9 +1347,13 @@ export default function WorldlineDashboard() {
   }
 
   function updateAgreementField(field: string, value: string) {
+    updateAgreementFields({ [field]: value });
+  }
+
+  function updateAgreementFields(updates: Record<string, string>) {
     if (!canWriteWorldline) return;
     setAgreementFields((currentFields) => {
-      const nextFields = { ...currentFields, [field]: value };
+      const nextFields = { ...currentFields, ...updates };
       agreementFieldsRef.current = nextFields;
       return nextFields;
     });
@@ -1283,9 +1362,13 @@ export default function WorldlineDashboard() {
   }
 
   function commitAgreementField(field: string, value: string) {
+    commitAgreementFields({ [field]: value });
+  }
+
+  function commitAgreementFields(updates: Record<string, string>) {
     if (!canWriteWorldline) return;
 
-    const nextFields = { ...agreementFieldsRef.current, [field]: value };
+    const nextFields = { ...agreementFieldsRef.current, ...updates };
     agreementFieldsRef.current = nextFields;
     setAgreementFields(nextFields);
     agreementFieldsDirtyRef.current = true;
@@ -2163,13 +2246,20 @@ export default function WorldlineDashboard() {
                             {definition.label}
                           </span>
                           <div className="worldline-field-control">
-                            {renderAgreementFieldControl(
-                              definition,
-                              agreementFields[definition.key] ?? definition.defaultValue ?? "",
-                              !canWriteWorldline,
-                              (value) => updateAgreementField(definition.key, value),
-                              (value) => commitAgreementField(definition.key, value),
-                            )}
+                            {definition.key === "mcc"
+                              ? renderWorldlineMccFieldControl({
+                                  value: agreementFields[definition.key] ?? definition.defaultValue ?? "",
+                                  disabled: !canWriteWorldline,
+                                  onChange: (value) => updateAgreementFields(getWorldlineMccFieldUpdates(value)),
+                                  onCommit: (value) => commitAgreementFields(getWorldlineMccFieldUpdates(value)),
+                                })
+                              : renderAgreementFieldControl(
+                                  definition,
+                                  agreementFields[definition.key] ?? definition.defaultValue ?? "",
+                                  !canWriteWorldline,
+                                  (value) => updateAgreementField(definition.key, value),
+                                  (value) => commitAgreementField(definition.key, value),
+                                )}
                           </div>
                         </div>
                       ))}

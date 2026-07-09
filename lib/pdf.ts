@@ -5,6 +5,7 @@ import { euro } from "@/lib/pricing";
 import { getQuoteLayout } from "@/lib/quote-layouts";
 import {
   getImplementationText,
+  getIncludedModulesForPackage,
   getLicenseRows,
   getModuleRows,
   getModuleSummaryText,
@@ -248,6 +249,50 @@ function addPriceTable(doc: jsPDF, title: string, rows: PdfTableRow[], y: number
   doc.text(euro.format(total), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
 
   return y + 13;
+}
+
+function addIncludedModulesTable(doc: jsPDF, title: string, rows: Array<{ amount: string; description: string }>, y: number) {
+  y = addSectionTitle(doc, title, y);
+
+  const x = 16;
+  const widths = [22, 106, 50];
+
+  doc.setFillColor(244, 247, 251);
+  doc.setDrawColor(219, 228, 238);
+  doc.rect(x, y - 5, 178, 8, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(64, 80, 100);
+  doc.text("Aantal", x + 2, y);
+  doc.text("Module", x + widths[0] + 2, y);
+  doc.text("Status", x + widths[0] + widths[1] + 2, y);
+
+  y += 8;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(25, 40, 55);
+
+  rows.forEach((row) => {
+    const descriptionLines = doc.splitTextToSize(row.description, 100);
+    const rowHeight = Math.max(9, descriptionLines.length * 4.4 + 4);
+    y = ensurePage(doc, y, rowHeight + 2);
+
+    doc.setDrawColor(234, 239, 245);
+    doc.line(x, y + 2, x + 178, y + 2);
+
+    doc.text(row.amount, x + 2, y);
+    doc.text(descriptionLines, x + widths[0] + 2, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(34, 128, 84);
+    doc.text("Inbegrepen", x + widths[0] + widths[1] + 2, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(25, 40, 55);
+
+    y += rowHeight;
+  });
+
+  return y + 5;
 }
 
 function getExpansionSectionTitle(lines: AssetExpansionLine[]) {
@@ -506,6 +551,10 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   const text = getOfferTextBlocks(input);
   const licenseRows = getLicenseRows(input);
   const supportRows = getSupportRows(input);
+  const includedModuleRows = getIncludedModulesForPackage(input.selectedModules, input.result).map((module) => ({
+    amount: `${module.qty}x`,
+    description: module.name,
+  }));
   const moduleRows = getModuleRows(input);
   const extraMonthlyRows = input.extraMonthlyRows ?? [];
   const supportTotal = supportRows.reduce((sum, row) => sum + row.total, 0);
@@ -580,6 +629,10 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   y = addPriceTable(doc, "Licentie", licenseRows, y);
   if (supportTotal > 0) {
     y = addPriceTable(doc, "Support", supportRows, y);
+  }
+
+  if (includedModuleRows.length > 0) {
+    y = addIncludedModulesTable(doc, `Inbegrepen modules in Smart Trade ${input.result.name}`, includedModuleRows, y);
   }
 
   if (moduleRows.length > 0) {

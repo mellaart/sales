@@ -536,12 +536,6 @@ function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhon
   }
 }
 
-function formatDays(days: number) {
-  const roundedDays = Math.round(days * 100) / 100;
-  const label = roundedDays === 1 ? "dag" : "dagen";
-  return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
-}
-
 export async function exportQuotePdf(input: OfferTemplateInput) {
   const doc = new jsPDF();
   const layout = getQuoteLayout(input.quoteLayout);
@@ -571,17 +565,6 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
   if (isAssetsExpansionLayout && expansionLines.length > 0) {
     const expansionTravelCostTotal = input.includeTravelCosts ? input.travelCostTotal ?? 0 : 0;
     y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2, expansionTravelCostTotal);
-
-    if (expansionTravelCostTotal > 0) {
-      const postcodeText = input.travelPostcodePrefix ? `postcode ${input.travelPostcodePrefix}` : "postcode onbekend";
-      const regionText = input.travelRegion ? `regio ${input.travelRegion}` : "regio onbekend";
-      const descriptionText = input.travelDescription ? ` (${input.travelDescription})` : "";
-      y = addParagraph(
-        doc,
-        `Reiskosten zijn meegenomen: ${formatDays(input.implementationDays ?? 0)} x ${euro.format(input.travelCostPerDay ?? 0)} = ${euro.format(expansionTravelCostTotal)} op basis van ${postcodeText}, ${regionText}${descriptionText}.`,
-        y,
-      );
-    }
 
     const expansionWorkItems = getExpansionWorkItems(input);
     if (expansionWorkItems.length > 0) {
@@ -671,16 +654,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
     y = addBullets(doc, text.implementationOptions, y);
   }
   y = addParagraph(doc, getImplementationText(input), y);
-  if (input.includeTravelCosts && input.travelCostTotal && input.travelCostTotal > 0) {
-    const postcodeText = input.travelPostcodePrefix ? `postcode ${input.travelPostcodePrefix}` : "postcode onbekend";
-    const regionText = input.travelRegion ? `regio ${input.travelRegion}` : "regio onbekend";
-    const descriptionText = input.travelDescription ? ` (${input.travelDescription})` : "";
-    y = addParagraph(
-      doc,
-      `Reiskosten zijn meegenomen: ${formatDays(input.implementationDays ?? 0)} x ${euro.format(input.travelCostPerDay ?? 0)} = ${euro.format(input.travelCostTotal)} op basis van ${postcodeText}, ${regionText}${descriptionText}.`,
-      y,
-    );
-  } else {
+  if (!input.includeTravelCosts) {
     y = addParagraph(doc, "Reiskosten worden separaat afgestemd en zijn exclusief btw.", y);
   }
 

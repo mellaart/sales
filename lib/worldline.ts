@@ -39,7 +39,7 @@ export type WorldlineAgreementFieldDefinition = {
 
 export type WorldlineAgreementFields = Record<string, string>;
 
-export const WORLDLINE_AGREEMENT_TEMPLATE_PATH = "/worldline-aansluitovereenkomst-2026-v7.pdf";
+export const WORLDLINE_AGREEMENT_TEMPLATE_PATH = "/worldline-aansluitovereenkomst-2026-v8.pdf";
 
 export type WorldlineProject = {
   id: string;

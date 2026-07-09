@@ -1,6 +1,15 @@
 import type { UserRole } from "@/lib/supabase";
 
-export type AppTabKey = "calculator" | "deals" | "assets" | "worldline" | "testen" | "prices" | "postcode" | "admin";
+export type AppTabKey =
+  | "calculator"
+  | "deals"
+  | "assets"
+  | "worldline"
+  | "testen"
+  | "prices"
+  | "postcode"
+  | "worldlineMcc"
+  | "admin";
 
 export type AppTabConfig = {
   key: AppTabKey;
@@ -31,6 +40,7 @@ export const APP_TABS: AppTabConfig[] = [
   { key: "testen", label: "Testen", href: "/testen", pathPrefix: "/testen" },
   { key: "prices", label: "Prijzen", href: "/prijzen", pathPrefix: "/prijzen" },
   { key: "postcode", label: "Postcode", href: "/postcode", pathPrefix: "/postcode" },
+  { key: "worldlineMcc", label: "Worldline MCC", href: "/worldline-mcc", pathPrefix: "/worldline-mcc" },
   { key: "admin", label: "Admin", href: "/admin", pathPrefix: "/admin" },
 ];
 
@@ -40,7 +50,17 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   support: buildRoleAccess(["deals", "assets", "testen"]),
   worldline: buildRoleAccess(["worldline"]),
   manager: buildRoleAccess(["calculator", "deals", "assets", "testen"]),
-  admin: buildRoleAccess(["calculator", "deals", "assets", "worldline", "testen", "prices", "postcode", "admin"]),
+  admin: buildRoleAccess([
+    "calculator",
+    "deals",
+    "assets",
+    "worldline",
+    "testen",
+    "prices",
+    "postcode",
+    "worldlineMcc",
+    "admin",
+  ]),
 };
 
 const VALID_TAB_KEYS = new Set<AppTabKey>(APP_TABS.map((tab) => tab.key));

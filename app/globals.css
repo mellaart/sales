@@ -1725,6 +1725,10 @@ td {
   min-width: 900px;
 }
 
+.price-table.worldline-mcc-table {
+  min-width: 760px;
+}
+
 .price-table th,
 .price-table td {
   padding: 10px 12px;
@@ -1845,6 +1849,26 @@ td {
 
 .postcode-description-input {
   min-width: 280px;
+}
+
+.worldline-mcc-table td:first-child,
+.worldline-mcc-table th:first-child {
+  min-width: 120px;
+}
+
+.worldline-mcc-table td:nth-child(2),
+.worldline-mcc-table th:nth-child(2) {
+  min-width: 430px;
+}
+
+.worldline-mcc-table td:nth-child(3),
+.worldline-mcc-table th:nth-child(3) {
+  min-width: 140px;
+}
+
+.worldline-mcc-empty {
+  color: var(--muted);
+  text-align: center;
 }
 
 .price-table-input:focus {

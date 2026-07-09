@@ -13,6 +13,9 @@ import {
 } from "@/lib/role-tabs";
 import { useAuth } from "@/components/auth-provider";
 
+const ADMIN_MENU_TAB_KEYS = ["postcode", "testen", "worldlineMcc"] as const;
+const ADMIN_MENU_TAB_KEY_SET = new Set<string>(ADMIN_MENU_TAB_KEYS);
+
 export function AppShellHeader() {
   const { user, role, signOut } = useAuth();
   const pathname = usePathname();
@@ -100,11 +103,13 @@ export function AppShellHeader() {
   const accessibleTabs = roleTabAccessLoaded ? getAccessibleTabs(role ?? "sales", roleTabAccess) : [];
   const adminTab = accessibleTabs.find((tab) => tab.key === "admin") ?? null;
   const adminUtilityTabs = adminTab
-    ? accessibleTabs.filter((tab) => tab.key === "postcode" || tab.key === "testen")
+    ? ADMIN_MENU_TAB_KEYS
+        .map((tabKey) => accessibleTabs.find((tab) => tab.key === tabKey))
+        .filter((tab): tab is (typeof accessibleTabs)[number] => Boolean(tab))
     : [];
   const mainTabs = accessibleTabs.filter((tab) => {
     if (tab.key === "admin") return false;
-    if (adminTab && (tab.key === "postcode" || tab.key === "testen")) return false;
+    if (adminTab && ADMIN_MENU_TAB_KEY_SET.has(tab.key)) return false;
     return true;
   });
   const adminMenuTabs = adminTab ? [adminTab, ...adminUtilityTabs] : [];

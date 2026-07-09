@@ -400,7 +400,7 @@ function addContactLine(doc: jsPDF, label: string, value: string, x: number, y: 
 function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number, logoDataUrl: LoadedLogo, troublefreeBadgeDataUrl: LoadedLogo) {
   const signature = getSignatureDetails(input);
 
-  y = ensurePage(doc, y, 78);
+  y = ensurePage(doc, y, 88);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.3);
   doc.setTextColor(25, 40, 55);
@@ -463,13 +463,14 @@ function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number, logoData
     doc.text("Smart Trade", 124, signatureTop + 27);
   }
 
-  const disclaimerY = signatureTop + 57;
+  const addressBottomY = companyY + 15;
+  const disclaimerY = Math.max(signatureTop + 57, addressBottomY + 8);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6);
   doc.setTextColor(25, 40, 55);
   addWrappedText(doc, SIGNATURE_DISCLAIMER, 16, disclaimerY, 178, 3.1);
 
-  return disclaimerY + 18;
+  return disclaimerY + 20;
 }
 
 function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhone?: string) {

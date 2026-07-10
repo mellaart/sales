@@ -211,6 +211,18 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
     const result = await worker.recognize(ocrImage);
     const textParts = [normalizeBrowserOcrText(result.data.text)];
 
+    if (options.documentType === "bank_statement") {
+      onProgress("Gratis OCR leest bankgegevens extra...");
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: PSM.AUTO,
+        tessedit_char_whitelist: "",
+        user_defined_dpi: "300",
+      });
+      const bankStatementResult = await worker.recognize(file);
+      textParts.push(normalizeBrowserOcrText(bankStatementResult.data.text));
+    }
+
     if (options.documentType === "identity") {
       onProgress("Gratis OCR leest paspoortregels extra...");
 

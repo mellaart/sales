@@ -41,6 +41,8 @@ export type WorldlineAgreementFieldDefinition = {
 export type WorldlineAgreementFields = Record<string, string>;
 
 export const WORLDLINE_AGREEMENT_TEMPLATE_PATH = "/worldline-aansluitovereenkomst-2026-v8.pdf";
+export const WORLDLINE_KYC_AML_TEMPLATE_PATH = "/worldline-kyc-aml-vragenlijst.docx";
+export const WORLDLINE_UBO_REGISTRATION_TEMPLATE_PATH = "/worldline-ubo-registratieformulier.pdf";
 
 export type WorldlineProject = {
   id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { AlertTriangle, Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Send, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Send, Trash2, UploadCloud, UsersRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 import {
@@ -20,7 +20,9 @@ import {
   WORLDLINE_CHECK_STATUS_LABELS,
   WORLDLINE_DOCUMENT_BUCKET,
   WORLDLINE_DOCUMENT_DEFINITIONS,
+  WORLDLINE_KYC_AML_TEMPLATE_PATH,
   WORLDLINE_STATUS_LABELS,
+  WORLDLINE_UBO_REGISTRATION_TEMPLATE_PATH,
   getWorldlineDocumentDefinition,
   normalizeWorldlineAgreementFields,
   type WorldlineAgreementFieldDefinition,
@@ -769,6 +771,48 @@ async function downloadAgreementPdf(
   const safeRelationName = sanitizeFileName(relation.name) || "worldline";
   const fileName = `${safeRelationName}-worldline-aansluitovereenkomst.pdf`;
   downloadBlob(new Blob([pdfArrayBuffer], { type: "application/pdf" }), fileName);
+}
+
+async function downloadUboDocuments(
+  relation: RelationOption,
+  project: WorldlineProject,
+  fields: WorldlineAgreementFields,
+) {
+  const [{ PDFDocument, StandardFonts }, pdfTemplateResponse, questionnaireResponse] = await Promise.all([
+    import("pdf-lib"),
+    fetch(WORLDLINE_UBO_REGISTRATION_TEMPLATE_PATH),
+    fetch(WORLDLINE_KYC_AML_TEMPLATE_PATH),
+  ]);
+
+  if (!pdfTemplateResponse.ok) {
+    throw new Error("UBO-registratieformulier kon niet worden geladen.");
+  }
+
+  if (!questionnaireResponse.ok) {
+    throw new Error("KYC- en AML-vragenlijst kon niet worden geladen.");
+  }
+
+  const pdfDoc = await PDFDocument.load(await pdfTemplateResponse.arrayBuffer());
+  pdfDoc.setTitle(`UBO-registratieformulier ${relation.name}`);
+  pdfDoc.setSubject(`Worldline project ${project.id}`);
+  const form = pdfDoc.getForm();
+  const companyName = (fields.companyName || relation.name).trim();
+  const vatNumber = (fields.vatNumber || "").trim();
+
+  form.getTextField("1723.1.01.VP.1").setText(companyName);
+  form.getTextField("1723.1.01.VP.2").setText(vatNumber);
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  form.updateFieldAppearances(font);
+
+  const [pdfBytes, questionnaireBlob] = await Promise.all([
+    pdfDoc.save(),
+    questionnaireResponse.blob(),
+  ]);
+  const pdfArrayBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+
+  downloadBlob(questionnaireBlob, "KYC- en AML-vragenlijst.docx");
+  downloadBlob(new Blob([pdfArrayBuffer], { type: "application/pdf" }), "UBO-registratieformulier.pdf");
 }
 
 function renderAgreementFieldControl(
@@ -1865,6 +1909,20 @@ export default function WorldlineDashboard() {
     }
   }
 
+  async function handleDownloadUboDocuments() {
+    if (!selectedRelation || !activeProject) return;
+
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
+    setStatus("UBO-documenten worden voorbereid...");
+
+    try {
+      await downloadUboDocuments(selectedRelation, activeProject, agreementFieldsRef.current);
+      setStatus("KYC- en AML-vragenlijst en UBO-registratieformulier gedownload.");
+    } catch (error) {
+      setStatus(`UBO-documenten downloaden mislukt: ${getErrorMessage(error, "documenten konden niet worden voorbereid.")}`);
+    }
+  }
+
   async function downloadDocument(document: WorldlineDocument) {
     if (!supabase) return;
 
@@ -2209,6 +2267,10 @@ export default function WorldlineDashboard() {
                   <button type="button" className="primary-button" onClick={() => void handleDownloadAgreementPdf()} disabled={busy || savingAgreementFields}>
                     <Download size={16} />
                     Download PDF
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => void handleDownloadUboDocuments()} disabled={busy || savingAgreementFields}>
+                    <UsersRound size={16} />
+                    UBO
                   </button>
                   <button
                     type="button"

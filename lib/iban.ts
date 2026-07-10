@@ -111,6 +111,23 @@ function normalizeIbanCandidate(value: string) {
   return `${countryCode}${checkDigits}${compact.slice(4)}`;
 }
 
+function hasValidIbanChecksum(candidate: string) {
+  const rearranged = `${candidate.slice(4)}${candidate.slice(0, 4)}`;
+  let remainder = 0;
+
+  for (const character of rearranged) {
+    const digits = character >= "A" && character <= "Z"
+      ? String(character.charCodeAt(0) - 55)
+      : character;
+
+    for (const digit of digits) {
+      remainder = (remainder * 10 + Number(digit)) % 97;
+    }
+  }
+
+  return remainder === 1;
+}
+
 function normalizeCandidate(rawCandidate: string) {
   const normalized = normalizeIbanCandidate(rawCandidate);
   const countryCode = normalized.slice(0, 2);
@@ -123,6 +140,7 @@ function normalizeCandidate(rawCandidate: string) {
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(candidate)) return "";
   if (candidate.length < 15 || candidate.length > 34) return "";
   if (expectedLength && candidate.length !== expectedLength) return "";
+  if (!hasValidIbanChecksum(candidate)) return "";
 
   return candidate;
 }

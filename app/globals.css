@@ -2444,6 +2444,31 @@ td {
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.22);
 }
 
+.modern-auth-form .two-factor-remember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.modern-auth-form .two-factor-remember input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 18px;
+  accent-color: #3b82f6;
+  box-shadow: none;
+}
+
+.modern-auth-form .two-factor-remember span {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .modern-auth-primary,
 .modern-auth-secondary {
   margin-top: 4px;

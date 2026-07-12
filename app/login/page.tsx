@@ -17,7 +17,7 @@ type TwoFactorChallenge = {
 };
 
 type TwoFactorAuthClient = {
-  verifyTwoFactor?: (input: { challengeToken: string; code: string }) => Promise<{
+  verifyTwoFactor?: (input: { challengeToken: string; code: string; rememberDevice?: boolean }) => Promise<{
     data: unknown;
     error: { message: string } | null;
   }>;
@@ -34,11 +34,12 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [twoFactor, setTwoFactor] = useState<TwoFactorChallenge | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("timeout") === "1") {
-      setStatus("Je bent automatisch uitgelogd omdat de website langer dan 1 uur niet is gebruikt.");
+      setStatus("Je bent automatisch uitgelogd omdat de website langer dan 10 uur niet is gebruikt.");
     }
   }, []);
 
@@ -130,6 +131,7 @@ export default function LoginPage() {
     if (data?.twoFactor?.challengeToken) {
       setTwoFactor(data.twoFactor);
       setTwoFactorCode("");
+      setRememberDevice(false);
       setPassword("");
       setStatus(data.twoFactor.mode === "setup"
         ? "Scan de QR-code en vul daarna de 6-cijferige code in."
@@ -159,6 +161,7 @@ export default function LoginPage() {
     const { error } = await authClient.verifyTwoFactor({
       challengeToken: twoFactor.challengeToken,
       code: twoFactorCode,
+      rememberDevice,
     });
 
     setBusy(false);
@@ -174,6 +177,7 @@ export default function LoginPage() {
   function resetTwoFactorStep() {
     setTwoFactor(null);
     setTwoFactorCode("");
+    setRememberDevice(false);
     setQrDataUrl("");
     setStatus("");
   }
@@ -225,6 +229,15 @@ export default function LoginPage() {
                 maxLength={6}
                 autoComplete="one-time-code"
               />
+            </label>
+
+            <label className="two-factor-remember">
+              <input
+                type="checkbox"
+                checked={rememberDevice}
+                onChange={(event) => setRememberDevice(event.target.checked)}
+              />
+              <span>Dit apparaat 30 dagen onthouden</span>
             </label>
 
             <button type="submit" className="modern-auth-primary" disabled={busy}>

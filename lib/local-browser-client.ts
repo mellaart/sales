@@ -218,7 +218,7 @@ function createLocalBrowserClient() {
         }
         return { data: payload?.data ?? null, error: null };
       },
-      async verifyTwoFactor(input: { challengeToken: string; code: string }) {
+      async verifyTwoFactor(input: { challengeToken: string; code: string; rememberDevice?: boolean }) {
         const response = await fetch("/api/local/auth/2fa/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

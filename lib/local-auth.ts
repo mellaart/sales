@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { LOCAL_SESSION_COOKIE } from "@/lib/local-auth-shared";
+import { LOCAL_SESSION_COOKIE, LOCAL_TRUSTED_DEVICE_COOKIE } from "@/lib/local-auth-shared";
 import { createId, ensureLocalSchema, query, queryWithoutSchema } from "@/lib/local-db";
 import { getEffectiveUserRole, getProtectedAdminProfile, isProtectedAdminEmail } from "@/lib/protected-admin";
 import type { ProfileRecord, UserRole } from "@/lib/supabase";
@@ -12,8 +12,9 @@ import {
   verifyTotpCode,
 } from "@/lib/two-factor";
 
-const SESSION_TTL_SECONDS = 12 * 60 * 60;
+const SESSION_TTL_SECONDS = 10 * 60 * 60;
 const TWO_FACTOR_CHALLENGE_TTL_SECONDS = 10 * 60;
+const TRUSTED_DEVICE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 type DbProfile = ProfileRecord & {
   password_hash?: string | null;
@@ -205,6 +206,43 @@ async function createSession(profile: DbProfile) {
   } satisfies LocalSession;
 }
 
+async function createTrustedDevice(profile: DbProfile) {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = Math.floor(Date.now() / 1000) + TRUSTED_DEVICE_TTL_SECONDS;
+
+  await queryWithoutSchema("delete from public.app_trusted_devices where expires_at <= now()");
+  await queryWithoutSchema(
+    `insert into public.app_trusted_devices (token_hash, user_id, expires_at)
+     values ($1, $2, to_timestamp($3))`,
+    [hashToken(token), profile.id, expiresAt],
+  );
+
+  return { token, expiresAt };
+}
+
+async function isTrustedDeviceForUser(token: string | null, userId: string) {
+  if (!token) return false;
+
+  const tokenHash = hashToken(token);
+  const { rowCount } = await queryWithoutSchema(
+    `update public.app_trusted_devices
+     set last_used_at = now()
+     where token_hash = $1
+       and user_id = $2
+       and expires_at > now()`,
+    [tokenHash, userId],
+  );
+
+  if (!rowCount) {
+    await queryWithoutSchema(
+      "delete from public.app_trusted_devices where token_hash = $1 and expires_at <= now()",
+      [tokenHash],
+    );
+  }
+
+  return Boolean(rowCount);
+}
+
 async function createTwoFactorChallenge(profile: DbProfile, mode: "setup" | "verify") {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = Math.floor(Date.now() / 1000) + TWO_FACTOR_CHALLENGE_TTL_SECONDS;
@@ -231,7 +269,7 @@ async function createTwoFactorChallenge(profile: DbProfile, mode: "setup" | "ver
   };
 }
 
-export async function signInLocal(email: string, password: string) {
+export async function signInLocal(email: string, password: string, trustedDeviceToken: string | null = null) {
   await ensureLocalSchema();
 
   const normalizedEmail = normalizeEmail(email);
@@ -253,6 +291,14 @@ export async function signInLocal(email: string, password: string) {
     return { error: "E-mailadres of wachtwoord klopt niet." };
   }
 
+  if (
+    profile.two_factor_enabled &&
+    profile.two_factor_secret &&
+    await isTrustedDeviceForUser(trustedDeviceToken, profile.id)
+  ) {
+    return { session: await createSession(profile) };
+  }
+
   const challenge = await createTwoFactorChallenge(
     profile,
     profile.two_factor_enabled && profile.two_factor_secret ? "verify" : "setup",
@@ -270,7 +316,7 @@ export async function signInLocal(email: string, password: string) {
   };
 }
 
-export async function verifyLocalTwoFactor(challengeToken: string, code: string) {
+export async function verifyLocalTwoFactor(challengeToken: string, code: string, rememberDevice = false) {
   await ensureLocalSchema();
 
   const { rows } = await queryWithoutSchema<
@@ -342,20 +388,29 @@ export async function verifyLocalTwoFactor(challengeToken: string, code: string)
 
   return {
     session: await createSession(profile),
+    trustedDevice: rememberDevice ? await createTrustedDevice(profile) : null,
   };
+}
+
+function readCookie(request: Request, name: string) {
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const cookie = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
 }
 
 export function readBearerToken(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
 
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  const tokenCookie = cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${LOCAL_SESSION_COOKIE}=`));
+  return readCookie(request, LOCAL_SESSION_COOKIE);
+}
 
-  return tokenCookie ? decodeURIComponent(tokenCookie.slice(LOCAL_SESSION_COOKIE.length + 1)) : null;
+export function readTrustedDeviceToken(request: Request) {
+  return readCookie(request, LOCAL_TRUSTED_DEVICE_COOKIE);
 }
 
 export async function getLocalSession(token: string | null) {
@@ -420,6 +475,7 @@ export async function updateLocalPassword(token: string | null, password: string
      where id = $1`,
     [session.user.id, hashPassword(password)],
   );
+  await queryWithoutSchema("delete from public.app_trusted_devices where user_id = $1", [session.user.id]);
 
   return {};
 }
@@ -438,6 +494,7 @@ export async function updateLocalPasswordForUser(userId: string, password: strin
   );
 
   if (!rowCount) return { error: "Gebruiker niet gevonden." };
+  await queryWithoutSchema("delete from public.app_trusted_devices where user_id = $1", [userId]);
   return {};
 }
 
@@ -456,6 +513,7 @@ export async function resetLocalTwoFactorForUser(userId: string) {
   );
 
   await queryWithoutSchema("delete from public.app_2fa_challenges where user_id = $1", [userId]);
+  await queryWithoutSchema("delete from public.app_trusted_devices where user_id = $1", [userId]);
 
   if (!rowCount) return { error: "Gebruiker niet gevonden." };
   return {};
@@ -510,6 +568,16 @@ export async function createLocalUser(input: {
 
 export function setLocalSessionCookie(response: NextResponse, token: string, expiresAt: number) {
   response.cookies.set(LOCAL_SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: new Date(expiresAt * 1000),
+  });
+}
+
+export function setLocalTrustedDeviceCookie(response: NextResponse, token: string, expiresAt: number) {
+  response.cookies.set(LOCAL_TRUSTED_DEVICE_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

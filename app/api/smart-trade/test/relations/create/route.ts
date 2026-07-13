@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const TEST_RELATION_DEFAULTS = {
-  group: 7,
+  group_id: 7,
   type: 2,
-  onMailingList: true,
+  mailinglist: 1,
   status: 3,
 } as const;
 
@@ -69,10 +69,24 @@ function apiErrorMessage(status: number, body: unknown) {
   if (body && typeof body === "object") {
     const record = body as Record<string, unknown>;
     const message = record.message ?? record.error;
-    if (typeof message === "string" && message.trim()) return message.trim();
-
     const errors = record.errors;
-    if (errors && typeof errors === "object") return JSON.stringify(errors);
+    if (errors && typeof errors === "object") {
+      const details = Object.entries(errors as Record<string, unknown>)
+        .flatMap(([field, value]) => {
+          const messages = Array.isArray(value) ? value : [value];
+          return messages
+            .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+            .map((item) => `${field}: ${item.trim()}`);
+        })
+        .join(" ");
+
+      if (details) {
+        const prefix = typeof message === "string" && message.trim() ? `${message.trim()} ` : "";
+        return `${prefix}${details}`.trim();
+      }
+    }
+
+    if (typeof message === "string" && message.trim()) return message.trim();
   }
 
   if (typeof body === "string" && body.trim()) return body.trim().slice(0, 700);

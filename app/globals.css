@@ -761,11 +761,15 @@ select option {
   border-top: 1px solid var(--line);
 }
 
-.relation-test-fixed-values .summary-list,
-.relation-test-preview-list {
+.relation-test-fixed-values .summary-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 32px;
+}
+
+.relation-test-preview-list {
+  display: grid;
+  grid-template-columns: 1fr;
 }
 
 .relation-test-preview h3 {
@@ -788,8 +792,7 @@ select option {
     min-height: 0;
   }
 
-  .relation-test-fixed-values .summary-list,
-  .relation-test-preview-list {
+  .relation-test-fixed-values .summary-list {
     grid-template-columns: 1fr;
   }
 }

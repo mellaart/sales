@@ -72,6 +72,7 @@ type PullResult = {
 
 function defaultQuery(endpoint?: ApiEndpoint | null) {
   if (!endpoint) return "";
+  if (endpoint.path === "/relations") return "page=1&per_page=1000";
   if (["/articles", "/relations", "/assets", "/orders", "/offers"].includes(endpoint.path)) {
     return "page=1&per_page=25";
   }
@@ -110,6 +111,31 @@ function responseRows(result: PullResult | null) {
     return Array.isArray(data) ? data : [];
   }
   return [];
+}
+
+function filterRelationsFromId(result: PullResult, minimumId: string) {
+  if (!minimumId.trim()) return result;
+  const threshold = Number(minimumId);
+  if (!Number.isFinite(threshold) || threshold < 0) return result;
+
+  const keepRelation = (row: unknown) => {
+    if (!row || typeof row !== "object") return false;
+    const id = Number((row as Record<string, unknown>).id);
+    return Number.isFinite(id) && id > threshold;
+  };
+
+  if (Array.isArray(result.body)) {
+    return { ...result, body: result.body.filter(keepRelation) };
+  }
+
+  if (result.body && typeof result.body === "object") {
+    const body = result.body as Record<string, unknown>;
+    if (Array.isArray(body.data)) {
+      return { ...result, body: { ...body, data: body.data.filter(keepRelation) } };
+    }
+  }
+
+  return result;
 }
 
 function collectColumns(rows: Record<string, unknown>[]) {
@@ -185,6 +211,7 @@ export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTest
   const [tag, setTag] = useState("");
   const [pathValues, setPathValues] = useState<Record<string, string>>({});
   const [queryString, setQueryString] = useState("");
+  const [minimumRelationId, setMinimumRelationId] = useState("2500");
   const [ifModifiedSince, setIfModifiedSince] = useState("");
   const [ifNoneMatch, setIfNoneMatch] = useState("");
   const [result, setResult] = useState<PullResult | null>(null);
@@ -262,12 +289,20 @@ export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTest
         }),
       });
       const json = (await response.json()) as PullResult;
-      setResult(json);
+      const visibleResult =
+        moduleKey === "relations" && selectedEndpoint.path === "/relations" && !json.error
+          ? filterRelationsFromId(json, minimumRelationId)
+          : json;
+      setResult(visibleResult);
       if (!response.ok || json.error) {
         setStatus(json.error ?? "Pull mislukt.");
         return;
       }
-      setStatus(`${json.status} ${json.statusText ?? ""} in ${json.durationMs ?? 0} ms`);
+      const relationFilterStatus =
+        moduleKey === "relations" && selectedEndpoint.path === "/relations" && minimumRelationId.trim()
+          ? ` · ${responseRows(visibleResult).length} relaties met ID hoger dan ${minimumRelationId}`
+          : "";
+      setStatus(`${json.status} ${json.statusText ?? ""} in ${json.durationMs ?? 0} ms${relationFilterStatus}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Pull mislukt.";
       setResult({ error: message });
@@ -357,6 +392,12 @@ export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTest
               {selectedEndpoint?.pathParams.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>{selectedEndpoint.pathParams.map((name) => <label key={name} className="input-wrap"><span className="input-label">{name}</span><input className="input" value={pathValues[name] ?? ""} onChange={(event) => setPathValues((current) => ({ ...current, [name]: event.target.value }))} required /></label>)}</div> : null}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
                 <label className="input-wrap"><span className="input-label">Querystring</span><input className="input" value={queryString} onChange={(event) => setQueryString(event.target.value)} placeholder="page=1&per_page=25&include=contactAddress" /></label>
+                {moduleKey === "relations" && selectedEndpoint?.path === "/relations" ? (
+                  <label className="input-wrap">
+                    <span className="input-label">Toon ID hoger dan</span>
+                    <input className="input" type="number" min="0" step="1" value={minimumRelationId} onChange={(event) => setMinimumRelationId(event.target.value)} />
+                  </label>
+                ) : null}
                 <label className="input-wrap"><span className="input-label">If-Modified-Since</span><input className="input" value={ifModifiedSince} onChange={(event) => setIfModifiedSince(event.target.value)} /></label>
                 <label className="input-wrap"><span className="input-label">If-None-Match</span><input className="input" value={ifNoneMatch} onChange={(event) => setIfNoneMatch(event.target.value)} /></label>
               </div>

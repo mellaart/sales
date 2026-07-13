@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
+import { requireLocalUser } from "@/lib/local-auth";
 import { fillPathTemplate, getApiTestEndpoint } from "@/lib/retail-api-endpoints";
 import {
   fetchWithSmartTradeTimeout,
   getSmartTradePullConfig,
   getSmartTradePullHeaders,
+  type SmartTradePullEnvironment,
 } from "@/lib/smart-trade-pull-test";
 
 export const dynamic = "force-dynamic";
 
 type PullBody = {
+  environment?: SmartTradePullEnvironment;
   pathTemplate?: string;
   pathParams?: Record<string, unknown>;
   queryString?: string;
@@ -33,8 +36,12 @@ function applyQuery(target: URL, queryString?: string) {
   return target;
 }
 
-function buildTargetUrl(endpointPath: string, queryString?: string) {
-  const config = getSmartTradePullConfig();
+function buildTargetUrl(
+  environment: SmartTradePullEnvironment,
+  endpointPath: string,
+  queryString?: string,
+) {
+  const config = getSmartTradePullConfig(environment);
   const target = new URL(config.baseUrl);
   const basePath = target.pathname.replace(/\/+$/, "");
   const endpoint = pathSegments(endpointPath).join("/");
@@ -58,7 +65,13 @@ function isVersionDetectionError(status: number, bodyText: string) {
 
 export async function POST(request: Request) {
   try {
+    const verified = await requireLocalUser(request);
+    if (!verified.ok) {
+      return NextResponse.json({ error: verified.message }, { status: 401 });
+    }
+
     const body = (await request.json()) as PullBody;
+    const environment: SmartTradePullEnvironment = body.environment === "test" ? "test" : "live";
     const pathTemplate = body.pathTemplate ?? "";
     const endpoint = getApiTestEndpoint(pathTemplate);
 
@@ -67,7 +80,7 @@ export async function POST(request: Request) {
     }
 
     const endpointPath = fillPathTemplate(pathTemplate, body.pathParams ?? {});
-    const targetUrl = buildTargetUrl(endpointPath, body.queryString);
+    const targetUrl = buildTargetUrl(environment, endpointPath, body.queryString);
     const extraHeaders: Record<string, string> = {};
 
     if (body.ifModifiedSince?.trim()) {
@@ -78,9 +91,9 @@ export async function POST(request: Request) {
       extraHeaders["if-none-match"] = body.ifNoneMatch.trim();
     }
 
-    const headers = getSmartTradePullHeaders(extraHeaders);
+    const headers = getSmartTradePullHeaders(environment, extraHeaders);
     const startedAt = Date.now();
-    const response = await fetchWithSmartTradeTimeout(targetUrl.toString(), headers);
+    const response = await fetchWithSmartTradeTimeout(targetUrl.toString(), headers, environment);
     const responseBuffer = Buffer.from(await response.arrayBuffer());
     const rawResponseText = responseBuffer.toString("utf8");
     const contentType = response.headers.get("content-type") ?? "";
@@ -104,6 +117,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: response.ok,
+      environment,
       status: response.status,
       statusText: response.statusText,
       url: targetUrl.toString(),

@@ -2,9 +2,44 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Copy, Download, FileJson, Search, Server, Table2 } from "lucide-react";
+import { ArrowLeft, Copy, Download, FileJson, Search, Server, Table2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
+
+export type ApiTestModule = "relations" | "orders" | "assets";
+
+const API_TEST_MODULES: Record<
+  ApiTestModule,
+  {
+    label: string;
+    title: string;
+    description: string;
+    defaultPath: string;
+    matches: (path: string) => boolean;
+  }
+> = {
+  relations: {
+    label: "Relaties",
+    title: "Relaties testen",
+    description: "Controleer relatiegegevens in de Smart Trade testadministratie.",
+    defaultPath: "/relations",
+    matches: (path) => path.startsWith("/relations"),
+  },
+  orders: {
+    label: "Orders",
+    title: "Orders testen",
+    description: "Controleer orders in de Smart Trade testadministratie.",
+    defaultPath: "/orders",
+    matches: (path) => path.startsWith("/orders"),
+  },
+  assets: {
+    label: "Assets",
+    title: "Assets testen",
+    description: "Controleer assets en assetklassen in de Smart Trade testadministratie.",
+    defaultPath: "/assets",
+    matches: (path) => path.startsWith("/assets") || path.startsWith("/asset_"),
+  },
+};
 
 type ApiEndpoint = {
   method: "GET";
@@ -139,8 +174,9 @@ function ResponseTable({ result }: { result: PullResult | null }) {
   );
 }
 
-export default function ApiPullTestDashboard() {
+export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTestModule }) {
   const { user, loading } = useAuth();
+  const moduleConfig = API_TEST_MODULES[moduleKey];
   const [basePath, setBasePath] = useState("/v3/api");
   const [endpoints, setEndpoints] = useState<ApiEndpoint[]>([]);
   const [selectedEndpoint, setSelectedEndpoint] = useState<ApiEndpoint | null>(null);
@@ -164,13 +200,17 @@ export default function ApiPullTestDashboard() {
         if (!response.ok) throw new Error("Swagger laden mislukt.");
         if (!active) return;
 
-        const firstEndpoint = json.endpoints.find((endpoint) => endpoint.path === "/articles") ?? json.endpoints[0] ?? null;
+        const matchingEndpoints = json.endpoints.filter((endpoint) => moduleConfig.matches(endpoint.path));
+        const firstEndpoint =
+          matchingEndpoints.find((endpoint) => endpoint.path === moduleConfig.defaultPath) ??
+          matchingEndpoints[0] ??
+          null;
         setBasePath(json.basePath);
-        setEndpoints(json.endpoints);
+        setEndpoints(matchingEndpoints);
         setSelectedEndpoint(firstEndpoint);
         setPathValues(Object.fromEntries((firstEndpoint?.pathParams ?? []).map((name) => [name, ""])));
         setQueryString(defaultQuery(firstEndpoint));
-        setStatus(`${json.endpoints.length} GET routes geladen.`);
+        setStatus(`${matchingEndpoints.length} alleen-lezen routes geladen.`);
       } catch (error) {
         if (!active) return;
         setStatus(error instanceof Error ? error.message : "Swagger laden mislukt.");
@@ -180,7 +220,7 @@ export default function ApiPullTestDashboard() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [moduleConfig]);
 
   const tags = useMemo(() => [...new Set(endpoints.map((endpoint) => endpoint.tag).sort())], [endpoints]);
   const filteredEndpoints = useMemo(() => {
@@ -211,7 +251,14 @@ export default function ApiPullTestDashboard() {
       const response = await fetch("/api/smart-trade/pull-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pathTemplate: selectedEndpoint.path, pathParams: pathValues, queryString, ifModifiedSince, ifNoneMatch }),
+        body: JSON.stringify({
+          environment: "test",
+          pathTemplate: selectedEndpoint.path,
+          pathParams: pathValues,
+          queryString,
+          ifModifiedSince,
+          ifNoneMatch,
+        }),
       });
       const json = (await response.json()) as PullResult;
       setResult(json);
@@ -258,7 +305,7 @@ export default function ApiPullTestDashboard() {
     return (
       <div className="page-shell">
         <div className="container stack-4">
-          <section className="brand-hero card"><div><div className="brand-mark">Testen</div><h1>Inloggen</h1><p>Log in om de API test te openen.</p></div></section>
+          <section className="brand-hero card"><div><div className="brand-mark">Testen</div><h1>Inloggen</h1><p>Log in om {moduleConfig.label.toLowerCase()} te testen.</p></div></section>
           <Link href="/login" className="primary-button">Naar login</Link>
         </div>
       </div>
@@ -269,8 +316,12 @@ export default function ApiPullTestDashboard() {
     <div className="page-shell">
       <div className="container stack-4">
         <header className="brand-hero card">
-          <div><div className="brand-mark">Testen</div><h1>Retail API pull test</h1><p>Basispad {basePath}. Pullen gebeurt server-side met de live environment variables.</p></div>
-          <div className="brand-actions"><StatusPill tone="success">{endpoints.length} GET routes</StatusPill><StatusPill tone="warning">{rowCount} records</StatusPill></div>
+          <div><div className="brand-mark">Testen · {moduleConfig.label}</div><h1>{moduleConfig.title}</h1><p>{moduleConfig.description} Alle acties op deze pagina zijn alleen-lezen via {basePath}.</p></div>
+          <div className="brand-actions">
+            <Link href="/testen" className="secondary-button"><ArrowLeft size={16} />Overzicht</Link>
+            <StatusPill tone="success">Testadministratie</StatusPill>
+            <StatusPill tone="warning">{rowCount} records</StatusPill>
+          </div>
         </header>
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 340px) minmax(0, 1fr)", gap: 24, alignItems: "start" }}>
@@ -298,7 +349,7 @@ export default function ApiPullTestDashboard() {
                 <label className="input-wrap"><span className="input-label">If-None-Match</span><input className="input" value={ifNoneMatch} onChange={(event) => setIfNoneMatch(event.target.value)} /></label>
               </div>
               <div className="button-row" style={{ marginTop: 18 }}>
-                <button type="submit" className="primary-button" disabled={busy || !selectedEndpoint}><Search size={16} />{busy ? "Pullen..." : "Pull"}</button>
+                <button type="submit" className="primary-button" disabled={busy || !selectedEndpoint}><Search size={16} />{busy ? "Test loopt..." : "Test uitvoeren"}</button>
                 <button type="button" className="secondary-button" onClick={() => void copyUrl()} disabled={!result?.url}><Copy size={16} />URL</button>
                 <button type="button" className="secondary-button" onClick={downloadJson} disabled={!result}><FileJson size={16} />JSON</button>
                 <button type="button" className="secondary-button" onClick={downloadCsv} disabled={rowCount === 0}><Download size={16} />CSV</button>

@@ -7,6 +7,8 @@ type SmartTradePullConfig = {
   timeoutMs: number;
 };
 
+export type SmartTradePullEnvironment = "live" | "test";
+
 function env(name: string) {
   return process.env[name]?.trim() || "";
 }
@@ -27,28 +29,41 @@ function basicAuthorization(user: string, password: string) {
   return `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
 }
 
-export function getSmartTradePullConfig(): SmartTradePullConfig {
-  const company = env("SMART_TRADE_COMPANY_KEY") || env("SMART_TRADE_COMPANY");
-  const user = env("SMART_TRADE_API_USER");
-  const password = env("SMART_TRADE_API_PASSWORD");
-  const timeoutMs = Number(env("SMART_TRADE_API_TIMEOUT_MS") || DEFAULT_TIMEOUT_MS);
+export function getSmartTradePullConfig(environment: SmartTradePullEnvironment = "live"): SmartTradePullConfig {
+  const isTest = environment === "test";
+  const company = isTest
+    ? env("SMART_TRADE_TEST_COMPANY_KEY") || env("SMART_TRADE_TEST_COMPANY")
+    : env("SMART_TRADE_COMPANY_KEY") || env("SMART_TRADE_COMPANY");
+  const user = env(isTest ? "SMART_TRADE_TEST_API_USER" : "SMART_TRADE_API_USER");
+  const password = env(isTest ? "SMART_TRADE_TEST_API_PASSWORD" : "SMART_TRADE_API_PASSWORD");
+  const timeoutMs = Number(
+    env(isTest ? "SMART_TRADE_TEST_API_TIMEOUT_MS" : "SMART_TRADE_API_TIMEOUT_MS") ||
+      env("SMART_TRADE_API_TIMEOUT_MS") ||
+      DEFAULT_TIMEOUT_MS,
+  );
+  const configuredBaseUrl = env(isTest ? "SMART_TRADE_TEST_API_BASE_URL" : "SMART_TRADE_API_BASE_URL");
 
-  if (!company || !user || !password) {
+  if (!company || !user || !password || (isTest && !configuredBaseUrl)) {
     throw new Error(
-      "Smart Trade API is niet geconfigureerd. Vul SMART_TRADE_COMPANY_KEY, SMART_TRADE_API_USER en SMART_TRADE_API_PASSWORD in bij de environment variables.",
+      isTest
+        ? "De Smart Trade testadministratie is niet volledig geconfigureerd. Controleer de vier SMART_TRADE_TEST_* environment variables."
+        : "Smart Trade API is niet geconfigureerd. Vul SMART_TRADE_COMPANY_KEY, SMART_TRADE_API_USER en SMART_TRADE_API_PASSWORD in bij de environment variables.",
     );
   }
 
   return {
-    baseUrl: normalizeRetailApiBaseUrl(process.env.SMART_TRADE_API_BASE_URL),
+    baseUrl: normalizeRetailApiBaseUrl(configuredBaseUrl),
     company,
     authorization: basicAuthorization(user, password),
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS,
   };
 }
 
-export function getSmartTradePullHeaders(extraHeaders: Record<string, string> = {}) {
-  const config = getSmartTradePullConfig();
+export function getSmartTradePullHeaders(
+  environment: SmartTradePullEnvironment = "live",
+  extraHeaders: Record<string, string> = {},
+) {
+  const config = getSmartTradePullConfig(environment);
 
   return {
     accept: "application/json, text/plain, */*",
@@ -84,8 +99,12 @@ function getSmartTradeFetchErrorDetail(error: unknown) {
   return error.message;
 }
 
-export async function fetchWithSmartTradeTimeout(url: string, headers: Record<string, string>) {
-  const config = getSmartTradePullConfig();
+export async function fetchWithSmartTradeTimeout(
+  url: string,
+  headers: Record<string, string>,
+  environment: SmartTradePullEnvironment = "live",
+) {
+  const config = getSmartTradePullConfig(environment);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
@@ -103,7 +122,7 @@ export async function fetchWithSmartTradeTimeout(url: string, headers: Record<st
     }
 
     throw new Error(
-      `Smart Trade API verbinding mislukt naar ${getSmartTradeHost(url)}: ${getSmartTradeFetchErrorDetail(error)}. Controleer SMART_TRADE_API_BASE_URL, DNS/SSL en firewall vanaf de server.`,
+      `Smart Trade API verbinding mislukt naar ${getSmartTradeHost(url)}: ${getSmartTradeFetchErrorDetail(error)}. Controleer ${environment === "test" ? "SMART_TRADE_TEST_API_BASE_URL" : "SMART_TRADE_API_BASE_URL"}, DNS/SSL en firewall vanaf de server.`,
     );
   } finally {
     clearTimeout(timeout);

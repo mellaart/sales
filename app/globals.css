@@ -708,6 +708,59 @@ select option {
   background: rgba(147,197,253,0.78);
 }
 
+.api-test-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.api-test-module-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  min-height: 220px;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.api-test-module-link:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96,165,250,0.48);
+  background: rgba(30,58,138,0.2);
+}
+
+.api-test-module-link strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.api-test-module-link span span {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.api-test-module-link .api-test-module-action {
+  grid-column: 2;
+  align-self: end;
+  margin-top: 14px;
+  color: #93c5fd;
+  font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .api-test-module-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .api-test-module-link {
+    min-height: 0;
+  }
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

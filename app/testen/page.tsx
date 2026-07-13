@@ -1,5 +1,5 @@
-import ApiPullTestDashboard from "@/components/api-pull-test-dashboard";
+import ApiTestHub from "@/components/api-test-hub";
 
 export default function TestenPage() {
-  return <ApiPullTestDashboard />;
+  return <ApiTestHub />;
 }

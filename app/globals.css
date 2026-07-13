@@ -751,6 +751,34 @@ select option {
   font-weight: 800;
 }
 
+.relation-test-create .top-row {
+  margin-bottom: 0;
+}
+
+.relation-test-fixed-values,
+.relation-test-preview {
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.relation-test-fixed-values .summary-list,
+.relation-test-preview-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+}
+
+.relation-test-preview h3 {
+  margin-top: 6px;
+  font-size: 23px;
+}
+
+.save-status.success {
+  border-color: rgba(52,211,153,0.28);
+  background: rgba(6,78,59,0.24);
+  color: #a7f3d0;
+}
+
 @media (max-width: 980px) {
   .api-test-module-grid {
     grid-template-columns: 1fr;
@@ -758,6 +786,11 @@ select option {
 
   .api-test-module-link {
     min-height: 0;
+  }
+
+  .relation-test-fixed-values .summary-list,
+  .relation-test-preview-list {
+    grid-template-columns: 1fr;
   }
 }
 

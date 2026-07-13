@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Copy, Download, FileJson, Search, Server, Table2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import RelationCreateTestForm from "@/components/relation-create-test-form";
 import { StatusPill } from "@/components/ui";
 
 export type ApiTestModule = "relations" | "orders" | "assets";
@@ -316,13 +317,24 @@ export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTest
     <div className="page-shell">
       <div className="container stack-4">
         <header className="brand-hero card">
-          <div><div className="brand-mark">Testen · {moduleConfig.label}</div><h1>{moduleConfig.title}</h1><p>{moduleConfig.description} Alle acties op deze pagina zijn alleen-lezen via {basePath}.</p></div>
+          <div>
+            <div className="brand-mark">Testen · {moduleConfig.label}</div>
+            <h1>{moduleConfig.title}</h1>
+            <p>
+              {moduleConfig.description}{" "}
+              {moduleKey === "relations"
+                ? `Nieuwe relaties worden alleen in de testadministratie aangemaakt. De overige controles zijn alleen-lezen via ${basePath}.`
+                : `Alle acties op deze pagina zijn alleen-lezen via ${basePath}.`}
+            </p>
+          </div>
           <div className="brand-actions">
             <Link href="/testen" className="secondary-button"><ArrowLeft size={16} />Overzicht</Link>
             <StatusPill tone="success">Testadministratie</StatusPill>
             <StatusPill tone="warning">{rowCount} records</StatusPill>
           </div>
         </header>
+
+        {moduleKey === "relations" ? <RelationCreateTestForm /> : null}
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 340px) minmax(0, 1fr)", gap: 24, alignItems: "start" }}>
           <aside className="card panel" style={{ position: "sticky", top: 92 }}>

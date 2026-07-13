@@ -103,6 +103,7 @@ export async function fetchWithSmartTradeTimeout(
   url: string,
   headers: Record<string, string>,
   environment: SmartTradePullEnvironment = "live",
+  requestInit: Pick<RequestInit, "method" | "body"> = {},
 ) {
   const config = getSmartTradePullConfig(environment);
   const controller = new AbortController();
@@ -110,7 +111,8 @@ export async function fetchWithSmartTradeTimeout(
 
   try {
     return await fetch(url, {
-      method: "GET",
+      method: requestInit.method ?? "GET",
+      body: requestInit.body,
       headers,
       cache: "no-store",
       redirect: "follow",

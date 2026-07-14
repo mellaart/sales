@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, LockKeyhole, Plus, RotateCcw } from "lucide-react";
+import { CheckCircle2, LockKeyhole, MapPin, Plus, RotateCcw } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 
 type RelationForm = {
@@ -24,6 +24,25 @@ type CreateRelationResponse = {
   apiResponse?: unknown;
 };
 
+type AddressForm = {
+  relationId: string;
+  street: string;
+  number: string;
+  postcode: string;
+  city: string;
+  district: string;
+  addressName: string;
+  country: string;
+  isContact: boolean;
+  isDelivery: boolean;
+};
+
+type CreateAddressResponse = {
+  created?: boolean;
+  addressId?: string | null;
+  error?: string;
+};
+
 const EMPTY_FORM: RelationForm = {
   company: "",
   phone: "",
@@ -32,6 +51,19 @@ const EMPTY_FORM: RelationForm = {
   website: "",
   vatNumber: "",
   chamberOfCommerceNumber: "",
+};
+
+const EMPTY_ADDRESS_FORM: AddressForm = {
+  relationId: "",
+  street: "",
+  number: "",
+  postcode: "",
+  city: "",
+  district: "",
+  addressName: "Hoofdadres",
+  country: "NL",
+  isContact: true,
+  isDelivery: true,
 };
 
 const FIXED_VALUES = [
@@ -51,6 +83,10 @@ export default function RelationCreateTestForm() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [createdRelationId, setCreatedRelationId] = useState<string | null>(null);
+  const [addressForm, setAddressForm] = useState<AddressForm>(EMPTY_ADDRESS_FORM);
+  const [addressBusy, setAddressBusy] = useState(false);
+  const [addressStatus, setAddressStatus] = useState("");
+  const [createdAddressId, setCreatedAddressId] = useState<string | null>(null);
   const previewRows = useMemo(
     () => [
       ["Bedrijf", displayValue(form.company)],
@@ -70,6 +106,9 @@ export default function RelationCreateTestForm() {
     setPreviewReady(false);
     setCreatedRelationId(null);
     setStatus("");
+    setAddressForm((current) => ({ ...current, relationId: "" }));
+    setAddressStatus("");
+    setCreatedAddressId(null);
   }
 
   function preparePreview(event: FormEvent<HTMLFormElement>) {
@@ -97,6 +136,9 @@ export default function RelationCreateTestForm() {
       }
 
       setCreatedRelationId(result.relationId ?? "onbekend");
+      if (result.relationId) {
+        setAddressForm((current) => ({ ...current, relationId: result.relationId ?? "" }));
+      }
       setStatus(
         result.warning
           ? `${result.warning}${result.relationId ? ` Relatie-ID: ${result.relationId}.` : ""}`
@@ -116,13 +158,61 @@ export default function RelationCreateTestForm() {
     setPreviewReady(false);
     setCreatedRelationId(null);
     setStatus("");
+    setAddressForm(EMPTY_ADDRESS_FORM);
+    setAddressStatus("");
+    setCreatedAddressId(null);
+  }
+
+  function updateAddressField<K extends keyof AddressForm>(field: K, value: AddressForm[K]) {
+    setAddressForm((current) => ({ ...current, [field]: value }));
+    setAddressStatus("");
+    setCreatedAddressId(null);
+  }
+
+  async function createAddress(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (addressBusy || createdAddressId) return;
+
+    const relationId = addressForm.relationId.trim();
+    if (!/^\d+$/.test(relationId)) {
+      setAddressStatus("Vul eerst een geldig relatie-ID in.");
+      return;
+    }
+
+    setAddressBusy(true);
+    setAddressStatus(`Adres wordt toegevoegd aan relatie ${relationId}...`);
+
+    try {
+      const response = await fetch(`/api/smart-trade/test/relations/${encodeURIComponent(relationId)}/addresses/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(addressForm),
+      });
+      const result = (await response.json().catch(() => null)) as CreateAddressResponse | null;
+
+      if (!response.ok || !result?.created) {
+        setAddressStatus(result?.error || "Testadres aanmaken mislukt.");
+        return;
+      }
+
+      setCreatedAddressId(result.addressId ?? "aangemaakt");
+      setAddressStatus(
+        result.addressId
+          ? `Adres ${result.addressId} is toegevoegd aan relatie ${relationId}.`
+          : `Het adres is toegevoegd aan relatie ${relationId}.`,
+      );
+    } catch (error) {
+      setAddressStatus(error instanceof Error ? error.message : "Testadres aanmaken mislukt.");
+    } finally {
+      setAddressBusy(false);
+    }
   }
 
   return (
     <section className="card panel stack-4 relation-test-create">
       <div className="top-row">
         <div>
-          <div className="eyebrow">Testadministratie</div>
+          <div className="eyebrow">Stap 1 · Testadministratie</div>
           <h2 className="headline">Nieuwe relatie</h2>
           <p className="subtext">Maak alleen een testrelatie aan. Adres en contactpersoon volgen in de volgende stappen.</p>
         </div>
@@ -195,6 +285,73 @@ export default function RelationCreateTestForm() {
       ) : null}
 
       {status ? <div className={`save-status ${createdRelationId ? "success" : ""}`}>{status}</div> : null}
+
+      <form onSubmit={createAddress} className="relation-test-step stack-4">
+        <div className="top-row">
+          <div>
+            <div className="eyebrow">Stap 2</div>
+            <h2 className="headline"><MapPin size={24} />Adres toevoegen</h2>
+            <p className="subtext">Het ID van de zojuist aangemaakte relatie wordt automatisch overgenomen.</p>
+          </div>
+          <StatusPill tone={createdAddressId ? "success" : "warning"}>
+            {createdAddressId ? "Adres aangemaakt" : addressForm.relationId ? `Relatie ${addressForm.relationId}` : "Wacht op relatie"}
+          </StatusPill>
+        </div>
+
+        <div className="field-grid-2">
+          <label className="input-wrap">
+            <span className="input-label">Relatie-ID</span>
+            <input className="input" inputMode="numeric" value={addressForm.relationId} onChange={(event) => updateAddressField("relationId", event.target.value)} required maxLength={12} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Adresnaam</span>
+            <input className="input" value={addressForm.addressName} onChange={(event) => updateAddressField("addressName", event.target.value)} maxLength={120} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Straat</span>
+            <input className="input" value={addressForm.street} onChange={(event) => updateAddressField("street", event.target.value)} required maxLength={180} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Huisnummer</span>
+            <input className="input" value={addressForm.number} onChange={(event) => updateAddressField("number", event.target.value)} required maxLength={30} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Postcode</span>
+            <input className="input" value={addressForm.postcode} onChange={(event) => updateAddressField("postcode", event.target.value.toUpperCase())} required maxLength={20} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Plaats</span>
+            <input className="input" value={addressForm.city} onChange={(event) => updateAddressField("city", event.target.value)} required maxLength={120} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Wijk</span>
+            <input className="input" value={addressForm.district} onChange={(event) => updateAddressField("district", event.target.value)} maxLength={120} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Landcode</span>
+            <input className="input" value={addressForm.country} onChange={(event) => updateAddressField("country", event.target.value.toUpperCase())} required minLength={2} maxLength={2} />
+          </label>
+        </div>
+
+        <div className="relation-test-address-options">
+          <label className="checkbox-row">
+            <input type="checkbox" checked={addressForm.isContact} onChange={(event) => updateAddressField("isContact", event.target.checked)} />
+            <span>Contactadres</span>
+          </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={addressForm.isDelivery} onChange={(event) => updateAddressField("isDelivery", event.target.checked)} />
+            <span>Afleveradres</span>
+          </label>
+        </div>
+
+        <div className="button-row">
+          <button type="submit" className="primary-button" disabled={addressBusy || Boolean(createdAddressId)}>
+            <MapPin size={17} />{addressBusy ? "Adres toevoegen..." : createdAddressId ? "Adres toegevoegd" : "Adres toevoegen in test"}
+          </button>
+        </div>
+
+        {addressStatus ? <div className={`save-status ${createdAddressId ? "success" : ""}`}>{addressStatus}</div> : null}
+      </form>
     </section>
   );
 }

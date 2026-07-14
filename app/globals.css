@@ -756,9 +756,42 @@ select option {
 }
 
 .relation-test-fixed-values,
-.relation-test-preview {
+.relation-test-preview,
+.relation-test-step {
   padding-top: 22px;
   border-top: 1px solid var(--line);
+}
+
+.relation-test-step .headline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.relation-test-address-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.relation-test-address-options .checkbox-row {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 190px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-weight: 750;
+}
+
+.relation-test-address-options .checkbox-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: #60a5fa;
 }
 
 .relation-test-fixed-values .summary-list {

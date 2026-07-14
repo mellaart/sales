@@ -14,8 +14,6 @@ type CreateAddressBody = {
   city?: unknown;
   number?: unknown;
   postcode?: unknown;
-  district?: unknown;
-  addressName?: unknown;
   country?: unknown;
   isContact?: unknown;
   isDelivery?: unknown;
@@ -92,8 +90,6 @@ export async function POST(
       city: textValue(body?.city, 120),
       number: textValue(body?.number, 30),
       postcode: textValue(body?.postcode, 20).toUpperCase(),
-      district: textValue(body?.district, 120),
-      addressName: textValue(body?.addressName, 120) || "Hoofdadres",
       gln: "",
       country: (textValue(body?.country, 2) || "NL").toUpperCase(),
       isContact: body?.isContact !== false,

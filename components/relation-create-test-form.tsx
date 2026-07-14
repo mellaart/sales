@@ -30,8 +30,6 @@ type AddressForm = {
   number: string;
   postcode: string;
   city: string;
-  district: string;
-  addressName: string;
   country: string;
   isContact: boolean;
   isDelivery: boolean;
@@ -59,8 +57,6 @@ const EMPTY_ADDRESS_FORM: AddressForm = {
   number: "",
   postcode: "",
   city: "",
-  district: "",
-  addressName: "Hoofdadres",
   country: "NL",
   isContact: true,
   isDelivery: true,
@@ -304,10 +300,6 @@ export default function RelationCreateTestForm() {
             <input className="input" inputMode="numeric" value={addressForm.relationId} onChange={(event) => updateAddressField("relationId", event.target.value)} required maxLength={12} />
           </label>
           <label className="input-wrap">
-            <span className="input-label">Adresnaam</span>
-            <input className="input" value={addressForm.addressName} onChange={(event) => updateAddressField("addressName", event.target.value)} maxLength={120} />
-          </label>
-          <label className="input-wrap">
             <span className="input-label">Straat</span>
             <input className="input" value={addressForm.street} onChange={(event) => updateAddressField("street", event.target.value)} required maxLength={180} />
           </label>
@@ -322,10 +314,6 @@ export default function RelationCreateTestForm() {
           <label className="input-wrap">
             <span className="input-label">Plaats</span>
             <input className="input" value={addressForm.city} onChange={(event) => updateAddressField("city", event.target.value)} required maxLength={120} />
-          </label>
-          <label className="input-wrap">
-            <span className="input-label">Wijk</span>
-            <input className="input" value={addressForm.district} onChange={(event) => updateAddressField("district", event.target.value)} maxLength={120} />
           </label>
           <label className="input-wrap">
             <span className="input-label">Landcode</span>

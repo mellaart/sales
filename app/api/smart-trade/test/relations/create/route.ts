@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     };
 
     const config = getSmartTradePullConfig("test");
-    const targetUrl = `${config.baseUrl.replace(/\/+$/, "")}/relations`;
+    const targetUrl = new URL("/api/v1/relations", config.baseUrl).toString();
     const headers = getSmartTradePullHeaders("test", {
       "content-type": "application/json",
     });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, LockKeyhole, MapPin, Plus, RotateCcw } from "lucide-react";
+import { CheckCircle2, LockKeyhole, MapPin, Plus, RotateCcw, UserPlus } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 
 type RelationForm = {
@@ -41,6 +41,25 @@ type CreateAddressResponse = {
   error?: string;
 };
 
+type ContactPersonForm = {
+  relationId: string;
+  gender: string;
+  firstName: string;
+  lastNamePrefix: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  phoneMobile: string;
+  phoneWork: string;
+  position: string;
+};
+
+type CreateContactPersonResponse = {
+  created?: boolean;
+  contactPersonId?: string | null;
+  error?: string;
+};
+
 const EMPTY_FORM: RelationForm = {
   company: "",
   phone: "",
@@ -60,6 +79,19 @@ const EMPTY_ADDRESS_FORM: AddressForm = {
   country: "NL",
   isContact: true,
   isDelivery: true,
+};
+
+const EMPTY_CONTACT_PERSON_FORM: ContactPersonForm = {
+  relationId: "",
+  gender: "",
+  firstName: "",
+  lastNamePrefix: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  phoneMobile: "",
+  phoneWork: "",
+  position: "",
 };
 
 const FIXED_VALUES = [
@@ -83,6 +115,10 @@ export default function RelationCreateTestForm() {
   const [addressBusy, setAddressBusy] = useState(false);
   const [addressStatus, setAddressStatus] = useState("");
   const [createdAddressId, setCreatedAddressId] = useState<string | null>(null);
+  const [contactPersonForm, setContactPersonForm] = useState<ContactPersonForm>(EMPTY_CONTACT_PERSON_FORM);
+  const [contactPersonBusy, setContactPersonBusy] = useState(false);
+  const [contactPersonStatus, setContactPersonStatus] = useState("");
+  const [createdContactPersonId, setCreatedContactPersonId] = useState<string | null>(null);
   const previewRows = useMemo(
     () => [
       ["Bedrijf", displayValue(form.company)],
@@ -105,6 +141,9 @@ export default function RelationCreateTestForm() {
     setAddressForm((current) => ({ ...current, relationId: "" }));
     setAddressStatus("");
     setCreatedAddressId(null);
+    setContactPersonForm((current) => ({ ...current, relationId: "" }));
+    setContactPersonStatus("");
+    setCreatedContactPersonId(null);
   }
 
   function preparePreview(event: FormEvent<HTMLFormElement>) {
@@ -134,6 +173,7 @@ export default function RelationCreateTestForm() {
       setCreatedRelationId(result.relationId ?? "onbekend");
       if (result.relationId) {
         setAddressForm((current) => ({ ...current, relationId: result.relationId ?? "" }));
+        setContactPersonForm((current) => ({ ...current, relationId: result.relationId ?? "" }));
       }
       setStatus(
         result.warning
@@ -157,6 +197,9 @@ export default function RelationCreateTestForm() {
     setAddressForm(EMPTY_ADDRESS_FORM);
     setAddressStatus("");
     setCreatedAddressId(null);
+    setContactPersonForm(EMPTY_CONTACT_PERSON_FORM);
+    setContactPersonStatus("");
+    setCreatedContactPersonId(null);
   }
 
   function updateAddressField<K extends keyof AddressForm>(field: K, value: AddressForm[K]) {
@@ -192,6 +235,7 @@ export default function RelationCreateTestForm() {
       }
 
       setCreatedAddressId(result.addressId ?? "aangemaakt");
+      setContactPersonForm((current) => ({ ...current, relationId }));
       setAddressStatus(
         result.addressId
           ? `Adres ${result.addressId} is toegevoegd aan relatie ${relationId}.`
@@ -201,6 +245,51 @@ export default function RelationCreateTestForm() {
       setAddressStatus(error instanceof Error ? error.message : "Testadres aanmaken mislukt.");
     } finally {
       setAddressBusy(false);
+    }
+  }
+
+  function updateContactPersonField<K extends keyof ContactPersonForm>(field: K, value: ContactPersonForm[K]) {
+    setContactPersonForm((current) => ({ ...current, [field]: value }));
+    setContactPersonStatus("");
+    setCreatedContactPersonId(null);
+  }
+
+  async function createContactPerson(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (contactPersonBusy || createdContactPersonId) return;
+
+    const relationId = contactPersonForm.relationId.trim();
+    if (!/^\d+$/.test(relationId)) {
+      setContactPersonStatus("Vul eerst een geldig relatie-ID in.");
+      return;
+    }
+
+    setContactPersonBusy(true);
+    setContactPersonStatus(`Contactpersoon wordt toegevoegd aan relatie ${relationId}...`);
+
+    try {
+      const response = await fetch(`/api/smart-trade/test/relations/${encodeURIComponent(relationId)}/contactpersons/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contactPersonForm),
+      });
+      const result = (await response.json().catch(() => null)) as CreateContactPersonResponse | null;
+
+      if (!response.ok || !result?.created) {
+        setContactPersonStatus(result?.error || "Testcontactpersoon aanmaken mislukt.");
+        return;
+      }
+
+      setCreatedContactPersonId(result.contactPersonId ?? "aangemaakt");
+      setContactPersonStatus(
+        result.contactPersonId
+          ? `Contactpersoon ${result.contactPersonId} is toegevoegd aan relatie ${relationId}.`
+          : `De contactpersoon is toegevoegd aan relatie ${relationId}.`,
+      );
+    } catch (error) {
+      setContactPersonStatus(error instanceof Error ? error.message : "Testcontactpersoon aanmaken mislukt.");
+    } finally {
+      setContactPersonBusy(false);
     }
   }
 
@@ -339,6 +428,74 @@ export default function RelationCreateTestForm() {
         </div>
 
         {addressStatus ? <div className={`save-status ${createdAddressId ? "success" : ""}`}>{addressStatus}</div> : null}
+      </form>
+
+      <form onSubmit={createContactPerson} className="relation-test-step stack-4">
+        <div className="top-row">
+          <div>
+            <div className="eyebrow">Stap 3</div>
+            <h2 className="headline"><UserPlus size={24} />Contactpersoon toevoegen</h2>
+            <p className="subtext">Het relatie-ID wordt automatisch overgenomen uit de voorgaande stappen.</p>
+          </div>
+          <StatusPill tone={createdContactPersonId ? "success" : "warning"}>
+            {createdContactPersonId ? "Contactpersoon aangemaakt" : contactPersonForm.relationId ? `Relatie ${contactPersonForm.relationId}` : "Wacht op relatie"}
+          </StatusPill>
+        </div>
+
+        <div className="field-grid-2">
+          <label className="input-wrap">
+            <span className="input-label">Relatie-ID</span>
+            <input className="input" inputMode="numeric" value={contactPersonForm.relationId} onChange={(event) => updateContactPersonField("relationId", event.target.value)} required maxLength={12} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Aanhef</span>
+            <select className="input" value={contactPersonForm.gender} onChange={(event) => updateContactPersonField("gender", event.target.value)}>
+              <option value="">Geen keuze</option>
+              <option value="M">De heer</option>
+              <option value="V">Mevrouw</option>
+            </select>
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Voornaam</span>
+            <input className="input" value={contactPersonForm.firstName} onChange={(event) => updateContactPersonField("firstName", event.target.value)} required maxLength={100} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Tussenvoegsel</span>
+            <input className="input" value={contactPersonForm.lastNamePrefix} onChange={(event) => updateContactPersonField("lastNamePrefix", event.target.value)} maxLength={40} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Achternaam</span>
+            <input className="input" value={contactPersonForm.lastName} onChange={(event) => updateContactPersonField("lastName", event.target.value)} required maxLength={120} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">E-mailadres</span>
+            <input className="input" type="email" value={contactPersonForm.email} onChange={(event) => updateContactPersonField("email", event.target.value)} required maxLength={180} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Telefoon</span>
+            <input className="input" type="tel" value={contactPersonForm.phone} onChange={(event) => updateContactPersonField("phone", event.target.value)} maxLength={80} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Mobiel</span>
+            <input className="input" type="tel" value={contactPersonForm.phoneMobile} onChange={(event) => updateContactPersonField("phoneMobile", event.target.value)} maxLength={80} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Telefoon werk</span>
+            <input className="input" type="tel" value={contactPersonForm.phoneWork} onChange={(event) => updateContactPersonField("phoneWork", event.target.value)} maxLength={80} />
+          </label>
+          <label className="input-wrap">
+            <span className="input-label">Functie</span>
+            <input className="input" value={contactPersonForm.position} onChange={(event) => updateContactPersonField("position", event.target.value)} maxLength={120} />
+          </label>
+        </div>
+
+        <div className="button-row">
+          <button type="submit" className="primary-button" disabled={contactPersonBusy || Boolean(createdContactPersonId)}>
+            <UserPlus size={17} />{contactPersonBusy ? "Contactpersoon toevoegen..." : createdContactPersonId ? "Contactpersoon toegevoegd" : "Contactpersoon toevoegen in test"}
+          </button>
+        </div>
+
+        {contactPersonStatus ? <div className={`save-status ${createdContactPersonId ? "success" : ""}`}>{contactPersonStatus}</div> : null}
       </form>
     </section>
   );

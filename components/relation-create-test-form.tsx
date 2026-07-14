@@ -19,6 +19,7 @@ type CreateRelationResponse = {
   created?: boolean;
   apiStatus?: number;
   relationId?: string | null;
+  warning?: string | null;
   error?: string;
   apiResponse?: unknown;
 };
@@ -97,7 +98,9 @@ export default function RelationCreateTestForm() {
 
       setCreatedRelationId(result.relationId ?? "onbekend");
       setStatus(
-        result.relationId
+        result.warning
+          ? `${result.warning}${result.relationId ? ` Relatie-ID: ${result.relationId}.` : ""}`
+          : result.relationId
           ? `Testrelatie is aangemaakt met ID ${result.relationId}.`
           : "Testrelatie is aangemaakt, maar de API gaf geen relatie-ID terug. Maak deze relatie niet opnieuw aan.",
       );

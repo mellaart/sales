@@ -10,10 +10,14 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const TEST_RELATION_DEFAULTS = {
-  group_id: 7,
-  type: 2,
-  mailinglist: 1,
-  status: 3,
+  group: 7,
+  applyGroupProperties: true,
+  types: [2],
+  status: {
+    active: true,
+    verified: true,
+    defunct: false,
+  },
 } as const;
 
 type CreateRelationBody = {
@@ -52,6 +56,17 @@ function relationIdFromResponse(body: unknown, location: string | null) {
   }
 
   return null;
+}
+
+function relationFromResponse(body: unknown) {
+  if (!body || typeof body !== "object") return null;
+
+  const record = body as Record<string, unknown>;
+  if (record.data && typeof record.data === "object") {
+    return record.data as Record<string, unknown>;
+  }
+
+  return record;
 }
 
 async function responseBody(response: Response) {
@@ -145,6 +160,13 @@ export async function POST(request: Request) {
     }
 
     const relationId = relationIdFromResponse(apiBody, response.headers.get("location"));
+    const createdRelation = relationFromResponse(apiBody);
+    const returnedCompany = typeof createdRelation?.company === "string"
+      ? createdRelation.company.trim()
+      : null;
+    const warning = returnedCompany !== null && returnedCompany !== company
+      ? "Smart Trade heeft de relatie aangemaakt, maar gaf niet dezelfde bedrijfsnaam terug. Controleer het aangemaakte record voordat je verdergaat."
+      : null;
 
     return NextResponse.json(
       {
@@ -153,6 +175,7 @@ export async function POST(request: Request) {
         apiStatus: response.status,
         relationId,
         relation: apiBody,
+        warning,
       },
       { headers: { "Cache-Control": "no-store" } },
     );

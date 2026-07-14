@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Copy, Download, FileJson, Search, Server, Table2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import OrderCreateTestForm from "@/components/order-create-test-form";
 import RelationCreateTestForm from "@/components/relation-create-test-form";
 import { StatusPill } from "@/components/ui";
 
@@ -29,7 +30,7 @@ const API_TEST_MODULES: Record<
   orders: {
     label: "Orders",
     title: "Orders testen",
-    description: "Controleer orders in de Smart Trade testadministratie.",
+    description: "Controleer orders en maak een order aan in de Smart Trade testadministratie.",
     defaultPath: "/orders",
     matches: (path) => path.startsWith("/orders"),
   },
@@ -442,6 +443,8 @@ export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTest
               {moduleConfig.description}{" "}
               {moduleKey === "relations"
                 ? `Nieuwe relaties worden alleen in de testadministratie aangemaakt. De overige controles zijn alleen-lezen via ${basePath}.`
+                : moduleKey === "orders"
+                ? `Nieuwe orders worden eerst gecontroleerd en daarna alleen in de testadministratie aangemaakt. De overige controles zijn alleen-lezen via ${basePath}.`
                 : `Alle acties op deze pagina zijn alleen-lezen via ${basePath}.`}
             </p>
           </div>
@@ -453,6 +456,7 @@ export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTest
         </header>
 
         {moduleKey === "relations" ? <RelationCreateTestForm /> : null}
+        {moduleKey === "orders" ? <OrderCreateTestForm /> : null}
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 340px) minmax(0, 1fr)", gap: 24, alignItems: "start" }}>
           <aside className="card panel" style={{ position: "sticky", top: 92 }}>

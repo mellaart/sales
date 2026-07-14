@@ -70,6 +70,9 @@ type PullResult = {
   attempts?: Array<{ url: string; status: number; versionError?: boolean; bodyPreview?: string }>;
 };
 
+const RELATION_TEST_PAGE_SIZE = 1000;
+const RELATION_TEST_MAX_PAGES = 10;
+
 function defaultQuery(endpoint?: ApiEndpoint | null) {
   if (!endpoint) return "";
   if (endpoint.path === "/relations") return "page=1&per_page=1000";
@@ -125,17 +128,50 @@ function filterRelationsFromId(result: PullResult, minimumId: string) {
   };
 
   if (Array.isArray(result.body)) {
-    return { ...result, body: result.body.filter(keepRelation) };
+    return { ...result, body: result.body.filter(keepRelation), bodyText: "" };
   }
 
   if (result.body && typeof result.body === "object") {
     const body = result.body as Record<string, unknown>;
     if (Array.isArray(body.data)) {
-      return { ...result, body: { ...body, data: body.data.filter(keepRelation) } };
+      return { ...result, body: { ...body, data: body.data.filter(keepRelation) }, bodyText: "" };
     }
   }
 
   return result;
+}
+
+function relationPageQuery(queryString: string, page: number) {
+  const params = new URLSearchParams(queryString.trim().replace(/^\?/, ""));
+  params.set("page", String(page));
+  params.set("per_page", String(RELATION_TEST_PAGE_SIZE));
+  return params.toString();
+}
+
+function mergeRelationPages(firstResult: PullResult, rows: unknown[], pages: PullResult[]) {
+  let body: unknown = rows;
+
+  if (firstResult.body && typeof firstResult.body === "object" && !Array.isArray(firstResult.body)) {
+    body = { ...(firstResult.body as Record<string, unknown>), data: rows };
+  }
+
+  return {
+    ...firstResult,
+    body,
+    bodyText: "",
+    durationMs: pages.reduce((total, page) => total + (page.durationMs ?? 0), 0),
+    byteLength: pages.reduce((total, page) => total + (page.byteLength ?? 0), 0),
+    attempts: pages.flatMap((page) => page.attempts ?? []),
+  } satisfies PullResult;
+}
+
+function relationRowKey(row: unknown) {
+  if (row && typeof row === "object") {
+    const id = (row as Record<string, unknown>).id;
+    if (typeof id === "string" || typeof id === "number") return `id:${String(id)}`;
+  }
+
+  return `row:${JSON.stringify(row)}`;
 }
 
 function collectColumns(rows: Record<string, unknown>[]) {
@@ -271,36 +307,83 @@ export default function ApiPullTestDashboard({ moduleKey }: { moduleKey: ApiTest
   async function handlePull(event: FormEvent) {
     event.preventDefault();
     if (!selectedEndpoint) return;
+    const endpoint = selectedEndpoint;
     setBusy(true);
     setResult(null);
     setStatus("Pull loopt...");
 
     try {
-      const response = await fetch("/api/smart-trade/pull-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          environment: "test",
-          pathTemplate: selectedEndpoint.path,
-          pathParams: pathValues,
-          queryString,
-          ifModifiedSince,
-          ifNoneMatch,
-        }),
-      });
-      const json = (await response.json()) as PullResult;
+      async function pull(customQueryString: string) {
+        const response = await fetch("/api/smart-trade/pull-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            environment: "test",
+            pathTemplate: endpoint.path,
+            pathParams: pathValues,
+            queryString: customQueryString,
+            ifModifiedSince,
+            ifNoneMatch,
+          }),
+        });
+        const json = (await response.json()) as PullResult;
+        return { response, json };
+      }
+
+      let json: PullResult;
+
+      if (moduleKey === "relations" && endpoint.path === "/relations") {
+        const pages: PullResult[] = [];
+        const rows: unknown[] = [];
+        const seenRows = new Set<string>();
+
+        for (let page = 1; page <= RELATION_TEST_MAX_PAGES; page += 1) {
+          setStatus(`Relaties ophalen: pagina ${page}...`);
+          const pagePull = await pull(relationPageQuery(queryString, page));
+          const pageResult = pagePull.json;
+
+          if (!pagePull.response.ok || pageResult.error || pageResult.ok === false) {
+            setResult(pageResult);
+            setStatus(pageResult.error ?? `Smart Trade API gaf status ${pageResult.status ?? "onbekend"}.`);
+            return;
+          }
+
+          pages.push(pageResult);
+          const pageRows = responseRows(pageResult);
+          if (pageRows.length === 0) break;
+
+          let newRows = 0;
+          pageRows.forEach((row) => {
+            const key = relationRowKey(row);
+            if (seenRows.has(key)) return;
+            seenRows.add(key);
+            rows.push(row);
+            newRows += 1;
+          });
+
+          if (newRows === 0 || pageRows.length < RELATION_TEST_PAGE_SIZE) break;
+        }
+
+        json = mergeRelationPages(pages[0] ?? { ok: true, status: 200, statusText: "OK" }, rows, pages);
+      } else {
+        const singlePull = await pull(queryString);
+        json = singlePull.json;
+        if (!singlePull.response.ok || json.error || json.ok === false) {
+          setResult(json);
+          setStatus(json.error ?? `Smart Trade API gaf status ${json.status ?? "onbekend"}.`);
+          return;
+        }
+      }
+
       const visibleResult =
-        moduleKey === "relations" && selectedEndpoint.path === "/relations" && !json.error
+        moduleKey === "relations" && endpoint.path === "/relations" && !json.error
           ? filterRelationsFromId(json, minimumRelationId)
           : json;
       setResult(visibleResult);
-      if (!response.ok || json.error) {
-        setStatus(json.error ?? "Pull mislukt.");
-        return;
-      }
+      const allRelationRows = moduleKey === "relations" && endpoint.path === "/relations" ? responseRows(json).length : 0;
       const relationFilterStatus =
-        moduleKey === "relations" && selectedEndpoint.path === "/relations" && minimumRelationId.trim()
-          ? ` · ${responseRows(visibleResult).length} relaties met ID hoger dan ${minimumRelationId}`
+        moduleKey === "relations" && endpoint.path === "/relations" && minimumRelationId.trim()
+          ? ` · ${responseRows(visibleResult).length} van ${allRelationRows} relaties met ID hoger dan ${minimumRelationId}`
           : "";
       setStatus(`${json.status} ${json.statusText ?? ""} in ${json.durationMs ?? 0} ms${relationFilterStatus}`);
     } catch (error) {

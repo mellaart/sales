@@ -20,8 +20,6 @@ type OrderLineBody = {
 type CreateOrderBody = {
   mode?: unknown;
   debtorId?: unknown;
-  invoiceRelationId?: unknown;
-  employeeId?: unknown;
   reference?: unknown;
   commentAboveLines?: unknown;
   commentBelowLines?: unknown;
@@ -100,13 +98,19 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as CreateOrderBody | null;
     const mode = body?.mode === "create" ? "create" : "preview";
     const debtorId = positiveInteger(body?.debtorId);
-    const invoiceRelationId = positiveInteger(body?.invoiceRelationId) ?? debtorId;
-    const employeeId = positiveInteger(body?.employeeId);
+    const employeeId = positiveInteger(verified.profile.employee_relation_id);
     const rawLines = Array.isArray(body?.lines) ? body.lines as OrderLineBody[] : [];
 
-    if (!debtorId || !invoiceRelationId || !employeeId) {
+    if (!debtorId) {
       return NextResponse.json(
-        { error: "Debiteur-ID, factuurrelatie-ID en medewerker-ID moeten geldige ID's zijn." },
+        { error: "Debiteur relatie-ID moet een geldig ID zijn." },
+        { status: 400 },
+      );
+    }
+
+    if (!employeeId) {
+      return NextResponse.json(
+        { error: "Vul op de Admin-pagina eerst een medewerker relatie-ID in bij jouw gebruiker." },
         { status: 400 },
       );
     }
@@ -139,7 +143,7 @@ export async function POST(request: Request) {
 
     const payload = {
       debtor: debtorId,
-      invoiceRelation: invoiceRelationId,
+      invoiceRelation: debtorId,
       employee: employeeId,
       reference: textValue(body?.reference, 180),
       commentAboveLines: textValue(body?.commentAboveLines, 1000),

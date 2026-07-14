@@ -162,6 +162,7 @@ async function loadAuthMetadata(
 
 async function loadProfiles(client: SupabaseClient) {
   const profileSelects = [
+    "id,role,full_name,job_title,workdays,mobile_phone,employee_relation_id,email,two_factor_enabled,two_factor_enabled_at,two_factor_last_verified_at,created_at",
     "id,role,full_name,job_title,workdays,mobile_phone,email,two_factor_enabled,two_factor_enabled_at,two_factor_last_verified_at,created_at",
     "id,role,full_name,job_title,workdays,mobile_phone,email,created_at",
     "id,role,full_name,job_title,workdays,mobile_phone,email",
@@ -186,6 +187,7 @@ async function loadProfiles(client: SupabaseClient) {
       isMissingColumnError(result.error.message, "job_title") ||
       isMissingColumnError(result.error.message, "workdays") ||
       isMissingColumnError(result.error.message, "mobile_phone") ||
+      isMissingColumnError(result.error.message, "employee_relation_id") ||
       isMissingColumnError(result.error.message, "two_factor_enabled") ||
       isMissingColumnError(result.error.message, "two_factor_enabled_at") ||
       isMissingColumnError(result.error.message, "two_factor_last_verified_at") ||
@@ -231,6 +233,7 @@ export async function GET(request: Request) {
         job_title?: string | null;
         workdays?: string | null;
         mobile_phone?: string | null;
+        employee_relation_id?: number | null;
         email?: string | null;
         two_factor_enabled?: boolean | null;
         two_factor_enabled_at?: string | null;
@@ -254,6 +257,10 @@ export async function GET(request: Request) {
         job_title: protectedProfile?.jobTitle ?? normalizeText(profile.job_title) ?? authMetadata?.jobTitle ?? null,
         workdays: protectedProfile?.workdays ?? normalizeText(profile.workdays) ?? authMetadata?.workdays ?? null,
         mobile_phone: protectedProfile?.mobilePhone ?? normalizeText(profile.mobile_phone) ?? authMetadata?.mobilePhone ?? null,
+        employee_relation_id:
+          typeof profile.employee_relation_id === "number" && Number.isSafeInteger(profile.employee_relation_id)
+            ? profile.employee_relation_id
+            : null,
         role: getEffectiveUserRole(profile.role ?? "sales", email) ?? "sales",
         two_factor_enabled: profile.two_factor_enabled ?? false,
         two_factor_enabled_at: profile.two_factor_enabled_at ?? null,

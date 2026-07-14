@@ -12,6 +12,7 @@ export type ProfileRecord = {
   job_title?: string | null;
   workdays?: string | null;
   mobile_phone?: string | null;
+  employee_relation_id?: number | null;
   role: UserRole;
   two_factor_enabled?: boolean | null;
   two_factor_enabled_at?: string | null;
@@ -168,6 +169,7 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
   }
 
   const profileSelects = [
+    "id,email,full_name,job_title,workdays,mobile_phone,employee_relation_id,role,created_at,updated_at",
     "id,email,full_name,job_title,workdays,mobile_phone,role,created_at,updated_at",
     "id,email,full_name,job_title,workdays,mobile_phone,role,created_at",
     "id,email,full_name,role,created_at,updated_at",
@@ -193,6 +195,8 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
         error.message.includes("column profiles.workdays does not exist") ||
         error.message.includes("profiles.mobile_phone does not exist") ||
         error.message.includes("column profiles.mobile_phone does not exist") ||
+        error.message.includes("profiles.employee_relation_id does not exist") ||
+        error.message.includes("column profiles.employee_relation_id does not exist") ||
         error.message.includes("profiles.updated_at does not exist") ||
         error.message.includes("column profiles.updated_at does not exist");
 
@@ -217,6 +221,7 @@ export async function fetchProfile(userId: string): Promise<ProfileRecord | null
       job_title: protectedProfile?.jobTitle ?? profile.job_title ?? null,
       workdays: protectedProfile?.workdays ?? profile.workdays ?? null,
       mobile_phone: protectedProfile?.mobilePhone ?? profile.mobile_phone ?? null,
+      employee_relation_id: profile.employee_relation_id ?? null,
       role: getEffectiveUserRole(profile.role, profile.email) ?? profile.role,
       created_at: profile.created_at,
       updated_at: profile.updated_at ?? null,

@@ -149,6 +149,7 @@ export default function AdminDashboard() {
             job_title: profile.job_title ?? null,
             workdays: profile.workdays ?? null,
             mobile_phone: profile.mobile_phone ?? null,
+            employee_relation_id: profile.employee_relation_id ?? null,
             two_factor_enabled: profile.two_factor_enabled ?? false,
             two_factor_enabled_at: profile.two_factor_enabled_at ?? null,
             two_factor_last_verified_at: profile.two_factor_last_verified_at ?? null,
@@ -320,16 +321,25 @@ export default function AdminDashboard() {
     );
   }
 
-  async function saveProfileSignature(profile: ProfileRecord) {
+  function updateEmployeeRelationId(profileId: string, value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 12);
+    setProfiles((currentProfiles) =>
+      currentProfiles.map((profile) =>
+        profile.id === profileId
+          ? {
+              ...profile,
+              employee_relation_id: digits ? Number(digits) : null,
+            }
+          : profile,
+      ),
+    );
+  }
+
+  async function saveProfile(profile: ProfileRecord) {
     if (!supabase) return;
 
-    if (isProtectedProfile(profile)) {
-      setStatus("Deze beschermde admin-gebruiker kan niet worden aangepast.");
-      return;
-    }
-
     setProfileSavingId(profile.id);
-    setStatus("Handtekeninggegevens worden opgeslagen...");
+    setStatus("Profielgegevens worden opgeslagen...");
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -351,21 +361,22 @@ export default function AdminDashboard() {
           jobTitle: profile.job_title,
           workdays: profile.workdays,
           mobilePhone: profile.mobile_phone,
+          employeeRelationId: profile.employee_relation_id,
         }),
       });
 
       const json = (await response.json().catch(() => ({}))) as { error?: string; metadataWarning?: string | null };
 
       if (!response.ok) {
-        setStatus(json.error || "Handtekeninggegevens opslaan mislukt.");
+        setStatus(json.error || "Profielgegevens opslaan mislukt.");
         return;
       }
 
-      setStatus(json.metadataWarning ? `Profiel opgeslagen. Metadata waarschuwing: ${json.metadataWarning}` : "Handtekeninggegevens opgeslagen.");
+      setStatus(json.metadataWarning ? `Profiel opgeslagen. Metadata waarschuwing: ${json.metadataWarning}` : "Profielgegevens opgeslagen.");
       await loadProfiles({ keepStatus: true });
       await refreshProfile();
     } catch {
-      setStatus("Er ging iets mis bij het opslaan van de handtekeninggegevens.");
+      setStatus("Er ging iets mis bij het opslaan van de profielgegevens.");
     } finally {
       setProfileSavingId(null);
     }
@@ -727,7 +738,7 @@ export default function AdminDashboard() {
                   <div className="subtext">
                     {profile.two_factor_enabled ? "2FA actief" : "2FA nog niet ingesteld"}
                   </div>
-                  {protectedProfile ? <div className="subtext">Beschermde admin - niet aanpasbaar</div> : null}
+                  {protectedProfile ? <div className="subtext">Beschermde admin - rol en profielnaam niet aanpasbaar</div> : null}
                 </div>
 
                 <div className="field-grid-2">
@@ -767,18 +778,31 @@ export default function AdminDashboard() {
                     />
                   </label>
 
-                  <button
-                    type="button"
-                    className="secondary-button create-user-button"
-                    disabled={protectedProfile || profileSavingId === profile.id}
-                    onClick={() => void saveProfileSignature(profile)}
-                  >
-                    <Save size={16} />
-                    {profileSavingId === profile.id ? "Opslaan..." : "Handtekening opslaan"}
-                  </button>
+                  <label className="input-wrap">
+                    <span className="input-label">Medewerker relatie-ID</span>
+                    <input
+                      className="input"
+                      type="text"
+                      inputMode="numeric"
+                      value={profile.employee_relation_id ?? ""}
+                      onChange={(event) => updateEmployeeRelationId(profile.id, event.target.value)}
+                      placeholder="Bijv. 2498"
+                      maxLength={12}
+                    />
+                  </label>
                 </div>
 
                 <div className="button-row">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={profileSavingId === profile.id}
+                    onClick={() => void saveProfile(profile)}
+                  >
+                    <Save size={16} />
+                    {profileSavingId === profile.id ? "Opslaan..." : "Profiel opslaan"}
+                  </button>
+
                   <span className="secondary-button">
                     <Users2 size={15} />
                     Huidig: {ROLE_LABELS[profile.role]}

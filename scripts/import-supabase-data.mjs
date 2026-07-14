@@ -28,7 +28,7 @@ const pool = process.env.DATABASE_URL
       password: process.env.PGPASSWORD || undefined,
     });
 
-const profileColumns = ["id", "email", "full_name", "job_title", "workdays", "mobile_phone", "role", "must_set_password"];
+const profileColumns = ["id", "email", "full_name", "job_title", "workdays", "mobile_phone", "employee_relation_id", "role", "must_set_password"];
 const dealColumns = [
   "id",
   "user_id",
@@ -141,6 +141,7 @@ async function ensureLocalSchema(client) {
       job_title text,
       workdays text,
       mobile_phone text,
+      employee_relation_id bigint,
       role text not null default 'sales'
         check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')),
       must_set_password boolean not null default false,
@@ -155,6 +156,8 @@ async function ensureLocalSchema(client) {
       created_at timestamptz not null default now(),
       last_seen_at timestamptz not null default now()
     );
+
+    alter table public.profiles add column if not exists employee_relation_id bigint;
 
     create index if not exists app_sessions_user_id_idx on public.app_sessions(user_id);
     create index if not exists app_sessions_expires_at_idx on public.app_sessions(expires_at);
@@ -294,7 +297,8 @@ async function importProfiles(client, sourceProfiles) {
              job_title = coalesce($3, job_title),
              workdays = coalesce($4, workdays),
              mobile_phone = coalesce($5, mobile_phone),
-             role = $6,
+             employee_relation_id = coalesce($6, employee_relation_id),
+             role = $7,
              updated_at = now()
          where id = $1`,
         [
@@ -303,6 +307,7 @@ async function importProfiles(client, sourceProfiles) {
           profile.job_title ?? null,
           profile.workdays ?? null,
           profile.mobile_phone ?? null,
+          profile.employee_relation_id ?? null,
           normalizeRole(profile.role, email),
         ],
       );
@@ -317,6 +322,7 @@ async function importProfiles(client, sourceProfiles) {
       job_title: profile.job_title ?? null,
       workdays: profile.workdays ?? null,
       mobile_phone: profile.mobile_phone ?? null,
+      employee_relation_id: profile.employee_relation_id ?? null,
       role: normalizeRole(profile.role, email),
       must_set_password: true,
     });

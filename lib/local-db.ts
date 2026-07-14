@@ -59,6 +59,7 @@ export async function ensureLocalSchema() {
           job_title text,
           workdays text,
           mobile_phone text,
+          employee_relation_id bigint,
           role text not null default 'sales'
             check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')),
           must_set_password boolean not null default false,
@@ -75,6 +76,7 @@ export async function ensureLocalSchema() {
         alter table public.profiles add column if not exists job_title text;
         alter table public.profiles add column if not exists workdays text;
         alter table public.profiles add column if not exists mobile_phone text;
+        alter table public.profiles add column if not exists employee_relation_id bigint;
         alter table public.profiles add column if not exists must_set_password boolean not null default false;
         alter table public.profiles add column if not exists two_factor_enabled boolean not null default false;
         alter table public.profiles add column if not exists two_factor_secret text;

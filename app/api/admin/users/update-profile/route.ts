@@ -53,7 +53,8 @@ function isMissingSignatureColumnError(message: string) {
   return (
     message.includes("job_title") ||
     message.includes("workdays") ||
-    message.includes("mobile_phone")
+    message.includes("mobile_phone") ||
+    message.includes("employee_relation_id")
   );
 }
 
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
       jobTitle?: string | null;
       workdays?: string | null;
       mobilePhone?: string | null;
+      employeeRelationId?: number | string | null;
     };
     const userId = body.userId?.trim();
 
@@ -83,29 +85,40 @@ export async function POST(request: Request) {
       .maybeSingle();
     const { data: targetUserData } = await verified.service.auth.admin.getUserById(userId);
 
-    if (
+    const protectedProfile =
       isProtectedAdminEmail((targetProfile as { email?: string | null } | null)?.email) ||
-      isProtectedAdminEmail(targetUserData.user?.email)
-    ) {
-      return NextResponse.json({ error: "Deze beschermde admin-gebruiker kan hier niet worden aangepast." }, { status: 400 });
+      isProtectedAdminEmail(targetUserData.user?.email);
+
+    const rawEmployeeRelationId = body.employeeRelationId;
+    const employeeRelationId = rawEmployeeRelationId === null || rawEmployeeRelationId === undefined || rawEmployeeRelationId === ""
+      ? null
+      : Number(rawEmployeeRelationId);
+
+    if (employeeRelationId !== null && (!Number.isSafeInteger(employeeRelationId) || employeeRelationId <= 0)) {
+      return NextResponse.json({ error: "Medewerker relatie-ID moet een geldig positief nummer zijn." }, { status: 400 });
     }
 
     const jobTitle = normalizeText(body.jobTitle);
     const workdays = normalizeText(body.workdays);
     const mobilePhone = normalizeText(body.mobilePhone);
 
+    const profileValues = protectedProfile
+      ? { employee_relation_id: employeeRelationId }
+      : {
+          job_title: jobTitle,
+          workdays,
+          mobile_phone: mobilePhone,
+          employee_relation_id: employeeRelationId,
+        };
+
     const { error: profileError } = await verified.service
       .from("profiles")
-      .update({
-        job_title: jobTitle,
-        workdays,
-        mobile_phone: mobilePhone,
-      })
+      .update(profileValues)
       .eq("id", userId);
 
     if (profileError) {
       const message = isMissingSignatureColumnError(profileError.message)
-        ? "Profielvelden ontbreken nog in Supabase. Voer eerst de SQL voor job_title, workdays en mobile_phone uit."
+        ? "Een benodigd profielveld ontbreekt nog in de database. Vernieuw de applicatie en probeer opnieuw."
         : profileError.message;
       return NextResponse.json({ error: message }, { status: 500 });
     }
@@ -113,12 +126,15 @@ export async function POST(request: Request) {
     const { data: userData } = await verified.service.auth.admin.getUserById(userId);
     const metadata = userData.user?.user_metadata ?? {};
     const { error: metadataError } = await verified.service.auth.admin.updateUserById(userId, {
-      user_metadata: {
-        ...metadata,
-        job_title: jobTitle,
-        workdays,
-        mobile_phone: mobilePhone,
-      },
+      user_metadata: protectedProfile
+        ? { ...metadata, employee_relation_id: employeeRelationId }
+        : {
+            ...metadata,
+            job_title: jobTitle,
+            workdays,
+            mobile_phone: mobilePhone,
+            employee_relation_id: employeeRelationId,
+          },
     });
 
     return NextResponse.json({

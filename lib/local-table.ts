@@ -39,6 +39,7 @@ const TABLES = {
     "job_title",
     "workdays",
     "mobile_phone",
+    "employee_relation_id",
     "role",
     "must_set_password",
     "two_factor_enabled",

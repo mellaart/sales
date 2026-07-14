@@ -35,6 +35,7 @@ export type LocalUser = {
     job_title?: string | null;
     workdays?: string | null;
     mobile_phone?: string | null;
+    employee_relation_id?: number | null;
     role?: UserRole | null;
     must_set_password?: boolean | null;
     two_factor_enabled?: boolean | null;
@@ -87,6 +88,7 @@ export function toLocalUser(profile: DbProfile): LocalUser {
       job_title: protectedProfile?.jobTitle ?? profile.job_title ?? null,
       workdays: protectedProfile?.workdays ?? profile.workdays ?? null,
       mobile_phone: protectedProfile?.mobilePhone ?? profile.mobile_phone ?? null,
+      employee_relation_id: profile.employee_relation_id ?? null,
       role,
       must_set_password: profile.must_set_password ?? false,
       two_factor_enabled: profile.two_factor_enabled ?? false,
@@ -98,7 +100,7 @@ export async function getLocalProfile(userId: string) {
   await ensureLocalSchema();
 
   const { rows } = await queryWithoutSchema<DbProfile>(
-    `select id, email, full_name, job_title, workdays, mobile_phone, role, must_set_password,
+    `select id, email, full_name, job_title, workdays, mobile_phone, employee_relation_id, role, must_set_password,
             two_factor_enabled, two_factor_secret, two_factor_enabled_at, two_factor_last_verified_at,
             created_at, updated_at
      from public.profiles
@@ -139,7 +141,7 @@ async function ensureBootstrapAdmin(email: string, password: string) {
   }
 
   const { rows: existingRows } = await queryWithoutSchema<DbProfile>(
-    `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, role, must_set_password,
+    `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, employee_relation_id, role, must_set_password,
             two_factor_enabled, two_factor_secret, two_factor_enabled_at, two_factor_last_verified_at,
             created_at, updated_at
      from public.profiles
@@ -277,7 +279,7 @@ export async function signInLocal(email: string, password: string, trustedDevice
   const { rows } = bootstrapped
     ? { rows: [bootstrapped] }
     : await queryWithoutSchema<DbProfile>(
-        `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, role, must_set_password,
+        `select id, email, password_hash, full_name, job_title, workdays, mobile_phone, employee_relation_id, role, must_set_password,
                 two_factor_enabled, two_factor_secret, two_factor_enabled_at, two_factor_last_verified_at,
                 created_at, updated_at
          from public.profiles
@@ -325,7 +327,8 @@ export async function verifyLocalTwoFactor(challengeToken: string, code: string,
       challenge_secret?: string | null;
     }
   >(
-    `select p.id, p.email, p.password_hash, p.full_name, p.job_title, p.workdays, p.mobile_phone, p.role,
+    `select p.id, p.email, p.password_hash, p.full_name, p.job_title, p.workdays, p.mobile_phone,
+            p.employee_relation_id, p.role,
             p.must_set_password, p.two_factor_enabled, p.two_factor_secret,
             p.two_factor_enabled_at, p.two_factor_last_verified_at, p.created_at, p.updated_at,
             c.mode as challenge_mode, c.secret as challenge_secret
@@ -418,7 +421,8 @@ export async function getLocalSession(token: string | null) {
   await ensureLocalSchema();
 
   const { rows } = await queryWithoutSchema<DbProfile & { expires_at_epoch: number }>(
-    `select p.id, p.email, p.full_name, p.job_title, p.workdays, p.mobile_phone, p.role,
+    `select p.id, p.email, p.full_name, p.job_title, p.workdays, p.mobile_phone,
+            p.employee_relation_id, p.role,
             p.must_set_password, p.two_factor_enabled, p.two_factor_secret,
             p.two_factor_enabled_at, p.two_factor_last_verified_at, p.created_at, p.updated_at,
             extract(epoch from s.expires_at)::integer as expires_at_epoch

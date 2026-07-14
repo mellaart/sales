@@ -15,8 +15,6 @@ type OrderLineForm = {
 
 type OrderForm = {
   debtorId: string;
-  invoiceRelationId: string;
-  employeeId: string;
   reference: string;
   commentAboveLines: string;
   commentBelowLines: string;
@@ -32,8 +30,6 @@ type OrderResponse = {
 
 const EMPTY_FORM: OrderForm = {
   debtorId: "",
-  invoiceRelationId: "",
-  employeeId: "",
   reference: "API testorder - mag verwijderd worden",
   commentAboveLines: "",
   commentBelowLines: "",
@@ -75,13 +71,7 @@ export default function OrderCreateTestForm() {
   }
 
   function updateForm(field: keyof OrderForm, value: string) {
-    setForm((current) => {
-      const next = { ...current, [field]: value };
-      if (field === "debtorId" && (!current.invoiceRelationId || current.invoiceRelationId === current.debtorId)) {
-        next.invoiceRelationId = value;
-      }
-      return next;
-    });
+    setForm((current) => ({ ...current, [field]: value }));
     invalidatePreview();
   }
 
@@ -186,14 +176,6 @@ export default function OrderCreateTestForm() {
           <label className="input-wrap">
             <span className="input-label">Debiteur relatie-ID</span>
             <input className="input" inputMode="numeric" value={form.debtorId} onChange={(event) => updateForm("debtorId", event.target.value)} required maxLength={12} />
-          </label>
-          <label className="input-wrap">
-            <span className="input-label">Factuurrelatie-ID</span>
-            <input className="input" inputMode="numeric" value={form.invoiceRelationId} onChange={(event) => updateForm("invoiceRelationId", event.target.value)} required maxLength={12} />
-          </label>
-          <label className="input-wrap">
-            <span className="input-label">Medewerker relatie-ID</span>
-            <input className="input" inputMode="numeric" value={form.employeeId} onChange={(event) => updateForm("employeeId", event.target.value)} required maxLength={12} />
           </label>
           <label className="input-wrap">
             <span className="input-label">Referentie</span>

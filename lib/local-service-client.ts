@@ -177,6 +177,12 @@ export function createLocalServiceClient() {
           if (typeof metadata.job_title === "string") updatePayload.job_title = metadata.job_title;
           if (typeof metadata.workdays === "string") updatePayload.workdays = metadata.workdays;
           if (typeof metadata.mobile_phone === "string") updatePayload.mobile_phone = metadata.mobile_phone;
+          if (
+            metadata.employee_relation_id === null ||
+            (typeof metadata.employee_relation_id === "number" && Number.isSafeInteger(metadata.employee_relation_id))
+          ) {
+            updatePayload.employee_relation_id = metadata.employee_relation_id;
+          }
           if (typeof metadata.role === "string") updatePayload.role = metadata.role as UserRole;
           if (typeof metadata.must_set_password === "boolean") updatePayload.must_set_password = metadata.must_set_password;
 

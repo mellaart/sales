@@ -136,6 +136,12 @@ export default function DealsDashboard() {
   ];
 
   const handleDelete = async (deal: DealRecord) => {
+    const canDelete = role === "admin" || deal.user_id === user?.id;
+    if (!canDelete) {
+      setStatus("Je mag alleen je eigen deals verwijderen.");
+      return;
+    }
+
     const confirmed = window.confirm(`Weet je zeker dat je deal van ${deal.customer_name || deal.quote_title} wilt verwijderen?`);
     if (!confirmed) return;
 
@@ -243,34 +249,40 @@ export default function DealsDashboard() {
           {status ? <div className="save-status">{status}</div> : null}
 
           <div className="deals-list">
-            {filteredDeals.map((deal) => (
-              <article key={deal.id} className="deal-card-row">
-                <div className="deal-card-main">
-                  <div className="deal-card-top">
-                    <StatusPill tone={isExpansionDeal(deal) ? "success" : "warning"}>{getDealTypeLabel(deal)}</StatusPill>
-                    <span className="deal-date">{getDealDateLabel(deal)}</span>
+            {filteredDeals.map((deal) => {
+              const canDelete = role === "admin" || deal.user_id === user?.id;
+
+              return (
+                <article key={deal.id} className="deal-card-row">
+                  <div className="deal-card-main">
+                    <div className="deal-card-top">
+                      <StatusPill tone={isExpansionDeal(deal) ? "success" : "warning"}>{getDealTypeLabel(deal)}</StatusPill>
+                      <span className="deal-date">{getDealDateLabel(deal)}</span>
+                    </div>
+                    <div>
+                      <h3>{deal.customer_name || "Onbekende klant"}</h3>
+                      <p>{getDealMeta(deal)}</p>
+                    </div>
+                    <div className="deal-meta-grid">
+                      <span>Contact: <strong>{deal.contact_name || "-"}</strong></span>
+                      <span>Sales: <strong>{getDealSalesName(deal, salesNamesByUserId, user?.id, currentSalesName)}</strong></span>
+                    </div>
                   </div>
-                  <div>
-                    <h3>{deal.customer_name || "Onbekende klant"}</h3>
-                    <p>{getDealMeta(deal)}</p>
+                  <div className="deal-card-side">
+                    <div className="deal-amount">
+                      <span>Maand</span>
+                      <strong>{euro.format(Number(deal.monthly_total || 0))}</strong>
+                    </div>
+                    <div className="button-row compact deal-actions">
+                      <Link href={`/deals/${deal.id}`} className="primary-button"><ExternalLink size={16} /> Open</Link>
+                      {canDelete ? (
+                        <button type="button" className="secondary-button danger" onClick={() => void handleDelete(deal)}><Trash2 size={16} /> Verwijder</button>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="deal-meta-grid">
-                    <span>Contact: <strong>{deal.contact_name || "-"}</strong></span>
-                    <span>Sales: <strong>{getDealSalesName(deal, salesNamesByUserId, user?.id, currentSalesName)}</strong></span>
-                  </div>
-                </div>
-                <div className="deal-card-side">
-                  <div className="deal-amount">
-                    <span>Maand</span>
-                    <strong>{euro.format(Number(deal.monthly_total || 0))}</strong>
-                  </div>
-                  <div className="button-row compact deal-actions">
-                    <Link href={`/deals/${deal.id}`} className="primary-button"><ExternalLink size={16} /> Open</Link>
-                    <button type="button" className="secondary-button danger" onClick={() => void handleDelete(deal)}><Trash2 size={16} /> Verwijder</button>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
             {!loading && filteredDeals.length === 0 ? <div className="save-status">Geen deals gevonden.</div> : null}
           </div>
         </section>

@@ -260,6 +260,19 @@ async function getAccessWhere(table: TableName, actor: Actor | null, serviceMode
   return [];
 }
 
+function getDeleteAccessWhere(table: TableName, actor: Actor | null, serviceMode: boolean, values: unknown[]) {
+  if (serviceMode) return [];
+  if (!actor) throw new Error("Niet ingelogd.");
+
+  if (table === "deals") {
+    if (isLocalAdmin(actor.profile)) return [];
+    values.push(actor.user.id);
+    return [`"user_id" = $${values.length}`];
+  }
+
+  return null;
+}
+
 function withOrderAndLimit(table: TableName, input: LocalTableQuery, values: unknown[]) {
   const parts: string[] = [];
 
@@ -311,10 +324,14 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
   if (!serviceMode && !actor) throw new Error("Niet ingelogd.");
 
   if (input.action === "delete") {
-    const accessWhere = await getAccessWhere(table, actor, serviceMode, values);
+    const deleteAccessWhere = getDeleteAccessWhere(table, actor, serviceMode, values);
+    const accessWhere = deleteAccessWhere ?? await getAccessWhere(table, actor, serviceMode, values);
     const where = appendFilters(table, input.filters, values, accessWhere);
     if (where.length === 0) throw new Error("Verwijderen zonder selectie is niet toegestaan.");
     const { rows } = await query(`delete from public.${table} where ${where.join(" and ")} returning *`, values);
+    if (table === "deals" && !serviceMode && actor && !isLocalAdmin(actor.profile) && rows.length === 0) {
+      return { data: null, error: { message: "Je mag alleen je eigen deals verwijderen." } };
+    }
     return formatResult(rows, input);
   }
 

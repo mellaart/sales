@@ -1373,6 +1373,37 @@ td {
   background: rgba(255,255,255,0.04);
 }
 
+.temporary-password-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(96,165,250,0.42);
+  border-radius: 14px;
+  background: rgba(37,99,235,0.12);
+}
+
+.temporary-password-panel > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.temporary-password-value {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .temporary-password-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .role-access-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

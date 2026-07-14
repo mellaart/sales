@@ -494,6 +494,7 @@ export async function updateLocalPasswordForUser(userId: string, password: strin
   );
 
   if (!rowCount) return { error: "Gebruiker niet gevonden." };
+  await queryWithoutSchema("delete from public.app_sessions where user_id = $1", [userId]);
   await queryWithoutSchema("delete from public.app_trusted_devices where user_id = $1", [userId]);
   return {};
 }

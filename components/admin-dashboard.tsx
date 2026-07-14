@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Save, ShieldCheck, UserPlus, Users2 } from "lucide-react";
+import { Check, Copy, KeyRound, RefreshCw, Save, ShieldCheck, UserPlus, Users2 } from "lucide-react";
 import {
   canManageRoles,
   getSupabaseClient,
@@ -35,6 +35,12 @@ type RoleTabsResponse = {
   error?: string;
   roleTabAccess?: unknown;
   persisted?: boolean;
+};
+
+type PasswordResetResult = {
+  profileId: string;
+  email: string;
+  temporaryPassword: string;
 };
 
 type EditableProfileField = "job_title" | "workdays" | "mobile_phone";
@@ -80,6 +86,9 @@ export default function AdminDashboard() {
   const [busy, setBusy] = useState(false);
   const [profileSavingId, setProfileSavingId] = useState<string | null>(null);
   const [twoFactorResettingId, setTwoFactorResettingId] = useState<string | null>(null);
+  const [passwordResettingId, setPasswordResettingId] = useState<string | null>(null);
+  const [passwordResetResult, setPasswordResetResult] = useState<PasswordResetResult | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
 
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [roleTabsLoading, setRoleTabsLoading] = useState(true);
@@ -495,6 +504,80 @@ export default function AdminDashboard() {
     }
   }
 
+  async function resetPassword(profileId: string) {
+    if (!supabase) return;
+
+    const profile = profiles.find((item) => item.id === profileId);
+    if (!profile) return;
+
+    if (isProtectedProfile(profile)) {
+      setStatus("Het wachtwoord van de beschermde admin wijzig je via het accountmenu.");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Wachtwoord resetten voor ${profile.email || "deze gebruiker"}? De gebruiker wordt uitgelogd en moet het tijdelijke wachtwoord direct wijzigen.`,
+    );
+    if (!confirmed) return;
+
+    setPasswordResettingId(profileId);
+    setPasswordResetResult(null);
+    setPasswordCopied(false);
+    setStatus("Wachtwoord wordt gereset...");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        setStatus("Je sessie is verlopen. Log opnieuw in.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/users/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ userId: profileId }),
+      });
+
+      const json = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        temporaryPassword?: string;
+      };
+
+      if (!response.ok || !json.temporaryPassword) {
+        setStatus(json.error || "Wachtwoord resetten mislukt.");
+        return;
+      }
+
+      setPasswordResetResult({
+        profileId,
+        email: profile.email || "de gebruiker",
+        temporaryPassword: json.temporaryPassword,
+      });
+      setStatus("Wachtwoord is gereset. Deel het tijdelijke wachtwoord veilig met de gebruiker.");
+    } catch {
+      setStatus("Er ging iets mis bij het resetten van het wachtwoord.");
+    } finally {
+      setPasswordResettingId(null);
+    }
+  }
+
+  async function copyTemporaryPassword() {
+    if (!passwordResetResult) return;
+
+    try {
+      await navigator.clipboard.writeText(passwordResetResult.temporaryPassword);
+      setPasswordCopied(true);
+      setStatus(`Tijdelijk wachtwoord voor ${passwordResetResult.email} is gekopieerd.`);
+    } catch {
+      setStatus("Kopieren lukt niet automatisch. Selecteer het tijdelijke wachtwoord handmatig.");
+    }
+  }
+
   if (authLoading) {
     return (
       <div className="page-shell">
@@ -732,7 +815,31 @@ export default function AdminDashboard() {
                     <ShieldCheck size={15} />
                     {twoFactorResettingId === profile.id ? "2FA resetten..." : "2FA resetten"}
                   </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={protectedProfile || passwordResettingId === profile.id}
+                    onClick={() => void resetPassword(profile.id)}
+                  >
+                    <KeyRound size={15} />
+                    {passwordResettingId === profile.id ? "Wachtwoord resetten..." : "Wachtwoord resetten"}
+                  </button>
                 </div>
+
+                {passwordResetResult?.profileId === profile.id ? (
+                  <div className="temporary-password-panel">
+                    <div>
+                      <div className="input-label">Tijdelijk wachtwoord voor {passwordResetResult.email}</div>
+                      <code className="temporary-password-value">{passwordResetResult.temporaryPassword}</code>
+                      <div className="subtext">Dit wachtwoord wordt alleen nu getoond en moet bij de eerste login worden gewijzigd.</div>
+                    </div>
+                    <button type="button" className="secondary-button" onClick={() => void copyTemporaryPassword()}>
+                      {passwordCopied ? <Check size={16} /> : <Copy size={16} />}
+                      {passwordCopied ? "Gekopieerd" : "Kopieren"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
               );
             })}

@@ -48,7 +48,7 @@ const EMPTY_FORM: OrderForm = {
 const INITIAL_LINE: OrderLineForm = {
   key: "line-1",
   quantity: "1",
-  description: "API testregel - mag verwijderd worden",
+  description: "",
   remark: "",
   price: "0,00",
 };
@@ -157,7 +157,7 @@ function ArticleDescriptionField({
           value={line.description}
           onFocus={() => setActive(true)}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Zoek op artikelnummer of omschrijving"
+          placeholder="Zoek een artikel of vul een omschrijving in"
           required
           maxLength={240}
           disabled={disabled}

@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/ui";
 
 type OrderLineForm = {
   key: string;
+  articleId: string;
   quantity: string;
   description: string;
   remark: string;
@@ -47,6 +48,7 @@ const EMPTY_FORM: OrderForm = {
 
 const INITIAL_LINE: OrderLineForm = {
   key: "line-1",
+  articleId: "",
   quantity: "1",
   description: "",
   remark: "",
@@ -56,6 +58,7 @@ const INITIAL_LINE: OrderLineForm = {
 function newLine(): OrderLineForm {
   return {
     key: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    articleId: "",
     quantity: "1",
     description: "",
     remark: "",
@@ -157,19 +160,23 @@ function ArticleDescriptionField({
           value={line.description}
           onFocus={() => setActive(true)}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Zoek een artikel of vul een omschrijving in"
+          placeholder="Zoek en selecteer een artikel"
           required
           maxLength={240}
           disabled={disabled}
         />
       </div>
 
+      {line.articleId ? (
+        <span className="order-test-article-selected">Artikel geselecteerd</span>
+      ) : null}
+
       {showResults ? (
         <div className="order-test-article-results" id={`${inputId}-results`} role="listbox">
           {busy ? <div className="order-test-article-message">Artikelen laden...</div> : null}
           {!busy && error ? <div className="order-test-article-message error">{error}</div> : null}
           {!busy && !error && articles.length === 0 ? (
-            <div className="order-test-article-message">Geen artikelen gevonden. Vrije tekst blijft mogelijk.</div>
+            <div className="order-test-article-message">Geen artikelen gevonden.</div>
           ) : null}
           {!busy && !error ? articles.map((article) => (
             <button
@@ -216,7 +223,13 @@ export default function OrderCreateTestForm() {
   }
 
   function updateLine(key: string, field: keyof Omit<OrderLineForm, "key">, value: string) {
-    setLines((current) => current.map((line) => line.key === key ? { ...line, [field]: value } : line));
+    setLines((current) => current.map((line) => line.key === key
+      ? {
+        ...line,
+        [field]: value,
+        ...(field === "description" ? { articleId: "" } : {}),
+      }
+      : line));
     invalidatePreview();
   }
 
@@ -224,6 +237,7 @@ export default function OrderCreateTestForm() {
     setLines((current) => current.map((line) => line.key === key
       ? {
         ...line,
+        articleId: article.id,
         description: article.description,
         price: article.price === null ? line.price : formatPrice(article.price),
       }
@@ -253,7 +267,8 @@ export default function OrderCreateTestForm() {
         body: JSON.stringify({
           ...form,
           mode,
-          lines: lines.map(({ quantity, description, remark, price }) => ({
+          lines: lines.map(({ articleId, quantity, description, remark, price }) => ({
+            article: articleId,
             quantity,
             description,
             remark,

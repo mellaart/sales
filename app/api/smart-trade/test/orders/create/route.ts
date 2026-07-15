@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type OrderLineBody = {
+  article?: unknown;
   quantity?: unknown;
   description?: unknown;
   remark?: unknown;
@@ -34,11 +35,11 @@ function positiveInteger(value: unknown) {
   return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
 }
 
-function decimalValue(value: unknown) {
+function decimalString(value: unknown) {
   const normalized = typeof value === "number"
     ? value
     : Number(textValue(value, 40).replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(normalized) ? normalized : null;
+  return Number.isFinite(normalized) ? String(normalized) : null;
 }
 
 async function responseBody(response: Response) {
@@ -119,10 +120,22 @@ export async function POST(request: Request) {
 
     const lines = [];
     for (const [index, line] of rawLines.entries()) {
-      const quantity = decimalValue(line.quantity);
-      const price = decimalValue(line.price);
+      const article = positiveInteger(line.article);
+      const quantity = decimalString(line.quantity);
+      const price = decimalString(line.price);
       const description = textValue(line.description, 240);
-      if (quantity === null || quantity <= 0 || price === null || price < 0 || !description) {
+      if (!article) {
+        return NextResponse.json(
+          { error: `Kies bij orderregel ${index + 1} een artikel uit de zoeklijst.` },
+          { status: 400 },
+        );
+      }
+
+      if (
+        quantity === null || Number(quantity) <= 0 ||
+        price === null || Number(price) < 0 ||
+        !description
+      ) {
         return NextResponse.json(
           { error: `Controleer aantal, omschrijving en prijs van orderregel ${index + 1}.` },
           { status: 400 },
@@ -131,6 +144,7 @@ export async function POST(request: Request) {
 
       lines.push({
         sortOrder: index + 1,
+        article,
         quantity,
         unit: "st",
         description,
@@ -143,6 +157,7 @@ export async function POST(request: Request) {
       debtor: debtorId,
       invoiceRelation: debtorId,
       employee: employeeId,
+      deliveryMethod: 2,
       reference: textValue(body?.reference, 180),
       commentAboveLines: textValue(body?.commentAboveLines, 1000),
       internalComment: textValue(body?.internalComment, 1000),

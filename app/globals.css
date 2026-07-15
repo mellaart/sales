@@ -853,6 +853,12 @@ select option {
   padding-left: 43px;
 }
 
+.order-test-article-selected {
+  color: #86efac;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .order-test-article-results {
   position: absolute;
   z-index: 40;

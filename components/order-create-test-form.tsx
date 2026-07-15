@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { CheckCircle2, Plus, RotateCcw, ShoppingCart, Trash2 } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { CheckCircle2, Plus, RotateCcw, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 
 type OrderLineForm = {
@@ -23,6 +23,18 @@ type OrderResponse = {
   previewed?: boolean;
   created?: boolean;
   orderId?: string | null;
+  error?: string;
+};
+
+type ArticleOption = {
+  id: string;
+  code: string;
+  description: string;
+  price: number | null;
+};
+
+type ArticleSearchResponse = {
+  articles?: ArticleOption[];
   error?: string;
 };
 
@@ -51,6 +63,139 @@ function newLine(): OrderLineForm {
   };
 }
 
+function formatPrice(value: number) {
+  return value.toFixed(2).replace(".", ",");
+}
+
+function formatArticlePrice(value: number | null) {
+  if (value === null) return "";
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function ArticleDescriptionField({
+  line,
+  disabled,
+  onChange,
+  onSelect,
+}: {
+  line: OrderLineForm;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onSelect: (article: ArticleOption) => void;
+}) {
+  const [active, setActive] = useState(false);
+  const [articles, setArticles] = useState<ArticleOption[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const query = line.description.trim();
+  const inputId = `order-description-${line.key}`;
+
+  useEffect(() => {
+    if (!active || query.length < 2) {
+      setArticles([]);
+      setBusy(false);
+      setError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setBusy(true);
+      setError("");
+
+      try {
+        const response = await fetch(`/api/smart-trade/test/articles/search?q=${encodeURIComponent(query)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const result = (await response.json().catch(() => null)) as ArticleSearchResponse | null;
+        if (!response.ok) {
+          setArticles([]);
+          setError(result?.error || "Artikelen ophalen mislukt.");
+          return;
+        }
+        setArticles(Array.isArray(result?.articles) ? result.articles : []);
+      } catch (fetchError) {
+        if (fetchError instanceof DOMException && fetchError.name === "AbortError") return;
+        setArticles([]);
+        setError(fetchError instanceof Error ? fetchError.message : "Artikelen ophalen mislukt.");
+      } finally {
+        if (!controller.signal.aborted) setBusy(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [active, query]);
+
+  const showResults = active && query.length >= 2;
+
+  return (
+    <div
+      className="input-wrap order-test-description order-test-article-field"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActive(false);
+      }}
+    >
+      <label className="input-label" htmlFor={inputId}>Orderregel omschrijving</label>
+      <div className="order-test-article-input">
+        <Search size={17} aria-hidden="true" />
+        <input
+          id={inputId}
+          className="input"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={showResults}
+          aria-controls={`${inputId}-results`}
+          value={line.description}
+          onFocus={() => setActive(true)}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Zoek op artikelnummer of omschrijving"
+          required
+          maxLength={240}
+          disabled={disabled}
+        />
+      </div>
+
+      {showResults ? (
+        <div className="order-test-article-results" id={`${inputId}-results`} role="listbox">
+          {busy ? <div className="order-test-article-message">Artikelen laden...</div> : null}
+          {!busy && error ? <div className="order-test-article-message error">{error}</div> : null}
+          {!busy && !error && articles.length === 0 ? (
+            <div className="order-test-article-message">Geen artikelen gevonden. Vrije tekst blijft mogelijk.</div>
+          ) : null}
+          {!busy && !error ? articles.map((article) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected="false"
+              className="order-test-article-option"
+              key={`${article.id}:${article.code}`}
+              onClick={() => {
+                onSelect(article);
+                setActive(false);
+              }}
+            >
+              <span>
+                <strong>{article.description}</strong>
+                {article.code ? <small>Artikel {article.code}</small> : null}
+              </span>
+              {article.price !== null ? <b>{formatArticlePrice(article.price)}</b> : null}
+            </button>
+          )) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function OrderCreateTestForm() {
   const [form, setForm] = useState<OrderForm>(EMPTY_FORM);
   const [lines, setLines] = useState<OrderLineForm[]>([INITIAL_LINE]);
@@ -72,6 +217,17 @@ export default function OrderCreateTestForm() {
 
   function updateLine(key: string, field: keyof Omit<OrderLineForm, "key">, value: string) {
     setLines((current) => current.map((line) => line.key === key ? { ...line, [field]: value } : line));
+    invalidatePreview();
+  }
+
+  function selectArticle(key: string, article: ArticleOption) {
+    setLines((current) => current.map((line) => line.key === key
+      ? {
+        ...line,
+        description: article.description,
+        price: article.price === null ? line.price : formatPrice(article.price),
+      }
+      : line));
     invalidatePreview();
   }
 
@@ -194,10 +350,12 @@ export default function OrderCreateTestForm() {
                 <span className="input-label">Aantal</span>
                 <input className="input" inputMode="decimal" value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />
               </label>
-              <label className="input-wrap order-test-description">
-                <span className="input-label">Omschrijving</span>
-                <input className="input" value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required maxLength={240} />
-              </label>
+              <ArticleDescriptionField
+                line={line}
+                disabled={Boolean(busyMode) || Boolean(createdOrderId)}
+                onChange={(value) => updateLine(line.key, "description", value)}
+                onSelect={(article) => selectArticle(line.key, article)}
+              />
               <label className="input-wrap">
                 <span className="input-label">Prijs per stuk</span>
                 <input className="input" inputMode="decimal" value={line.price} onChange={(event) => updateLine(line.key, "price", event.target.value)} required />

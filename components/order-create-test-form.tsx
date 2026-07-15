@@ -7,7 +7,6 @@ import { StatusPill } from "@/components/ui";
 type OrderLineForm = {
   key: string;
   quantity: string;
-  unit: string;
   description: string;
   remark: string;
   price: string;
@@ -17,7 +16,6 @@ type OrderForm = {
   debtorId: string;
   reference: string;
   commentAboveLines: string;
-  commentBelowLines: string;
   internalComment: string;
 };
 
@@ -32,14 +30,12 @@ const EMPTY_FORM: OrderForm = {
   debtorId: "",
   reference: "API testorder - mag verwijderd worden",
   commentAboveLines: "",
-  commentBelowLines: "",
   internalComment: "Aangemaakt via de Sales testpagina.",
 };
 
 const INITIAL_LINE: OrderLineForm = {
   key: "line-1",
   quantity: "1",
-  unit: "st",
   description: "API testregel - mag verwijderd worden",
   remark: "",
   price: "0,00",
@@ -49,7 +45,6 @@ function newLine(): OrderLineForm {
   return {
     key: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     quantity: "1",
-    unit: "st",
     description: "",
     remark: "",
     price: "0,00",
@@ -102,9 +97,8 @@ export default function OrderCreateTestForm() {
         body: JSON.stringify({
           ...form,
           mode,
-          lines: lines.map(({ quantity, unit, description, remark, price }) => ({
+          lines: lines.map(({ quantity, description, remark, price }) => ({
             quantity,
-            unit,
             description,
             remark,
             price,
@@ -200,10 +194,6 @@ export default function OrderCreateTestForm() {
                 <span className="input-label">Aantal</span>
                 <input className="input" inputMode="decimal" value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />
               </label>
-              <label className="input-wrap">
-                <span className="input-label">Eenheid</span>
-                <input className="input" value={line.unit} onChange={(event) => updateLine(line.key, "unit", event.target.value)} maxLength={30} />
-              </label>
               <label className="input-wrap order-test-description">
                 <span className="input-label">Omschrijving</span>
                 <input className="input" value={line.description} onChange={(event) => updateLine(line.key, "description", event.target.value)} required maxLength={240} />
@@ -234,10 +224,6 @@ export default function OrderCreateTestForm() {
           <label className="input-wrap">
             <span className="input-label">Tekst boven orderregels</span>
             <textarea className="input" value={form.commentAboveLines} onChange={(event) => updateForm("commentAboveLines", event.target.value)} rows={3} maxLength={1000} />
-          </label>
-          <label className="input-wrap">
-            <span className="input-label">Tekst onder orderregels</span>
-            <textarea className="input" value={form.commentBelowLines} onChange={(event) => updateForm("commentBelowLines", event.target.value)} rows={3} maxLength={1000} />
           </label>
           <label className="input-wrap">
             <span className="input-label">Interne opmerking</span>

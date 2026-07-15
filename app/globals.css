@@ -811,7 +811,7 @@ select option {
 
 .order-test-line {
   display: grid;
-  grid-template-columns: minmax(90px, 0.55fr) minmax(80px, 0.45fr) minmax(260px, 2fr) minmax(130px, 0.8fr) minmax(220px, 1.4fr) 44px;
+  grid-template-columns: minmax(90px, 0.55fr) minmax(260px, 2fr) minmax(130px, 0.8fr) minmax(220px, 1.4fr) 44px;
   gap: 12px;
   align-items: end;
   padding: 16px;

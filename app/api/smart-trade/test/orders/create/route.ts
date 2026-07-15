@@ -11,7 +11,6 @@ export const runtime = "nodejs";
 
 type OrderLineBody = {
   quantity?: unknown;
-  unit?: unknown;
   description?: unknown;
   remark?: unknown;
   price?: unknown;
@@ -22,7 +21,6 @@ type CreateOrderBody = {
   debtorId?: unknown;
   reference?: unknown;
   commentAboveLines?: unknown;
-  commentBelowLines?: unknown;
   internalComment?: unknown;
   lines?: unknown;
 };
@@ -134,7 +132,7 @@ export async function POST(request: Request) {
       lines.push({
         sortOrder: index + 1,
         quantity,
-        unit: textValue(line.unit, 30) || "st",
+        unit: "st",
         description,
         remark: textValue(line.remark, 500),
         price,
@@ -147,7 +145,6 @@ export async function POST(request: Request) {
       employee: employeeId,
       reference: textValue(body?.reference, 180),
       commentAboveLines: textValue(body?.commentAboveLines, 1000),
-      commentBelowLines: textValue(body?.commentBelowLines, 1000),
       internalComment: textValue(body?.internalComment, 1000),
       lines,
     };

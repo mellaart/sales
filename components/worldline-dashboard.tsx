@@ -76,6 +76,7 @@ const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const AGREEMENT_AUTOSAVE_DELAY_MS = 500;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
+const WORLDLINE_REFUND_ANALYSIS_VERSION = 2;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund"];
 const PDF_OCR_MAX_PAGES = 6;
 
@@ -190,9 +191,66 @@ async function createOcrReadyImage(file: File, region?: OcrImageRegion) {
   });
 }
 
+function detectRefundSignatureOnCanvas(canvas: HTMLCanvasElement) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return false;
+
+  const left = Math.round(canvas.width * 0.05);
+  const top = Math.round(canvas.height * 0.755);
+  const right = Math.round(canvas.width * 0.48);
+  const bottom = Math.round(canvas.height * 0.815);
+  const width = Math.max(1, right - left);
+  const height = Math.max(1, bottom - top);
+  const pixels = context.getImageData(left, top, width, height).data;
+  const occupiedColumns = new Uint8Array(width);
+  const occupiedRows = new Uint8Array(height);
+  let darkPixels = 0;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const gray = pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+      if (gray >= 120) continue;
+
+      darkPixels += 1;
+      occupiedColumns[x] = 1;
+      occupiedRows[y] = 1;
+    }
+  }
+
+  const darkRatio = darkPixels / (width * height);
+  const columnRatio = occupiedColumns.reduce((sum, value) => sum + value, 0) / width;
+  const rowRatio = occupiedRows.reduce((sum, value) => sum + value, 0) / height;
+
+  return darkRatio >= 0.022 && columnRatio >= 0.28 && rowRatio >= 0.3;
+}
+
+async function detectRefundSignatureInImage(file: File) {
+  const image = await loadImageForOcr(file);
+  const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+  const scale = Math.min(1, 2200 / longestSide);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return false;
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const detected = detectRefundSignatureOnCanvas(canvas);
+  canvas.width = 0;
+  canvas.height = 0;
+  return detected;
+}
+
 async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: string) => void, options: BrowserOcrOptions = {}) {
   const { PSM, createWorker } = await import("tesseract.js");
   const ocrImage = await createOcrReadyImage(file);
+  const visualSignatureDetected = options.documentType === "refund"
+    ? await detectRefundSignatureInImage(file)
+    : undefined;
   const worker = await createWorker(["nld", "eng"], 1, {
     logger: (message) => {
       if (typeof message.progress !== "number" || !message.status) return;
@@ -270,6 +328,7 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
     return {
       confidence: typeof result.data.confidence === "number" ? Math.round(result.data.confidence) : undefined,
       text: normalizeBrowserOcrText(textParts.filter(Boolean).join("\n\n")),
+      visualSignatureDetected,
     };
   } finally {
     await worker.terminate();
@@ -295,6 +354,7 @@ async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: st
   });
   const pdf = await loadingTask.promise;
   const textParts: string[] = [];
+  let visualSignatureDetected = options.documentType === "refund" ? false : undefined;
 
   try {
     const pageCount = Math.min(pdf.numPages, PDF_OCR_MAX_PAGES);
@@ -329,6 +389,7 @@ async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: st
       );
 
       if (ocrResult.text) textParts.push(ocrResult.text);
+      if (ocrResult.visualSignatureDetected === true) visualSignatureDetected = true;
       page.cleanup();
       canvas.width = 0;
       canvas.height = 0;
@@ -337,7 +398,10 @@ async function extractPdfTextWithBrowserOcr(file: File, onProgress: (message: st
     await pdf.destroy();
   }
 
-  return normalizeBrowserOcrText(textParts.join("\n\n"));
+  return {
+    text: normalizeBrowserOcrText(textParts.join("\n\n")),
+    visualSignatureDetected,
+  };
 }
 
 function formatDate(value?: string | null) {
@@ -455,6 +519,14 @@ function identityExpiryNeedsOcr(document: WorldlineDocument) {
   );
 }
 
+function refundSignatureNeedsVisualCheck(document: WorldlineDocument) {
+  if (document.document_type !== "refund") return false;
+
+  const checkResult = getCheckResult(document, "refund");
+  const signatureCheck = checkResult.checklist?.find((check) => /handtekening/i.test(check.text));
+  return signatureCheck?.done !== true;
+}
+
 function getDocumentTitleKey(value: string) {
   return sanitizeFileName(value) || "document";
 }
@@ -534,6 +606,7 @@ function getCheckResult(document: WorldlineDocument | null, documentType: Worldl
     producedDate: typeof source.producedDate === "string" ? source.producedDate : undefined,
     statementDate: typeof source.statementDate === "string" ? source.statementDate : undefined,
     uploadedAsImage: source.uploadedAsImage === true,
+    visualSignatureDetected: typeof source.visualSignatureDetected === "boolean" ? source.visualSignatureDetected : undefined,
     authorizedSigners: Array.isArray(source.authorizedSigners) ? source.authorizedSigners : undefined,
     legalShareholders: Array.isArray(source.legalShareholders) ? source.legalShareholders : undefined,
   };
@@ -556,6 +629,16 @@ function shouldRefreshKvkCheck(document: WorldlineDocument) {
     : {};
 
   return checkResult.analysisVersion !== WORLDLINE_KVK_ANALYSIS_VERSION;
+}
+
+function shouldRefreshRefundCheck(document: WorldlineDocument) {
+  if (document.document_type !== "refund") return false;
+
+  const checkResult = document.check_result && typeof document.check_result === "object"
+    ? (document.check_result as WorldlineCheckResult)
+    : {};
+
+  return checkResult.analysisVersion !== WORLDLINE_REFUND_ANALYSIS_VERSION;
 }
 
 function shouldAutoCheckOcrDocument(document: WorldlineDocument) {
@@ -940,6 +1023,8 @@ export default function WorldlineDashboard() {
   const hydratedAgreementProjectId = useRef<string | null>(null);
   const autoCheckedKvkDocumentIds = useRef<Set<string>>(new Set());
   const autoCheckedOcrDocumentIds = useRef<Set<string>>(new Set());
+  const autoCheckedRefundDocumentIds = useRef<Set<string>>(new Set());
+  const checkDocumentRef = useRef<(document: WorldlineDocument) => Promise<void>>(async () => undefined);
   const [searching, setSearching] = useState(false);
   const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -1109,6 +1194,7 @@ export default function WorldlineDashboard() {
   useEffect(() => {
     autoCheckedKvkDocumentIds.current.clear();
     autoCheckedOcrDocumentIds.current.clear();
+    autoCheckedRefundDocumentIds.current.clear();
     if (activeProjectId) {
       void loadDocuments(activeProjectId);
     } else {
@@ -1529,6 +1615,7 @@ export default function WorldlineDashboard() {
     let ocrConfidence: number | undefined;
     let ocrError = "";
     let ocrText = "";
+    let visualSignatureDetected: boolean | undefined;
 
     const definition = getWorldlineDocumentDefinition(documentType);
     const documentTitle = getDocumentTitleFromFileName(uploadFile.name);
@@ -1555,6 +1642,7 @@ export default function WorldlineDashboard() {
           const ocrResult = await extractImageTextWithBrowserOcr(file, setStatus, { documentType });
           ocrText = ocrResult.text;
           ocrConfidence = ocrResult.confidence;
+          visualSignatureDetected = ocrResult.visualSignatureDetected;
         } catch (error) {
           ocrError = getErrorMessage(error, "OCR kon niet worden uitgevoerd.");
         }
@@ -1573,6 +1661,7 @@ export default function WorldlineDashboard() {
               ocrEngine: "tesseract.js",
               ...(ocrError ? { ocrError } : {}),
               ...(ocrText ? { ocrText } : {}),
+              ...(typeof visualSignatureDetected === "boolean" ? { visualSignatureDetected } : {}),
               originalFileName: file.name,
               originalMimeType: file.type || "image",
             }
@@ -1709,11 +1798,18 @@ export default function WorldlineDashboard() {
       const uploadedDocument = await uploadDocument(documentType, file, knownDocuments);
       if (uploadedDocument) {
         knownDocuments = [uploadedDocument, ...knownDocuments];
+        if (documentType === "refund") {
+          autoCheckedRefundDocumentIds.current.add(uploadedDocument.id);
+          await checkDocument(uploadedDocument);
+        }
       }
     }
   }
 
-  const runAutomatedDocumentCheck = useCallback(async (document: WorldlineDocument, options: { ocrText?: string } = {}) => {
+  const runAutomatedDocumentCheck = useCallback(async (
+    document: WorldlineDocument,
+    options: { ocrText?: string; visualSignatureDetected?: boolean } = {},
+  ) => {
     if (!supabase) return { ok: false as const, error: "Supabase is niet beschikbaar." };
     if (!canWriteWorldline) {
       setStatus("Je hebt alleen leesrechten voor Worldline.");
@@ -1748,6 +1844,9 @@ export default function WorldlineDashboard() {
         body: JSON.stringify({
           documentId: document.id,
           ...(options.ocrText ? { ocrText: options.ocrText } : {}),
+          ...(typeof options.visualSignatureDetected === "boolean"
+            ? { visualSignatureDetected: options.visualSignatureDetected }
+            : {}),
         }),
       });
       const json = (await response.json().catch(() => ({}))) as {
@@ -1775,7 +1874,7 @@ export default function WorldlineDashboard() {
   }, [canWriteWorldline, supabase]);
 
   async function rerunImageOcrForDocument(document: WorldlineDocument) {
-    if (!supabase || !isImageDocument(document) || !OCR_DOCUMENT_TYPES.includes(document.document_type)) return "";
+    if (!supabase || !isImageDocument(document) || !OCR_DOCUMENT_TYPES.includes(document.document_type)) return null;
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
     setBusy(true);
@@ -1788,7 +1887,7 @@ export default function WorldlineDashboard() {
 
       if (downloadError || !imageFile) {
         setStatus(`${documentTitle}-OCR mislukt: ${downloadError?.message ?? "afbeelding kon niet worden opgehaald"}.`);
-        return "";
+        return null;
       }
 
       const ocrResult = await extractImageTextWithBrowserOcr(
@@ -1797,10 +1896,10 @@ export default function WorldlineDashboard() {
         { documentType: document.document_type },
       );
 
-      return ocrResult.text;
+      return ocrResult;
     } catch (error) {
       setStatus(`${documentTitle}-OCR mislukt: ${getErrorMessage(error, "afbeelding kon niet worden gelezen.")}`);
-      return "";
+      return null;
     } finally {
       setBusy(false);
     }
@@ -1835,10 +1934,13 @@ export default function WorldlineDashboard() {
 
   async function checkDocument(document: WorldlineDocument) {
     if (isImageDocument(document) && OCR_DOCUMENT_TYPES.includes(document.document_type)) {
-      const freshOcrText = await rerunImageOcrForDocument(document);
+      const freshOcrResult = await rerunImageOcrForDocument(document);
 
-      if (freshOcrText) {
-        await runAutomatedDocumentCheck(document, { ocrText: freshOcrText });
+      if (freshOcrResult?.text) {
+        await runAutomatedDocumentCheck(document, {
+          ocrText: freshOcrResult.text,
+          visualSignatureDetected: freshOcrResult.visualSignatureDetected,
+        });
         return;
       }
     }
@@ -1859,7 +1961,10 @@ export default function WorldlineDashboard() {
       isPdfDocument(document) &&
       (
         firstError.includes("Geen selecteerbare tekst") ||
-        (checkedDocument && identityExpiryNeedsOcr(checkedDocument))
+        (checkedDocument && (
+          identityExpiryNeedsOcr(checkedDocument) ||
+          refundSignatureNeedsVisualCheck(checkedDocument)
+        ))
       )
     );
 
@@ -1872,7 +1977,9 @@ export default function WorldlineDashboard() {
     setStatus(
       firstError.includes("Geen selecteerbare tekst")
         ? `${documentTitle} heeft geen selecteerbare tekst. Gratis OCR leest de gescande PDF...`
-        : `${documentTitle} mist de geldigheidsdatum in de PDF-tekst. Gratis OCR leest de PDF opnieuw...`
+        : checkedDocument && refundSignatureNeedsVisualCheck(checkedDocument)
+          ? `${documentTitle} controleert de handtekening visueel...`
+          : `${documentTitle} mist de geldigheidsdatum in de PDF-tekst. Gratis OCR leest de PDF opnieuw...`
     );
 
     try {
@@ -1885,18 +1992,21 @@ export default function WorldlineDashboard() {
         return;
       }
 
-      const ocrText = await extractPdfTextWithBrowserOcr(
+      const ocrResult = await extractPdfTextWithBrowserOcr(
         new File([pdfFile], document.file_name, { type: document.mime_type || pdfFile.type || "application/pdf" }),
         setStatus,
         { documentType: document.document_type },
       );
 
-      if (!ocrText) {
+      if (!ocrResult.text) {
         setStatus(`${documentTitle}-controle mislukt: OCR kon geen tekst lezen uit deze gescande PDF. Controleer dit document handmatig.`);
         return;
       }
 
-      await runAutomatedDocumentCheck(document, { ocrText });
+      await runAutomatedDocumentCheck(document, {
+        ocrText: ocrResult.text,
+        visualSignatureDetected: ocrResult.visualSignatureDetected,
+      });
     } catch (error) {
       setStatus(`${documentTitle}-OCR mislukt: ${getErrorMessage(error, "gescande PDF kon niet worden gelezen.")}`);
     } finally {
@@ -1904,13 +2014,17 @@ export default function WorldlineDashboard() {
     }
   }
 
+  checkDocumentRef.current = checkDocument;
+
   useEffect(() => {
     if (!activeProjectId || !canWriteWorldline || roleAccessLoading || busy) return;
 
     const ocrDocumentToCheck = Object.values(latestDocumentsByType)
       .flat()
       .find((document) => (
-        shouldAutoCheckOcrDocument(document) && !autoCheckedOcrDocumentIds.current.has(document.id)
+        shouldAutoCheckOcrDocument(document) &&
+        !shouldRefreshRefundCheck(document) &&
+        !autoCheckedOcrDocumentIds.current.has(document.id)
       ));
 
     if (!ocrDocumentToCheck) return;
@@ -1918,6 +2032,19 @@ export default function WorldlineDashboard() {
     autoCheckedOcrDocumentIds.current.add(ocrDocumentToCheck.id);
     void runAutomatedDocumentCheck(ocrDocumentToCheck);
   }, [activeProjectId, busy, canWriteWorldline, latestDocumentsByType, roleAccessLoading, runAutomatedDocumentCheck]);
+
+  useEffect(() => {
+    if (!activeProjectId || !canWriteWorldline || roleAccessLoading || busy) return;
+
+    const staleRefundDocument = latestDocumentsByType.refund.find((document) => (
+      shouldRefreshRefundCheck(document) && !autoCheckedRefundDocumentIds.current.has(document.id)
+    ));
+
+    if (!staleRefundDocument) return;
+
+    autoCheckedRefundDocumentIds.current.add(staleRefundDocument.id);
+    void checkDocumentRef.current(staleRefundDocument);
+  }, [activeProjectId, busy, canWriteWorldline, latestDocumentsByType, roleAccessLoading]);
 
   useEffect(() => {
     if (!activeProjectId || !canWriteWorldline || roleAccessLoading || busy) return;

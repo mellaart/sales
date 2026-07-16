@@ -23,6 +23,7 @@ export type WorldlineCheckResult = {
   producedDate?: string;
   statementDate?: string;
   uploadedAsImage?: boolean;
+  visualSignatureDetected?: boolean;
   authorizedSigners?: string[];
   legalShareholders?: string[];
 };

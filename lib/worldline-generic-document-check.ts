@@ -19,6 +19,7 @@ type GenericDocumentAnalysisOptions = {
   expectedSignerNames?: string;
   supportingDocumentNames?: string[];
   supportingOcrTexts?: string[];
+  visualSignatureDetected?: boolean;
 };
 
 const MONTHS: Record<string, number> = {
@@ -477,10 +478,11 @@ function analyzeRefund(text: string, options: GenericDocumentAnalysisOptions): N
   const requiredFields = findIban(text, options.expectedIban) || findEmail(text) || findDate(text);
   const placeValue = getValueAfterLabel(text, ["plaats", "place"]);
   const signatureValue = getValueAfterLabel(text, ["handtekening", "signature"]);
+  const signaturePresent = Boolean(signatureValue) || options.visualSignatureDetected === true;
   const signerNameValue = getValueAfterLabel(text, ["naam tekenbevoegde", "naam ondertekenaar", "name"]);
   const missingLeftFields = [
     placeValue ? "" : "Plaats",
-    signatureValue ? "" : "Handtekening",
+    signaturePresent ? "" : "Handtekening",
     signerNameValue ? "" : "Naam tekenbevoegde",
   ].filter(Boolean);
 
@@ -519,7 +521,7 @@ export function analyzeWorldlineGenericDocumentText(
 
   const needsReview = checklist.some((check) => check.tone !== "success" || !check.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: 1,
+    analysisVersion: documentType === "refund" ? 2 : 1,
     checklist,
     note: needsReview
       ? `${definition?.title ?? "Document"}-controle uitgevoerd met OCR: controleer de aandachtspunten visueel.`

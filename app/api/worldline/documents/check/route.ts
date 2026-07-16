@@ -32,6 +32,10 @@ function keepNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function keepBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
 function readCheckResult(value: unknown) {
   return value && typeof value === "object" ? value as WorldlineCheckResult : {};
 }
@@ -107,9 +111,14 @@ export async function POST(request: Request) {
       return jsonResponse({ error: verified.message }, 401);
     }
 
-    const body = (await request.json().catch(() => null)) as { documentId?: unknown; ocrText?: unknown } | null;
+    const body = (await request.json().catch(() => null)) as {
+      documentId?: unknown;
+      ocrText?: unknown;
+      visualSignatureDetected?: unknown;
+    } | null;
     const documentId = normalizeText(body?.documentId);
     const incomingOcrText = normalizeText(body?.ocrText);
+    const incomingVisualSignatureDetected = keepBoolean(body?.visualSignatureDetected);
 
     if (!documentId) {
       return jsonResponse({ error: "Geen document ontvangen." }, 400);
@@ -145,6 +154,7 @@ export async function POST(request: Request) {
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
     const currentResult = readCheckResult(document.check_result);
+    const visualSignatureDetected = incomingVisualSignatureDetected ?? keepBoolean(currentResult.visualSignatureDetected);
     let documentText = incomingOcrText || normalizeText(currentResult.ocrText);
 
     if (!documentText) {
@@ -233,6 +243,7 @@ export async function POST(request: Request) {
             documentName: normalizeText(document.file_name),
             supportingDocumentNames: supportingIdentityDocumentNames,
             supportingOcrTexts: supportingIdentityOcrTexts,
+            visualSignatureDetected,
           }));
     const resolvedAnalysis = await analysis;
     const nextOcrText = incomingOcrText || keepString(currentResult.ocrText);
@@ -246,6 +257,7 @@ export async function POST(request: Request) {
       ...(incomingOcrText ? { ocrEngine: "tesseract.js/pdf" } : keepString(currentResult.ocrEngine) ? { ocrEngine: keepString(currentResult.ocrEngine) } : {}),
       ...(keepString(currentResult.ocrError) ? { ocrError: keepString(currentResult.ocrError) } : {}),
       ...(nextOcrText ? { ocrText: nextOcrText } : {}),
+      ...(visualSignatureDetected !== undefined ? { visualSignatureDetected } : {}),
       ...(keepString(currentResult.originalFileName) ? { originalFileName: keepString(currentResult.originalFileName) } : {}),
       ...(keepString(currentResult.originalMimeType) ? { originalMimeType: keepString(currentResult.originalMimeType) } : {}),
     };

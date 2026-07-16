@@ -385,6 +385,9 @@ function hasBacksideDocument(text: string, options: GenericDocumentAnalysisOptio
   if (names.some((name) => /\b(achterzijde|achterkant|back|backside|verso|zijde\s*2|pagina\s*2|page\s*2)\b/i.test(name))) return true;
   if (names.length >= 1) return true;
 
+  const compactMachineText = text.replace(/[^A-Z0-9<]/gi, "");
+  if (/[MF<][0-9OQDILSZBGT]{6}[0-9OQDILSZBGT]/i.test(compactMachineText)) return true;
+
   return hasAny(text, [
     /\bvervolg\s+naam\b/i,
     /\bcontinue\s+surname\b/i,
@@ -618,7 +621,7 @@ export function analyzeWorldlineGenericDocumentText(
 
   const needsReview = checklist.some((check) => check.tone !== "success" || !check.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: documentType === "identity" ? 7 : documentType === "refund" ? 2 : 1,
+    analysisVersion: documentType === "identity" ? 8 : documentType === "refund" ? 2 : 1,
     checklist,
     note: needsReview
       ? `${definition?.title ?? "Document"}-controle uitgevoerd met OCR: controleer de aandachtspunten visueel.`

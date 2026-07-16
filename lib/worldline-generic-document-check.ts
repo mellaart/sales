@@ -127,7 +127,10 @@ function normalizeOcrDigits(value: string) {
     .replace(/[OQD]/gi, "0")
     .replace(/[IL]/gi, "1")
     .replace(/S/gi, "5")
-    .replace(/Z/gi, "2");
+    .replace(/Z/gi, "2")
+    .replace(/G/gi, "6")
+    .replace(/T/gi, "7")
+    .replace(/B/gi, "8");
 }
 
 function parseFutureMrzDate(value: string, referenceDate: Date) {
@@ -248,6 +251,39 @@ function extractDates(text: string) {
 
 function findIdentityExpiryDate(text: string, referenceDate = new Date()) {
   const compact = normalizeWhitespace(text);
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  const maxExpiry = new Date(today);
+  maxExpiry.setFullYear(maxExpiry.getFullYear() + 15);
+  const focusedBlocks = Array.from(compact.matchAll(/IDENTITY_EXPIRY_FOCUS_START\s+(.{1,600}?)\s+IDENTITY_EXPIRY_FOCUS_END/gi))
+    .map((match) => match[1]);
+
+  for (const focusedBlock of focusedBlocks) {
+    const focusedDate = extractDates(focusedBlock)
+      .filter((date) => date >= today && date <= maxExpiry)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+    if (focusedDate) return focusedDate;
+
+    const knownDates = extractDates(compact);
+    for (const yearMatch of focusedBlock.matchAll(/\b(20\d{2})\b/g)) {
+      const expiryYear = Number(yearMatch[1]);
+      if (expiryYear < today.getFullYear() || expiryYear > maxExpiry.getFullYear()) continue;
+
+      const precedingText = focusedBlock.slice(Math.max(0, (yearMatch.index ?? 0) - 36), yearMatch.index);
+      const dayMatches = Array.from(precedingText.matchAll(/\b([0-9OQDILSZ]{1,2})\b/gi));
+      const expiryDay = Number(normalizeOcrDigits(dayMatches.at(-1)?.[1] ?? ""));
+      if (!Number.isInteger(expiryDay) || expiryDay < 1 || expiryDay > 31) continue;
+
+      const matchingIssueDate = knownDates
+        .filter((date) => date.getDate() === expiryDay && [5, 10].includes(expiryYear - date.getFullYear()))
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+      if (!matchingIssueDate) continue;
+
+      const inferredDate = parseDate(String(expiryDay), String(matchingIssueDate.getMonth() + 1), String(expiryYear));
+      if (inferredDate && inferredDate >= today && inferredDate <= maxExpiry) return inferredDate;
+    }
+  }
+
   const labelledPattern = /\b(?:geldig\s*tot|einde\s+geldigheid|datum\s+einde\s+geldigheid|date\s*of\s*expiry|expiry\s*date|expires|valid\s*until|validity|expiration|expiration\s+date|verloopt\s*op|datum\s*verval)\b.{0,140}/gi;
   const labelledDates: Date[] = [];
 
@@ -257,8 +293,6 @@ function findIdentityExpiryDate(text: string, referenceDate = new Date()) {
 
   if (labelledDates.length > 0) return labelledDates.sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
-  const today = new Date(referenceDate);
-  today.setHours(0, 0, 0, 0);
   const explicitFutureDate = extractDates(compact)
     .filter((date) => date >= today)
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
@@ -266,12 +300,12 @@ function findIdentityExpiryDate(text: string, referenceDate = new Date()) {
 
   const mrzText = compact.replace(/[^A-Z0-9<]/gi, "");
   const mrzDates: Date[] = [];
-  for (const match of mrzText.matchAll(/[MF<]([0-9OQDILSZ]{6})[0-9OQDILSZ]/gi)) {
+  for (const match of mrzText.matchAll(/[MF<]([0-9OQDILSZBGT]{6})[0-9OQDILSZBGT]/gi)) {
     const date = parseFutureMrzDate(match[1], referenceDate);
     if (date) mrzDates.push(date);
   }
 
-  for (const match of mrzText.matchAll(/([0-9OQDILSZ]{6})/gi)) {
+  for (const match of mrzText.matchAll(/([0-9OQDILSZBGT]{6})/gi)) {
     const date = parseFutureMrzDate(match[1], referenceDate);
     if (date) mrzDates.push(date);
   }
@@ -577,7 +611,7 @@ export function analyzeWorldlineGenericDocumentText(
 
   const needsReview = checklist.some((check) => check.tone !== "success" || !check.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: documentType === "identity" ? 5 : documentType === "refund" ? 2 : 1,
+    analysisVersion: documentType === "identity" ? 6 : documentType === "refund" ? 2 : 1,
     checklist,
     note: needsReview
       ? `${definition?.title ?? "Document"}-controle uitgevoerd met OCR: controleer de aandachtspunten visueel.`

@@ -386,7 +386,21 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
         user_defined_dpi: "300",
       });
       const mrzResult = await worker.recognize(mrzImage);
-      textParts.push(normalizeBrowserOcrText(mrzResult.data.text));
+      const mrzText = normalizeBrowserOcrText(mrzResult.data.text);
+      textParts.push(mrzText);
+
+      const identityCombinedText = normalizeBrowserOcrText(textParts.filter(Boolean).join("\n\n"));
+      console.info("[Worldline ID OCR]", {
+        totalLength: identityCombinedText.length,
+        identityTextLength: normalizeBrowserOcrText(identityTextResult.data.text).length,
+        identityDateLength: normalizeBrowserOcrText(identityDateResult.data.text).length,
+        focusedDateLength: identityFocusedDateText.length,
+        mrzLength: mrzText.length,
+        hasIdentityKeyword: /\b(?:identiteitskaart|identity\s*card|national\s*identity)\b/i.test(identityCombinedText),
+        hasMonthToken: /\b(?:jan|feb|mrt|mar|apr|mei|may|jun|jul|aug|sep|okt|oct|nov|dec)\b/i.test(identityFocusedDateText),
+        hasFourDigitYear: /\b20\d{2}\b/.test(identityFocusedDateText),
+        hasMrzDateCandidate: /[MF<][0-9OQDILSZBGT]{6}[0-9OQDILSZBGT]/i.test(mrzText.replace(/\s+/g, "")),
+      });
     }
 
     if (options.documentType === "ubo" && options.uboSigningPage !== false) {

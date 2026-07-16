@@ -167,10 +167,6 @@ function ArticleDescriptionField({
         />
       </div>
 
-      {line.articleId ? (
-        <span className="order-test-article-selected">Artikel geselecteerd</span>
-      ) : null}
-
       {showResults ? (
         <div className="order-test-article-results" id={`${inputId}-results`} role="listbox">
           {busy ? <div className="order-test-article-message">Artikelen laden...</div> : null}

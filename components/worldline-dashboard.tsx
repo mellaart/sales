@@ -76,7 +76,7 @@ const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const AGREEMENT_AUTOSAVE_DELAY_MS = 500;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
-const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 3;
+const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 4;
 const WORLDLINE_REFUND_ANALYSIS_VERSION = 2;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund", "ubo"];
 const PDF_OCR_MAX_PAGES = 6;
@@ -741,7 +741,10 @@ function shouldRefreshIdentityCheck(document: WorldlineDocument) {
     ? (document.check_result as WorldlineCheckResult)
     : {};
 
-  return checkResult.analysisVersion !== WORLDLINE_IDENTITY_ANALYSIS_VERSION;
+  return (
+    checkResult.analysisVersion !== WORLDLINE_IDENTITY_ANALYSIS_VERSION ||
+    identityExpiryNeedsOcr(document)
+  );
 }
 
 function shouldAutoCheckOcrDocument(document: WorldlineDocument) {

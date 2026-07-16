@@ -827,6 +827,31 @@ async function downloadUboDocuments(
   downloadBlob(new Blob([pdfArrayBuffer], { type: "application/pdf" }), "UBO-registratieformulier.pdf");
 }
 
+async function downloadRefundAddendum(
+  relation: RelationOption,
+  fields: WorldlineAgreementFields,
+) {
+  const response = await fetch("/api/worldline/refund/fill", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      companyName: (fields.companyName || relation.name).trim(),
+      businessAddress: fields.businessAddress,
+      businessPostcode: fields.businessPostcode,
+      businessCity: fields.businessCity,
+      vatNumber: fields.vatNumber,
+    }),
+  });
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(result?.error || "Refundformulier kon niet worden ingevuld.");
+  }
+
+  const safeRelationName = sanitizeFileName(relation.name) || "worldline";
+  downloadBlob(await response.blob(), `${safeRelationName}-worldline-refund-addendum.docx`);
+}
+
 function renderAgreementFieldControl(
   definition: WorldlineAgreementFieldDefinition,
   value: string,
@@ -1935,6 +1960,20 @@ export default function WorldlineDashboard() {
     }
   }
 
+  async function handleDownloadRefundAddendum() {
+    if (!selectedRelation || !activeProject) return;
+
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
+    setStatus("Refundformulier wordt ingevuld...");
+
+    try {
+      await downloadRefundAddendum(selectedRelation, agreementFieldsRef.current);
+      setStatus("Ingevuld refundformulier gedownload.");
+    } catch (error) {
+      setStatus(`Refundformulier downloaden mislukt: ${getErrorMessage(error, "document kon niet worden ingevuld.")}`);
+    }
+  }
+
   async function downloadDocument(document: WorldlineDocument) {
     if (!supabase) return;
 
@@ -2283,6 +2322,16 @@ export default function WorldlineDashboard() {
                   <button type="button" className="secondary-button" onClick={() => void handleDownloadUboDocuments()} disabled={busy || savingAgreementFields}>
                     <UsersRound size={16} />
                     UBO
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void handleDownloadRefundAddendum()}
+                    disabled={busy || savingAgreementFields || !refundEnabled}
+                    title={refundEnabled ? "Ingevuld refundformulier downloaden" : "Zet Refund eerst op Ja"}
+                  >
+                    <FileText size={16} />
+                    Refund
                   </button>
                   <button
                     type="button"

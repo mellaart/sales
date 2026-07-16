@@ -115,7 +115,7 @@ function normalizeArticle(value: unknown): ArticleOption | null {
     "shortDescription",
     "short_description",
   ]));
-  const price = priceValue(firstValue(record, [
+  const rawPrice = firstValue(record, [
     "salesPrice",
     "sales_price",
     "salePrice",
@@ -127,7 +127,11 @@ function normalizeArticle(value: unknown): ArticleOption | null {
     "unitPrice",
     "unit_price",
     "price",
-  ]));
+  ]);
+  const priceRecord = asRecord(rawPrice);
+  const price = priceValue(priceRecord
+    ? firstValue(priceRecord, ["exclVat", "excl_vat", "amount", "value"])
+    : rawPrice);
 
   if (!description && !code) return null;
   const stableId = id || code || description;

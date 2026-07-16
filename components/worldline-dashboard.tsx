@@ -76,7 +76,7 @@ const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const AGREEMENT_AUTOSAVE_DELAY_MS = 500;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
-const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 6;
+const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 7;
 const WORLDLINE_REFUND_ANALYSIS_VERSION = 2;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund", "ubo"];
 const PDF_OCR_MAX_PAGES = 6;
@@ -386,21 +386,7 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
         user_defined_dpi: "300",
       });
       const mrzResult = await worker.recognize(mrzImage);
-      const mrzText = normalizeBrowserOcrText(mrzResult.data.text);
-      textParts.push(mrzText);
-
-      const identityCombinedText = normalizeBrowserOcrText(textParts.filter(Boolean).join("\n\n"));
-      console.info("[Worldline ID OCR]", JSON.stringify({
-        totalLength: identityCombinedText.length,
-        identityTextLength: normalizeBrowserOcrText(identityTextResult.data.text).length,
-        identityDateLength: normalizeBrowserOcrText(identityDateResult.data.text).length,
-        focusedDateLength: identityFocusedDateText.length,
-        mrzLength: mrzText.length,
-        hasIdentityKeyword: /\b(?:identiteitskaart|identity\s*card|national\s*identity)\b/i.test(identityCombinedText),
-        hasMonthToken: /\b(?:jan|feb|mrt|mar|apr|mei|may|jun|jul|aug|sep|okt|oct|nov|dec)\b/i.test(identityFocusedDateText),
-        hasFourDigitYear: /\b20\d{2}\b/.test(identityFocusedDateText),
-        hasMrzDateCandidate: /[MF<][0-9OQDILSZBGT]{6}[0-9OQDILSZBGT]/i.test(mrzText.replace(/\s+/g, "")),
-      }));
+      textParts.push(normalizeBrowserOcrText(mrzResult.data.text));
     }
 
     if (options.documentType === "ubo" && options.uboSigningPage !== false) {

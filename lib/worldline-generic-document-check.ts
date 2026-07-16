@@ -367,7 +367,14 @@ function expectedNameMatches(text: string, expectedNames?: string) {
 function getIdentityDocumentKind(text: string) {
   if (hasAny(text, [/\bpaspoort\b/i, /\bpassport\b/i, /\bpassport\s*no\b/i])) return "paspoort";
   if (hasAny(text, [/\brijbewijs\b/i, /\bdriving\s*licen[cs]e\b/i, /\bdriver'?s\s*licen[cs]e\b/i])) return "rijbewijs";
-  if (hasAny(text, [/\bidentiteitskaart\b/i, /\bidentity\s*card\b/i, /\bnational\s*identity\b/i, /\bid\s*card\b/i])) return "identiteitskaart";
+  if (hasAny(text, [
+    /\bidentiteitskaart\b/i,
+    /\bidentity\s*card\b/i,
+    /\bnational\s*identity\b/i,
+    /\bid\s*card\b/i,
+    /\bkopie\s+(?:van\s+)?(?:id|identiteitskaart)\b/i,
+    /I\s*<\s*NLD/i,
+  ])) return "identiteitskaart";
   return "";
 }
 
@@ -611,7 +618,7 @@ export function analyzeWorldlineGenericDocumentText(
 
   const needsReview = checklist.some((check) => check.tone !== "success" || !check.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: documentType === "identity" ? 6 : documentType === "refund" ? 2 : 1,
+    analysisVersion: documentType === "identity" ? 7 : documentType === "refund" ? 2 : 1,
     checklist,
     note: needsReview
       ? `${definition?.title ?? "Document"}-controle uitgevoerd met OCR: controleer de aandachtspunten visueel.`

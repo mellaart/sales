@@ -76,7 +76,7 @@ const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const AGREEMENT_AUTOSAVE_DELAY_MS = 500;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
-const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 2;
+const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 3;
 const WORLDLINE_REFUND_ANALYSIS_VERSION = 2;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund", "ubo"];
 const PDF_OCR_MAX_PAGES = 6;
@@ -350,21 +350,23 @@ async function extractImageTextWithBrowserOcr(file: File, onProgress: (message: 
       textParts.push(normalizeBrowserOcrText(identityDateResult.data.text));
 
       const identityFocusedDateImage = await createOcrReadyImage(file, {
-        x: 0.2,
-        y: 0.08,
-        width: 0.65,
-        height: 0.42,
-        threshold: true,
-        targetLongestSide: 4800,
+        x: 0.36,
+        y: 0.255,
+        width: 0.34,
+        height: 0.14,
+        targetLongestSide: 3600,
       });
       await worker.setParameters({
         preserve_interword_spaces: "1",
         tessedit_pageseg_mode: PSM.SPARSE_TEXT,
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/-. ",
+        tessedit_char_whitelist: "",
         user_defined_dpi: "300",
       });
       const identityFocusedDateResult = await worker.recognize(identityFocusedDateImage);
-      textParts.push(normalizeBrowserOcrText(identityFocusedDateResult.data.text));
+      const identityFocusedDateText = normalizeBrowserOcrText(identityFocusedDateResult.data.text);
+      if (identityFocusedDateText) {
+        textParts.push(`IDENTITY_EXPIRY_FOCUS_START ${identityFocusedDateText} IDENTITY_EXPIRY_FOCUS_END`);
+      }
 
       const mrzLooseImage = await createOcrReadyImage(file, { x: 0, y: 0.48, width: 1, height: 0.52, targetLongestSide: 4200 });
       await worker.setParameters({

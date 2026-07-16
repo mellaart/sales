@@ -577,7 +577,7 @@ export function analyzeWorldlineGenericDocumentText(
 
   const needsReview = checklist.some((check) => check.tone !== "success" || !check.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: documentType === "refund" || documentType === "identity" ? 2 : 1,
+    analysisVersion: documentType === "identity" ? 3 : documentType === "refund" ? 2 : 1,
     checklist,
     note: needsReview
       ? `${definition?.title ?? "Document"}-controle uitgevoerd met OCR: controleer de aandachtspunten visueel.`

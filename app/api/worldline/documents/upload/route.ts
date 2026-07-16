@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const VALID_DOCUMENT_TYPES = new Set<WorldlineDocumentType>(["kvk", "agreement", "identity", "bank_statement", "refund"]);
+const VALID_DOCUMENT_TYPES = new Set<WorldlineDocumentType>(["kvk", "agreement", "identity", "bank_statement", "refund", "ubo"]);
 
 type UploadPrepareBody = {
   action?: unknown;

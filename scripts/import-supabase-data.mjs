@@ -215,7 +215,7 @@ async function ensureLocalSchema(client) {
       id uuid primary key default gen_random_uuid(),
       project_id uuid not null references public.worldline_projects(id) on delete cascade,
       document_type text not null
-        check (document_type in ('kvk', 'agreement', 'identity', 'bank_statement', 'refund')),
+        check (document_type in ('kvk', 'agreement', 'identity', 'bank_statement', 'refund', 'ubo')),
       file_name text not null,
       storage_path text not null,
       mime_type text,
@@ -227,6 +227,14 @@ async function ensureLocalSchema(client) {
       uploaded_by uuid not null references public.profiles(id) on delete cascade,
       uploaded_at timestamptz not null default now()
     );
+
+    alter table public.worldline_documents
+      drop constraint if exists worldline_documents_document_type_check;
+    alter table public.worldline_documents
+      drop constraint if exists worldline_documents_type_check;
+    alter table public.worldline_documents
+      add constraint worldline_documents_type_check
+      check (document_type in ('kvk', 'agreement', 'identity', 'bank_statement', 'refund', 'ubo'));
 
     create index if not exists worldline_projects_relation_idx
       on public.worldline_projects(relation_id, updated_at desc);

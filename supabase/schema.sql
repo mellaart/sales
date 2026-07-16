@@ -151,10 +151,18 @@ create table if not exists public.worldline_documents (
   uploaded_by uuid not null default auth.uid() references auth.users(id) on delete cascade,
   uploaded_at timestamptz not null default now(),
   constraint worldline_documents_type_check
-    check (document_type in ('kvk', 'agreement', 'identity', 'bank_statement', 'refund')),
+    check (document_type in ('kvk', 'agreement', 'identity', 'bank_statement', 'refund', 'ubo')),
   constraint worldline_documents_status_check
     check (check_status in ('missing', 'uploaded', 'checking', 'approved', 'rejected'))
 );
+
+alter table public.worldline_documents
+  drop constraint if exists worldline_documents_document_type_check;
+alter table public.worldline_documents
+  drop constraint if exists worldline_documents_type_check;
+alter table public.worldline_documents
+  add constraint worldline_documents_type_check
+  check (document_type in ('kvk', 'agreement', 'identity', 'bank_statement', 'refund', 'ubo'));
 
 alter table public.worldline_projects enable row level security;
 alter table public.worldline_documents enable row level security;

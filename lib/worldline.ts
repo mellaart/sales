@@ -1,5 +1,5 @@
 export type WorldlineProjectStatus = "concept" | "waiting_customer" | "checking" | "complete" | "submitted";
-export type WorldlineDocumentType = "kvk" | "agreement" | "identity" | "bank_statement" | "refund";
+export type WorldlineDocumentType = "kvk" | "agreement" | "identity" | "bank_statement" | "refund" | "ubo";
 export type WorldlineCheckStatus = "missing" | "uploaded" | "checking" | "approved" | "rejected";
 export type WorldlineAgreementFieldType = "text" | "textarea" | "checkbox" | "select";
 export type WorldlineCheckItemTone = "success" | "warning" | "danger";
@@ -18,6 +18,7 @@ export type WorldlineCheckResult = {
   ocrEngine?: string;
   ocrError?: string;
   ocrText?: string;
+  pageCount?: number;
   originalFileName?: string;
   originalMimeType?: string;
   producedDate?: string;
@@ -219,6 +220,16 @@ export const WORLDLINE_DOCUMENT_DEFINITIONS: Array<{
       "Refund formulier is aanwezig wanneer refund gewenst is",
       "Formulier hoort bij de juiste relatie",
       "Vereiste velden en handtekening zijn ingevuld",
+    ],
+  },
+  {
+    key: "ubo",
+    title: "UBO",
+    description: "Upload het ingevulde en ondertekende UBO-registratieformulier.",
+    accept: "application/pdf,image/jpeg,image/png",
+    checklist: [
+      "Datum en plaats zijn ingevuld",
+      "Handtekening is aanwezig",
     ],
   },
 ];

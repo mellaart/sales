@@ -36,6 +36,10 @@ function keepBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
 
+function keepPositiveInteger(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function readCheckResult(value: unknown) {
   return value && typeof value === "object" ? value as WorldlineCheckResult : {};
 }
@@ -114,10 +118,12 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as {
       documentId?: unknown;
       ocrText?: unknown;
+      pageCount?: unknown;
       visualSignatureDetected?: unknown;
     } | null;
     const documentId = normalizeText(body?.documentId);
     const incomingOcrText = normalizeText(body?.ocrText);
+    const incomingPageCount = keepPositiveInteger(body?.pageCount);
     const incomingVisualSignatureDetected = keepBoolean(body?.visualSignatureDetected);
 
     if (!documentId) {
@@ -154,6 +160,7 @@ export async function POST(request: Request) {
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
     const currentResult = readCheckResult(document.check_result);
+    const pageCount = incomingPageCount ?? keepPositiveInteger(currentResult.pageCount);
     const visualSignatureDetected = incomingVisualSignatureDetected ?? keepBoolean(currentResult.visualSignatureDetected);
     let documentText = incomingOcrText || normalizeText(currentResult.ocrText);
 
@@ -241,6 +248,7 @@ export async function POST(request: Request) {
             expectedIban: normalizeText(agreementFields.iban),
             expectedSignerNames,
             documentName: normalizeText(document.file_name),
+            pageCount,
             supportingDocumentNames: supportingIdentityDocumentNames,
             supportingOcrTexts: supportingIdentityOcrTexts,
             visualSignatureDetected,
@@ -257,6 +265,7 @@ export async function POST(request: Request) {
       ...(incomingOcrText ? { ocrEngine: "tesseract.js/pdf" } : keepString(currentResult.ocrEngine) ? { ocrEngine: keepString(currentResult.ocrEngine) } : {}),
       ...(keepString(currentResult.ocrError) ? { ocrError: keepString(currentResult.ocrError) } : {}),
       ...(nextOcrText ? { ocrText: nextOcrText } : {}),
+      ...(pageCount !== undefined ? { pageCount } : {}),
       ...(visualSignatureDetected !== undefined ? { visualSignatureDetected } : {}),
       ...(keepString(currentResult.originalFileName) ? { originalFileName: keepString(currentResult.originalFileName) } : {}),
       ...(keepString(currentResult.originalMimeType) ? { originalMimeType: keepString(currentResult.originalMimeType) } : {}),

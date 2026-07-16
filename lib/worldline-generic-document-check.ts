@@ -17,6 +17,7 @@ type GenericDocumentAnalysisOptions = {
   expectedCompanyName?: string;
   expectedIban?: string;
   expectedSignerNames?: string;
+  pageCount?: number;
   supportingDocumentNames?: string[];
   supportingOcrTexts?: string[];
   visualSignatureDetected?: boolean;
@@ -100,7 +101,7 @@ function findVatNumber(text: string) {
 }
 
 function findDate(text: string) {
-  return /\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/.test(text) ||
+  return /\b\d{1,2}\s*[-/.]\s*\d{1,2}\s*[-/.]\s*\d{2,4}\b/.test(text) ||
     /\b\d{1,2}\s+(?:jan|feb|mrt|maart|apr|mei|jun|jul|aug|sep|okt|nov|dec)[a-z]*\s+\d{4}\b/i.test(text);
 }
 
@@ -171,6 +172,7 @@ function extractDates(text: string) {
     .replace(/J\s*U\s*[I1L]\s*[L1]?\s*[/|\\-]?\s*J\s*U\s*[I1L]\s*[L1]?/gi, "JUL")
     .replace(/JUILJUL|JULJUIL|JULJUL|JUILJUIL/gi, "JUL")
     .replace(/JUL\s*JUIL/gi, "JUL")
+    .replace(/\b(JAN|FEB|MRT|MAR|APR|MEI|MAY|JUN|JUL|JUI|AUG|SEP|OKT|OCT|NOV|DEC)\s*[/|\\-]?\s*\1\b/gi, "$1")
     .replace(/\b([a-z])\s+([a-z])\s+([a-z])\b/gi, "$1$2$3");
   const variants = Array.from(new Set([text, compactDateText]));
   const dayToken = "[0-9OQDILSZ]{1,2}";
@@ -335,10 +337,21 @@ function getIdentityDocumentKind(text: string) {
   return "";
 }
 
-function hasBacksideDocument(options: GenericDocumentAnalysisOptions) {
+function hasBacksideDocument(text: string, options: GenericDocumentAnalysisOptions) {
+  if ((options.pageCount ?? 0) >= 2) return true;
+
   const names = options.supportingDocumentNames ?? [];
   if (names.some((name) => /\b(achterzijde|achterkant|back|backside|verso|zijde\s*2|pagina\s*2|page\s*2)\b/i.test(name))) return true;
-  return names.length >= 1;
+  if (names.length >= 1) return true;
+
+  return hasAny(text, [
+    /\bvervolg\s+naam\b/i,
+    /\bcontinue\s+surname\b/i,
+    /\bpersoonsnummer\b/i,
+    /\bpersonal\s*(?:no|number)\b/i,
+    /I\s*<\s*NLD/i,
+    /NLD\s*<{2,}/i,
+  ]);
 }
 
 function hasVisibleBsn(text: string) {
@@ -422,7 +435,7 @@ function analyzeIdentity(text: string, options: GenericDocumentAnalysisOptions):
   const matchedSignerName = expectedNameMatches(nameEvidenceText, options.expectedSignerNames);
   const hasExpectedSignerName = splitExpectedNames(options.expectedSignerNames).length > 0;
   const bsnVisible = hasVisibleBsn(combinedText);
-  const backsidePresent = hasBacksideDocument(options);
+  const backsidePresent = hasBacksideDocument(combinedText, options);
 
   return [
     {
@@ -500,6 +513,47 @@ function analyzeRefund(text: string, options: GenericDocumentAnalysisOptions): N
   ];
 }
 
+function hasUboDateAndPlace(text: string) {
+  const normalized = normalizeWhitespace(text);
+  const focusedMatch = normalized.match(/UBO_DATE_PLACE_START\s*(.*?)\s*UBO_DATE_PLACE_END/i);
+  const labelMatch = normalized.match(/(?:datum\s+en\s+plaats|date\s+and\s+place)\s*:?\s*(.{0,140})/i);
+  const candidate = normalizeWhitespace(focusedMatch?.[1] ?? labelMatch?.[1] ?? "")
+    .replace(/\b(?:wettelijke\s+vertegenwoordiger|legal\s+representative).*$/i, "");
+
+  if (!candidate || !findDate(candidate)) return false;
+
+  const placeText = candidate
+    .replace(/\b\d{1,2}\s*[-/.]\s*\d{1,2}\s*[-/.]\s*\d{2,4}\b/g, " ")
+    .replace(/\b\d{1,2}\s+(?:jan|feb|mrt|maart|apr|mei|jun|jul|aug|sep|okt|nov|dec)[a-z]*\s+\d{4}\b/gi, " ")
+    .replace(/\b(?:datum|date|en|and|plaats|place)\b/gi, " ")
+    .replace(/[^a-zA-ZÀ-ÿ' -]+/g, " ");
+
+  return (placeText.match(/[a-zA-ZÀ-ÿ][a-zA-ZÀ-ÿ' -]{1,}/g) ?? [])
+    .some((value) => value.trim().length >= 2);
+}
+
+function analyzeUbo(text: string, options: GenericDocumentAnalysisOptions): NonNullable<WorldlineCheckResult["checklist"]> {
+  const dateAndPlacePresent = hasUboDateAndPlace(text);
+  const signaturePresent = options.visualSignatureDetected === true;
+
+  return [
+    {
+      text: dateAndPlacePresent
+        ? "Datum en plaats zijn ingevuld."
+        : "Datum en plaats zijn niet duidelijk ingevuld.",
+      done: dateAndPlacePresent,
+      tone: dateAndPlacePresent ? "success" : "danger",
+    },
+    {
+      text: signaturePresent
+        ? "Handtekening is aanwezig."
+        : "Handtekening is niet duidelijk aanwezig.",
+      done: signaturePresent,
+      tone: signaturePresent ? "success" : "danger",
+    },
+  ];
+}
+
 export function analyzeWorldlineGenericDocumentText(
   documentType: WorldlineDocumentType,
   rawText: string,
@@ -513,6 +567,8 @@ export function analyzeWorldlineGenericDocumentText(
       ? analyzeIdentity(text, options)
       : documentType === "refund"
         ? analyzeRefund(text, options)
+        : documentType === "ubo"
+          ? analyzeUbo(text, options)
         : (definition?.checklist ?? []).map((label) => ({
             text: `${label}: controleer visueel.`,
             done: false,
@@ -521,7 +577,7 @@ export function analyzeWorldlineGenericDocumentText(
 
   const needsReview = checklist.some((check) => check.tone !== "success" || !check.done);
   const result: WorldlineCheckResult = {
-    analysisVersion: documentType === "refund" ? 2 : 1,
+    analysisVersion: documentType === "refund" || documentType === "identity" ? 2 : 1,
     checklist,
     note: needsReview
       ? `${definition?.title ?? "Document"}-controle uitgevoerd met OCR: controleer de aandachtspunten visueel.`

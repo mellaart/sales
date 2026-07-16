@@ -76,7 +76,7 @@ const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const AGREEMENT_AUTOSAVE_DELAY_MS = 500;
 const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
-const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 4;
+const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 5;
 const WORLDLINE_REFUND_ANALYSIS_VERSION = 2;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund", "ubo"];
 const PDF_OCR_MAX_PAGES = 6;
@@ -2026,6 +2026,43 @@ export default function WorldlineDashboard() {
     }
   }
 
+  async function rerunPdfOcrForDocument(document: WorldlineDocument) {
+    if (!supabase || !isPdfDocument(document) || !OCR_DOCUMENT_TYPES.includes(document.document_type)) return null;
+
+    const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
+    setBusy(true);
+    setStatus(`${documentTitle} wordt rechtstreeks opnieuw met OCR gelezen...`);
+
+    try {
+      const { data: pdfFile, error: downloadError } = await supabase.storage
+        .from(WORLDLINE_DOCUMENT_BUCKET)
+        .download(document.storage_path);
+
+      if (downloadError || !pdfFile) {
+        setStatus(`${documentTitle}-OCR mislukt: ${downloadError?.message ?? "PDF kon niet worden opgehaald"}.`);
+        return null;
+      }
+
+      const ocrResult = await extractPdfTextWithBrowserOcr(
+        new File([pdfFile], document.file_name, { type: document.mime_type || pdfFile.type || "application/pdf" }),
+        setStatus,
+        { documentType: document.document_type },
+      );
+
+      if (!ocrResult.text) {
+        setStatus(`${documentTitle}-controle mislukt: OCR kon geen tekst lezen uit deze gescande PDF. Controleer dit document handmatig.`);
+        return null;
+      }
+
+      return ocrResult;
+    } catch (error) {
+      setStatus(`${documentTitle}-OCR mislukt: ${getErrorMessage(error, "gescande PDF kon niet worden gelezen.")}`);
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function updateDocumentStatus(document: WorldlineDocument, nextStatus: WorldlineCheckStatus, successMessage = "Documentstatus bijgewerkt.") {
     if (!supabase) return;
     if (!canWriteWorldline) {
@@ -2056,6 +2093,19 @@ export default function WorldlineDashboard() {
   async function checkDocument(document: WorldlineDocument) {
     if (isImageDocument(document) && OCR_DOCUMENT_TYPES.includes(document.document_type)) {
       const freshOcrResult = await rerunImageOcrForDocument(document);
+
+      if (freshOcrResult?.text) {
+        await runAutomatedDocumentCheck(document, {
+          ocrText: freshOcrResult.text,
+          pageCount: freshOcrResult.pageCount,
+          visualSignatureDetected: freshOcrResult.visualSignatureDetected,
+        });
+        return;
+      }
+    }
+
+    if (document.document_type === "identity" && isPdfDocument(document)) {
+      const freshOcrResult = await rerunPdfOcrForDocument(document);
 
       if (freshOcrResult?.text) {
         await runAutomatedDocumentCheck(document, {

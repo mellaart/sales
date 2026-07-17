@@ -256,7 +256,9 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
       .filter((module) => module.monthlyPrice > 0 && !module.noPackageSwitch)
       .slice()
       .sort((a, b) => b.monthlyPrice - a.monthlyPrice);
-    const standaloneUnits = selectedModuleUnits.filter((module) => module.monthlyPrice > 0 && module.noPackageSwitch);
+    // Losse modules wisselen het pakket niet, maar hun setupkosten gelden altijd.
+    // Dit blijft ook zo wanneer een losse module geen maandprijs heeft.
+    const standaloneUnits = selectedModuleUnits.filter((module) => module.noPackageSwitch);
     const extraModuleUnits = [
       ...packageRelevantUnits.slice(freeModulesApplied),
       ...standaloneUnits,

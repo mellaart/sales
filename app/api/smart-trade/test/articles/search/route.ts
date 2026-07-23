@@ -93,6 +93,17 @@ function normalizeSearchText(value: string) {
     .toLocaleLowerCase("nl-NL");
 }
 
+function isEndOfLifeArticle(value: unknown) {
+  const record = articleRecord(value);
+  if (!record) return false;
+
+  const endOfLife = firstValue(record, ["endoflife", "endOfLife", "end_of_life"]);
+  if (endOfLife === true || endOfLife === 1) return true;
+  if (typeof endOfLife !== "string") return false;
+
+  return ["1", "true", "yes", "ja"].includes(endOfLife.trim().toLocaleLowerCase("nl-NL"));
+}
+
 function normalizeArticle(value: unknown): ArticleOption | null {
   const record = articleRecord(value);
   if (!record) return null;
@@ -192,6 +203,7 @@ async function loadArticleCatalog() {
 
       const previousSize = articles.size;
       rows.forEach((row) => {
+        if (isEndOfLifeArticle(row)) return;
         const article = normalizeArticle(row);
         if (!article) return;
         articles.set(`${article.id}:${article.code}`, article);

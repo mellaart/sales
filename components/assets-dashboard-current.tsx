@@ -2,13 +2,14 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, Search, Sparkles } from "lucide-react";
+import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, MapPin, Search, Sparkles } from "lucide-react";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { createDealWithFallback } from "@/lib/deal-storage";
+import { getTravelCostQuoteForPostcode, normalizePostcodePrefix } from "@/lib/price-config";
 import {
   MODULES,
   PACKAGES,
@@ -490,6 +491,12 @@ function formatLineAmount(line: AssetExpansionLine) {
   return `${euro.format(line.amount)}${suffix}`;
 }
 
+function formatDays(days: number) {
+  const roundedDays = Math.round(days * 100) / 100;
+  const label = roundedDays === 1 ? "dag" : "dagen";
+  return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
+}
+
 function buildAssetDealNotes(relation: RelationOption, lines: AssetExpansionLine[]) {
   return [
     `Assets-uitbreiding voor ${relation.name}.`,
@@ -520,6 +527,8 @@ export default function AssetsDashboardCurrent() {
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [serviceCostQuantities, setServiceCostQuantities] = useState<Record<string, number>>(getInitialServiceCostQuantities);
+  const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
+  const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
 
@@ -791,6 +800,17 @@ export default function AssetsDashboardCurrent() {
     smartConnectPricing,
     targetPackage,
   ]);
+  const assetExpansionTotals = useMemo(() => getAssetExpansionTotals(assetDealLines), [assetDealLines]);
+  const implementationDays = pricingConfig.implementationDayRate > 0
+    ? Math.max(0, assetExpansionTotals.once / pricingConfig.implementationDayRate)
+    : 0;
+  const travelCostQuote = useMemo(
+    () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
+    [pricingConfig, travelPostcodePrefix],
+  );
+  const travelCostTotal = includeTravelCosts && travelCostQuote
+    ? implementationDays * travelCostQuote.pricePerDay
+    : 0;
   const transferHint = !selectedRelation
     ? "Kies eerst een relatie. Daarna kun je geselecteerde uitbreidingen doorzetten naar Deals."
     : assetDealLines.length === 0
@@ -849,7 +869,7 @@ export default function AssetsDashboardCurrent() {
 
     try {
       const finalPackage = targetPackage ?? selectedPackage ?? packages[packages.length - 1];
-      const expansionTotals = getAssetExpansionTotals(assetDealLines);
+      const expansionTotals = assetExpansionTotals;
       const quantities = Object.fromEntries(
         modules.map((moduleConfig) => [moduleConfig.key, addedModules.some((addedModule) => addedModule.key === moduleConfig.key) ? 1 : 0]),
       );
@@ -884,8 +904,8 @@ export default function AssetsDashboardCurrent() {
         manual_implementation_adjustment: manualImplementationAdjustment,
         monthly_base: expansionTotals.monthly,
         monthly_total: expansionTotals.monthly,
-        implementation_total: expansionTotals.once,
-        contract_value: expansionTotals.monthly + expansionTotals.annual + expansionTotals.once,
+        implementation_total: expansionTotals.once + travelCostTotal,
+        contract_value: expansionTotals.monthly + expansionTotals.annual + expansionTotals.once + travelCostTotal,
         annual_recurring: expansionTotals.monthly * 12 + expansionTotals.annual,
         modules: selectedModuleRows,
         notes,
@@ -894,6 +914,11 @@ export default function AssetsDashboardCurrent() {
           selectedPackage: activeResult.key,
           manualImplementationAdjustment,
           includeVat: false,
+          includeTravelCosts,
+          travelPostcodePrefix,
+          travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
+          travelCostTotal,
+          travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
           quantities,
           quoteLayout: "assets-expansion" as const,
           assetsExpansion: {
@@ -965,6 +990,8 @@ export default function AssetsDashboardCurrent() {
     setSelectedCustomerPortalOptionKeys([]);
     setSmartConnectConnections(0);
     setServiceCostQuantities(getInitialServiceCostQuantities());
+    setIncludeTravelCosts(true);
+    setTravelPostcodePrefix("");
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -997,6 +1024,8 @@ export default function AssetsDashboardCurrent() {
     setSelectedCustomerPortalOptionKeys([]);
     setSmartConnectConnections(0);
     setServiceCostQuantities(getInitialServiceCostQuantities());
+    setIncludeTravelCosts(true);
+    setTravelPostcodePrefix("");
 
     try {
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
@@ -1455,6 +1484,74 @@ export default function AssetsDashboardCurrent() {
               <div className={styles.quoteRows}>{selectedServiceCostRows.length > 0 ? selectedServiceCostRows.map((option) => <div key={`service-${option.key}`} className={styles.quoteRow}><span>{option.offerQuantity}x</span><strong>{option.name}</strong><span>{euro.format(option.annualPrice)} p/j</span><strong>{euro.format(option.offerAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Vul een extra aantal in voor CCV of Worldline.</div>}</div>
               <div className={styles.quoteTotal}><span>Servicekosten offerte per jaar</span><strong>{euro.format(serviceCostAnnualTotal)} p/j</strong></div>
             </div>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Offerte</div>
+              <h2 className="headline">Reiskosten</h2>
+              <p className="subtext">Bereken de reiskosten voor de implementatie op basis van de eerste twee cijfers van de postcode.</p>
+            </div>
+            <div className="icon-badge"><MapPin size={26} /></div>
+          </div>
+
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie om reiskosten te berekenen.</div>
+          ) : (
+            <>
+              <div className="calculator-module-grid travel-toggle-grid">
+                <label className={`calculator-module-card travel-toggle-card ${includeTravelCosts ? "active" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={includeTravelCosts}
+                    onChange={(event) => setIncludeTravelCosts(event.target.checked)}
+                  />
+                  <span className="calculator-module-main">
+                    <strong>Prijs implementatie inclusief reiskosten</strong>
+                    <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                  </span>
+                  <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
+                </label>
+              </div>
+
+              <div className="travel-cost-layout">
+                <label className="input-wrap travel-postcode-field">
+                  <span className="input-label">Postcode eerste 2 cijfers</span>
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={travelPostcodePrefix}
+                    onChange={(event) => setTravelPostcodePrefix(normalizePostcodePrefix(event.target.value))}
+                    placeholder="Bijv. 22"
+                  />
+                </label>
+
+                <div className="input-wrap travel-price-summary">
+                  <span className="input-label">Prijs</span>
+                  <div className="summary-list">
+                    <div>
+                      <span>Regio</span>
+                      <strong>{travelCostQuote?.postcodeRow ? travelCostQuote.postcodeRow.region : "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Omschrijving</span>
+                      <strong>{travelCostQuote?.postcodeRow?.description ?? "Geen postcode gekozen"}</strong>
+                    </div>
+                    <div>
+                      <span>Prijs per dag</span>
+                      <strong>{euro.format(travelCostQuote?.pricePerDay ?? 0)}</strong>
+                    </div>
+                    <div className="total-row">
+                      <span>Reiskosten</span>
+                      <strong>{euro.format(travelCostTotal)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </section>
 

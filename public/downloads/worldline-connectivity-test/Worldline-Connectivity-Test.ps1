@@ -325,15 +325,19 @@ $testButton.Add_Click({
         if ($result.Success) {
             $successCount++
             $grid.Rows[$index].DefaultCellStyle.ForeColor = $green
+            $grid.Rows[$index].DefaultCellStyle.SelectionForeColor = $green
         }
         else {
             $grid.Rows[$index].DefaultCellStyle.ForeColor = $red
+            $grid.Rows[$index].DefaultCellStyle.SelectionForeColor = $red
         }
 
         [System.Windows.Forms.Application]::DoEvents()
     }
 
     $script:lastTestedAt = Get-Date
+    $grid.ClearSelection()
+    $grid.CurrentCell = $null
     $saveButton.Enabled = $true
     $copyButton.Enabled = $true
     $testButton.Enabled = $true

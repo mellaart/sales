@@ -167,6 +167,7 @@ async function fetchArticlePage(page: number) {
   target.pathname = `${target.pathname.replace(/\/+$/, "")}/articles`;
   target.searchParams.set("page", String(page));
   target.searchParams.set("per_page", String(ARTICLE_PAGE_SIZE));
+  target.searchParams.set("endoflife", "0");
 
   const response = await fetchWithSmartTradeTimeout(
     target.toString(),

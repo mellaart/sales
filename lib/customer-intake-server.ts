@@ -79,8 +79,11 @@ function normalizeOrigin(request: Request) {
   const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const url = new URL(request.url);
-  const protocol = forwardedProto || url.protocol.replace(":", "") || "https";
   const host = forwardedHost || request.headers.get("host") || url.host;
+  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host);
+  const protocol =
+    forwardedProto ||
+    (process.env.NODE_ENV === "production" && !isLocalHost ? "https" : url.protocol.replace(":", "") || "https");
   return `${protocol}://${host}`;
 }
 

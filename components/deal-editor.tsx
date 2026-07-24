@@ -598,20 +598,18 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       intake.publicUrl,
       "",
       "Na het opslaan ontvangen wij de gegevens automatisch.",
-      "",
-      "Met vriendelijke groet,",
-      currentSalesName || salesName || "Smart Trade",
     ].join("\n");
-    const outlookUrl = new URL("https://outlook.office.com/mail/deeplink/compose");
-    outlookUrl.searchParams.set("to", recipientEmail);
-    outlookUrl.searchParams.set("subject", subject);
-    outlookUrl.searchParams.set("body", body);
+    const outlookUrl =
+      "https://outlook.office.com/mail/deeplink/compose" +
+      `?to=${encodeURIComponent(recipientEmail)}` +
+      `&subject=${encodeURIComponent(subject)}` +
+      `&body=${encodeURIComponent(body)}`;
 
     if (!outlookWindow) {
       setCustomerIntakeStatus("De browser blokkeerde Outlook. Sta pop-ups toe en probeer opnieuw.");
       return;
     }
-    outlookWindow.location.href = outlookUrl.toString();
+    outlookWindow.location.href = outlookUrl;
     setCustomerIntakeStatus("Outlook-concept is geopend.");
   }
 

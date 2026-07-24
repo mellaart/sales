@@ -15,6 +15,9 @@ import {
 const SESSION_TTL_SECONDS = 10 * 60 * 60;
 const TWO_FACTOR_CHALLENGE_TTL_SECONDS = 10 * 60;
 const TRUSTED_DEVICE_TTL_SECONDS = 30 * 24 * 60 * 60;
+const TWO_FACTOR_RECOVERY_CODE_COUNT = 10;
+const TWO_FACTOR_RECOVERY_CODE_LENGTH = 12;
+const TWO_FACTOR_RECOVERY_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 type DbProfile = ProfileRecord & {
   password_hash?: string | null;
@@ -54,6 +57,31 @@ function normalizeEmail(email: string) {
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function normalizeTwoFactorRecoveryCode(code: string) {
+  return code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function hashTwoFactorRecoveryCode(code: string) {
+  return hashToken(`2fa-recovery:${normalizeTwoFactorRecoveryCode(code)}`);
+}
+
+function createTwoFactorRecoveryCode() {
+  const code = Array.from(
+    randomBytes(TWO_FACTOR_RECOVERY_CODE_LENGTH),
+    (byte) => TWO_FACTOR_RECOVERY_CODE_ALPHABET[byte & 31],
+  ).join("");
+
+  return code.match(/.{1,4}/g)?.join("-") ?? code;
+}
+
+function isTwoFactorRecoveryCode(code: string) {
+  const normalizedCode = normalizeTwoFactorRecoveryCode(code);
+  return (
+    normalizedCode.length === TWO_FACTOR_RECOVERY_CODE_LENGTH &&
+    [...normalizedCode].every((character) => TWO_FACTOR_RECOVERY_CODE_ALPHABET.includes(character))
+  );
 }
 
 function hashPassword(password: string) {
@@ -271,6 +299,100 @@ async function createTwoFactorChallenge(profile: DbProfile, mode: "setup" | "ver
   };
 }
 
+async function consumeTwoFactorRecoveryCode(userId: string, code: string) {
+  if (!isTwoFactorRecoveryCode(code)) return false;
+
+  const { rowCount } = await queryWithoutSchema(
+    `update public.app_2fa_recovery_codes
+     set used_at = now()
+     where user_id = $1
+       and code_hash = $2
+       and used_at is null`,
+    [userId, hashTwoFactorRecoveryCode(code)],
+  );
+
+  return Boolean(rowCount);
+}
+
+export async function getLocalTwoFactorRecoveryCodeStatus(userId: string) {
+  await ensureLocalSchema();
+
+  const { rows } = await queryWithoutSchema<{
+    remaining: number | string;
+    generated_at: Date | string | null;
+  }>(
+    `select count(*) filter (where used_at is null) as remaining,
+            max(created_at) as generated_at
+     from public.app_2fa_recovery_codes
+     where user_id = $1`,
+    [userId],
+  );
+
+  const generatedAt = rows[0]?.generated_at;
+  return {
+    remaining: Number(rows[0]?.remaining ?? 0),
+    generatedAt: generatedAt ? new Date(generatedAt).toISOString() : null,
+  };
+}
+
+export async function generateLocalTwoFactorRecoveryCodes(userId: string, currentTwoFactorCode: string) {
+  await ensureLocalSchema();
+
+  const { rows } = await queryWithoutSchema<DbProfile>(
+    `select id, email, two_factor_enabled, two_factor_secret
+     from public.profiles
+     where id = $1
+     limit 1`,
+    [userId],
+  );
+  const profile = rows[0] ?? null;
+
+  if (!profile || !isProtectedAdminEmail(profile.email)) {
+    return { error: "Alleen de beschermde admin kan herstelcodes maken." };
+  }
+
+  if (!profile.two_factor_enabled || !profile.two_factor_secret) {
+    return { error: "Stel eerst 2FA in voordat je herstelcodes maakt." };
+  }
+
+  let secret: string;
+  try {
+    secret = decryptTwoFactorSecret(profile.two_factor_secret);
+  } catch {
+    return { error: "2FA sleutel kon niet gelezen worden." };
+  }
+
+  if (!verifyTotpCode(secret, currentTwoFactorCode)) {
+    return { error: "De huidige 2FA-code klopt niet." };
+  }
+
+  const codes = Array.from(
+    { length: TWO_FACTOR_RECOVERY_CODE_COUNT },
+    () => createTwoFactorRecoveryCode(),
+  );
+  const codeHashes = codes.map(hashTwoFactorRecoveryCode);
+
+  await queryWithoutSchema(
+    `with removed as (
+       delete from public.app_2fa_recovery_codes
+       where user_id = $1
+     ),
+     new_codes as (
+       select unnest($2::text[]) as code_hash
+     )
+     insert into public.app_2fa_recovery_codes (user_id, code_hash)
+     select $1::uuid, code_hash
+     from new_codes`,
+    [userId, codeHashes],
+  );
+
+  return {
+    codes,
+    remaining: codes.length,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 export async function signInLocal(email: string, password: string, trustedDeviceToken: string | null = null) {
   await ensureLocalSchema();
 
@@ -345,23 +467,37 @@ export async function verifyLocalTwoFactor(challengeToken: string, code: string,
     return { error: "2FA-controle is verlopen. Log opnieuw in." };
   }
 
-  const secretSource = profile.challenge_mode === "setup" ? profile.challenge_secret : profile.two_factor_secret;
-  if (!secretSource) {
-    return { error: "2FA sleutel ontbreekt. Log opnieuw in." };
-  }
+  let secret: string | null = null;
+  let recoveryCodeVerified = false;
 
-  let secret: string;
-  try {
-    secret = decryptTwoFactorSecret(secretSource);
-  } catch {
-    return { error: "2FA sleutel kon niet gelezen worden. Laat een admin 2FA resetten." };
-  }
+  if (profile.challenge_mode === "verify" && isTwoFactorRecoveryCode(code)) {
+    recoveryCodeVerified = await consumeTwoFactorRecoveryCode(profile.id, code);
+    if (!recoveryCodeVerified) {
+      return { error: "2FA-code of herstelcode klopt niet." };
+    }
+  } else {
+    const secretSource = profile.challenge_mode === "setup" ? profile.challenge_secret : profile.two_factor_secret;
+    if (!secretSource) {
+      return { error: "2FA sleutel ontbreekt. Log opnieuw in." };
+    }
 
-  if (!verifyTotpCode(secret, code)) {
-    return { error: "2FA-code klopt niet." };
+    try {
+      secret = decryptTwoFactorSecret(secretSource);
+    } catch {
+      return { error: "2FA sleutel kon niet gelezen worden. Laat een admin 2FA resetten." };
+    }
+
+    if (!verifyTotpCode(secret, code)) {
+      return { error: profile.challenge_mode === "verify"
+        ? "2FA-code of herstelcode klopt niet."
+        : "2FA-code klopt niet." };
+    }
   }
 
   if (profile.challenge_mode === "setup") {
+    if (!secret) {
+      return { error: "2FA sleutel ontbreekt. Log opnieuw in." };
+    }
     const encryptedSecret = encryptTwoFactorSecret(secret);
     await queryWithoutSchema(
       `update public.profiles
@@ -518,6 +654,7 @@ export async function resetLocalTwoFactorForUser(userId: string) {
   );
 
   await queryWithoutSchema("delete from public.app_2fa_challenges where user_id = $1", [userId]);
+  await queryWithoutSchema("delete from public.app_2fa_recovery_codes where user_id = $1", [userId]);
   await queryWithoutSchema("delete from public.app_trusted_devices where user_id = $1", [userId]);
 
   if (!rowCount) return { error: "Gebruiker niet gevonden." };

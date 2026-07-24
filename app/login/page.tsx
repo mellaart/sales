@@ -34,6 +34,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [twoFactor, setTwoFactor] = useState<TwoFactorChallenge | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
 
@@ -131,6 +132,7 @@ export default function LoginPage() {
     if (data?.twoFactor?.challengeToken) {
       setTwoFactor(data.twoFactor);
       setTwoFactorCode("");
+      setUseRecoveryCode(false);
       setRememberDevice(false);
       setPassword("");
       setStatus(data.twoFactor.mode === "setup"
@@ -177,9 +179,19 @@ export default function LoginPage() {
   function resetTwoFactorStep() {
     setTwoFactor(null);
     setTwoFactorCode("");
+    setUseRecoveryCode(false);
     setRememberDevice(false);
     setQrDataUrl("");
     setStatus("");
+  }
+
+  function toggleRecoveryCode() {
+    const nextValue = !useRecoveryCode;
+    setUseRecoveryCode(nextValue);
+    setTwoFactorCode("");
+    setStatus(nextValue
+      ? "Vul één van je eenmalige herstelcodes in."
+      : "Vul de 6-cijferige code uit je authenticator-app in.");
   }
 
   if (twoFactor) {
@@ -193,7 +205,9 @@ export default function LoginPage() {
           <p className="modern-auth-subtitle">
             {twoFactor.mode === "setup"
               ? "Scan deze QR-code met je authenticator-app en bevestig daarna met de 6-cijferige code."
-              : "Open je authenticator-app en vul de 6-cijferige code in."}
+              : useRecoveryCode
+                ? "Gebruik één van de herstelcodes die je eerder veilig hebt bewaard."
+                : "Open je authenticator-app en vul de 6-cijferige code in."}
           </p>
 
           {twoFactor.mode === "setup" ? (
@@ -217,19 +231,31 @@ export default function LoginPage() {
 
           <form onSubmit={handleTwoFactorSubmit} className="modern-auth-form">
             <label>
-              <span>2FA-code</span>
+              <span>{useRecoveryCode ? "Herstelcode" : "2FA-code"}</span>
               <input
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                inputMode={useRecoveryCode ? "text" : "numeric"}
+                pattern={useRecoveryCode ? "[A-Za-z0-9-]*" : "[0-9]*"}
                 value={twoFactorCode}
-                onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(event) => setTwoFactorCode(
+                  useRecoveryCode
+                    ? event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 14)
+                    : event.target.value.replace(/\D/g, "").slice(0, 6),
+                )}
                 required
-                minLength={6}
-                maxLength={6}
-                autoComplete="one-time-code"
+                minLength={useRecoveryCode ? 12 : 6}
+                maxLength={useRecoveryCode ? 14 : 6}
+                autoComplete={useRecoveryCode ? "off" : "one-time-code"}
+                placeholder={useRecoveryCode ? "XXXX-XXXX-XXXX" : "000000"}
               />
             </label>
+
+            {twoFactor.mode === "verify" ? (
+              <button type="button" className="modern-auth-secondary" onClick={toggleRecoveryCode}>
+                <KeyRound size={18} />
+                {useRecoveryCode ? "Authenticator-code gebruiken" : "Herstelcode gebruiken"}
+              </button>
+            ) : null}
 
             <label className="two-factor-remember">
               <input

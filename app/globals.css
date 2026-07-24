@@ -1488,10 +1488,82 @@ td {
   overflow-wrap: anywhere;
 }
 
+.recovery-codes-card {
+  display: grid;
+  gap: 18px;
+}
+
+.recovery-code-controls {
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) auto;
+  gap: 14px;
+  align-items: end;
+  justify-content: start;
+}
+
+.recovery-code-verification .input {
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.recovery-code-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.recovery-code-meta strong {
+  color: var(--text);
+}
+
+.recovery-code-result {
+  display: grid;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.recovery-code-warning {
+  color: #fde68a;
+  font-weight: 750;
+}
+
+.recovery-code-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  max-width: 580px;
+}
+
+.recovery-code-grid code {
+  padding: 10px 12px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #dbeafe;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0;
+}
+
 @media (max-width: 680px) {
   .temporary-password-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .recovery-code-controls,
+  .recovery-code-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .recovery-code-controls {
+    justify-content: stretch;
   }
 }
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, KeyRound, RefreshCw, Save, ShieldCheck, UserPlus, Users2 } from "lucide-react";
+import { Check, Copy, Download, KeyRound, RefreshCw, Save, ShieldCheck, UserPlus, Users2 } from "lucide-react";
 import {
   canManageRoles,
   getSupabaseClient,
@@ -43,6 +43,11 @@ type PasswordResetResult = {
   temporaryPassword: string;
 };
 
+type RecoveryCodeStatus = {
+  remaining: number;
+  generatedAt: string | null;
+};
+
 type EditableProfileField = "job_title" | "workdays" | "mobile_phone";
 
 function isProtectedProfile(profile: Pick<ProfileRecord, "email">) {
@@ -53,6 +58,14 @@ function wait(milliseconds: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, milliseconds);
   });
+}
+
+function formatRecoveryCodeDate(value: string | null) {
+  if (!value) return "Nog niet aangemaakt";
+  return new Intl.DateTimeFormat("nl-NL", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function setRoleTabPermission(
@@ -71,9 +84,10 @@ function setRoleTabPermission(
 }
 
 export default function AdminDashboard() {
-  const { role, loading: authLoading, refreshProfile } = useAuth();
+  const { user, role, loading: authLoading, refreshProfile } = useAuth();
   const router = useRouter();
   const supabase = getSupabaseClient();
+  const isProtectedCurrentAdmin = isProtectedAdminEmail(user?.email);
 
   const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +103,15 @@ export default function AdminDashboard() {
   const [passwordResettingId, setPasswordResettingId] = useState<string | null>(null);
   const [passwordResetResult, setPasswordResetResult] = useState<PasswordResetResult | null>(null);
   const [passwordCopied, setPasswordCopied] = useState(false);
+  const [recoveryCodeStatus, setRecoveryCodeStatus] = useState<RecoveryCodeStatus>({
+    remaining: 0,
+    generatedAt: null,
+  });
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [recoveryTotpCode, setRecoveryTotpCode] = useState("");
+  const [recoveryCodesBusy, setRecoveryCodesBusy] = useState(false);
+  const [recoveryCodesCopied, setRecoveryCodesCopied] = useState(false);
+  const [recoveryCodesMessage, setRecoveryCodesMessage] = useState("");
 
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [roleTabsLoading, setRoleTabsLoading] = useState(true);
@@ -195,15 +218,51 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const loadRecoveryCodeStatus = useCallback(async () => {
+    if (!isProtectedCurrentAdmin || !supabase) return;
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setRecoveryCodesMessage("Je sessie is verlopen. Log opnieuw in.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/2fa-recovery-codes", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      const json = (await response.json().catch(() => ({}))) as RecoveryCodeStatus & { error?: string };
+
+      if (!response.ok) {
+        setRecoveryCodesMessage(json.error || "Herstelcodes laden mislukt.");
+        return;
+      }
+
+      setRecoveryCodeStatus({
+        remaining: Number(json.remaining || 0),
+        generatedAt: json.generatedAt || null,
+      });
+    } catch {
+      setRecoveryCodesMessage("Herstelcodes laden mislukt.");
+    }
+  }, [isProtectedCurrentAdmin, supabase]);
+
   useEffect(() => {
     if (canManageRoles(role)) {
       void loadProfiles();
       void loadRoleTabs();
+      void loadRecoveryCodeStatus();
     }
-  }, [role, loadProfiles, loadRoleTabs]);
+  }, [role, loadProfiles, loadRecoveryCodeStatus, loadRoleTabs]);
 
   async function refreshAdminData() {
-    await Promise.all([loadProfiles(), loadRoleTabs()]);
+    await Promise.all([
+      loadProfiles(),
+      loadRoleTabs(),
+      isProtectedCurrentAdmin ? loadRecoveryCodeStatus() : Promise.resolve(),
+    ]);
   }
 
   async function createUser(event: React.FormEvent) {
@@ -589,6 +648,102 @@ export default function AdminDashboard() {
     }
   }
 
+  async function generateRecoveryCodes() {
+    if (!supabase || !isProtectedCurrentAdmin) return;
+
+    if (!/^\d{6}$/.test(recoveryTotpCode)) {
+      setRecoveryCodesMessage("Vul eerst je huidige 6-cijferige 2FA-code in.");
+      return;
+    }
+
+    if (
+      recoveryCodeStatus.remaining > 0 &&
+      !confirm("Nieuwe herstelcodes maken? Alle bestaande herstelcodes worden direct ongeldig.")
+    ) {
+      return;
+    }
+
+    setRecoveryCodesBusy(true);
+    setRecoveryCodes([]);
+    setRecoveryCodesCopied(false);
+    setRecoveryCodesMessage("Nieuwe herstelcodes worden gemaakt...");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setRecoveryCodesMessage("Je sessie is verlopen. Log opnieuw in.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/2fa-recovery-codes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ currentTwoFactorCode: recoveryTotpCode }),
+      });
+      const json = (await response.json().catch(() => ({}))) as RecoveryCodeStatus & {
+        codes?: string[];
+        error?: string;
+      };
+
+      if (!response.ok || !json.codes?.length) {
+        setRecoveryCodesMessage(json.error || "Herstelcodes maken mislukt.");
+        return;
+      }
+
+      setRecoveryCodes(json.codes);
+      setRecoveryCodeStatus({
+        remaining: Number(json.remaining || json.codes.length),
+        generatedAt: json.generatedAt || new Date().toISOString(),
+      });
+      setRecoveryTotpCode("");
+      setRecoveryCodesMessage("Herstelcodes aangemaakt. Bewaar ze nu; na het verlaten van deze pagina worden ze niet meer getoond.");
+    } catch {
+      setRecoveryCodesMessage("Herstelcodes maken mislukt.");
+    } finally {
+      setRecoveryCodesBusy(false);
+    }
+  }
+
+  async function copyRecoveryCodes() {
+    if (recoveryCodes.length === 0) return;
+
+    try {
+      await navigator.clipboard.writeText(recoveryCodes.join("\n"));
+      setRecoveryCodesCopied(true);
+      setRecoveryCodesMessage("Alle herstelcodes zijn gekopieerd.");
+    } catch {
+      setRecoveryCodesMessage("Kopieren lukt niet automatisch. Download de codes als tekstbestand.");
+    }
+  }
+
+  function downloadRecoveryCodes() {
+    if (recoveryCodes.length === 0) return;
+
+    const content = [
+      "Smart Trade Sales - 2FA-herstelcodes",
+      `Account: ${user?.email || "erik@smarttrade.nl"}`,
+      `Aangemaakt: ${formatRecoveryCodeDate(recoveryCodeStatus.generatedAt)}`,
+      "",
+      ...recoveryCodes,
+      "",
+      "Elke code kan maar een keer worden gebruikt.",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "smart-trade-2fa-herstelcodes.txt";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setRecoveryCodesMessage("Herstelcodes gedownload.");
+  }
+
   if (authLoading) {
     return (
       <div className="page-shell">
@@ -633,6 +788,80 @@ export default function AdminDashboard() {
             </button>
           </div>
         </header>
+
+        {isProtectedCurrentAdmin ? (
+          <section className="card panel recovery-codes-card">
+            <div className="top-row">
+              <div>
+                <div className="brand-mark">Accountbeveiliging</div>
+                <h2>2FA-herstelcodes</h2>
+                <p className="subtext">Voor toegang wanneer je authenticator tijdelijk niet beschikbaar is.</p>
+              </div>
+              <StatusPill tone={recoveryCodeStatus.remaining > 0 ? "success" : "warning"}>
+                {recoveryCodeStatus.remaining} beschikbaar
+              </StatusPill>
+            </div>
+
+            <div className="recovery-code-controls">
+              <label className="input-wrap recovery-code-verification">
+                <span className="input-label">Huidige 2FA-code</span>
+                <input
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={recoveryTotpCode}
+                  onChange={(event) => setRecoveryTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="000000"
+                  minLength={6}
+                  maxLength={6}
+                />
+              </label>
+
+              <button
+                type="button"
+                className="primary-button"
+                disabled={recoveryCodesBusy}
+                onClick={() => void generateRecoveryCodes()}
+              >
+                <KeyRound size={16} />
+                {recoveryCodesBusy
+                  ? "Herstelcodes maken..."
+                  : recoveryCodeStatus.remaining > 0
+                    ? "Nieuwe codes maken"
+                    : "Herstelcodes maken"}
+              </button>
+            </div>
+
+            <div className="recovery-code-meta">
+              <span>Laatst aangemaakt</span>
+              <strong>{formatRecoveryCodeDate(recoveryCodeStatus.generatedAt)}</strong>
+            </div>
+
+            {recoveryCodes.length > 0 ? (
+              <div className="recovery-code-result">
+                <div className="recovery-code-warning">
+                  Deze codes worden alleen nu getoond. Bewaar ze buiten de website.
+                </div>
+                <div className="recovery-code-grid">
+                  {recoveryCodes.map((code) => <code key={code}>{code}</code>)}
+                </div>
+                <div className="button-row">
+                  <button type="button" className="secondary-button" onClick={() => void copyRecoveryCodes()}>
+                    {recoveryCodesCopied ? <Check size={16} /> : <Copy size={16} />}
+                    {recoveryCodesCopied ? "Gekopieerd" : "Alles kopieren"}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={downloadRecoveryCodes}>
+                    <Download size={16} />
+                    Download tekstbestand
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {recoveryCodesMessage ? <div className="save-status">{recoveryCodesMessage}</div> : null}
+          </section>
+        ) : null}
 
         <section className="card panel">
           <div className="top-row">

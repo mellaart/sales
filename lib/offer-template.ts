@@ -241,7 +241,7 @@ export function getOfferTextBlocks(input: OfferTemplateInput) {
     consultancy:
       "Aanvullend ontwikkelwerk en extra toekomstige consultancy zijn niet inbegrepen in het supportcontract. Wanneer er consultancy of ontwikkelwerkzaamheden nodig zijn, dan zullen wij jullie van tevoren vertellen dat hier kosten aan verbonden zijn. Het tarief voor consultancy werk is € 135,00 per uur.",
     hardware:
-      "De Troublefree consultant zal in overleg afstemmen wat voor hardware handig is en desgewenst hiervoor offertes bij moederbedrijf PWA opvragen.",
+      "De Troublefree consultant zal in overleg afstemmen wat voor hardware handig is en desgewenst hiervoor offertes bij zusterbedrijf PWA opvragen.",
     closing:
       "Deze offerte is onder voorbehoud van typefouten en/of calculatiefouten. De getoonde prijzen zijn exclusief 21% btw. Ook zijn onze algemene voorwaarden van toepassing.",
     contact:

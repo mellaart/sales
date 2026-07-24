@@ -82,8 +82,9 @@ function normalizeOrigin(request: Request) {
   const host = forwardedHost || request.headers.get("host") || url.host;
   const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host);
   const protocol =
-    forwardedProto ||
-    (process.env.NODE_ENV === "production" && !isLocalHost ? "https" : url.protocol.replace(":", "") || "https");
+    process.env.NODE_ENV === "production" && !isLocalHost
+      ? "https"
+      : forwardedProto || url.protocol.replace(":", "") || "https";
   return `${protocol}://${host}`;
 }
 

@@ -191,6 +191,28 @@ export async function ensureLocalSchema() {
 
         create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
 
+        create table if not exists public.customer_intakes (
+          id uuid primary key default gen_random_uuid(),
+          deal_id uuid not null unique references public.deals(id) on delete cascade,
+          created_by uuid not null references public.profiles(id) on delete cascade,
+          status text not null default 'open'
+            check (status in ('open', 'submitted', 'processed', 'revoked')),
+          token_version integer not null default 1,
+          recipient_email text,
+          form_data jsonb not null default '{}'::jsonb,
+          expires_at timestamptz not null default (now() + interval '30 days'),
+          submitted_at timestamptz,
+          processed_at timestamptz,
+          processed_by uuid references public.profiles(id) on delete set null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        create index if not exists customer_intakes_created_by_idx
+          on public.customer_intakes(created_by, updated_at desc);
+        create index if not exists customer_intakes_status_idx
+          on public.customer_intakes(status, expires_at);
+
         create table if not exists public.worldline_projects (
           id uuid primary key default gen_random_uuid(),
           relation_id text not null,

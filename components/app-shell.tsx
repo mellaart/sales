@@ -27,6 +27,7 @@ export function AppShellHeader() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const isPublicUtilityPage = pathname === "/worldline-test" || pathname.startsWith("/klantgegevens/");
 
   useEffect(() => {
     if (!user) return;
@@ -98,7 +99,7 @@ export function AppShellHeader() {
     };
   }, [adminMenuOpen, accountMenuOpen]);
 
-  if (!user) return null;
+  if (!user || isPublicUtilityPage) return null;
 
   const accessibleTabs = roleTabAccessLoaded ? getAccessibleTabs(role ?? "sales", roleTabAccess) : [];
   const adminTab = accessibleTabs.find((tab) => tab.key === "admin") ?? null;

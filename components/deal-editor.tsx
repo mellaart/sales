@@ -2,9 +2,32 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Boxes, Calculator, CheckCircle2, CloudUpload, Download, FileText, LifeBuoy, MapPin, Package, SlidersHorizontal, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Boxes,
+  Calculator,
+  CheckCircle2,
+  ClipboardCopy,
+  CloudUpload,
+  Download,
+  ExternalLink,
+  FileText,
+  LifeBuoy,
+  Link2,
+  Mail,
+  MapPin,
+  Package,
+  RefreshCw,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
 import { exportQuotePdf } from "@/lib/pdf";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
+import { exportCustomerIntakePdf } from "@/lib/customer-intake-pdf";
+import {
+  customerIntakeStatusLabel,
+  type CustomerIntakeSummary,
+} from "@/lib/customer-intake";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { calculatePricing, euro, getMinimumPackageForPaidModules, getPaidSelectedModuleCount, MODULES, type ModuleConfig } from "@/lib/pricing";
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
@@ -110,6 +133,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  const [customerIntake, setCustomerIntake] = useState<CustomerIntakeSummary | null>(null);
+  const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
+  const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
+  const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
 
   const [customerName, setCustomerName] = useState("");
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
@@ -171,6 +198,29 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setQuoteLayout(normalizeQuoteLayout(inputs.quoteLayout));
       setAssetsExpansion(inputs.assetsExpansion ?? null);
       setStatus(result.warning ?? "");
+
+      if (inputs.quoteLayout !== "assets-expansion") {
+        try {
+          const intakeResponse = await fetch(
+            `/api/customer-intakes?dealId=${encodeURIComponent(dealId)}`,
+            { cache: "no-store" },
+          );
+          const intakeJson = await intakeResponse.json().catch(() => ({})) as {
+            intake?: CustomerIntakeSummary | null;
+            error?: string;
+          };
+
+          if (intakeResponse.ok && intakeJson.intake) {
+            setCustomerIntake(intakeJson.intake);
+            setCustomerIntakeEmail(intakeJson.intake.recipientEmail);
+          } else if (!intakeResponse.ok) {
+            setCustomerIntakeStatus(intakeJson.error || "Klantformulier laden mislukt.");
+          }
+        } catch {
+          setCustomerIntakeStatus("Klantformulier laden mislukt.");
+        }
+      }
+
       setLoading(false);
     }
 
@@ -407,6 +457,210 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setStatus(error instanceof Error ? error.message : "PDF maken mislukt.");
     }
   }
+
+  async function saveCustomerIntake(regenerate = false) {
+    if (customerIntakeBusy) return null;
+
+    setCustomerIntakeBusy(true);
+    setCustomerIntakeStatus(regenerate ? "Nieuwe klantlink wordt gemaakt..." : "Klantlink wordt gemaakt...");
+
+    try {
+      const response = await fetch("/api/customer-intakes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dealId,
+          recipientEmail: customerIntakeEmail,
+          regenerate,
+        }),
+      });
+      const json = await response.json().catch(() => ({})) as {
+        intake?: CustomerIntakeSummary;
+        error?: string;
+      };
+
+      if (!response.ok || !json.intake) {
+        setCustomerIntakeStatus(json.error || "Klantlink maken mislukt.");
+        return null;
+      }
+
+      setCustomerIntake(json.intake);
+      setCustomerIntakeEmail(json.intake.recipientEmail);
+      setCustomerIntakeStatus(regenerate ? "Nieuwe klantlink is klaar." : "Klantlink is klaar.");
+      return json.intake;
+    } catch {
+      setCustomerIntakeStatus("Klantlink maken mislukt.");
+      return null;
+    } finally {
+      setCustomerIntakeBusy(false);
+    }
+  }
+
+  async function refreshCustomerIntake() {
+    if (customerIntakeBusy) return;
+
+    setCustomerIntakeBusy(true);
+    setCustomerIntakeStatus("Status wordt vernieuwd...");
+
+    try {
+      const response = await fetch(
+        `/api/customer-intakes?dealId=${encodeURIComponent(dealId)}`,
+        { cache: "no-store" },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        intake?: CustomerIntakeSummary | null;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setCustomerIntakeStatus(json.error || "Status vernieuwen mislukt.");
+        return;
+      }
+
+      setCustomerIntake(json.intake ?? null);
+      if (json.intake) setCustomerIntakeEmail(json.intake.recipientEmail);
+      setCustomerIntakeStatus(json.intake?.submittedAt
+        ? "De ingevulde klantgegevens zijn ontvangen."
+        : "Status is bijgewerkt.");
+    } catch {
+      setCustomerIntakeStatus("Status vernieuwen mislukt.");
+    } finally {
+      setCustomerIntakeBusy(false);
+    }
+  }
+
+  async function getUsableCustomerIntake() {
+    const expired = customerIntake
+      ? new Date(customerIntake.expiresAt).getTime() <= Date.now()
+      : false;
+    const mustRegenerate = Boolean(
+      customerIntake && (customerIntake.status === "revoked" || expired),
+    );
+
+    if (!customerIntake || mustRegenerate || customerIntake.recipientEmail !== customerIntakeEmail.trim().toLowerCase()) {
+      return saveCustomerIntake(mustRegenerate);
+    }
+
+    return customerIntake;
+  }
+
+  async function handleCopyCustomerIntakeLink() {
+    const intake = await getUsableCustomerIntake();
+    if (!intake) return;
+
+    try {
+      await navigator.clipboard.writeText(intake.publicUrl);
+      setCustomerIntakeStatus("Klantlink is gekopieerd.");
+    } catch {
+      setCustomerIntakeStatus("Kopiëren mislukt. Open de klantlink en kopieer het adres uit de browser.");
+    }
+  }
+
+  async function handleOpenCustomerIntake() {
+    const targetWindow = window.open("about:blank", "_blank");
+    if (targetWindow) targetWindow.opener = null;
+
+    const intake = await getUsableCustomerIntake();
+    if (!intake) {
+      targetWindow?.close();
+      return;
+    }
+    if (!targetWindow) {
+      setCustomerIntakeStatus("De browser blokkeerde het nieuwe tabblad. Sta pop-ups toe en probeer opnieuw.");
+      return;
+    }
+    targetWindow.location.href = intake.publicUrl;
+  }
+
+  async function handleOutlookDraft() {
+    const recipientEmail = customerIntakeEmail.trim().toLowerCase();
+    if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setCustomerIntakeStatus("Vul eerst een geldig e-mailadres van de klant in.");
+      return;
+    }
+
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+
+    const intake = await getUsableCustomerIntake();
+    if (!intake) {
+      outlookWindow?.close();
+      return;
+    }
+
+    const greeting = contactName.trim() ? `Beste ${contactName.trim()},` : "Beste,";
+    const subject = `Klantgegevens Smart Trade - ${customerName || "nieuwe klant"}`;
+    const body = [
+      greeting,
+      "",
+      "Wilt u via onderstaande beveiligde link de gegevens voor de inrichting van Smart Trade invullen?",
+      "",
+      intake.publicUrl,
+      "",
+      "Na het opslaan ontvangen wij de gegevens automatisch.",
+      "",
+      "Met vriendelijke groet,",
+      currentSalesName || salesName || "Smart Trade",
+    ].join("\n");
+    const outlookUrl = new URL("https://outlook.office.com/mail/deeplink/compose");
+    outlookUrl.searchParams.set("to", recipientEmail);
+    outlookUrl.searchParams.set("subject", subject);
+    outlookUrl.searchParams.set("body", body);
+
+    if (!outlookWindow) {
+      setCustomerIntakeStatus("De browser blokkeerde Outlook. Sta pop-ups toe en probeer opnieuw.");
+      return;
+    }
+    outlookWindow.location.href = outlookUrl.toString();
+    setCustomerIntakeStatus("Outlook-concept is geopend.");
+  }
+
+  async function handleCustomerIntakePdf() {
+    setCustomerIntakeStatus("Klantgegevens-PDF wordt gemaakt...");
+
+    try {
+      await exportCustomerIntakePdf({
+        customerName,
+        formData: customerIntake?.formData ?? {
+          deliveryName: customerName,
+          deliveryStreet: "",
+          deliveryNumber: "",
+          deliveryPostcode: "",
+          deliveryCity: "",
+          phone: "",
+          mobile: "",
+          generalEmail: "",
+          postalStreet: "",
+          postalNumber: "",
+          postalPostcode: "",
+          postalCity: "",
+          contactName,
+          contactPhone: "",
+          contactEmail: customerIntakeEmail,
+          invoiceDelivery: "",
+          administrationEmail: "",
+          administrationContact: "",
+          administrationPhone: "",
+          directDebit: "",
+          directDebitBankAccount: "",
+        },
+      });
+      setCustomerIntakeStatus(customerIntake?.submittedAt
+        ? "Ingevulde klantgegevens-PDF is gemaakt."
+        : "Leeg klantgegevensformulier is gemaakt.");
+    } catch {
+      setCustomerIntakeStatus("Klantgegevens-PDF maken mislukt.");
+    }
+  }
+
+  const customerIntakeLabel = customerIntake
+    ? customerIntakeStatusLabel(customerIntake.status, customerIntake.expiresAt)
+    : "Nog niet aangemaakt";
+  const customerIntakeTone = customerIntakeLabel === "Ontvangen" || customerIntakeLabel === "Verwerkt"
+    ? "success"
+    : customerIntakeLabel === "Verlopen" || customerIntakeLabel === "Ingetrokken"
+      ? "danger"
+      : "warning";
 
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;
@@ -852,6 +1106,137 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             </div>
           </section>
         </div>
+
+        {!isAssetsExpansionDeal ? (
+          <section className="card panel customer-intake-panel">
+            <div className="top-row customer-intake-heading">
+              <div>
+                <div className="eyebrow">Nieuwe klant</div>
+                <h2 className="headline">Klantgegevensformulier</h2>
+                <div className="subtext">
+                  {customerIntake?.submittedAt
+                    ? `Ontvangen op ${new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeStyle: "short" }).format(new Date(customerIntake.submittedAt))}`
+                    : "Beveiligde klantlink en PDF voor de gegevens van een nieuwe klant."}
+                </div>
+              </div>
+              <StatusPill tone={customerIntakeTone}>{customerIntakeLabel}</StatusPill>
+            </div>
+
+            <div className="customer-intake-controls">
+              <label className="input-wrap customer-intake-email">
+                <span className="input-label">E-mailadres klant</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={customerIntakeEmail}
+                  onChange={(event) => setCustomerIntakeEmail(event.target.value)}
+                  placeholder="naam@bedrijf.nl"
+                />
+              </label>
+
+              <div className="customer-intake-actions">
+                {!customerIntake ? (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={customerIntakeBusy}
+                    onClick={() => void saveCustomerIntake(false)}
+                  >
+                    <Mail size={16} />
+                    {customerIntakeBusy ? "Link maken..." : "Klantlink maken"}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={customerIntakeBusy}
+                      onClick={() => void handleOpenCustomerIntake()}
+                    >
+                      <ExternalLink size={16} /> Open formulier
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={customerIntakeBusy}
+                      onClick={() => void handleCopyCustomerIntakeLink()}
+                    >
+                      <ClipboardCopy size={16} /> Kopieer link
+                    </button>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={customerIntakeBusy}
+                  onClick={() => void handleOutlookDraft()}
+                >
+                  <Mail size={16} /> Klaarzetten in Outlook
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={customerIntakeBusy}
+                  onClick={() => void handleCustomerIntakePdf()}
+                >
+                  <Download size={16} />
+                  {customerIntake?.submittedAt ? "Download ingevulde PDF" : "Download lege PDF"}
+                </button>
+                {customerIntake ? (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={customerIntakeBusy}
+                      onClick={() => void refreshCustomerIntake()}
+                    >
+                      <RefreshCw size={16} /> Status vernieuwen
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={customerIntakeBusy}
+                      onClick={() => void saveCustomerIntake(true)}
+                    >
+                      <Link2 size={16} /> Nieuwe link
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            {customerIntake?.submittedAt ? (
+              <div className="customer-intake-summary">
+                <div>
+                  <span>Naam</span>
+                  <strong>{customerIntake.formData.deliveryName || "-"}</strong>
+                </div>
+                <div>
+                  <span>Afleveradres</span>
+                  <strong>
+                    {[
+                      customerIntake.formData.deliveryStreet,
+                      customerIntake.formData.deliveryNumber,
+                      customerIntake.formData.deliveryPostcode,
+                      customerIntake.formData.deliveryCity,
+                    ].filter(Boolean).join(" ") || "-"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Contactpersoon</span>
+                  <strong>{customerIntake.formData.contactName || "-"}</strong>
+                </div>
+                <div>
+                  <span>E-mail administratie</span>
+                  <strong>{customerIntake.formData.administrationEmail || "-"}</strong>
+                </div>
+              </div>
+            ) : null}
+
+            {customerIntakeStatus ? <div className="save-status">{customerIntakeStatus}</div> : null}
+          </section>
+        ) : null}
       </div>
     </div>
   );

@@ -536,7 +536,7 @@ function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhon
   }
 }
 
-export async function exportQuotePdf(input: OfferTemplateInput) {
+async function buildQuotePdf(input: OfferTemplateInput) {
   const doc = new jsPDF();
   const layout = getQuoteLayout(input.quoteLayout);
   const isCompactLayout = layout.key === "compact";
@@ -583,8 +583,7 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
       .replace(/\s+/g, "-")
       .toLowerCase()}-offerte-uitbreiding.pdf`;
 
-    doc.save(fileName);
-    return;
+    return { doc, fileName };
   }
 
   y = addSectionTitle(doc, "Functionaliteiten / pakketkeuze", y + 2);
@@ -681,5 +680,15 @@ export async function exportQuotePdf(input: OfferTemplateInput) {
     .replace(/\s+/g, "-")
     .toLowerCase()}-offerte-smart-trade.pdf`;
 
+  return { doc, fileName };
+}
+
+export async function createQuotePdfFile(input: OfferTemplateInput) {
+  const { doc, fileName } = await buildQuotePdf(input);
+  return new File([doc.output("blob")], fileName, { type: "application/pdf" });
+}
+
+export async function exportQuotePdf(input: OfferTemplateInput) {
+  const { doc, fileName } = await buildQuotePdf(input);
   doc.save(fileName);
 }

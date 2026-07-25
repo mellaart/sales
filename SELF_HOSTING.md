@@ -38,6 +38,27 @@ Log daarna in met:
 
 Wijzig daarna het wachtwoord in de app en verwijder `SALES_BOOTSTRAP_ADMIN_PASSWORD` uit `.env.local`.
 
+## Outlook-concepten
+
+Voor de knop `Klaarzetten in Outlook` is een Microsoft Entra-appregistratie nodig. Voeg aan
+`.env.local` toe:
+
+```env
+MICROSOFT_OUTLOOK_TENANT_ID=vul-hier-de-tenant-id-in
+MICROSOFT_OUTLOOK_CLIENT_ID=vul-hier-de-application-client-id-in
+MICROSOFT_OUTLOOK_CLIENT_SECRET=vul-hier-het-client-secret-in
+SALES_OUTLOOK_ENCRYPTION_KEY=vul-hier-een-lange-willekeurige-sleutel-in
+```
+
+Registreer deze redirect-URI als `Web`:
+
+```text
+https://sales.troublefree.nl/api/outlook/callback
+```
+
+Geef de app de gedelegeerde Microsoft Graph-machtiging `Mail.ReadWrite`. De app maakt
+uitsluitend een conceptbericht; verzenden blijft een bewuste handeling in Outlook.
+
 ## Data
 
 De database-tabellen worden automatisch aangemaakt bij de eerste server-aanroep. Documenten worden opgeslagen onder:

@@ -21,7 +21,7 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
-import { exportQuotePdf } from "@/lib/pdf";
+import { createQuotePdfFile, exportQuotePdf } from "@/lib/pdf";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { exportCustomerIntakePdf } from "@/lib/customer-intake-pdf";
 import {
@@ -137,6 +137,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
   const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
   const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
+  const [quoteOutlookBusy, setQuoteOutlookBusy] = useState(false);
 
   const [customerName, setCustomerName] = useState("");
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
@@ -226,6 +227,17 @@ export default function DealEditor({ dealId }: { dealId: string }) {
 
     void loadDeal();
   }, [currentSalesName, dealId, modules, supabase, user]);
+
+  useEffect(() => {
+    if (loading || typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("outlook") !== "connected") return;
+
+    setStatus("Outlook is verbonden. Klik nogmaals op 'Klaarzetten in Outlook' om het concept te maken.");
+    url.searchParams.delete("outlook");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [loading]);
 
   const totalUsers = extraUsers + 1;
   const results = useMemo(
@@ -426,35 +438,118 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     setStatus("PDF wordt gemaakt...");
 
     try {
-      await exportQuotePdf({
-        quoteTitle,
-        customerName,
-        contactName,
-        salesName: currentSalesName || salesName,
-        salesEmail: currentSalesEmail,
-        salesPhone: currentSalesPhone,
-        salesTitle: currentSalesTitle,
-        salesWorkdays: currentSalesWorkdays,
-        notes,
-        includeVat,
-        totalUsers,
-        selectedModules: selectedModuleRows,
-        extraMonthlyRows,
-        result: adjustedResult,
-        includeTravelCosts,
-        travelPostcodePrefix,
-        travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
-        travelDescription: travelCostQuote?.postcodeRow?.description ?? "",
-        travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
-        travelCostTotal,
-        implementationDays,
-        quoteLayout,
-        assetsExpansion,
-        expansionWorkItems: pricingConfig.expansionWorkItems,
-      });
+      await exportQuotePdf(getQuotePdfInput());
       setStatus("PDF is gemaakt.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "PDF maken mislukt.");
+    }
+  }
+
+  function getQuotePdfInput() {
+    return {
+      quoteTitle,
+      customerName,
+      contactName,
+      salesName: currentSalesName || salesName,
+      salesEmail: currentSalesEmail,
+      salesPhone: currentSalesPhone,
+      salesTitle: currentSalesTitle,
+      salesWorkdays: currentSalesWorkdays,
+      notes,
+      includeVat,
+      totalUsers,
+      selectedModules: selectedModuleRows,
+      extraMonthlyRows,
+      result: adjustedResult,
+      includeTravelCosts,
+      travelPostcodePrefix,
+      travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
+      travelDescription: travelCostQuote?.postcodeRow?.description ?? "",
+      travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
+      travelCostTotal,
+      implementationDays,
+      quoteLayout,
+      assetsExpansion,
+      expansionWorkItems: pricingConfig.expansionWorkItems,
+    };
+  }
+
+  async function handleQuoteOutlookDraft() {
+    const recipientEmail = customerIntakeEmail.trim().toLowerCase();
+    if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setStatus("Vul eerst een geldig e-mailadres van de klant in.");
+      return;
+    }
+    if (quoteOutlookBusy) return;
+
+    const returnTo = `/deals/${encodeURIComponent(dealId)}`;
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    setQuoteOutlookBusy(true);
+    setStatus("Outlook-verbinding wordt gecontroleerd...");
+
+    try {
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!statusResponse.ok) {
+        outlookWindow?.close();
+        throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+      }
+      if (!statusJson.connected) {
+        outlookWindow?.close();
+        setStatus("Outlook wordt eenmalig verbonden...");
+        window.location.assign(statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`);
+        return;
+      }
+
+      setStatus("Offerte-PDF en Outlook-concept worden gemaakt...");
+      const attachment = await createQuotePdfFile(getQuotePdfInput());
+      const formData = new FormData();
+      formData.set("recipientEmail", recipientEmail);
+      formData.set("customerName", customerName);
+      formData.set("contactName", contactName);
+      formData.set("attachment", attachment);
+
+      const response = await fetch(
+        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        { method: "POST", body: formData },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (json.reconnectRequired && json.connectUrl) {
+        outlookWindow?.close();
+        setStatus("Outlook moet opnieuw worden verbonden...");
+        window.location.assign(json.connectUrl);
+        return;
+      }
+      if (!response.ok || !json.webLink) {
+        outlookWindow?.close();
+        throw new Error(json.error || "Outlook-concept maken mislukt.");
+      }
+
+      if (outlookWindow) {
+        outlookWindow.location.href = json.webLink;
+      } else {
+        window.location.assign(json.webLink);
+      }
+      setStatus("Outlook-concept met offerte-PDF is aangemaakt.");
+    } catch (error) {
+      outlookWindow?.close();
+      setStatus(error instanceof Error ? error.message : "Outlook-concept maken mislukt.");
+    } finally {
+      setQuoteOutlookBusy(false);
     }
   }
 
@@ -1076,6 +1171,27 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                       </button>
                     );
                   })}
+                </div>
+                <div className="quote-outlook-controls">
+                  <label className="input-wrap">
+                    <span className="input-label">E-mailadres klant</span>
+                    <input
+                      className="input"
+                      type="email"
+                      value={customerIntakeEmail}
+                      onChange={(event) => setCustomerIntakeEmail(event.target.value)}
+                      placeholder="naam@bedrijf.nl"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={quoteOutlookBusy}
+                    onClick={() => void handleQuoteOutlookDraft()}
+                  >
+                    <Mail size={16} />
+                    {quoteOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                  </button>
                 </div>
               </div>
 

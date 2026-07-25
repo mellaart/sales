@@ -213,6 +213,25 @@ export async function ensureLocalSchema() {
         create index if not exists customer_intakes_status_idx
           on public.customer_intakes(status, expires_at);
 
+        create table if not exists public.outlook_connections (
+          user_id uuid primary key references public.profiles(id) on delete cascade,
+          refresh_token_encrypted text not null,
+          scope text,
+          connected_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        create table if not exists public.outlook_oauth_states (
+          state_hash text primary key,
+          user_id uuid not null references public.profiles(id) on delete cascade,
+          return_to text not null default '/',
+          expires_at timestamptz not null,
+          created_at timestamptz not null default now()
+        );
+
+        create index if not exists outlook_oauth_states_expires_at_idx
+          on public.outlook_oauth_states(expires_at);
+
         create table if not exists public.worldline_projects (
           id uuid primary key default gen_random_uuid(),
           relation_id text not null,

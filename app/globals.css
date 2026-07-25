@@ -1383,6 +1383,24 @@ td {
   background: rgba(37,99,235,0.18);
 }
 
+.quote-outlook-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 380px) max-content;
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.quote-outlook-controls .primary-button {
+  min-height: 48px;
+  white-space: nowrap;
+}
+
+.quote-outlook-controls .primary-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .comparison-grid {
   display: grid;
   grid-template-columns: repeat(4,1fr);
@@ -1419,10 +1437,15 @@ td {
   .comparison-grid,
   .kpi-grid,
   .quote-layout-grid,
+  .quote-outlook-controls,
   .quote-price-strip,
   .quote-facts,
   .travel-cost-layout {
     grid-template-columns: 1fr;
+  }
+
+  .quote-outlook-controls .primary-button {
+    width: 100%;
   }
 
   .travel-postcode-field .input {

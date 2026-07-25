@@ -273,70 +273,72 @@ export default function CustomerIntakeForm({
               </div>
             </div>
 
-            <fieldset className={styles.choiceField}>
-              <legend>Factuur per mail / post *</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="invoiceDelivery"
-                  value="mail"
-                  required
-                  checked={formData.invoiceDelivery === "mail"}
-                  onChange={() => setField("invoiceDelivery", "mail")}
-                />
-                <span>Mail</span>
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="invoiceDelivery"
-                  value="post"
-                  checked={formData.invoiceDelivery === "post"}
-                  onChange={() => setField("invoiceDelivery", "post")}
-                />
-                <span>Post</span>
-              </label>
-            </fieldset>
+            <div className={styles.administrationContent}>
+              <fieldset className={styles.choiceField}>
+                <legend>Factuur per mail / post *</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="invoiceDelivery"
+                    value="mail"
+                    required
+                    checked={formData.invoiceDelivery === "mail"}
+                    onChange={() => setField("invoiceDelivery", "mail")}
+                  />
+                  <span>Mail</span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="invoiceDelivery"
+                    value="post"
+                    checked={formData.invoiceDelivery === "post"}
+                    onChange={() => setField("invoiceDelivery", "post")}
+                  />
+                  <span>Post</span>
+                </label>
+              </fieldset>
 
-            <div className={styles.fields}>
-              <CustomerTextField label="E-mail" field="administrationEmail" formData={formData} onChange={setField} type="email" />
-              <CustomerTextField label="Contactpersoon" field="administrationContact" formData={formData} onChange={setField} />
-              <CustomerTextField label="Telefoon" field="administrationPhone" formData={formData} onChange={setField} type="tel" />
-            </div>
+              <div className={`${styles.fields} ${styles.administrationFields}`}>
+                <CustomerTextField label="E-mail" field="administrationEmail" formData={formData} onChange={setField} type="email" />
+                <CustomerTextField label="Contactpersoon" field="administrationContact" formData={formData} onChange={setField} />
+                <CustomerTextField label="Telefoon" field="administrationPhone" formData={formData} onChange={setField} type="tel" />
+              </div>
 
-            <fieldset className={styles.choiceField}>
-              <legend>Automatische incasso ja / nee *</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="directDebit"
-                  value="yes"
-                  required
-                  checked={formData.directDebit === "yes"}
-                  onChange={() => setField("directDebit", "yes")}
-                />
-                <span>Ja</span>
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="directDebit"
-                  value="no"
-                  checked={formData.directDebit === "no"}
-                  onChange={() => setField("directDebit", "no")}
-                />
-                <span>Nee</span>
-              </label>
-            </fieldset>
+              <fieldset className={styles.choiceField}>
+                <legend>Automatische incasso ja / nee *</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="directDebit"
+                    value="yes"
+                    required
+                    checked={formData.directDebit === "yes"}
+                    onChange={() => setField("directDebit", "yes")}
+                  />
+                  <span>Ja</span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="directDebit"
+                    value="no"
+                    checked={formData.directDebit === "no"}
+                    onChange={() => setField("directDebit", "no")}
+                  />
+                  <span>Nee</span>
+                </label>
+              </fieldset>
 
-            <div className={styles.fields}>
-              <CustomerTextField
-                label="Bankrekening voor automatische incasso"
-                field="directDebitBankAccount"
-                formData={formData}
-                onChange={setField}
-                required={formData.directDebit === "yes"}
-              />
+              <div className={styles.bankAccountField}>
+                <CustomerTextField
+                  label="Bankrekening voor automatische incasso"
+                  field="directDebitBankAccount"
+                  formData={formData}
+                  onChange={setField}
+                  required={formData.directDebit === "yes"}
+                />
+              </div>
             </div>
           </section>
 

@@ -167,6 +167,15 @@ export async function exportCustomerIntakePdf(input: CustomerIntakePdfInput) {
     { label: "Mobiel", value: data.mobile },
     { label: "E-mail algemeen", value: data.generalEmail },
   );
+  addFullRow({
+    label: "Website",
+    value: data.website,
+    labelWidth: 24,
+  });
+  addRow(
+    { label: "BTW-nummer", value: data.vatNumber, labelWidth: 27 },
+    { label: "KvK-nummer", value: data.chamberOfCommerceNumber, labelWidth: 27 },
+  );
 
   y += 2;
   addSection("Post adres *");

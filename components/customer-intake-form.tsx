@@ -230,6 +230,9 @@ export default function CustomerIntakeForm({
               <CustomerTextField label="Telefoonnummer" field="phone" formData={formData} onChange={setField} type="tel" autoComplete="tel" />
               <CustomerTextField label="Mobiel" field="mobile" formData={formData} onChange={setField} type="tel" autoComplete="tel" />
               <CustomerTextField label="E-mail algemeen" field="generalEmail" formData={formData} onChange={setField} type="email" autoComplete="email" />
+              <CustomerTextField label="Website" field="website" formData={formData} onChange={setField} autoComplete="url" />
+              <CustomerTextField label="BTW-nummer" field="vatNumber" formData={formData} onChange={setField} />
+              <CustomerTextField label="KvK-nummer" field="chamberOfCommerceNumber" formData={formData} onChange={setField} />
             </div>
           </section>
 

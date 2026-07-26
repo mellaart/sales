@@ -9,6 +9,9 @@ export type CustomerIntakeData = {
   phone: string;
   mobile: string;
   generalEmail: string;
+  website: string;
+  vatNumber: string;
+  chamberOfCommerceNumber: string;
   postalStreet: string;
   postalNumber: string;
   postalPostcode: string;
@@ -46,6 +49,9 @@ export const EMPTY_CUSTOMER_INTAKE_DATA: CustomerIntakeData = {
   phone: "",
   mobile: "",
   generalEmail: "",
+  website: "",
+  vatNumber: "",
+  chamberOfCommerceNumber: "",
   postalStreet: "",
   postalNumber: "",
   postalPostcode: "",
@@ -70,6 +76,9 @@ const FIELD_LIMITS: Record<keyof CustomerIntakeData, number> = {
   phone: 80,
   mobile: 80,
   generalEmail: 180,
+  website: 240,
+  vatNumber: 40,
+  chamberOfCommerceNumber: 40,
   postalStreet: 180,
   postalNumber: 30,
   postalPostcode: 20,
@@ -102,6 +111,7 @@ export function normalizeCustomerIntakeData(value: unknown): CustomerIntakeData 
   normalized.deliveryPostcode = normalized.deliveryPostcode.toUpperCase();
   normalized.postalPostcode = normalized.postalPostcode.toUpperCase();
   normalized.generalEmail = normalized.generalEmail.toLowerCase();
+  normalized.vatNumber = normalized.vatNumber.toUpperCase();
   normalized.contactEmail = normalized.contactEmail.toLowerCase();
   normalized.administrationEmail = normalized.administrationEmail.toLowerCase();
   normalized.directDebitBankAccount = normalized.directDebitBankAccount.toUpperCase();
@@ -129,6 +139,9 @@ export function validateCustomerIntakeData(data: CustomerIntakeData) {
     ["phone", "Telefoonnummer"],
     ["mobile", "Mobiel"],
     ["generalEmail", "E-mail algemeen"],
+    ["website", "Website"],
+    ["vatNumber", "BTW-nummer"],
+    ["chamberOfCommerceNumber", "KvK-nummer"],
     ["contactName", "Naam contactpersoon"],
     ["contactPhone", "Telefoonnummer contactpersoon"],
     ["contactEmail", "E-mail contactpersoon"],

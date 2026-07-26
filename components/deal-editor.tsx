@@ -723,6 +723,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           phone: "",
           mobile: "",
           generalEmail: "",
+          website: "",
+          vatNumber: "",
+          chamberOfCommerceNumber: "",
           postalStreet: "",
           postalNumber: "",
           postalPostcode: "",
@@ -1344,6 +1347,18 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <div>
                   <span>E-mail administratie</span>
                   <strong>{customerIntake.formData.administrationEmail || "-"}</strong>
+                </div>
+                <div>
+                  <span>Website</span>
+                  <strong>{customerIntake.formData.website || "-"}</strong>
+                </div>
+                <div>
+                  <span>BTW-nummer</span>
+                  <strong>{customerIntake.formData.vatNumber || "-"}</strong>
+                </div>
+                <div>
+                  <span>KvK-nummer</span>
+                  <strong>{customerIntake.formData.chamberOfCommerceNumber || "-"}</strong>
                 </div>
               </div>
             ) : null}

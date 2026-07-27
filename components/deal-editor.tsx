@@ -91,6 +91,27 @@ function formatDays(days: number) {
   return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
 }
 
+function getWebsiteDomain(website: string) {
+  const value = website.trim();
+  if (!value) return "";
+
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`);
+    return url.hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return value
+      .replace(/^[a-z][a-z\d+.-]*:\/\//i, "")
+      .split("/")[0]
+      .split(":")[0]
+      .toLowerCase()
+      .replace(/^www\./, "");
+  }
+}
+
+function getGreetingName(name: string) {
+  return name.trim().split(/\s+/)[0] || "";
+}
+
 function getSmartConnectPricing(
   connectionCount: number,
   tiers: SmartConnectPriceTier[],
@@ -708,6 +729,71 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     setCustomerIntakeStatus("Outlook-concept is geopend.");
   }
 
+  function handleDnsOutlookDraft() {
+    if (!customerIntake?.submittedAt) {
+      setCustomerIntakeStatus("De klantgegevens moeten eerst ontvangen zijn.");
+      return;
+    }
+
+    const recipientEmail = customerIntakeEmail.trim().toLowerCase();
+    if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setCustomerIntakeStatus("Vul eerst een geldig e-mailadres van de ontvanger in.");
+      return;
+    }
+
+    const domain = getWebsiteDomain(customerIntake.formData.website);
+    if (!domain) {
+      setCustomerIntakeStatus("In het klantgegevensformulier ontbreekt een geldige website.");
+      return;
+    }
+
+    const greetingName = getGreetingName(customerIntake.formData.contactName || contactName);
+    const greeting = greetingName ? `Beste ${greetingName},` : "Beste,";
+    const subject = "SPF- en DKIM-aanpassingen";
+    const body = [
+      greeting,
+      "",
+      `Wij gebruiken Smart Trade om e-mail te versturen namens het domein ${domain}. Om te voorkomen dat berichten als ongewenst gemarkeerd worden, moeten er een paar DNS-aanpassingen worden gedaan. Hieronder vind je alle benodigde gegevens.`,
+      "",
+      `Benodigde aanpassingen voor ${domain}:`,
+      "",
+      "SPF-record",
+      "Voeg de volgende regels toe aan het bestaande SPF-record:",
+      "include:_spf.smartsoft.nu",
+      "include:_spf.troublefreehosting.nl",
+      "",
+      "DKIM-record 1",
+      "Naam: smtp01-smartsoft._domainkey",
+      "Type: CNAME",
+      "Waarde: smtp01._domainkey.smartsoft.nu",
+      "",
+      "DKIM-record 2",
+      "Naam: smtp02-tfh._domainkey",
+      "Type: CNAME",
+      "Waarde: smtp02-tfh._domainkey.troublefreehosting.nl",
+      "",
+      "Let op:",
+      "Sommige DNS-beheerders vereisen een punt aan het eind van de waardes.",
+      "Controleer het SPF-record via Kitterman's SPF Checker:",
+      "https://www.kitterman.com/spf/validate.html",
+      "",
+      "Na het doorvoeren van de wijzigingen kun je een e-mail sturen naar support@troublefree.nl of naar mij om het te laten valideren.",
+    ].join("\n");
+    const outlookUrl =
+      "https://outlook.office.com/mail/deeplink/compose" +
+      `?to=${encodeURIComponent(recipientEmail)}` +
+      `&subject=${encodeURIComponent(subject)}` +
+      `&body=${encodeURIComponent(body)}`;
+    const outlookWindow = window.open(outlookUrl, "_blank");
+
+    if (!outlookWindow) {
+      setCustomerIntakeStatus("De browser blokkeerde Outlook. Sta pop-ups toe en probeer opnieuw.");
+      return;
+    }
+    outlookWindow.opener = null;
+    setCustomerIntakeStatus(`DNS-concept voor ${domain} is geopend in Outlook.`);
+  }
+
   async function handleCustomerIntakePdf() {
     setCustomerIntakeStatus("Klantgegevens-PDF wordt gemaakt...");
 
@@ -1300,6 +1386,16 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <Download size={16} />
                   {customerIntake?.submittedAt ? "Download ingevulde PDF" : "Download lege PDF"}
                 </button>
+                {customerIntake?.submittedAt ? (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={customerIntakeBusy}
+                    onClick={handleDnsOutlookDraft}
+                  >
+                    <Mail size={16} /> DNS-instructies in Outlook
+                  </button>
+                ) : null}
                 {customerIntake ? (
                   <>
                     <button

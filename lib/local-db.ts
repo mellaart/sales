@@ -204,9 +204,14 @@ export async function ensureLocalSchema() {
           submitted_at timestamptz,
           processed_at timestamptz,
           processed_by uuid references public.profiles(id) on delete set null,
+          notification_sent_at timestamptz,
+          notification_error text,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
+
+        alter table public.customer_intakes add column if not exists notification_sent_at timestamptz;
+        alter table public.customer_intakes add column if not exists notification_error text;
 
         create index if not exists customer_intakes_created_by_idx
           on public.customer_intakes(created_by, updated_at desc);

@@ -38,6 +38,8 @@ type CustomerIntakeRow = {
   submitted_at: string | null;
   processed_at: string | null;
   processed_by: string | null;
+  notification_sent_at: string | null;
+  notification_error: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -279,6 +281,8 @@ export async function submitPublicCustomerIntake(id: string, formData: CustomerI
          recipient_email = coalesce(nullif($3, ''), recipient_email),
          status = 'submitted',
          submitted_at = now(),
+         notification_sent_at = null,
+         notification_error = null,
          updated_at = now()
      where id = $1
        and status <> 'revoked'
@@ -288,4 +292,18 @@ export async function submitPublicCustomerIntake(id: string, formData: CustomerI
   );
 
   return rows[0] ?? null;
+}
+
+export async function recordCustomerIntakeNotification(
+  id: string,
+  errorMessage: string | null,
+) {
+  await query(
+    `update public.customer_intakes
+     set notification_sent_at = case when $2::text is null then now() else null end,
+         notification_error = $2,
+         updated_at = now()
+     where id = $1`,
+    [id, errorMessage],
+  );
 }

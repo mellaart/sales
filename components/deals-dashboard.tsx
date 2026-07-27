@@ -2,15 +2,28 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, ExternalLink, FileText, RefreshCw, Search, Trash2, WalletCards } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  CalendarDays,
+  ExternalLink,
+  FileText,
+  Inbox,
+  RefreshCw,
+  Search,
+  Trash2,
+  WalletCards,
+} from "lucide-react";
 import { getDealSalesName, loadDealSalesNames, type SalesNamesByUserId } from "@/lib/deal-sales-names";
-import { deleteDealWithFallback, listDealsWithFallback } from "@/lib/deal-storage";
+import { deleteDealWithFallback, listDealsWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { euro } from "@/lib/pricing";
 import { canViewAllDeals, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { StatusPill } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 
 type DealFilter = "all" | "expansion" | "calculator";
+type ArchiveView = "active" | "archived";
 
 const dealDateFormatter = new Intl.DateTimeFormat("nl-NL", {
   day: "2-digit",
@@ -46,6 +59,15 @@ function getDealDateLabel(deal: DealRecord) {
   return dealDateFormatter.format(date);
 }
 
+function getArchivedDateLabel(deal: DealRecord) {
+  if (!deal.archived_at) return "Geen archiefdatum";
+
+  const date = new Date(deal.archived_at);
+  if (Number.isNaN(date.getTime())) return "Geen archiefdatum";
+
+  return `Gearchiveerd ${dealDateFormatter.format(date)}`;
+}
+
 function getDealSearchValues(deal: DealRecord, salesName: string) {
   return [
     deal.customer_name,
@@ -66,6 +88,7 @@ export default function DealsDashboard() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [dealFilter, setDealFilter] = useState<DealFilter>("all");
+  const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [status, setStatus] = useState("");
 
   const loadDeals = useCallback(async () => {
@@ -82,7 +105,7 @@ export default function DealsDashboard() {
     }
 
     setLoading(true);
-    const result = await listDealsWithFallback(supabase, user.id, canViewAllDeals(role));
+    const result = await listDealsWithFallback(supabase, user.id, canViewAllDeals(role), undefined, true);
     if (result.error) {
       setStatus(`Deals laden mislukt: ${result.error}`);
       setLoading(false);
@@ -102,9 +125,18 @@ export default function DealsDashboard() {
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
+  const activeDeals = useMemo(() => deals.filter((deal) => !deal.archived_at), [deals]);
+  const archivedDeals = useMemo(
+    () => deals
+      .filter((deal) => Boolean(deal.archived_at))
+      .sort((a, b) => String(b.archived_at ?? "").localeCompare(String(a.archived_at ?? ""))),
+    [deals],
+  );
+  const visibleDeals = archiveView === "archived" ? archivedDeals : activeDeals;
+
   const filteredDeals = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return deals.filter((deal) => {
+    return visibleDeals.filter((deal) => {
       if (dealFilter === "expansion" && !isExpansionDeal(deal)) return false;
       if (dealFilter === "calculator" && isExpansionDeal(deal)) return false;
       if (!q) return true;
@@ -113,26 +145,28 @@ export default function DealsDashboard() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [currentSalesName, dealFilter, deals, query, salesNamesByUserId, user?.id]);
+  }, [currentSalesName, dealFilter, query, salesNamesByUserId, user?.id, visibleDeals]);
 
   const stats = useMemo(() => {
-    const expansionDeals = deals.filter(isExpansionDeal).length;
-    const monthlyTotal = deals.reduce((sum, deal) => sum + Number(deal.monthly_total || 0), 0);
-    const latestDeal = deals[0] ?? null;
+    const expansionDeals = activeDeals.filter(isExpansionDeal).length;
+    const monthlyTotal = activeDeals.reduce((sum, deal) => sum + Number(deal.monthly_total || 0), 0);
+    const latestDeal = activeDeals[0] ?? null;
 
     return {
-      totalDeals: deals.length,
+      totalDeals: activeDeals.length,
       expansionDeals,
-      calculatorDeals: deals.length - expansionDeals,
+      calculatorDeals: activeDeals.length - expansionDeals,
       monthlyTotal,
       latestLabel: latestDeal ? getDealDateLabel(latestDeal) : "-",
     };
-  }, [deals]);
+  }, [activeDeals]);
+
+  const visibleExpansionDeals = visibleDeals.filter(isExpansionDeal).length;
 
   const filterOptions: Array<{ key: DealFilter; label: string; count: number }> = [
-    { key: "all", label: "Alles", count: deals.length },
-    { key: "expansion", label: "Uitbreidingen", count: stats.expansionDeals },
-    { key: "calculator", label: "Calculator", count: stats.calculatorDeals },
+    { key: "all", label: "Alles", count: visibleDeals.length },
+    { key: "expansion", label: "Uitbreidingen", count: visibleExpansionDeals },
+    { key: "calculator", label: "Calculator", count: visibleDeals.length - visibleExpansionDeals },
   ];
 
   const handleDelete = async (deal: DealRecord) => {
@@ -152,6 +186,23 @@ export default function DealsDashboard() {
     }
 
     setStatus("Deal verwijderd.");
+    await loadDeals();
+  };
+
+  const handleRestore = async (deal: DealRecord) => {
+    const canRestore = role === "admin" || deal.user_id === user?.id;
+    if (!canRestore) {
+      setStatus("Je mag deze deal niet terugzetten.");
+      return;
+    }
+
+    const result = await updateDealWithFallback(supabase, deal.id, { archived_at: null });
+    if (result.error) {
+      setStatus(`Terugzetten mislukt: ${result.error}`);
+      return;
+    }
+
+    setStatus("Deal is teruggezet naar actieve deals.");
     await loadDeals();
   };
 
@@ -210,6 +261,28 @@ export default function DealsDashboard() {
             <div className="eyebrow">Zoeken en filteren</div>
             <h2 className="headline">Deals vinden</h2>
           </div>
+          <div className="deals-archive-switch" role="group" aria-label="Kies actieve of gearchiveerde deals">
+            <button
+              type="button"
+              className={`deals-archive-button ${archiveView === "active" ? "active" : ""}`}
+              aria-pressed={archiveView === "active"}
+              onClick={() => setArchiveView("active")}
+            >
+              <Inbox size={17} />
+              <span>Actieve deals</span>
+              <strong>{activeDeals.length}</strong>
+            </button>
+            <button
+              type="button"
+              className={`deals-archive-button ${archiveView === "archived" ? "active" : ""}`}
+              aria-pressed={archiveView === "archived"}
+              onClick={() => setArchiveView("archived")}
+            >
+              <Archive size={17} />
+              <span>Gearchiveerde deals</span>
+              <strong>{archivedDeals.length}</strong>
+            </button>
+          </div>
           <div className="deals-filter-bar">
             {filterOptions.map((option) => (
               <button
@@ -240,9 +313,19 @@ export default function DealsDashboard() {
           <div className="top-row">
             <div>
               <div className="eyebrow">Resultaten</div>
-              <h2 className="headline">{filteredDeals.length} deals</h2>
+              <h2 className="headline">
+                {filteredDeals.length} {archiveView === "archived" ? "gearchiveerde deals" : "deals"}
+              </h2>
             </div>
-            <StatusPill tone="neutral">{dealFilter === "all" ? "Alle types" : dealFilter === "expansion" ? "Uitbreidingen" : "Calculator"}</StatusPill>
+            <StatusPill tone="neutral">
+              {archiveView === "archived"
+                ? "Archief"
+                : dealFilter === "all"
+                  ? "Alle types"
+                  : dealFilter === "expansion"
+                    ? "Uitbreidingen"
+                    : "Calculator"}
+            </StatusPill>
           </div>
 
           {loading ? <div className="save-status">Deals worden geladen...</div> : null}
@@ -251,13 +334,17 @@ export default function DealsDashboard() {
           <div className="deals-list">
             {filteredDeals.map((deal) => {
               const canDelete = role === "admin" || deal.user_id === user?.id;
+              const canRestore = role === "admin" || deal.user_id === user?.id;
 
               return (
                 <article key={deal.id} className="deal-card-row">
                   <div className="deal-card-main">
                     <div className="deal-card-top">
                       <StatusPill tone={isExpansionDeal(deal) ? "success" : "warning"}>{getDealTypeLabel(deal)}</StatusPill>
-                      <span className="deal-date">{getDealDateLabel(deal)}</span>
+                      {deal.archived_at ? <StatusPill tone="neutral">Gearchiveerd</StatusPill> : null}
+                      <span className="deal-date">
+                        {deal.archived_at ? getArchivedDateLabel(deal) : getDealDateLabel(deal)}
+                      </span>
                     </div>
                     <div>
                       <h3>{deal.customer_name || "Onbekende klant"}</h3>
@@ -275,6 +362,11 @@ export default function DealsDashboard() {
                     </div>
                     <div className="button-row compact deal-actions">
                       <Link href={`/deals/${deal.id}`} className="primary-button"><ExternalLink size={16} /> Open</Link>
+                      {archiveView === "archived" && canRestore ? (
+                        <button type="button" className="secondary-button" onClick={() => void handleRestore(deal)}>
+                          <ArchiveRestore size={16} /> Terugzetten
+                        </button>
+                      ) : null}
                       {canDelete ? (
                         <button type="button" className="secondary-button danger" onClick={() => void handleDelete(deal)}><Trash2 size={16} /> Verwijder</button>
                       ) : null}

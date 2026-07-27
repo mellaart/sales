@@ -88,6 +88,7 @@ create table if not exists public.deals (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(),
+  archived_at timestamptz,
   customer_name text,
   quote_title text not null,
   contact_name text,
@@ -115,11 +116,13 @@ alter table public.deals enable row level security;
 
 alter table public.deals add column if not exists user_id uuid;
 alter table public.deals alter column user_id set default auth.uid();
+alter table public.deals add column if not exists archived_at timestamptz;
 alter table public.deals add column if not exists calculator_inputs jsonb not null default '{}'::jsonb;
 update public.deals set user_id = auth.uid() where user_id is null;
 alter table public.deals alter column user_id set not null;
 
 create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
+create index if not exists deals_archived_at_created_at_idx on public.deals(archived_at, created_at desc);
 create index if not exists profiles_role_idx on public.profiles(role);
 
 create table if not exists public.worldline_projects (

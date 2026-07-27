@@ -122,6 +122,7 @@ function toSupabaseDealPayload(deal: DealRecord, userId: string): DealPayload {
   return {
     user_id: deal.user_id || userId,
     created_at: deal.created_at ?? new Date().toISOString(),
+    archived_at: deal.archived_at ?? null,
     customer_name: deal.customer_name ?? null,
     quote_title: deal.quote_title || "Prijsvoorstel Smart Trade",
     contact_name: deal.contact_name ?? null,
@@ -247,6 +248,7 @@ export async function listDealsWithFallback(
   userId: string,
   canViewAll: boolean,
   limit?: number,
+  includeArchived = false,
 ): Promise<DealResult> {
   if (!supabase) {
     return { error: "Supabase keys ontbreken. Vul NEXT_PUBLIC_SUPABASE_URL en NEXT_PUBLIC_SUPABASE_ANON_KEY in." };
@@ -254,17 +256,17 @@ export async function listDealsWithFallback(
 
   await ensureFreshSession(supabase);
 
-  let query = supabase.from("deals").select("*").order("created_at", { ascending: false });
-  if (limit) {
-    query = query.limit(limit);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await supabase.from("deals").select("*").order("created_at", { ascending: false });
 
   if (error) {
     if (isDealsTableMissing(error)) {
+      const localDeals = listLocalDeals(userId, canViewAll);
+      const visibleLocalDeals = includeArchived
+        ? localDeals
+        : localDeals.filter((deal) => !deal.archived_at);
+
       return {
-        deals: listLocalDeals(userId, canViewAll).slice(0, limit),
+        deals: limit ? visibleLocalDeals.slice(0, limit) : visibleLocalDeals,
         warning: MISSING_TABLE_LIST_WARNING,
         storage: "local",
       };
@@ -276,9 +278,14 @@ export async function listDealsWithFallback(
   const syncedDeals = await syncLocalDealsToSupabase(supabase, userId);
   const localDeals = listLocalDeals(userId, false);
   const deals = mergeDeals([...(data ?? []) as DealRecord[], ...syncedDeals], localDeals);
+  const visibleDeals = includeArchived ? deals : deals.filter((deal) => !deal.archived_at);
   const warning = syncedDeals.length > 0 ? LOCAL_DEALS_SYNC_WARNING : undefined;
 
-  return { deals: limit ? deals.slice(0, limit) : deals, warning, storage: "supabase" };
+  return {
+    deals: limit ? visibleDeals.slice(0, limit) : visibleDeals,
+    warning,
+    storage: "supabase",
+  };
 }
 
 export async function getDealWithFallback(supabase: SupabaseClient | null, dealId: string): Promise<DealResult> {

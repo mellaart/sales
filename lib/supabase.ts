@@ -97,6 +97,7 @@ export type DealRecord = {
 
   created_at?: string | null;
   updated_at?: string | null;
+  archived_at?: string | null;
 };
 
 let client: ReturnType<typeof createClient> | null = null;

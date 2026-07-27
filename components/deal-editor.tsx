@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   Boxes,
   Calculator,
@@ -145,7 +147,7 @@ function getSmartConnectPricing(
 }
 
 export default function DealEditor({ dealId }: { dealId: string }) {
-  const { user, profile } = useAuth();
+  const { user, profile, role } = useAuth();
   const { pricingConfig } = usePricingConfig();
   const modules = pricingConfig.modules;
   const packages = useMemo(
@@ -155,6 +157,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const supabase = getSupabaseClient();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  const [dealOwnerId, setDealOwnerId] = useState<string | null>(null);
+  const [archivedAt, setArchivedAt] = useState<string | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeSummary | null>(null);
   const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
   const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
@@ -205,6 +210,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       const deal = result.deal;
       const inputs = normalizeInputs(deal, modules);
 
+      setDealOwnerId(deal.user_id || user.id);
+      setArchivedAt(deal.archived_at ?? null);
       setCustomerName(deal.customer_name || "");
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
       setContactName(deal.contact_name || "");
@@ -359,6 +366,42 @@ export default function DealEditor({ dealId }: { dealId: string }) {
 
       return currentKeys.filter((key) => key !== optionKey);
     });
+  }
+
+  async function handleArchiveToggle() {
+    if (!user || archiveBusy) return;
+
+    const isArchived = Boolean(archivedAt);
+    if (!isArchived) {
+      const confirmed = window.confirm(
+        `Is de deal van ${customerName || quoteTitle || "deze klant"} klaar en mag deze naar het archief?`,
+      );
+      if (!confirmed) return;
+    }
+
+    const nextArchivedAt = isArchived ? null : new Date().toISOString();
+    setArchiveBusy(true);
+    setStatus(isArchived ? "Deal wordt teruggezet..." : "Deal wordt gearchiveerd...");
+
+    try {
+      const result = await updateDealWithFallback(supabase, dealId, {
+        archived_at: nextArchivedAt,
+      });
+      if (result.error) {
+        setStatus(`${isArchived ? "Terugzetten" : "Archiveren"} mislukt: ${result.error}`);
+        return;
+      }
+
+      setArchivedAt(result.deal?.archived_at ?? nextArchivedAt);
+      setStatus(
+        result.warning
+          ?? (isArchived
+            ? "Deal is teruggezet naar actieve deals."
+            : "Deal is klaar en staat nu in het archief."),
+      );
+    } finally {
+      setArchiveBusy(false);
+    }
   }
 
   async function handleSave() {
@@ -902,6 +945,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     : customerIntakeLabel === "Verlopen" || customerIntakeLabel === "Ingetrokken"
       ? "danger"
       : "warning";
+  const canArchiveDeal = Boolean(
+    user && (role === "admin" || dealOwnerId === user.id),
+  );
 
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;
@@ -922,7 +968,26 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           </div>
           <div className="brand-actions">
             <Link href="/deals" className="secondary-button"><ArrowLeft size={16} /> Terug naar deals</Link>
-            <StatusPill tone="success">Versie 8</StatusPill>
+            {canArchiveDeal ? (
+              <button
+                type="button"
+                className={archivedAt ? "secondary-button" : "primary-button"}
+                onClick={() => void handleArchiveToggle()}
+                disabled={archiveBusy}
+              >
+                {archivedAt ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                {archiveBusy
+                  ? archivedAt
+                    ? "Terugzetten..."
+                    : "Archiveren..."
+                  : archivedAt
+                    ? "Terugzetten naar actief"
+                    : "Klaar en archiveren"}
+              </button>
+            ) : null}
+            <StatusPill tone={archivedAt ? "neutral" : "success"}>
+              {archivedAt ? "Gearchiveerd" : "Versie 8"}
+            </StatusPill>
           </div>
         </header>
 

@@ -133,6 +133,7 @@ export async function ensureLocalSchema() {
           user_id uuid not null references public.profiles(id) on delete cascade,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now(),
+          archived_at timestamptz,
           customer_name text,
           quote_title text,
           contact_name text,
@@ -162,6 +163,7 @@ export async function ensureLocalSchema() {
         );
 
         alter table public.deals add column if not exists updated_at timestamptz not null default now();
+        alter table public.deals add column if not exists archived_at timestamptz;
         alter table public.deals add column if not exists customer_name text;
         alter table public.deals add column if not exists quote_title text;
         alter table public.deals add column if not exists contact_name text;
@@ -190,6 +192,7 @@ export async function ensureLocalSchema() {
         alter table public.deals add column if not exists calculator_inputs jsonb not null default '{}'::jsonb;
 
         create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
+        create index if not exists deals_archived_at_created_at_idx on public.deals(archived_at, created_at desc);
 
         create table if not exists public.customer_intakes (
           id uuid primary key default gen_random_uuid(),

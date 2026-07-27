@@ -34,6 +34,7 @@ const dealColumns = [
   "user_id",
   "created_at",
   "updated_at",
+  "archived_at",
   "customer_name",
   "quote_title",
   "contact_name",
@@ -167,6 +168,7 @@ async function ensureLocalSchema(client) {
       user_id uuid not null references public.profiles(id) on delete cascade,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
+      archived_at timestamptz,
       customer_name text,
       quote_title text,
       contact_name text,
@@ -195,7 +197,10 @@ async function ensureLocalSchema(client) {
       calculator_inputs jsonb not null default '{}'::jsonb
     );
 
+    alter table public.deals add column if not exists archived_at timestamptz;
+
     create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
+    create index if not exists deals_archived_at_created_at_idx on public.deals(archived_at, created_at desc);
 
     create table if not exists public.worldline_projects (
       id uuid primary key default gen_random_uuid(),
@@ -350,6 +355,7 @@ async function importDeals(client, sourceDeals, idMap) {
       user_id: idMap.get(deal.user_id) ?? deal.user_id ?? fallbackUserId,
       created_at: createdAt,
       updated_at: timestampValue(deal.updated_at, createdAt),
+      archived_at: deal.archived_at ? timestampValue(deal.archived_at) : null,
       modules: jsonValue(deal.modules, "[]"),
       calculator_inputs: jsonValue(deal.calculator_inputs, "{}"),
       discount_pct: deal.discount_pct ?? 0,

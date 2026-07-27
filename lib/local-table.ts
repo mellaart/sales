@@ -53,6 +53,7 @@ const TABLES = {
     "user_id",
     "created_at",
     "updated_at",
+    "archived_at",
     "customer_name",
     "quote_title",
     "contact_name",

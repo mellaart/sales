@@ -16,11 +16,15 @@ export type CustomerIntakeData = {
   postalNumber: string;
   postalPostcode: string;
   postalCity: string;
+  contactFirstName: string;
+  contactLastName: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
   invoiceDelivery: "" | "mail" | "post";
   administrationEmail: string;
+  administrationFirstName: string;
+  administrationLastName: string;
   administrationContact: string;
   administrationPhone: string;
   directDebit: "" | "yes" | "no";
@@ -56,11 +60,15 @@ export const EMPTY_CUSTOMER_INTAKE_DATA: CustomerIntakeData = {
   postalNumber: "",
   postalPostcode: "",
   postalCity: "",
+  contactFirstName: "",
+  contactLastName: "",
   contactName: "",
   contactPhone: "",
   contactEmail: "",
   invoiceDelivery: "",
   administrationEmail: "",
+  administrationFirstName: "",
+  administrationLastName: "",
   administrationContact: "",
   administrationPhone: "",
   directDebit: "",
@@ -83,11 +91,15 @@ const FIELD_LIMITS: Record<keyof CustomerIntakeData, number> = {
   postalNumber: 30,
   postalPostcode: 20,
   postalCity: 120,
+  contactFirstName: 100,
+  contactLastName: 180,
   contactName: 180,
   contactPhone: 80,
   contactEmail: 180,
   invoiceDelivery: 10,
   administrationEmail: 180,
+  administrationFirstName: 100,
+  administrationLastName: 180,
   administrationContact: 180,
   administrationPhone: 80,
   directDebit: 10,
@@ -96,6 +108,18 @@ const FIELD_LIMITS: Record<keyof CustomerIntakeData, number> = {
 
 function textValue(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+export function splitCustomerContactName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts.shift() ?? "",
+    lastName: parts.join(" "),
+  };
+}
+
+export function combineCustomerContactName(firstName: string, lastName: string) {
+  return [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
 }
 
 export function normalizeCustomerIntakeData(value: unknown): CustomerIntakeData {
@@ -107,6 +131,30 @@ export function normalizeCustomerIntakeData(value: unknown): CustomerIntakeData 
   for (const key of Object.keys(normalized) as Array<keyof CustomerIntakeData>) {
     normalized[key] = textValue(input[key], FIELD_LIMITS[key]) as never;
   }
+
+  if (!normalized.contactFirstName && !normalized.contactLastName && normalized.contactName) {
+    const contact = splitCustomerContactName(normalized.contactName);
+    normalized.contactFirstName = contact.firstName;
+    normalized.contactLastName = contact.lastName;
+  }
+  normalized.contactName = combineCustomerContactName(
+    normalized.contactFirstName,
+    normalized.contactLastName,
+  );
+
+  if (
+    !normalized.administrationFirstName &&
+    !normalized.administrationLastName &&
+    normalized.administrationContact
+  ) {
+    const administrationContact = splitCustomerContactName(normalized.administrationContact);
+    normalized.administrationFirstName = administrationContact.firstName;
+    normalized.administrationLastName = administrationContact.lastName;
+  }
+  normalized.administrationContact = combineCustomerContactName(
+    normalized.administrationFirstName,
+    normalized.administrationLastName,
+  );
 
   normalized.deliveryPostcode = normalized.deliveryPostcode.toUpperCase();
   normalized.postalPostcode = normalized.postalPostcode.toUpperCase();
@@ -142,12 +190,14 @@ export function validateCustomerIntakeData(data: CustomerIntakeData) {
     ["website", "Website"],
     ["vatNumber", "BTW-nummer"],
     ["chamberOfCommerceNumber", "KvK-nummer"],
-    ["contactName", "Naam contactpersoon"],
+    ["contactFirstName", "Voornaam contactpersoon"],
+    ["contactLastName", "Achternaam contactpersoon"],
     ["contactPhone", "Telefoonnummer contactpersoon"],
     ["contactEmail", "E-mail contactpersoon"],
     ["invoiceDelivery", "Factuur per"],
     ["administrationEmail", "E-mail administratie"],
-    ["administrationContact", "Contactpersoon administratie"],
+    ["administrationFirstName", "Voornaam contactpersoon administratie"],
+    ["administrationLastName", "Achternaam contactpersoon administratie"],
     ["administrationPhone", "Telefoon administratie"],
     ["directDebit", "Automatische incasso"],
   ];

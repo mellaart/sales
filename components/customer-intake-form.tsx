@@ -261,7 +261,8 @@ export default function CustomerIntakeForm({
               </div>
             </div>
             <div className={styles.fields}>
-              <CustomerTextField label="Naam" field="contactName" formData={formData} onChange={setField} autoComplete="name" />
+              <CustomerTextField label="Voornaam" field="contactFirstName" formData={formData} onChange={setField} autoComplete="given-name" />
+              <CustomerTextField label="Achternaam" field="contactLastName" formData={formData} onChange={setField} autoComplete="family-name" />
               <CustomerTextField label="Telefoonnummer" field="contactPhone" formData={formData} onChange={setField} type="tel" />
               <CustomerTextField label="E-mail" field="contactEmail" formData={formData} onChange={setField} type="email" />
             </div>
@@ -304,7 +305,8 @@ export default function CustomerIntakeForm({
 
               <div className={`${styles.fields} ${styles.administrationFields}`}>
                 <CustomerTextField label="E-mail" field="administrationEmail" formData={formData} onChange={setField} type="email" />
-                <CustomerTextField label="Contactpersoon" field="administrationContact" formData={formData} onChange={setField} />
+                <CustomerTextField label="Voornaam" field="administrationFirstName" formData={formData} onChange={setField} autoComplete="given-name" />
+                <CustomerTextField label="Achternaam" field="administrationLastName" formData={formData} onChange={setField} autoComplete="family-name" />
                 <CustomerTextField label="Telefoon" field="administrationPhone" formData={formData} onChange={setField} type="tel" />
               </div>
 

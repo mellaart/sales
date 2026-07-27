@@ -4,6 +4,7 @@ import { createId, query } from "@/lib/local-db";
 import {
   EMPTY_CUSTOMER_INTAKE_DATA,
   normalizeCustomerIntakeData,
+  splitCustomerContactName,
   type CustomerIntakeData,
   type CustomerIntakeStatus,
   type CustomerIntakeSummary,
@@ -178,10 +179,14 @@ export async function createOrRefreshCustomerIntake(
   const recipientEmail = typeof input.recipientEmail === "string"
     ? input.recipientEmail.trim().toLowerCase().slice(0, 180)
     : "";
+  const contactName = access.deal.contact_name?.trim() ?? "";
+  const contact = splitCustomerContactName(contactName);
   const initialFormData: CustomerIntakeData = {
     ...EMPTY_CUSTOMER_INTAKE_DATA,
     deliveryName: access.deal.customer_name?.trim() ?? "",
-    contactName: access.deal.contact_name?.trim() ?? "",
+    contactFirstName: contact.firstName,
+    contactLastName: contact.lastName,
+    contactName,
     contactEmail: recipientEmail,
   };
   const id = createId();

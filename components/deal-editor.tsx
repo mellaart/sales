@@ -26,6 +26,7 @@ import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { exportCustomerIntakePdf } from "@/lib/customer-intake-pdf";
 import {
   customerIntakeStatusLabel,
+  splitCustomerContactName,
   type CustomerIntakeSummary,
 } from "@/lib/customer-intake";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
@@ -747,7 +748,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       return;
     }
 
-    const greetingName = getGreetingName(customerIntake.formData.contactName || contactName);
+    const greetingName =
+      customerIntake.formData.contactFirstName ||
+      getGreetingName(customerIntake.formData.contactName || contactName);
     const greeting = greetingName ? `Beste ${greetingName},` : "Beste,";
     const subject = "SPF- en DKIM-aanpassingen";
     const body = [
@@ -796,6 +799,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
 
   async function handleCustomerIntakePdf() {
     setCustomerIntakeStatus("Klantgegevens-PDF wordt gemaakt...");
+    const fallbackContact = splitCustomerContactName(contactName);
 
     try {
       await exportCustomerIntakePdf({
@@ -816,11 +820,15 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           postalNumber: "",
           postalPostcode: "",
           postalCity: "",
+          contactFirstName: fallbackContact.firstName,
+          contactLastName: fallbackContact.lastName,
           contactName,
           contactPhone: "",
           contactEmail: customerIntakeEmail,
           invoiceDelivery: "",
           administrationEmail: "",
+          administrationFirstName: "",
+          administrationLastName: "",
           administrationContact: "",
           administrationPhone: "",
           directDebit: "",

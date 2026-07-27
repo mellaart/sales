@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import {
-  EMPTY_CUSTOMER_INTAKE_DATA,
+  normalizeCustomerIntakeData,
   type CustomerIntakeData,
 } from "@/lib/customer-intake";
 
@@ -61,7 +61,7 @@ function directDebitLabel(value: CustomerIntakeData["directDebit"]) {
 export async function exportCustomerIntakePdf(input: CustomerIntakePdfInput) {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const logo = await loadLogo();
-  const data = { ...EMPTY_CUSTOMER_INTAKE_DATA, ...(input.formData ?? {}) };
+  const data = normalizeCustomerIntakeData(input.formData);
   const left = 16;
   const right = 194;
   const contentWidth = right - left;
@@ -191,10 +191,11 @@ export async function exportCustomerIntakePdf(input: CustomerIntakePdfInput) {
   y += 2;
   addSection("Contactpersoon");
   addRow(
-    { label: "Naam", value: data.contactName },
-    { label: "Telefoonnummer", value: data.contactPhone },
+    { label: "Voornaam", value: data.contactFirstName },
+    { label: "Achternaam", value: data.contactLastName },
   );
   addRow(
+    { label: "Telefoonnummer", value: data.contactPhone },
     { label: "E-mail", value: data.contactEmail },
   );
 
@@ -207,10 +208,13 @@ export async function exportCustomerIntakePdf(input: CustomerIntakePdfInput) {
   });
   addRow(
     { label: "E-mail", value: data.administrationEmail },
-    { label: "Contactpersoon", value: data.administrationContact },
+    { label: "Telefoon", value: data.administrationPhone },
   );
   addRow(
-    { label: "Telefoon", value: data.administrationPhone },
+    { label: "Voornaam", value: data.administrationFirstName },
+    { label: "Achternaam", value: data.administrationLastName },
+  );
+  addFullRow(
     {
       label: "Automatische incasso ja / nee",
       value: directDebitLabel(data.directDebit),

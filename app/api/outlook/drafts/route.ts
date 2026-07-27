@@ -125,6 +125,16 @@ export async function POST(request: Request) {
     if (!verified.ok) {
       return NextResponse.json({ error: verified.message }, { status: 401 });
     }
+    const signature = {
+      fullName:
+        verified.profile.full_name?.trim() ||
+        verified.user.user_metadata.full_name?.trim() ||
+        "Smart Trade",
+      jobTitle: verified.profile.job_title?.trim() || "",
+      workdays: verified.profile.workdays?.trim() || "",
+      mobilePhone: verified.profile.mobile_phone?.trim() || "",
+      email: verified.profile.email?.trim() || verified.user.email?.trim() || "",
+    };
 
     if (request.headers.get("content-type")?.includes("application/json")) {
       const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
@@ -166,6 +176,7 @@ export async function POST(request: Request) {
         recipientEmail,
         subject,
         htmlBody,
+        signature,
       });
 
       return NextResponse.json(
@@ -198,6 +209,7 @@ export async function POST(request: Request) {
       recipientEmail,
       subject,
       htmlBody: quoteEmail({ contactName, customerName }),
+      signature,
       fileName: attachment.name.slice(0, 180) || "offerte-smart-trade.pdf",
       fileContent: Buffer.from(await attachment.arrayBuffer()),
     });

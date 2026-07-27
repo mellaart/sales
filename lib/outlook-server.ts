@@ -4,6 +4,8 @@ import {
   createHash,
   randomBytes,
 } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { query } from "@/lib/local-db";
 
 const OUTLOOK_SCOPE = [
@@ -31,6 +33,25 @@ type TokenResponse = {
   error?: string;
   error_description?: string;
 };
+
+type OutlookSignatureInput = {
+  fullName: string;
+  jobTitle: string;
+  workdays: string;
+  mobilePhone: string;
+  email: string;
+};
+
+type OutlookAttachment = {
+  fileName: string;
+  contentType: string;
+  fileContent: Buffer;
+  isInline?: boolean;
+  contentId?: string;
+};
+
+const SIGNATURE_DISCLAIMER =
+  "De inhoud van dit bericht is alleen bestemd voor de geadresseerde en kan vertrouwelijke of persoonlijke informatie bevatten. Als u dit bericht onbedoeld heeft ontvangen, verzoeken wij u het te vernietigen en de afzender te informeren. Het is niet toegestaan om een bericht dat niet voor u bestemd is te vermenigvuldigen dan wel te verspreiden. Aan dit bericht inclusief de bijlagen kunnen geen rechten ontleend worden, tenzij schriftelijk anders wordt overeengekomen. Troublefree B.V. aanvaardt geen enkele aansprakelijkheid voor schade en/of kosten die voortvloeien uit onvolledige en/of foutieve informatie in e-mailberichten.";
 
 export class OutlookReconnectRequiredError extends Error {
   constructor(message = "Outlook moet opnieuw worden verbonden.") {
@@ -105,6 +126,103 @@ function decryptRefreshToken(value: string) {
   } catch {
     throw new OutlookReconnectRequiredError("De Outlook-koppeling kon niet worden ontsleuteld.");
   }
+}
+
+function escapeHtml(value: string) {
+  return value.replace(
+    /[&<>"']/g,
+    (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[character] ?? character,
+  );
+}
+
+async function readSignatureAsset(fileName: string) {
+  try {
+    return await readFile(join(process.cwd(), "public", fileName));
+  } catch {
+    return null;
+  }
+}
+
+async function createOutlookSignature(input: OutlookSignatureInput) {
+  const [smartTradeLogo, troublefreeBadge] = await Promise.all([
+    readSignatureAsset("smart-trade-logo.png"),
+    readSignatureAsset("troublefree-software-badge.png"),
+  ]);
+  const fullName = escapeHtml(input.fullName || "Smart Trade");
+  const jobTitle = escapeHtml(input.jobTitle);
+  const workdays = escapeHtml(input.workdays);
+  const mobilePhone = escapeHtml(input.mobilePhone);
+  const mobileHref = escapeHtml(input.mobilePhone.replace(/[^\d+]/g, ""));
+  const email = escapeHtml(input.email);
+  const attachments: OutlookAttachment[] = [];
+
+  if (smartTradeLogo) {
+    attachments.push({
+      fileName: "smart-trade-logo.png",
+      contentType: "image/png",
+      fileContent: smartTradeLogo,
+      isInline: true,
+      contentId: "smart-trade-logo",
+    });
+  }
+  if (troublefreeBadge) {
+    attachments.push({
+      fileName: "troublefree-software-badge.png",
+      contentType: "image/png",
+      fileContent: troublefreeBadge,
+      isInline: true,
+      contentId: "troublefree-software-badge",
+    });
+  }
+
+  const contactRows = [
+    mobilePhone
+      ? `<tr><td style="padding:0 8px 2px 0;font-weight:700">M</td><td style="padding:0 0 2px"><a href="tel:${mobileHref}" style="color:#2679d6;text-decoration:underline">${mobilePhone}</a></td></tr>`
+      : "",
+    '<tr><td style="padding:0 8px 2px 0;font-weight:700">T</td><td style="padding:0 0 2px"><a href="tel:+31252250260" style="color:#2679d6;text-decoration:underline">+31 252 250 260</a></td></tr>',
+    email
+      ? `<tr><td style="padding:0 8px 2px 0;font-weight:700">E</td><td style="padding:0 0 2px"><a href="mailto:${email}" style="color:#1f2937;text-decoration:underline">${email}</a></td></tr>`
+      : "",
+    '<tr><td style="padding:0 8px 2px 0;font-weight:700">W</td><td style="padding:0 0 2px"><a href="https://www.smarttrade.nl" style="color:#1f2937;text-decoration:underline">www.smarttrade.nl</a></td></tr>',
+  ].filter(Boolean).join("");
+
+  const html = [
+    '<div style="margin-top:24pt;font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.35;color:#1f2937;mso-fareast-font-family:Calibri">',
+    '<p style="margin:0 0 18pt">Met vriendelijke groet,</p>',
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937">',
+    "<tr>",
+    '<td valign="top" style="padding:0 28px 0 0;border-right:1px solid #2679d6;min-width:340px">',
+    `<div style="margin:0;color:#2679d6;font-size:15pt;font-weight:700">${fullName}</div>`,
+    jobTitle ? `<div style="margin:2px 0 16px">${jobTitle}</div>` : "",
+    workdays
+      ? `<div style="margin:0 0 16px"><strong>Werkdagen</strong>&nbsp; | &nbsp;${workdays}</div>`
+      : "",
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937">${contactRows}</table>`,
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937">',
+    "<tr>",
+    troublefreeBadge
+      ? '<td valign="top" style="padding:0 18px 0 0"><img src="cid:troublefree-software-badge" width="78" height="87" alt="Onderdeel van Troublefree Software" style="display:block;border:0"></td>'
+      : "",
+    '<td valign="top" style="padding:0"><strong>Troublefree B.V.</strong><br>Pletterij 1A<br>2211 JT Noordwijkerhout<br>Nederland</td>',
+    "</tr>",
+    "</table>",
+    "</td>",
+    smartTradeLogo
+      ? '<td valign="middle" style="padding:12px 0 0 34px"><img src="cid:smart-trade-logo" width="220" alt="Smart Trade branchegerichte software" style="display:block;border:0;height:auto"></td>'
+      : "",
+    "</tr>",
+    "</table>",
+    `<p style="margin:22pt 0 0;max-width:760px;font-size:8pt;line-height:1.35;color:#1f2937">${escapeHtml(SIGNATURE_DISCLAIMER)}</p>`,
+    "</div>",
+  ].join("");
+
+  return { html, attachments };
 }
 
 function requestOrigin(request: Request) {
@@ -307,6 +425,7 @@ export async function createOutlookDraft(
     recipientEmail: string;
     subject: string;
     htmlBody: string;
+    signature?: OutlookSignatureInput;
     fileName?: string;
     fileContent?: Buffer;
   },
@@ -316,9 +435,13 @@ export async function createOutlookDraft(
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
   };
+  const signature = input.signature
+    ? await createOutlookSignature(input.signature)
+    : { html: "", attachments: [] as OutlookAttachment[] };
   const htmlBody = [
     '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.5;color:#1f2937;mso-fareast-font-family:Calibri">',
     input.htmlBody,
+    signature.html,
     "</div>",
   ].join("");
   const draftResponse = await fetch("https://graph.microsoft.com/v1.0/me/messages", {
@@ -354,45 +477,58 @@ export async function createOutlookDraft(
     throw new Error(draft.error?.message || "Outlook kon het concept niet aanmaken.");
   }
 
-  if (!input.fileName || !input.fileContent) {
+  const attachments = [...signature.attachments];
+  if (input.fileName && input.fileContent) {
+    attachments.unshift({
+      fileName: input.fileName,
+      contentType: "application/pdf",
+      fileContent: input.fileContent,
+    });
+  }
+
+  if (attachments.length === 0) {
     return draft.webLink;
   }
 
-  const attachmentResponse = await fetch(
-    `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draft.id)}/attachments`,
-    {
-      method: "POST",
-      headers: authorizationHeaders,
-      body: JSON.stringify({
-        "@odata.type": "#microsoft.graph.fileAttachment",
-        name: input.fileName,
-        contentType: "application/pdf",
-        contentBytes: input.fileContent.toString("base64"),
-      }),
-      cache: "no-store",
-    },
-  );
-  const attachmentPayload = await attachmentResponse.json().catch(() => ({})) as {
-    error?: { message?: string };
-  };
-
-  if (!attachmentResponse.ok) {
-    await fetch(
-      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draft.id)}`,
+  for (const attachment of attachments) {
+    const attachmentResponse = await fetch(
+      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draft.id)}/attachments`,
       {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${accessToken}` },
+        method: "POST",
+        headers: authorizationHeaders,
+        body: JSON.stringify({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: attachment.fileName,
+          contentType: attachment.contentType,
+          contentBytes: attachment.fileContent.toString("base64"),
+          isInline: attachment.isInline ?? false,
+          contentId: attachment.contentId,
+        }),
         cache: "no-store",
       },
-    ).catch(() => undefined);
-
-    if (attachmentResponse.status === 401) {
-      await query("delete from public.outlook_connections where user_id = $1", [userId]);
-      throw new OutlookReconnectRequiredError();
-    }
-    throw new Error(
-      attachmentPayload.error?.message || "De offerte kon niet aan het Outlook-concept worden toegevoegd.",
     );
+    const attachmentPayload = await attachmentResponse.json().catch(() => ({})) as {
+      error?: { message?: string };
+    };
+
+    if (!attachmentResponse.ok) {
+      await fetch(
+        `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draft.id)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
+        },
+      ).catch(() => undefined);
+
+      if (attachmentResponse.status === 401) {
+        await query("delete from public.outlook_connections where user_id = $1", [userId]);
+        throw new OutlookReconnectRequiredError();
+      }
+      throw new Error(
+        attachmentPayload.error?.message || "Een bijlage kon niet aan het Outlook-concept worden toegevoegd.",
+      );
+    }
   }
 
   return draft.webLink;

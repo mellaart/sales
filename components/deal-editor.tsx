@@ -159,6 +159,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
   const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
   const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
+  const [customerOutlookBusy, setCustomerOutlookBusy] = useState(false);
   const [quoteOutlookBusy, setQuoteOutlookBusy] = useState(false);
 
   const [customerName, setCustomerName] = useState("");
@@ -689,48 +690,117 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     targetWindow.location.href = intake.publicUrl;
   }
 
+  async function openOutlookTemplateDraft(
+    outlookWindow: Window | null,
+    payload: {
+      template: "customer-intake" | "dns-instructions";
+      recipientEmail: string;
+      customerName: string;
+      contactName: string;
+      publicUrl?: string;
+      domain?: string;
+    },
+    successMessage: string,
+  ) {
+    const returnTo = `/deals/${encodeURIComponent(dealId)}`;
+    setCustomerIntakeStatus("Outlook-verbinding wordt gecontroleerd...");
+
+    const statusResponse = await fetch(
+      `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+      { cache: "no-store" },
+    );
+    const statusJson = await statusResponse.json().catch(() => ({})) as {
+      connected?: boolean;
+      connectUrl?: string;
+      error?: string;
+    };
+    if (!statusResponse.ok) {
+      throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+    }
+    if (!statusJson.connected) {
+      outlookWindow?.close();
+      setCustomerIntakeStatus("Outlook wordt eenmalig verbonden...");
+      window.location.assign(
+        statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`,
+      );
+      return;
+    }
+
+    setCustomerIntakeStatus("Outlook-concept wordt gemaakt...");
+    const response = await fetch(
+      `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+    const json = await response.json().catch(() => ({})) as {
+      webLink?: string;
+      reconnectRequired?: boolean;
+      connectUrl?: string;
+      error?: string;
+    };
+
+    if (json.reconnectRequired && json.connectUrl) {
+      outlookWindow?.close();
+      setCustomerIntakeStatus("Outlook moet opnieuw worden verbonden...");
+      window.location.assign(json.connectUrl);
+      return;
+    }
+    if (!response.ok || !json.webLink) {
+      throw new Error(json.error || "Outlook-concept maken mislukt.");
+    }
+
+    if (outlookWindow) {
+      outlookWindow.location.href = json.webLink;
+    } else {
+      window.location.assign(json.webLink);
+    }
+    setCustomerIntakeStatus(successMessage);
+  }
+
   async function handleOutlookDraft() {
     const recipientEmail = customerIntakeEmail.trim().toLowerCase();
     if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
       setCustomerIntakeStatus("Vul eerst een geldig e-mailadres van de klant in.");
       return;
     }
+    if (customerOutlookBusy) return;
 
     const outlookWindow = window.open("about:blank", "_blank");
     if (outlookWindow) outlookWindow.opener = null;
+    setCustomerOutlookBusy(true);
 
-    const intake = await getUsableCustomerIntake();
-    if (!intake) {
+    try {
+      const intake = await getUsableCustomerIntake();
+      if (!intake) {
+        outlookWindow?.close();
+        return;
+      }
+
+      await openOutlookTemplateDraft(
+        outlookWindow,
+        {
+          template: "customer-intake",
+          recipientEmail,
+          customerName,
+          contactName,
+          publicUrl: intake.publicUrl,
+        },
+        "Outlook-concept met klantlink is aangemaakt.",
+      );
+    } catch (error) {
       outlookWindow?.close();
-      return;
+      setCustomerIntakeStatus(
+        error instanceof Error ? error.message : "Outlook-concept maken mislukt.",
+      );
+    } finally {
+      setCustomerOutlookBusy(false);
     }
-
-    const greeting = contactName.trim() ? `Beste ${contactName.trim()},` : "Beste,";
-    const subject = `Klantgegevens Smart Trade - ${customerName || "nieuwe klant"}`;
-    const body = [
-      greeting,
-      "",
-      "Wilt u via onderstaande beveiligde link de gegevens voor de inrichting van Smart Trade invullen?",
-      "",
-      intake.publicUrl,
-      "",
-      "Na het opslaan ontvangen wij de gegevens automatisch.",
-    ].join("\n");
-    const outlookUrl =
-      "https://outlook.office.com/mail/deeplink/compose" +
-      `?to=${encodeURIComponent(recipientEmail)}` +
-      `&subject=${encodeURIComponent(subject)}` +
-      `&body=${encodeURIComponent(body)}`;
-
-    if (!outlookWindow) {
-      setCustomerIntakeStatus("De browser blokkeerde Outlook. Sta pop-ups toe en probeer opnieuw.");
-      return;
-    }
-    outlookWindow.location.href = outlookUrl;
-    setCustomerIntakeStatus("Outlook-concept is geopend.");
   }
 
-  function handleDnsOutlookDraft() {
+  async function handleDnsOutlookDraft() {
     if (!customerIntake?.submittedAt) {
       setCustomerIntakeStatus("De klantgegevens moeten eerst ontvangen zijn.");
       return;
@@ -747,54 +817,35 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setCustomerIntakeStatus("In het klantgegevensformulier ontbreekt een geldige website.");
       return;
     }
+    if (customerOutlookBusy) return;
 
     const greetingName =
       customerIntake.formData.contactFirstName ||
       getGreetingName(customerIntake.formData.contactName || contactName);
-    const greeting = greetingName ? `Beste ${greetingName},` : "Beste,";
-    const subject = "SPF- en DKIM-aanpassingen";
-    const body = [
-      greeting,
-      "",
-      `Wij gebruiken Smart Trade om e-mail te versturen namens het domein ${domain}. Om te voorkomen dat berichten als ongewenst gemarkeerd worden, moeten er een paar DNS-aanpassingen worden gedaan. Hieronder vind je alle benodigde gegevens.`,
-      "",
-      `Benodigde aanpassingen voor ${domain}:`,
-      "",
-      "SPF-record",
-      "Voeg de volgende regels toe aan het bestaande SPF-record:",
-      "include:_spf.smartsoft.nu",
-      "include:_spf.troublefreehosting.nl",
-      "",
-      "DKIM-record 1",
-      "Naam: smtp01-smartsoft._domainkey",
-      "Type: CNAME",
-      "Waarde: smtp01._domainkey.smartsoft.nu",
-      "",
-      "DKIM-record 2",
-      "Naam: smtp02-tfh._domainkey",
-      "Type: CNAME",
-      "Waarde: smtp02-tfh._domainkey.troublefreehosting.nl",
-      "",
-      "Let op:",
-      "Sommige DNS-beheerders vereisen een punt aan het eind van de waardes.",
-      "Controleer het SPF-record via Kitterman's SPF Checker:",
-      "https://www.kitterman.com/spf/validate.html",
-      "",
-      "Na het doorvoeren van de wijzigingen kun je een e-mail sturen naar support@troublefree.nl of naar mij om het te laten valideren.",
-    ].join("\n");
-    const outlookUrl =
-      "https://outlook.office.com/mail/deeplink/compose" +
-      `?to=${encodeURIComponent(recipientEmail)}` +
-      `&subject=${encodeURIComponent(subject)}` +
-      `&body=${encodeURIComponent(body)}`;
-    const outlookWindow = window.open(outlookUrl, "_blank");
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    setCustomerOutlookBusy(true);
 
-    if (!outlookWindow) {
-      setCustomerIntakeStatus("De browser blokkeerde Outlook. Sta pop-ups toe en probeer opnieuw.");
-      return;
+    try {
+      await openOutlookTemplateDraft(
+        outlookWindow,
+        {
+          template: "dns-instructions",
+          recipientEmail,
+          customerName,
+          contactName: greetingName,
+          domain,
+        },
+        `DNS-concept voor ${domain} is aangemaakt.`,
+      );
+    } catch (error) {
+      outlookWindow?.close();
+      setCustomerIntakeStatus(
+        error instanceof Error ? error.message : "DNS-concept maken mislukt.",
+      );
+    } finally {
+      setCustomerOutlookBusy(false);
     }
-    outlookWindow.opener = null;
-    setCustomerIntakeStatus(`DNS-concept voor ${domain} is geopend in Outlook.`);
   }
 
   async function handleCustomerIntakePdf() {
@@ -1380,10 +1431,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={customerIntakeBusy}
+                  disabled={customerIntakeBusy || customerOutlookBusy}
                   onClick={() => void handleOutlookDraft()}
                 >
-                  <Mail size={16} /> Klaarzetten in Outlook
+                  <Mail size={16} />
+                  {customerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
                 </button>
                 <button
                   type="button"
@@ -1398,10 +1450,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <button
                     type="button"
                     className="primary-button"
-                    disabled={customerIntakeBusy}
-                    onClick={handleDnsOutlookDraft}
+                    disabled={customerIntakeBusy || customerOutlookBusy}
+                    onClick={() => void handleDnsOutlookDraft()}
                   >
-                    <Mail size={16} /> DNS-instructies in Outlook
+                    <Mail size={16} />
+                    {customerOutlookBusy ? "Concept maken..." : "DNS-instructies in Outlook"}
                   </button>
                 ) : null}
                 {customerIntake ? (

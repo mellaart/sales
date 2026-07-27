@@ -307,8 +307,8 @@ export async function createOutlookDraft(
     recipientEmail: string;
     subject: string;
     htmlBody: string;
-    fileName: string;
-    fileContent: Buffer;
+    fileName?: string;
+    fileContent?: Buffer;
   },
 ) {
   const accessToken = await getOutlookAccessToken(request, userId);
@@ -316,6 +316,11 @@ export async function createOutlookDraft(
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
   };
+  const htmlBody = [
+    '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.5;color:#1f2937;mso-fareast-font-family:Calibri">',
+    input.htmlBody,
+    "</div>",
+  ].join("");
   const draftResponse = await fetch("https://graph.microsoft.com/v1.0/me/messages", {
     method: "POST",
     headers: authorizationHeaders,
@@ -323,7 +328,7 @@ export async function createOutlookDraft(
       subject: input.subject,
       body: {
         contentType: "HTML",
-        content: input.htmlBody,
+        content: htmlBody,
       },
       toRecipients: [
         {
@@ -347,6 +352,10 @@ export async function createOutlookDraft(
   }
   if (!draftResponse.ok || !draft.id || !draft.webLink) {
     throw new Error(draft.error?.message || "Outlook kon het concept niet aanmaken.");
+  }
+
+  if (!input.fileName || !input.fileContent) {
+    return draft.webLink;
   }
 
   const attachmentResponse = await fetch(

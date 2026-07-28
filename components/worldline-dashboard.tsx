@@ -781,10 +781,15 @@ function getAgreementPdfValue(fields: WorldlineAgreementFields, definition: Worl
   if (definition.key === "actSector" && !value) {
     return getWorldlineMccRecord(fields.mcc)?.actSector ?? "";
   }
-  if (definition.type === "checkbox") return value === "ja" ? "Ja" : "Nee";
+  if (definition.type === "checkbox") return isYesValue(value) ? "Ja" : "Nee";
   if (value === "ja") return "Ja";
   if (value === "nee") return "Nee";
   return value;
+}
+
+function isYesValue(value: unknown) {
+  if (typeof value !== "string") return false;
+  return ["ja", "yes", "true", "1"].includes(value.trim().toLowerCase());
 }
 
 function getAgreementRadioValue(definition: WorldlineAgreementFieldDefinition, value: string) {
@@ -1020,17 +1025,20 @@ async function downloadRefundAddendum(
   relation: RelationOption,
   fields: WorldlineAgreementFields,
 ) {
-  const response = await fetch("/api/worldline/refund/fill", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      companyName: (fields.companyName || relation.name).trim(),
-      businessAddress: fields.businessAddress,
-      businessPostcode: fields.businessPostcode,
-      businessCity: fields.businessCity,
-      vatNumber: fields.vatNumber,
+  const response = await withWorldlineTimeout(
+    fetch("/api/worldline/refund/fill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyName: (fields.companyName || relation.name).trim(),
+        businessAddress: fields.businessAddress,
+        businessPostcode: fields.businessPostcode,
+        businessCity: fields.businessCity,
+        vatNumber: fields.vatNumber,
+      }),
     }),
-  });
+    "Refundformulier voorbereiden",
+  );
 
   if (!response.ok) {
     const result = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -1053,7 +1061,7 @@ function renderAgreementFieldControl(
       <label className="worldline-checkbox-control">
         <input
           type="checkbox"
-          checked={value === "ja"}
+          checked={isYesValue(value)}
           disabled={disabled}
           onChange={(event) => {
             const nextValue = event.target.checked ? "ja" : "nee";
@@ -1148,7 +1156,7 @@ export default function WorldlineDashboard() {
       ]),
     ) as Record<WorldlineDocumentType, WorldlineDocument[]>;
   }, [documents, latestKvkDocuments]);
-  const refundEnabled = agreementFields.refund === "ja";
+  const refundEnabled = isYesValue(agreementFields.refund);
 
   const canAccessWorldline = canAccessTab(role, "worldline", roleTabAccess);
   const canWriteWorldline = canWriteTab(role, "worldline", roleTabAccess);
@@ -2277,14 +2285,22 @@ export default function WorldlineDashboard() {
   async function handleDownloadRefundAddendum() {
     if (!selectedRelation || !activeProject) return;
 
-    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
-    setStatus("Refundformulier wordt ingevuld...");
+    if (!isYesValue(agreementFieldsRef.current.refund)) {
+      setStatus("Selecteer eerst Refund bij Betaalkaarten en tarieven en sla het formulier op.");
+      return;
+    }
 
+    setBusy(true);
+    setStatus("Refundgegevens worden opgeslagen...");
     try {
+      await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
+      setStatus("Refundformulier wordt ingevuld...");
       await downloadRefundAddendum(selectedRelation, agreementFieldsRef.current);
       setStatus("Ingevuld refundformulier gedownload.");
     } catch (error) {
       setStatus(`Refundformulier downloaden mislukt: ${getErrorMessage(error, "document kon niet worden ingevuld.")}`);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -2641,8 +2657,8 @@ export default function WorldlineDashboard() {
                     type="button"
                     className="secondary-button"
                     onClick={() => void handleDownloadRefundAddendum()}
-                    disabled={busy || savingAgreementFields || !refundEnabled}
-                    title={refundEnabled ? "Ingevuld refundformulier downloaden" : "Zet Refund eerst op Ja"}
+                    disabled={busy || savingAgreementFields}
+                    title={refundEnabled ? "Ingevuld refundformulier downloaden" : "Selecteer eerst Refund bij Betaalkaarten en tarieven"}
                   >
                     <FileText size={16} />
                     Refund

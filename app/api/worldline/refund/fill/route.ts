@@ -1,5 +1,6 @@
-import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
 import { WORLDLINE_REFUND_TEMPLATE_PATH } from "@/lib/worldline";
@@ -15,54 +16,54 @@ type RefundFormBody = {
   vatNumber?: unknown;
 };
 
+const REFUND_TEMPLATE_MARKERS = {
+  companyName: "{{companyName}}",
+  businessAddress: "{{businessAddress}}",
+  postcodeCity: "{{postcodeCity}}",
+  vatNumber: "{{vatNumber}}",
+} as const;
+
 function textValue(value: unknown, maxLength = 200) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
-function runRefundFiller(templatePath: string, values: Record<string, string>) {
-  return new Promise<Buffer>((resolve, reject) => {
-    const pythonBin = process.env.WORLDLINE_PYTHON_BIN?.trim() || "python3";
-    const scriptPath = path.join(process.cwd(), "scripts", "fill-worldline-refund.py");
-    const child = spawn(pythonBin, [scriptPath, templatePath], {
-      cwd: process.cwd(),
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let settled = false;
+function escapeXmlText(value: string) {
+  return value.replace(
+    /[&<>"']/g,
+    (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&apos;",
+    })[character] ?? character,
+  );
+}
 
-    const timeout = setTimeout(() => {
-      child.kill();
-      if (!settled) {
-        settled = true;
-        reject(new Error("Refundformulier invullen duurde te lang."));
-      }
-    }, 15000);
+async function fillRefundTemplate(
+  templatePath: string,
+  values: Record<keyof typeof REFUND_TEMPLATE_MARKERS, string>,
+) {
+  const template = await readFile(templatePath);
+  const archive = unzipSync(template);
+  const documentPart = archive["word/document.xml"];
 
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      if (!settled) {
-        settled = true;
-        reject(error);
-      }
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      if (settled) return;
-      settled = true;
+  if (!documentPart) {
+    throw new Error("Refund-template bevat geen Word-document.");
+  }
 
-      if (code !== 0) {
-        reject(new Error(Buffer.concat(stderr).toString("utf8").trim() || "Refundformulier invullen mislukt."));
-        return;
-      }
+  let documentXml = strFromU8(documentPart);
+  for (const [key, marker] of Object.entries(REFUND_TEMPLATE_MARKERS) as Array<
+    [keyof typeof REFUND_TEMPLATE_MARKERS, string]
+  >) {
+    if (!documentXml.includes(marker)) {
+      throw new Error(`Refund-template mist veld ${key}.`);
+    }
+    documentXml = documentXml.replaceAll(marker, escapeXmlText(values[key]));
+  }
 
-      resolve(Buffer.concat(stdout));
-    });
-
-    child.stdin.end(JSON.stringify(values));
-  });
+  archive["word/document.xml"] = strToU8(documentXml);
+  return Buffer.from(zipSync(archive, { level: 6 }));
 }
 
 export async function POST(request: Request) {
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
     }
 
     const templatePath = path.join(process.cwd(), "public", WORLDLINE_REFUND_TEMPLATE_PATH.replace(/^\//, ""));
-    const result = await runRefundFiller(templatePath, {
+    const result = await fillRefundTemplate(templatePath, {
       companyName,
       businessAddress,
       postcodeCity: `${businessPostcode} ${businessCity}`,

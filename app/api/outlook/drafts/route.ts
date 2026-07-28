@@ -9,7 +9,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MAX_PDF_SIZE = 2_800_000;
+const MAX_PDF_SIZE = 25 * 1024 * 1024;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type OutlookDraftTemplate = "customer-intake" | "dns-instructions";
@@ -199,7 +199,7 @@ export async function POST(request: Request) {
     }
     if (attachment.size <= 0 || attachment.size > MAX_PDF_SIZE) {
       return NextResponse.json(
-        { error: "De offerte-PDF is te groot om direct aan een Outlook-concept toe te voegen." },
+        { error: "De offerte-PDF mag maximaal 25 MB groot zijn." },
         { status: 400 },
       );
     }

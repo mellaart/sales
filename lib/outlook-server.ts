@@ -16,6 +16,8 @@ const OUTLOOK_SCOPE = [
   "https://graph.microsoft.com/Mail.ReadWrite",
 ].join(" ");
 const TOKEN_PREFIX = "v1";
+const SIMPLE_ATTACHMENT_MAX_SIZE = 3 * 1024 * 1024;
+const LARGE_ATTACHMENT_CHUNK_SIZE = 10 * 320 * 1024;
 
 type OutlookConnectionRow = {
   refresh_token_encrypted: string;
@@ -48,6 +50,10 @@ type OutlookAttachment = {
   fileContent: Buffer;
   isInline?: boolean;
   contentId?: string;
+};
+
+type MicrosoftErrorPayload = {
+  error?: { message?: string };
 };
 
 const SIGNATURE_DISCLAIMER =
@@ -418,6 +424,125 @@ async function getOutlookAccessToken(request: Request, userId: string) {
   }
 }
 
+async function deleteOutlookDraft(accessToken: string, draftId: string) {
+  await fetch(
+    `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draftId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    },
+  ).catch(() => undefined);
+}
+
+async function addSmallOutlookAttachment(
+  accessToken: string,
+  draftId: string,
+  attachment: OutlookAttachment,
+) {
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draftId)}/attachments`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: attachment.fileName,
+        contentType: attachment.contentType,
+        contentBytes: attachment.fileContent.toString("base64"),
+        isInline: attachment.isInline ?? false,
+        contentId: attachment.contentId,
+      }),
+      cache: "no-store",
+    },
+  );
+  const payload = await response.json().catch(() => ({})) as MicrosoftErrorPayload;
+
+  if (response.status === 401) {
+    throw new OutlookReconnectRequiredError();
+  }
+  if (!response.ok) {
+    throw new Error(
+      payload.error?.message || "Een bijlage kon niet aan het Outlook-concept worden toegevoegd.",
+    );
+  }
+}
+
+async function addLargeOutlookAttachment(
+  accessToken: string,
+  draftId: string,
+  attachment: OutlookAttachment,
+) {
+  const sessionResponse = await fetch(
+    `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draftId)}/attachments/createUploadSession`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        AttachmentItem: {
+          attachmentType: "file",
+          name: attachment.fileName,
+          size: attachment.fileContent.length,
+          contentType: attachment.contentType,
+          isInline: attachment.isInline ?? false,
+          contentId: attachment.contentId,
+        },
+      }),
+      cache: "no-store",
+    },
+  );
+  const session = await sessionResponse.json().catch(() => ({})) as {
+    uploadUrl?: string;
+    error?: { message?: string };
+  };
+
+  if (sessionResponse.status === 401) {
+    throw new OutlookReconnectRequiredError();
+  }
+  if (!sessionResponse.ok || !session.uploadUrl) {
+    throw new Error(
+      session.error?.message || "Outlook kon de upload voor de grote bijlage niet starten.",
+    );
+  }
+
+  for (
+    let start = 0;
+    start < attachment.fileContent.length;
+    start += LARGE_ATTACHMENT_CHUNK_SIZE
+  ) {
+    const endExclusive = Math.min(
+      start + LARGE_ATTACHMENT_CHUNK_SIZE,
+      attachment.fileContent.length,
+    );
+    const chunk = attachment.fileContent.subarray(start, endExclusive);
+    const uploadBody = new ArrayBuffer(chunk.length);
+    new Uint8Array(uploadBody).set(chunk);
+    const uploadResponse = await fetch(session.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Length": String(chunk.length),
+        "Content-Range": `bytes ${start}-${endExclusive - 1}/${attachment.fileContent.length}`,
+        "Content-Type": "application/octet-stream",
+      },
+      body: uploadBody,
+      cache: "no-store",
+    });
+
+    if (!uploadResponse.ok) {
+      const payload = await uploadResponse.json().catch(() => ({})) as MicrosoftErrorPayload;
+      throw new Error(
+        payload.error?.message || "Een deel van de grote Outlook-bijlage kon niet worden geüpload.",
+      );
+    }
+  }
+}
+
 export async function createOutlookDraft(
   request: Request,
   userId: string,
@@ -491,43 +616,19 @@ export async function createOutlookDraft(
   }
 
   for (const attachment of attachments) {
-    const attachmentResponse = await fetch(
-      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draft.id)}/attachments`,
-      {
-        method: "POST",
-        headers: authorizationHeaders,
-        body: JSON.stringify({
-          "@odata.type": "#microsoft.graph.fileAttachment",
-          name: attachment.fileName,
-          contentType: attachment.contentType,
-          contentBytes: attachment.fileContent.toString("base64"),
-          isInline: attachment.isInline ?? false,
-          contentId: attachment.contentId,
-        }),
-        cache: "no-store",
-      },
-    );
-    const attachmentPayload = await attachmentResponse.json().catch(() => ({})) as {
-      error?: { message?: string };
-    };
-
-    if (!attachmentResponse.ok) {
-      await fetch(
-        `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draft.id)}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${accessToken}` },
-          cache: "no-store",
-        },
-      ).catch(() => undefined);
-
-      if (attachmentResponse.status === 401) {
-        await query("delete from public.outlook_connections where user_id = $1", [userId]);
-        throw new OutlookReconnectRequiredError();
+    try {
+      if (attachment.fileContent.length < SIMPLE_ATTACHMENT_MAX_SIZE) {
+        await addSmallOutlookAttachment(accessToken, draft.id, attachment);
+      } else {
+        await addLargeOutlookAttachment(accessToken, draft.id, attachment);
       }
-      throw new Error(
-        attachmentPayload.error?.message || "Een bijlage kon niet aan het Outlook-concept worden toegevoegd.",
-      );
+    } catch (error) {
+      await deleteOutlookDraft(accessToken, draft.id);
+
+      if (error instanceof OutlookReconnectRequiredError) {
+        await query("delete from public.outlook_connections where user_id = $1", [userId]);
+      }
+      throw error;
     }
   }
 

@@ -251,8 +251,11 @@ export async function ensureLocalSchema() {
           agreement_fields jsonb not null default '{}'::jsonb,
           created_by uuid not null references public.profiles(id) on delete cascade,
           created_at timestamptz not null default now(),
-          updated_at timestamptz not null default now()
+          updated_at timestamptz not null default now(),
+          archived_at timestamptz
         );
+
+        alter table public.worldline_projects add column if not exists archived_at timestamptz;
 
         create table if not exists public.worldline_documents (
           id uuid primary key default gen_random_uuid(),
@@ -283,6 +286,8 @@ export async function ensureLocalSchema() {
           on public.worldline_projects(relation_id, updated_at desc);
         create index if not exists worldline_projects_created_by_idx
           on public.worldline_projects(created_by, updated_at desc);
+        create index if not exists worldline_projects_archived_at_updated_at_idx
+          on public.worldline_projects(archived_at, updated_at desc);
         create index if not exists worldline_documents_project_idx
           on public.worldline_documents(project_id, document_type, version desc);
 

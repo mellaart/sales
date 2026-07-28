@@ -92,6 +92,7 @@ const TABLES = {
     "created_by",
     "created_at",
     "updated_at",
+    "archived_at",
   ]),
   worldline_documents: new Set([
     "id",

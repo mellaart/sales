@@ -136,9 +136,12 @@ create table if not exists public.worldline_projects (
   created_by uuid not null default auth.uid() references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  archived_at timestamptz,
   constraint worldline_projects_status_check
     check (status in ('concept', 'waiting_customer', 'checking', 'complete', 'submitted'))
 );
+
+alter table public.worldline_projects add column if not exists archived_at timestamptz;
 
 create table if not exists public.worldline_documents (
   id uuid primary key default gen_random_uuid(),
@@ -172,6 +175,7 @@ alter table public.worldline_documents enable row level security;
 
 create index if not exists worldline_projects_relation_idx on public.worldline_projects(relation_id, updated_at desc);
 create index if not exists worldline_projects_created_by_idx on public.worldline_projects(created_by, updated_at desc);
+create index if not exists worldline_projects_archived_at_updated_at_idx on public.worldline_projects(archived_at, updated_at desc);
 create index if not exists worldline_documents_project_idx on public.worldline_documents(project_id, document_type, version desc);
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

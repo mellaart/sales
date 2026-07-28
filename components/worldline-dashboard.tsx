@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { AlertTriangle, Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Mail, RefreshCw, Search, Send, Trash2, UploadCloud, UsersRound } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Inbox, Mail, RefreshCw, Search, Send, Trash2, UploadCloud, UsersRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
 import {
@@ -59,6 +59,8 @@ type QueuedAgreementSave = {
   options: AgreementSaveOptions;
 };
 
+type WorldlineArchiveView = "active" | "archived";
+
 type SignedUploadResponse = {
   upload?: {
     storagePath: string;
@@ -74,7 +76,6 @@ type SignedUploadResponse = {
 
 const WORLDLINE_REQUEST_TIMEOUT_MS = 30000;
 const AGREEMENT_AUTOSAVE_DELAY_MS = 500;
-const ONGOING_WORLDLINE_STATUSES: WorldlineProjectStatus[] = ["concept", "waiting_customer", "checking"];
 const WORLDLINE_KVK_ANALYSIS_VERSION = 7;
 const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 8;
 const WORLDLINE_REFUND_ANALYSIS_VERSION = 2;
@@ -515,10 +516,6 @@ function getProjectTone(status: WorldlineProjectStatus): "success" | "warning" |
   if (status === "complete" || status === "submitted") return "success";
   if (status === "checking") return "warning";
   return "warning";
-}
-
-function isOngoingWorldlineProject(project: WorldlineProject) {
-  return ONGOING_WORLDLINE_STATUSES.includes(project.status);
 }
 
 function getRelationFromProject(project: WorldlineProject): RelationOption {
@@ -1123,7 +1120,8 @@ export default function WorldlineDashboard() {
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
-  const [ongoingProjects, setOngoingProjects] = useState<WorldlineProject[]>([]);
+  const [overviewProjects, setOverviewProjects] = useState<WorldlineProject[]>([]);
+  const [archiveView, setArchiveView] = useState<WorldlineArchiveView>("active");
   const [projects, setProjects] = useState<WorldlineProject[]>([]);
   const [activeProject, setActiveProject] = useState<WorldlineProject | null>(null);
   const [documents, setDocuments] = useState<WorldlineDocument[]>([]);
@@ -1141,7 +1139,7 @@ export default function WorldlineDashboard() {
   const autoCheckedRefundDocumentIds = useRef<Set<string>>(new Set());
   const checkDocumentRef = useRef<(document: WorldlineDocument) => Promise<void>>(async () => undefined);
   const [searching, setSearching] = useState(false);
-  const [loadingOngoingProjects, setLoadingOngoingProjects] = useState(false);
+  const [loadingProjectOverview, setLoadingProjectOverview] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [savingAgreementFields, setSavingAgreementFields] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1161,7 +1159,17 @@ export default function WorldlineDashboard() {
   const canAccessWorldline = canAccessTab(role, "worldline", roleTabAccess);
   const canWriteWorldline = canWriteTab(role, "worldline", roleTabAccess);
   const canViewAllWorldlineProjects = role === "admin" || role === "manager" || role === "worldline";
-  const projectOverviewLabel = canViewAllWorldlineProjects ? "Alle projecten" : "Lopende projecten";
+  const activeOverviewProjects = useMemo(
+    () => overviewProjects.filter((project) => !project.archived_at),
+    [overviewProjects],
+  );
+  const archivedOverviewProjects = useMemo(
+    () => overviewProjects
+      .filter((project) => Boolean(project.archived_at))
+      .sort((a, b) => String(b.archived_at ?? "").localeCompare(String(a.archived_at ?? ""))),
+    [overviewProjects],
+  );
+  const visibleOverviewProjects = archiveView === "archived" ? archivedOverviewProjects : activeOverviewProjects;
 
   useEffect(() => {
     activeProjectRef.current = activeProject;
@@ -1217,45 +1225,36 @@ export default function WorldlineDashboard() {
     setAgreementFields(nextFields);
   }, [activeProject]);
 
-  const loadOngoingProjects = useCallback(async () => {
+  const loadProjectOverview = useCallback(async () => {
     if (!supabase) return;
 
-    setLoadingOngoingProjects(true);
+    setLoadingProjectOverview(true);
 
-    let query = supabase
+    const { data, error } = await supabase
       .from("worldline_projects")
       .select("*")
       .order("updated_at", { ascending: false })
       .limit(canViewAllWorldlineProjects ? 250 : 100);
 
-    if (!canViewAllWorldlineProjects) {
-      query = query.in("status", ONGOING_WORLDLINE_STATUSES);
-    }
-
-    const { data, error } = await query;
-
     if (error) {
-      setStatus(`${projectOverviewLabel} laden mislukt: ${error.message}`);
-      setOngoingProjects([]);
-      setLoadingOngoingProjects(false);
+      setStatus(`Worldline-projecten laden mislukt: ${error.message}`);
+      setOverviewProjects([]);
+      setLoadingProjectOverview(false);
       return;
     }
 
-    setOngoingProjects((data ?? []) as WorldlineProject[]);
-    setLoadingOngoingProjects(false);
-  }, [canViewAllWorldlineProjects, projectOverviewLabel, supabase]);
+    setOverviewProjects((data ?? []) as WorldlineProject[]);
+    setLoadingProjectOverview(false);
+  }, [canViewAllWorldlineProjects, supabase]);
 
   useEffect(() => {
     if (!supabase || roleAccessLoading || !canAccessWorldline) return;
-    void loadOngoingProjects();
-  }, [canAccessWorldline, loadOngoingProjects, roleAccessLoading, supabase]);
+    void loadProjectOverview();
+  }, [canAccessWorldline, loadProjectOverview, roleAccessLoading, supabase]);
 
-  function syncOngoingProject(project: WorldlineProject) {
-    setOngoingProjects((currentProjects) => {
+  function syncProjectOverview(project: WorldlineProject) {
+    setOverviewProjects((currentProjects) => {
       const remainingProjects = currentProjects.filter((item) => item.id !== project.id);
-      if (!isOngoingWorldlineProject(project)) {
-        return remainingProjects;
-      }
       return [project, ...remainingProjects].sort((a, b) => String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")));
     });
   }
@@ -1403,7 +1402,7 @@ export default function WorldlineDashboard() {
     }
 
     const nextProjects = projects.filter((item) => item.id !== project.id);
-    setOngoingProjects((currentProjects) => currentProjects.filter((item) => item.id !== project.id));
+    setOverviewProjects((currentProjects) => currentProjects.filter((item) => item.id !== project.id));
     setProjects(nextProjects);
     if (activeProject?.id === project.id) {
       setActiveProject(nextProjects[0] ?? null);
@@ -1461,7 +1460,7 @@ export default function WorldlineDashboard() {
       const nextProject = json.project;
       setProjects((currentProjects) => [nextProject, ...currentProjects]);
       setActiveProject(nextProject);
-      syncOngoingProject(nextProject);
+      syncProjectOverview(nextProject);
       setStatus("Worldline-project aangemaakt.");
     } catch (error) {
       setStatus(`Project aanmaken mislukt: ${getErrorMessage(error, "Supabase gaf geen antwoord.")}`);
@@ -1543,7 +1542,7 @@ export default function WorldlineDashboard() {
             activeProjectRef.current = nextProject;
             setActiveProject(nextProject);
           }
-          syncOngoingProject(nextProject);
+          syncProjectOverview(nextProject);
           if (queuedSave.options.savedMessage && !pendingAgreementSaveRef.current) {
             setStatus(queuedSave.options.savedMessage);
           }
@@ -1620,8 +1619,64 @@ export default function WorldlineDashboard() {
     const nextProject = data as WorldlineProject;
     setActiveProject(nextProject);
     setProjects((currentProjects) => currentProjects.map((project) => project.id === nextProject.id ? nextProject : project));
-    syncOngoingProject(nextProject);
+    syncProjectOverview(nextProject);
     setStatus(successMessage);
+    setBusy(false);
+  }
+
+  async function updateProjectArchive(project: WorldlineProject, shouldArchive: boolean) {
+    if (!supabase) return;
+    if (!canWriteWorldline) {
+      setStatus("Je hebt alleen leesrechten voor Worldline.");
+      return;
+    }
+
+    if (shouldArchive) {
+      const confirmed = window.confirm(
+        `Is het Worldline-project voor ${project.relation_name} klaar en mag dit naar het archief?`,
+      );
+      if (!confirmed) return;
+    }
+
+    await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
+    setBusy(true);
+    setStatus(shouldArchive ? "Worldline-project wordt gearchiveerd..." : "Worldline-project wordt teruggezet...");
+
+    const now = new Date().toISOString();
+    const updates: Record<string, string | null> = {
+      archived_at: shouldArchive ? now : null,
+      updated_at: now,
+    };
+    if (shouldArchive) {
+      updates.status = "complete";
+    }
+
+    const { data, error } = await supabase
+      .from("worldline_projects")
+      .update(updates as never)
+      .eq("id", project.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      setStatus(`${shouldArchive ? "Archiveren" : "Terugzetten"} mislukt: ${error.message}`);
+      setBusy(false);
+      return;
+    }
+
+    const nextProject = data as WorldlineProject;
+    setProjects((currentProjects) => currentProjects.map((item) => item.id === nextProject.id ? nextProject : item));
+    if (activeProjectRef.current?.id === nextProject.id) {
+      activeProjectRef.current = nextProject;
+      setActiveProject(nextProject);
+    }
+    syncProjectOverview(nextProject);
+    setArchiveView(shouldArchive ? "archived" : "active");
+    setStatus(
+      shouldArchive
+        ? "Worldline-project is klaar en staat nu in het archief."
+        : "Worldline-project is teruggezet naar de actieve projecten.",
+    );
     setBusy(false);
   }
 
@@ -1679,7 +1734,7 @@ export default function WorldlineDashboard() {
     activeProjectRef.current = refreshedProject;
     setActiveProject(refreshedProject);
     setProjects((currentProjects) => currentProjects.map((project) => project.id === refreshedProject.id ? refreshedProject : project));
-    syncOngoingProject(refreshedProject);
+    syncProjectOverview(refreshedProject);
 
     const refreshedFields = normalizeWorldlineAgreementFields(refreshedProject.agreement_fields);
     agreementFieldsRef.current = refreshedFields;
@@ -2474,8 +2529,8 @@ export default function WorldlineDashboard() {
           </div>
           <div className="brand-actions">
             {!canWriteWorldline ? <StatusPill tone="warning">Alleen lezen</StatusPill> : null}
-            <StatusPill tone={activeProject ? getProjectTone(activeProject.status) : "warning"}>
-              {activeProject ? WORLDLINE_STATUS_LABELS[activeProject.status] : "Geen project"}
+            <StatusPill tone={activeProject?.archived_at ? "neutral" : activeProject ? getProjectTone(activeProject.status) : "warning"}>
+              {activeProject?.archived_at ? "Gearchiveerd" : activeProject ? WORLDLINE_STATUS_LABELS[activeProject.status] : "Geen project"}
             </StatusPill>
           </div>
         </header>
@@ -2483,32 +2538,57 @@ export default function WorldlineDashboard() {
         <section className="card panel worldline-ongoing-panel">
           <div className="top-row">
             <div>
-              <div className="eyebrow">{projectOverviewLabel}</div>
+              <div className="eyebrow">Projectoverzicht</div>
               <h2 className="headline">Worldline-projecten</h2>
               <p className="subtext">
                 {canViewAllWorldlineProjects
-                  ? "Open direct elk Worldline-dossier, ook als het door een andere gebruiker is aangemaakt."
-                  : "Open direct een lopend dossier of verwijder een project dat niet meer nodig is."}
+                  ? "Open actieve en gearchiveerde Worldline-dossiers, ook als een andere gebruiker ze heeft aangemaakt."
+                  : "Open je actieve dossiers of zoek een afgerond project terug in het archief."}
               </p>
             </div>
             <div className="button-row compact">
-              <StatusPill tone="warning">{ongoingProjects.length} project(en)</StatusPill>
-              <button type="button" className="secondary-button" onClick={() => void loadOngoingProjects()} disabled={loadingOngoingProjects || busy}>
+              <StatusPill tone={archiveView === "archived" ? "neutral" : "warning"}>{visibleOverviewProjects.length} project(en)</StatusPill>
+              <button type="button" className="secondary-button" onClick={() => void loadProjectOverview()} disabled={loadingProjectOverview || busy}>
                 <RefreshCw size={16} />
                 Vernieuwen
               </button>
             </div>
           </div>
 
-          {loadingOngoingProjects ? <div className="save-status">{projectOverviewLabel} worden geladen...</div> : null}
+          <div className="deals-archive-switch" role="group" aria-label="Kies actieve of gearchiveerde Worldline-projecten">
+            <button
+              type="button"
+              className={`deals-archive-button ${archiveView === "active" ? "active" : ""}`}
+              aria-pressed={archiveView === "active"}
+              onClick={() => setArchiveView("active")}
+            >
+              <Inbox size={17} />
+              <span>Actieve projecten</span>
+              <strong>{activeOverviewProjects.length}</strong>
+            </button>
+            <button
+              type="button"
+              className={`deals-archive-button ${archiveView === "archived" ? "active" : ""}`}
+              aria-pressed={archiveView === "archived"}
+              onClick={() => setArchiveView("archived")}
+            >
+              <Archive size={17} />
+              <span>Gearchiveerde projecten</span>
+              <strong>{archivedOverviewProjects.length}</strong>
+            </button>
+          </div>
 
-          {!loadingOngoingProjects && ongoingProjects.length === 0 ? (
-            <div className="empty-state">Geen Worldline-projecten gevonden.</div>
+          {loadingProjectOverview ? <div className="save-status">Worldline-projecten worden geladen...</div> : null}
+
+          {!loadingProjectOverview && visibleOverviewProjects.length === 0 ? (
+            <div className="empty-state">
+              {archiveView === "archived" ? "Geen gearchiveerde Worldline-projecten gevonden." : "Geen actieve Worldline-projecten gevonden."}
+            </div>
           ) : null}
 
-          {ongoingProjects.length > 0 ? (
+          {visibleOverviewProjects.length > 0 ? (
             <div className="worldline-ongoing-list">
-              {ongoingProjects.map((project) => (
+              {visibleOverviewProjects.map((project) => (
                 <article key={project.id} className={`worldline-ongoing-card ${activeProject?.id === project.id ? "active" : ""}`}>
                   <div className="worldline-ongoing-main">
                     <strong>{project.relation_name}</strong>
@@ -2516,15 +2596,27 @@ export default function WorldlineDashboard() {
                       {project.relation_email || "Geen e-mail"}
                       {project.debtor_number ? ` · Debiteur ${project.debtor_number}` : ""}
                     </span>
-                    <small>Laatst bijgewerkt: {formatDate(project.updated_at ?? project.created_at)}</small>
+                    <small>
+                      {project.archived_at
+                        ? `Gearchiveerd: ${formatDate(project.archived_at)}`
+                        : `Laatst bijgewerkt: ${formatDate(project.updated_at ?? project.created_at)}`}
+                    </small>
                   </div>
 
                   <div className="worldline-ongoing-actions">
-                    <StatusPill tone={getProjectTone(project.status)}>{WORLDLINE_STATUS_LABELS[project.status]}</StatusPill>
+                    <StatusPill tone={project.archived_at ? "neutral" : getProjectTone(project.status)}>
+                      {project.archived_at ? "Gearchiveerd" : WORLDLINE_STATUS_LABELS[project.status]}
+                    </StatusPill>
                     <button type="button" className="secondary-button" onClick={() => void openProject(project)} disabled={busy}>
                       <FolderOpen size={16} />
                       Openen
                     </button>
+                    {project.archived_at ? (
+                      <button type="button" className="secondary-button" onClick={() => void updateProjectArchive(project, false)} disabled={busy || !canWriteWorldline}>
+                        <ArchiveRestore size={16} />
+                        Terugzetten
+                      </button>
+                    ) : null}
                     <button type="button" className="secondary-button danger" onClick={() => void deleteProject(project)} disabled={busy || !canWriteWorldline}>
                       <Trash2 size={16} />
                       Verwijderen
@@ -2620,7 +2712,7 @@ export default function WorldlineDashboard() {
                     onClick={() => setActiveProject(project)}
                   >
                     <span>
-                      <strong>{WORLDLINE_STATUS_LABELS[project.status]}</strong>
+                      <strong>{project.archived_at ? "Gearchiveerd" : WORLDLINE_STATUS_LABELS[project.status]}</strong>
                       <small>{formatDate(project.updated_at ?? project.created_at)}</small>
                     </span>
                     <ChevronRight size={16} />
@@ -2671,6 +2763,15 @@ export default function WorldlineDashboard() {
                   >
                     <Send size={16} />
                     {activeProject.status === "waiting_customer" ? "Verstuurd naar klant" : "Markeer verstuurd"}
+                  </button>
+                  <button
+                    type="button"
+                    className={activeProject.archived_at ? "secondary-button" : "primary-button"}
+                    onClick={() => void updateProjectArchive(activeProject, !activeProject.archived_at)}
+                    disabled={busy || savingAgreementFields || !canWriteWorldline}
+                  >
+                    {activeProject.archived_at ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                    {activeProject.archived_at ? "Terugzetten naar actief" : "Klaar en archiveren"}
                   </button>
                 </div>
               </div>

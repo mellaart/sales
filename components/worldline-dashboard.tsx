@@ -21,6 +21,7 @@ import {
   WORLDLINE_DOCUMENT_BUCKET,
   WORLDLINE_DOCUMENT_DEFINITIONS,
   WORLDLINE_KYC_AML_TEMPLATE_PATH,
+  WORLDLINE_REFUND_TEMPLATE_PATH,
   WORLDLINE_STATUS_LABELS,
   WORLDLINE_UBO_REGISTRATION_TEMPLATE_PATH,
   getWorldlineDocumentDefinition,
@@ -81,6 +82,12 @@ const WORLDLINE_IDENTITY_ANALYSIS_VERSION = 8;
 const WORLDLINE_REFUND_ANALYSIS_VERSION = 2;
 const OCR_DOCUMENT_TYPES: WorldlineDocumentType[] = ["kvk", "agreement", "identity", "bank_statement", "refund", "ubo"];
 const PDF_OCR_MAX_PAGES = 6;
+const WORLDLINE_REFUND_TEMPLATE_MARKERS = {
+  companyName: "{{companyName}}",
+  businessAddress: "{{businessAddress}}",
+  postcodeCity: "{{postcodeCity}}",
+  vatNumber: "{{vatNumber}}",
+} as const;
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -809,6 +816,19 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function escapeWordXmlText(value: string) {
+  return value.replace(
+    /[&<>"']/g,
+    (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&apos;",
+    })[character] ?? character,
+  );
+}
+
 function getWorldlineMccRecord(value?: string | null) {
   const normalizedValue = (value ?? "").trim().toLowerCase();
   if (!normalizedValue) return null;
@@ -1022,28 +1042,63 @@ async function downloadRefundAddendum(
   relation: RelationOption,
   fields: WorldlineAgreementFields,
 ) {
-  const response = await withWorldlineTimeout(
-    fetch("/api/worldline/refund/fill", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        companyName: (fields.companyName || relation.name).trim(),
-        businessAddress: fields.businessAddress,
-        businessPostcode: fields.businessPostcode,
-        businessCity: fields.businessCity,
-        vatNumber: fields.vatNumber,
-      }),
-    }),
-    "Refundformulier voorbereiden",
-  );
+  const companyName = (fields.companyName || relation.name).trim();
+  const businessAddress = (fields.businessAddress || "").trim();
+  const businessPostcode = (fields.businessPostcode || "").trim();
+  const businessCity = (fields.businessCity || "").trim();
+  const vatNumber = (fields.vatNumber || "").trim();
+  const missing = [
+    ["bedrijfsnaam", companyName],
+    ["vestigingsadres", businessAddress],
+    ["postcode", businessPostcode],
+    ["plaats", businessCity],
+    ["btw-nummer", vatNumber],
+  ].filter(([, value]) => !value).map(([label]) => label);
 
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(result?.error || "Refundformulier kon niet worden ingevuld.");
+  if (missing.length > 0) {
+    throw new Error(`Vul eerst de volgende bedrijfsgegevens in: ${missing.join(", ")}.`);
   }
 
+  const [{ strFromU8, strToU8, unzipSync, zipSync }, templateResponse] = await Promise.all([
+    import("fflate"),
+    fetch(WORLDLINE_REFUND_TEMPLATE_PATH, { cache: "no-store" }),
+  ]);
+
+  if (!templateResponse.ok) {
+    throw new Error("Refund-template kon niet worden geladen.");
+  }
+
+  const archive = unzipSync(new Uint8Array(await templateResponse.arrayBuffer()));
+  const documentPart = archive["word/document.xml"];
+  if (!documentPart) {
+    throw new Error("Refund-template bevat geen Word-document.");
+  }
+
+  const values: Record<keyof typeof WORLDLINE_REFUND_TEMPLATE_MARKERS, string> = {
+    companyName,
+    businessAddress,
+    postcodeCity: `${businessPostcode} ${businessCity}`,
+    vatNumber,
+  };
+  let documentXml = strFromU8(documentPart);
+
+  for (const [key, marker] of Object.entries(WORLDLINE_REFUND_TEMPLATE_MARKERS) as Array<
+    [keyof typeof WORLDLINE_REFUND_TEMPLATE_MARKERS, string]
+  >) {
+    if (!documentXml.includes(marker)) {
+      throw new Error(`Refund-template mist veld ${key}.`);
+    }
+    documentXml = documentXml.replaceAll(marker, escapeWordXmlText(values[key]));
+  }
+
+  archive["word/document.xml"] = strToU8(documentXml);
+  const result = zipSync(archive, { level: 6 });
+  const resultBuffer = result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength) as ArrayBuffer;
   const safeRelationName = sanitizeFileName(relation.name) || "worldline";
-  downloadBlob(await response.blob(), `${safeRelationName}-worldline-refund-addendum.docx`);
+  downloadBlob(
+    new Blob([resultBuffer], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+    `${safeRelationName}-worldline-refund-addendum.docx`,
+  );
 }
 
 function renderAgreementFieldControl(
@@ -1144,6 +1199,7 @@ export default function WorldlineDashboard() {
   const [savingAgreementFields, setSavingAgreementFields] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [refundDownloadStatus, setRefundDownloadStatus] = useState("");
 
   const latestKvkDocuments = useMemo(() => getLatestKvkDocuments(documents), [documents]);
   const latestDocumentsByType = useMemo(() => {
@@ -2341,19 +2397,26 @@ export default function WorldlineDashboard() {
     if (!selectedRelation || !activeProject) return;
 
     if (!isYesValue(agreementFieldsRef.current.refund)) {
-      setStatus("Selecteer eerst Refund bij Betaalkaarten en tarieven en sla het formulier op.");
+      const message = "Selecteer eerst Refund bij Betaalkaarten en tarieven en sla het formulier op.";
+      setStatus(message);
+      setRefundDownloadStatus(message);
       return;
     }
 
     setBusy(true);
     setStatus("Refundgegevens worden opgeslagen...");
+    setRefundDownloadStatus("Refundgegevens worden opgeslagen...");
     try {
       await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
       setStatus("Refundformulier wordt ingevuld...");
+      setRefundDownloadStatus("Refundformulier wordt ingevuld...");
       await downloadRefundAddendum(selectedRelation, agreementFieldsRef.current);
       setStatus("Ingevuld refundformulier gedownload.");
+      setRefundDownloadStatus("Ingevuld refundformulier gedownload.");
     } catch (error) {
-      setStatus(`Refundformulier downloaden mislukt: ${getErrorMessage(error, "document kon niet worden ingevuld.")}`);
+      const message = `Refundformulier downloaden mislukt: ${getErrorMessage(error, "document kon niet worden ingevuld.")}`;
+      setStatus(message);
+      setRefundDownloadStatus(message);
     } finally {
       setBusy(false);
     }
@@ -2775,6 +2838,12 @@ export default function WorldlineDashboard() {
                   </button>
                 </div>
               </div>
+
+              {refundDownloadStatus ? (
+                <div className="save-status worldline-inline-status" role="status" aria-live="polite">
+                  {refundDownloadStatus}
+                </div>
+              ) : null}
 
               <div className="worldline-field-list">
                 {Array.from(getAgreementSections()).map(([sectionTitle, definitions]) => (

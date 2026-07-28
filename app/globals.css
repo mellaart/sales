@@ -1401,6 +1401,10 @@ td {
   opacity: 0.62;
 }
 
+.quote-outlook-fallback {
+  margin-top: 10px;
+}
+
 .comparison-grid {
   display: grid;
   grid-template-columns: repeat(4,1fr);

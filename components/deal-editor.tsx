@@ -146,6 +146,76 @@ function getSmartConnectPricing(
   };
 }
 
+function showOutlookPopupStatus(
+  outlookWindow: Window | null,
+  title: string,
+  message: string,
+  tone: "loading" | "error" = "loading",
+) {
+  if (!outlookWindow || outlookWindow.closed) return;
+
+  try {
+    const document = outlookWindow.document;
+    document.title = title;
+    document.documentElement.lang = "nl";
+    document.body.replaceChildren();
+    Object.assign(document.body.style, {
+      margin: "0",
+      minHeight: "100vh",
+      display: "grid",
+      placeItems: "center",
+      padding: "24px",
+      boxSizing: "border-box",
+      background: "#0b1425",
+      color: "#eef4ff",
+      fontFamily: "Calibri, Arial, sans-serif",
+    });
+
+    const panel = document.createElement("main");
+    Object.assign(panel.style, {
+      width: "min(100%, 520px)",
+      padding: "28px",
+      border: `1px solid ${tone === "error" ? "#7f3540" : "#274a7f"}`,
+      borderRadius: "8px",
+      background: "#131f34",
+      boxSizing: "border-box",
+    });
+
+    const heading = document.createElement("h1");
+    heading.textContent = title;
+    Object.assign(heading.style, {
+      margin: "0 0 12px",
+      fontSize: "24px",
+      lineHeight: "1.2",
+    });
+
+    const description = document.createElement("p");
+    description.textContent = message;
+    Object.assign(description.style, {
+      margin: "0",
+      color: tone === "error" ? "#fecaca" : "#b9c8df",
+      fontSize: "16px",
+      lineHeight: "1.5",
+    });
+
+    panel.append(heading, description);
+    document.body.append(panel);
+  } catch {
+    // Het tabblad kan al naar Microsoft zijn genavigeerd.
+  }
+}
+
+function navigateOutlookPopup(outlookWindow: Window | null, url: string) {
+  if (!outlookWindow || outlookWindow.closed) return false;
+
+  try {
+    outlookWindow.location.replace(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function DealEditor({ dealId }: { dealId: string }) {
   const { user, profile, role } = useAuth();
   const { pricingConfig } = usePricingConfig();
@@ -166,6 +236,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
   const [customerOutlookBusy, setCustomerOutlookBusy] = useState(false);
   const [quoteOutlookBusy, setQuoteOutlookBusy] = useState(false);
+  const [quoteOutlookLink, setQuoteOutlookLink] = useState("");
 
   const [customerName, setCustomerName] = useState("");
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
@@ -551,6 +622,12 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     const returnTo = `/deals/${encodeURIComponent(dealId)}`;
     const outlookWindow = window.open("about:blank", "_blank");
     if (outlookWindow) outlookWindow.opener = null;
+    showOutlookPopupStatus(
+      outlookWindow,
+      "Outlook-concept voorbereiden",
+      "De offerte-PDF wordt gemaakt en aan het Outlook-concept toegevoegd.",
+    );
+    setQuoteOutlookLink("");
     setQuoteOutlookBusy(true);
     setStatus("Outlook-verbinding wordt gecontroleerd...");
 
@@ -565,18 +642,26 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         error?: string;
       };
       if (!statusResponse.ok) {
-        outlookWindow?.close();
-        throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+        const message = statusJson.error || "Outlook-verbinding controleren mislukt.";
+        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        throw new Error(message);
       }
       if (!statusJson.connected) {
-        outlookWindow?.close();
+        const connectUrl = statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
         setStatus("Outlook wordt eenmalig verbonden...");
-        window.location.assign(statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`);
+        if (!navigateOutlookPopup(outlookWindow, connectUrl)) {
+          window.location.assign(connectUrl);
+        }
         return;
       }
 
       setStatus("Offerte-PDF en Outlook-concept worden gemaakt...");
       const attachment = await createQuotePdfFile(getQuotePdfInput());
+      showOutlookPopupStatus(
+        outlookWindow,
+        "Outlook-concept voorbereiden",
+        "De offerte is gemaakt. Outlook voegt de PDF nu als bijlage toe.",
+      );
       const formData = new FormData();
       formData.set("recipientEmail", recipientEmail);
       formData.set("customerName", customerName);
@@ -595,25 +680,27 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       };
 
       if (json.reconnectRequired && json.connectUrl) {
-        outlookWindow?.close();
         setStatus("Outlook moet opnieuw worden verbonden...");
-        window.location.assign(json.connectUrl);
+        if (!navigateOutlookPopup(outlookWindow, json.connectUrl)) {
+          window.location.assign(json.connectUrl);
+        }
         return;
       }
       if (!response.ok || !json.webLink) {
-        outlookWindow?.close();
-        throw new Error(json.error || "Outlook-concept maken mislukt.");
+        const message = json.error || "Outlook-concept maken mislukt.";
+        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        throw new Error(message);
       }
 
-      if (outlookWindow) {
-        outlookWindow.location.href = json.webLink;
-      } else {
+      if (!navigateOutlookPopup(outlookWindow, json.webLink)) {
         window.location.assign(json.webLink);
       }
+      setQuoteOutlookLink(json.webLink);
       setStatus("Outlook-concept met offerte-PDF is aangemaakt.");
     } catch (error) {
-      outlookWindow?.close();
-      setStatus(error instanceof Error ? error.message : "Outlook-concept maken mislukt.");
+      const message = error instanceof Error ? error.message : "Outlook-concept maken mislukt.";
+      showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+      setStatus(message);
     } finally {
       setQuoteOutlookBusy(false);
     }
@@ -1406,6 +1493,19 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     {quoteOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
                   </button>
                 </div>
+                {quoteOutlookLink ? (
+                  <div className="button-row compact quote-outlook-fallback">
+                    <a
+                      href={quoteOutlookLink}
+                      className="secondary-button"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ExternalLink size={16} />
+                      Outlook-concept openen
+                    </a>
+                  </div>
+                ) : null}
               </div>
 
               {!isAssetsExpansionDeal && assetsExpansion?.lines?.length ? (

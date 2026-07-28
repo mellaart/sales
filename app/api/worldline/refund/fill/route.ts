@@ -79,26 +79,12 @@ export async function POST(request: Request) {
     const businessPostcode = textValue(body?.businessPostcode, 30);
     const businessCity = textValue(body?.businessCity, 100);
     const vatNumber = textValue(body?.vatNumber, 40);
-    const missing = [
-      ["bedrijfsnaam", companyName],
-      ["vestigingsadres", businessAddress],
-      ["postcode", businessPostcode],
-      ["plaats", businessCity],
-      ["btw-nummer", vatNumber],
-    ].filter(([, value]) => !value).map(([label]) => label);
-
-    if (missing.length > 0) {
-      return NextResponse.json(
-        { error: `Vul eerst de volgende bedrijfsgegevens in: ${missing.join(", ")}.` },
-        { status: 400 },
-      );
-    }
 
     const templatePath = path.join(process.cwd(), "public", WORLDLINE_REFUND_TEMPLATE_PATH.replace(/^\//, ""));
     const result = await fillRefundTemplate(templatePath, {
       companyName,
       businessAddress,
-      postcodeCity: `${businessPostcode} ${businessCity}`,
+      postcodeCity: [businessPostcode, businessCity].filter(Boolean).join(" "),
       vatNumber,
     });
     const arrayBuffer = result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength) as ArrayBuffer;

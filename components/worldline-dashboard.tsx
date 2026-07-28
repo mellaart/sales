@@ -1047,17 +1047,6 @@ async function downloadRefundAddendum(
   const businessPostcode = (fields.businessPostcode || "").trim();
   const businessCity = (fields.businessCity || "").trim();
   const vatNumber = (fields.vatNumber || "").trim();
-  const missing = [
-    ["bedrijfsnaam", companyName],
-    ["vestigingsadres", businessAddress],
-    ["postcode", businessPostcode],
-    ["plaats", businessCity],
-    ["btw-nummer", vatNumber],
-  ].filter(([, value]) => !value).map(([label]) => label);
-
-  if (missing.length > 0) {
-    throw new Error(`Vul eerst de volgende bedrijfsgegevens in: ${missing.join(", ")}.`);
-  }
 
   const [{ strFromU8, strToU8, unzipSync, zipSync }, templateResponse] = await Promise.all([
     import("fflate"),
@@ -1077,7 +1066,7 @@ async function downloadRefundAddendum(
   const values: Record<keyof typeof WORLDLINE_REFUND_TEMPLATE_MARKERS, string> = {
     companyName,
     businessAddress,
-    postcodeCity: `${businessPostcode} ${businessCity}`,
+    postcodeCity: [businessPostcode, businessCity].filter(Boolean).join(" "),
     vatNumber,
   };
   let documentXml = strFromU8(documentPart);

@@ -50,6 +50,7 @@ export type DealCalculatorInputs = {
   customerPortalOptionKeys?: string[];
   smartConnectConnections?: number;
   includeTravelCosts?: boolean;
+  customerPostcode?: string;
   travelPostcodePrefix?: string;
   travelCostPerDay?: number;
   travelCostTotal?: number;

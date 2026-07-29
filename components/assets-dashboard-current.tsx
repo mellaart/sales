@@ -39,6 +39,7 @@ type RelationOption = {
   name: string;
   email: string | null;
   debtorNumber: string | number | null;
+  postcode: string | null;
 };
 
 type AssetModule = {
@@ -1025,7 +1026,7 @@ export default function AssetsDashboardCurrent() {
     setSmartConnectConnections(0);
     setServiceCostQuantities(getInitialServiceCostQuantities());
     setIncludeTravelCosts(true);
-    setTravelPostcodePrefix("");
+    setTravelPostcodePrefix(normalizePostcodePrefix(relation.postcode ?? ""));
 
     try {
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);

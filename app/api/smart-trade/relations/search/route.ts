@@ -10,6 +10,7 @@ type RelationSearchResult = {
   name: string;
   email: string | null;
   debtorNumber: string | number | null;
+  postcode: string | null;
 };
 
 type CachedRelationSearch = {
@@ -63,6 +64,7 @@ function mapRelationSearchResults(relations: Awaited<ReturnType<typeof searchRel
     name: getRelationName(relation),
     email: relation.email ?? null,
     debtorNumber: relation.debtorNumber ?? null,
+    postcode: relation.postcode ?? null,
   }));
 }
 

@@ -125,6 +125,7 @@ export default function PriceCalculator() {
     [pricingConfig.packages],
   );
   const [customerName, setCustomerName] = useState("");
+  const [customerPostcode, setCustomerPostcode] = useState("");
   const [contactName, setContactName] = useState("");
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
   const [salesName, setSalesName] = useState("");
@@ -252,6 +253,12 @@ export default function PriceCalculator() {
     });
   }
 
+  function handleCustomerPostcodeChange(value: string) {
+    const nextPostcode = value.toUpperCase();
+    setCustomerPostcode(nextPostcode);
+    setTravelPostcodePrefix(normalizePostcodePrefix(nextPostcode));
+  }
+
   async function handleSaveCalculation() {
     if (!user) {
       setStatus("Je moet ingelogd zijn om deze berekening op te slaan.");
@@ -290,6 +297,7 @@ export default function PriceCalculator() {
           includeVat: false,
           includeSupport,
           includeTravelCosts,
+          customerPostcode: customerPostcode.trim(),
           travelPostcodePrefix,
           travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
           travelCostTotal,
@@ -451,6 +459,15 @@ export default function PriceCalculator() {
                 <label className="input-wrap">
                   <span className="input-label">Klantnaam</span>
                   <input className="input" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Bijv. Groenbedrijf Jansen" />
+                </label>
+                <label className="input-wrap">
+                  <span className="input-label">Postcode klant</span>
+                  <input
+                    className="input"
+                    value={customerPostcode}
+                    onChange={(event) => handleCustomerPostcodeChange(event.target.value)}
+                    placeholder="Bijv. 2211 JT"
+                  />
                 </label>
                 <label className="input-wrap">
                   <span className="input-label">Titel voorstel</span>

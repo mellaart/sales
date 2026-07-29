@@ -1192,16 +1192,6 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   </div>
                 </div>
 
-                <div className="section">
-                  <TextArea
-                    label="Toelichting offerte"
-                    value={assetsExpansion?.guidanceText ?? ""}
-                    onChange={(guidanceText) => setAssetsExpansion((currentExpansion) => (
-                      currentExpansion ? { ...currentExpansion, guidanceText } : currentExpansion
-                    ))}
-                    placeholder="Begeleidende tekst voor de klant"
-                  />
-                </div>
               </>
             ) : (
               <>
@@ -1544,6 +1534,30 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             </div>
           </section>
         </div>
+
+        {isAssetsExpansionDeal ? (
+          <section className="card panel">
+            <div className="top-row">
+              <div>
+                <div className="eyebrow">Offerte</div>
+                <h2 className="headline">Toelichting offerte</h2>
+                <p className="subtext">
+                  Schrijf hier de begeleidende tekst die de klant op de uitbreidingen-offerte leest.
+                </p>
+              </div>
+              <div className="icon-badge"><FileText size={26} /></div>
+            </div>
+
+            <TextArea
+              label="Begeleidende tekst"
+              value={assetsExpansion?.guidanceText ?? ""}
+              onChange={(guidanceText) => setAssetsExpansion((currentExpansion) => (
+                currentExpansion ? { ...currentExpansion, guidanceText } : currentExpansion
+              ))}
+              placeholder="Bijvoorbeeld: Met deze uitbreiding kunnen jullie..."
+            />
+          </section>
+        ) : null}
 
         {!isAssetsExpansionDeal ? (
           <section className="card panel customer-intake-panel">

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getRelationById } from "@/lib/smart-trade-api";
+import {
+  getPrimaryContactPersonForRelation,
+  getRelationById,
+} from "@/lib/smart-trade-api";
 
 export async function GET(
   request: Request,
@@ -14,15 +17,28 @@ export async function GET(
       return NextResponse.json({ error: "relationId is verplicht." }, { status: 400 });
     }
 
-    const relation = await getRelationById(id, {
+    const overrides = {
       baseUrl: url.searchParams.get("baseUrl") ?? undefined,
       company: url.searchParams.get("company") ?? undefined,
       user: url.searchParams.get("user") ?? undefined,
       password: url.searchParams.get("password") ?? undefined,
-    });
+    };
+    const [relation, primaryContactResult] = await Promise.all([
+      getRelationById(id, overrides),
+      getPrimaryContactPersonForRelation(id, overrides)
+        .then((primaryContact) => ({ primaryContact, error: null }))
+        .catch((error) => ({
+          primaryContact: null,
+          error: error instanceof Error ? error.message : "Primaire contactpersoon ophalen mislukt.",
+        })),
+    ]);
 
     return NextResponse.json(
-      { relation },
+      {
+        relation,
+        primaryContact: primaryContactResult.primaryContact,
+        primaryContactError: primaryContactResult.error,
+      },
       { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } },
     );
   } catch (error) {

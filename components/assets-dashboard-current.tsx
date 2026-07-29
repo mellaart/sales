@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, MapPin, Search, Sparkles } from "lucide-react";
+import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, MapPin, Search, Sparkles, UserRound } from "lucide-react";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -40,6 +40,16 @@ type RelationOption = {
   email: string | null;
   debtorNumber: string | number | null;
   postcode: string | null;
+};
+
+type RelationDetailResponse = {
+  relation?: {
+    postcode?: unknown;
+  } | null;
+  primaryContact?: {
+    name?: unknown;
+  } | null;
+  primaryContactError?: unknown;
 };
 
 type AssetModule = {
@@ -531,6 +541,9 @@ export default function AssetsDashboardCurrent() {
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const travelPostcodeManuallyEditedRef = useRef(false);
+  const [dealContactName, setDealContactName] = useState("");
+  const [contactPersonStatus, setContactPersonStatus] = useState("");
+  const [loadingContactPerson, setLoadingContactPerson] = useState(false);
   const [offerGuidance, setOfferGuidance] = useState("");
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
@@ -895,7 +908,7 @@ export default function AssetsDashboardCurrent() {
         user_id: user.id,
         customer_name: selectedRelation.name,
         quote_title: `Uitbreidingen ${selectedRelation.name}`,
-        contact_name: selectedRelation.email,
+        contact_name: dealContactName.trim() || null,
         sales_name: getUserDisplayName(user, profile),
         package_key: activeResult.key,
         package_name: "Uitbreiding",
@@ -996,6 +1009,9 @@ export default function AssetsDashboardCurrent() {
     setServiceCostQuantities(getInitialServiceCostQuantities());
     setIncludeTravelCosts(true);
     setTravelPostcodePrefix("");
+    setDealContactName("");
+    setContactPersonStatus("");
+    setLoadingContactPerson(false);
     setOfferGuidance("");
 
     try {
@@ -1032,22 +1048,50 @@ export default function AssetsDashboardCurrent() {
     setIncludeTravelCosts(true);
     travelPostcodeManuallyEditedRef.current = false;
     setTravelPostcodePrefix(normalizePostcodePrefix(relation.postcode ?? ""));
+    setDealContactName("");
+    setContactPersonStatus("Primaire contactpersoon wordt opgehaald...");
+    setLoadingContactPerson(true);
     setOfferGuidance("");
 
     try {
-      const relationPostcodePromise = relation.postcode
-        ? Promise.resolve(relation.postcode)
-        : fetch(`/api/smart-trade/relations/${encodeURIComponent(relation.id)}`)
-          .then(async (relationResponse) => {
-            if (!relationResponse.ok) return null;
-            const relationJson = await relationResponse.json();
-            return typeof relationJson.relation?.postcode === "string"
-              ? relationJson.relation.postcode
-              : null;
-          })
-          .catch(() => null);
-      const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
-      const json = await response.json();
+      const [assetsResult, relationResult] = await Promise.allSettled([
+        fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`)
+          .then(async (response) => ({ response, json: await response.json() })),
+        fetch(`/api/smart-trade/relations/${encodeURIComponent(relation.id)}`)
+          .then(async (response) => {
+            const json = await response.json() as RelationDetailResponse & { error?: string };
+            if (!response.ok) throw new Error(json.error ?? "Relatiegegevens ophalen mislukt.");
+            return json;
+          }),
+      ]);
+
+      if (relationResult.status === "fulfilled") {
+        const relationDetails = relationResult.value;
+        const primaryContactName = typeof relationDetails.primaryContact?.name === "string"
+          ? relationDetails.primaryContact.name.trim()
+          : "";
+        const relationPostcode = typeof relationDetails.relation?.postcode === "string"
+          ? relationDetails.relation.postcode
+          : null;
+
+        setDealContactName(primaryContactName);
+        setContactPersonStatus(
+          primaryContactName
+            ? ""
+            : relationDetails.primaryContactError
+              ? "Primaire contactpersoon kon niet worden opgehaald. Vul de naam voor deze deal handmatig in."
+              : "Geen primaire contactpersoon gevonden. Vul de naam voor deze deal handmatig in.",
+        );
+
+        if (relationPostcode && !travelPostcodeManuallyEditedRef.current) {
+          setTravelPostcodePrefix(normalizePostcodePrefix(relationPostcode));
+        }
+      } else {
+        setContactPersonStatus("Primaire contactpersoon kon niet worden opgehaald. Vul de naam voor deze deal handmatig in.");
+      }
+
+      if (assetsResult.status === "rejected") throw assetsResult.reason;
+      const { response, json } = assetsResult.value;
 
       if (!response.ok) {
         setAssetStatus(json.error ?? "Assets ophalen mislukt.");
@@ -1060,16 +1104,12 @@ export default function AssetsDashboardCurrent() {
       setSelectedModuleKeys(applyModuleDependencies(getModuleKeysFromAssets(nextVisibleAssets, modules)));
       setSelectedCustomerPortalOptionKeys(getCustomerPortalKeysFromAssets(nextVisibleAssets, pricingConfig.customerPortalOptions));
 
-      const relationPostcode = await relationPostcodePromise;
-      if (relationPostcode && !travelPostcodeManuallyEditedRef.current) {
-        setTravelPostcodePrefix(normalizePostcodePrefix(relationPostcode));
-      }
-
       if (nextAssets.length === 0) setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "Assets ophalen mislukt.");
     } finally {
       setLoadingAssets(false);
+      setLoadingContactPerson(false);
     }
   }
 
@@ -1192,6 +1232,37 @@ export default function AssetsDashboardCurrent() {
                   </button>
                 ))}
               </div>
+            </div>
+          ) : null}
+
+          {selectedRelation ? (
+            <div className={styles.dealContactEditor} aria-busy={loadingContactPerson}>
+              <div className={styles.dealContactHeading}>
+                <span className={styles.relationResultIcon}><UserRound size={18} /></span>
+                <div>
+                  <strong>{selectedRelation.name}</strong>
+                  <span>ID {selectedRelation.id} · Primaire contactpersoon</span>
+                </div>
+              </div>
+
+              <label className="input-wrap">
+                <span className="input-label">Contactpersoon voor de deal</span>
+                <input
+                  className="input"
+                  type="text"
+                  value={dealContactName}
+                  onChange={(event) => setDealContactName(event.target.value)}
+                  placeholder={loadingContactPerson ? "Contactpersoon ophalen..." : "Vul een contactpersoon in"}
+                  disabled={loadingContactPerson}
+                />
+                <span className={styles.dealContactHint}>
+                  Je kunt deze tekst aanpassen. De wijziging wordt alleen bij de deal op sales.troublefree.nl opgeslagen en niet in Smart Trade.
+                </span>
+              </label>
+
+              {contactPersonStatus ? (
+                <div className={`save-status ${styles.assetsStatus}`}>{contactPersonStatus}</div>
+              ) : null}
             </div>
           ) : null}
 

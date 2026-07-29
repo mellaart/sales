@@ -15,6 +15,12 @@ export type SmartTradeRelation = {
   city?: string | null;
 };
 
+export type SmartTradePrimaryContact = {
+  id: string | null;
+  name: string;
+  email: string | null;
+};
+
 type SmartTradeAddress = {
   street?: string | null;
   postcode?: string | null;
@@ -125,6 +131,12 @@ type SmartTradeRelationAssetIncludeResponse = {
   } | null;
 };
 
+type SmartTradeContactPersonsApiResponse = {
+  data?: Array<Record<string, unknown>> | {
+    data?: Array<Record<string, unknown>> | null;
+  } | null;
+};
+
 const DEFAULT_TIMEOUT_MS = 15000;
 const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
@@ -179,6 +191,59 @@ function readableText(value: unknown): string | null {
     readableText(record.title) ??
     null
   );
+}
+
+function recordText(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const text = readableText(record[key]);
+    if (text) return text;
+  }
+
+  return null;
+}
+
+function booleanValue(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (typeof value === "string") {
+    return ["1", "true", "yes", "ja"].includes(value.trim().toLowerCase());
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return booleanValue(record.value ?? record.data);
+  }
+
+  return false;
+}
+
+function unwrapContactPersonRow(row: Record<string, unknown>) {
+  const nestedData = row.data;
+  if (!nestedData || typeof nestedData !== "object" || Array.isArray(nestedData)) return row;
+  return { ...row, ...(nestedData as Record<string, unknown>) };
+}
+
+function readContactPersonRows(json: SmartTradeContactPersonsApiResponse) {
+  if (Array.isArray(json.data)) return json.data.map(unwrapContactPersonRow);
+  if (json.data && Array.isArray(json.data.data)) return json.data.data.map(unwrapContactPersonRow);
+  return [];
+}
+
+function mapPrimaryContact(row: Record<string, unknown>): SmartTradePrimaryContact | null {
+  const firstName = recordText(row, ["firstName", "firstname", "first_name"]);
+  const initials = recordText(row, ["initials", "initial"]);
+  const lastNamePrefix = recordText(row, ["lastNamePrefix", "lastnamePrefix", "last_name_prefix", "prefix"]);
+  const lastName = recordText(row, ["lastName", "lastname", "last_name"]);
+  const composedName = [firstName ?? initials, lastNamePrefix, lastName].filter(Boolean).join(" ").trim();
+  const directName = recordText(row, ["fullName", "fullname", "full_name", "displayName", "name"]);
+  const name = composedName || directName || "";
+
+  if (!name) return null;
+
+  return {
+    id: readableId(row.id),
+    name,
+    email: recordText(row, ["email", "emailAddress", "email_address"]),
+  };
 }
 
 function readableId(value: unknown): string | null {
@@ -690,4 +755,29 @@ export async function getRelationById(relationId: string | number, overrides?: P
     .catch(() => null);
 
   return mapRelationDetail(json.data, fallbackAddress);
+}
+
+export async function getPrimaryContactPersonForRelation(
+  relationId: string | number,
+  overrides?: Partial<Pick<SmartTradeConfig, "baseUrl" | "company" | "user" | "password" | "timeoutMs">>,
+) {
+  const id = String(relationId).trim();
+  if (!id) throw new Error("relationId is verplicht.");
+
+  const config = resolveSmartTradeConfig(overrides);
+  const headers = getHeaders(config);
+  const contactPersonsUrl = new URL(
+    `${config.baseUrl.replace(/\/+$/, "")}/relations/${encodeURIComponent(id)}/contactpersons`,
+  );
+  contactPersonsUrl.searchParams.set("per_page", "100");
+
+  const response = await fetchWithTimeout(contactPersonsUrl.toString(), headers, config.timeoutMs);
+  const json = await readSmartTradeJson<SmartTradeContactPersonsApiResponse>(response);
+  const primaryRow = readContactPersonRows(json).find((row) => (
+    booleanValue(row.isPrimary) ||
+    booleanValue(row.isprimary) ||
+    booleanValue(row.is_primary)
+  ));
+
+  return primaryRow ? mapPrimaryContact(primaryRow) : null;
 }

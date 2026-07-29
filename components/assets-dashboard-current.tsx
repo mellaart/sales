@@ -1387,6 +1387,7 @@ export default function AssetsDashboardCurrent() {
                     <div className={styles.quoteRow}><span>{selectedPackageModuleCount}x</span><strong>Modules binnen pakketadvies</strong><span>{targetPackage.includedModules} inbegrepen</span><strong>{euro.format(targetModuleMonthly)} p/m</strong></div>
                     {renderModuleImplementationRows()}
                     <div className={styles.quoteTotal}><span>Implementatie modules</span><strong>{euro.format(moduleImplementationTotal)}</strong></div>
+                    <div className={styles.quoteTotal}><span>Huidige maandprijs</span><strong>{euro.format(currentRecurringMonthly)} p/m</strong></div>
                     <div className={styles.quoteTotal}><span>Nieuwe maandprijs</span><strong>{euro.format(targetRecurringMonthly)} p/m</strong></div>
                   </div>
                 ) : (

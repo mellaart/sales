@@ -36,6 +36,7 @@ export type AssetExpansionSummary = {
   relationName: string;
   currentPackageName?: string | null;
   targetPackageName?: string | null;
+  guidanceText?: string;
   createdAt: string;
   lines: AssetExpansionLine[];
 };

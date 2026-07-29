@@ -531,6 +531,7 @@ export default function AssetsDashboardCurrent() {
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const travelPostcodeManuallyEditedRef = useRef(false);
+  const [offerGuidance, setOfferGuidance] = useState("");
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
 
@@ -929,6 +930,7 @@ export default function AssetsDashboardCurrent() {
             relationName: selectedRelation.name,
             currentPackageName: selectedPackageName,
             targetPackageName: activeResult.name,
+            guidanceText: offerGuidance.trim() || undefined,
             createdAt: new Date().toISOString(),
             lines: assetDealLines,
           },
@@ -994,6 +996,7 @@ export default function AssetsDashboardCurrent() {
     setServiceCostQuantities(getInitialServiceCostQuantities());
     setIncludeTravelCosts(true);
     setTravelPostcodePrefix("");
+    setOfferGuidance("");
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -1029,6 +1032,7 @@ export default function AssetsDashboardCurrent() {
     setIncludeTravelCosts(true);
     travelPostcodeManuallyEditedRef.current = false;
     setTravelPostcodePrefix(normalizePostcodePrefix(relation.postcode ?? ""));
+    setOfferGuidance("");
 
     try {
       const relationPostcodePromise = relation.postcode
@@ -1575,6 +1579,32 @@ export default function AssetsDashboardCurrent() {
                 </div>
               </div>
             </>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Offerte</div>
+              <h2 className="headline">Toelichting offerte</h2>
+              <p className="subtext">Schrijf hier de begeleidende tekst die de klant op de uitbreidingen-offerte leest.</p>
+            </div>
+            <div className="icon-badge"><FileText size={26} /></div>
+          </div>
+
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie om een toelichting voor de offerte te schrijven.</div>
+          ) : (
+            <label className="input-wrap">
+              <span className="input-label">Begeleidende tekst</span>
+              <textarea
+                className="textarea"
+                value={offerGuidance}
+                onChange={(event) => setOfferGuidance(event.target.value)}
+                placeholder="Bijvoorbeeld: Met deze uitbreiding kunnen jullie..."
+                rows={6}
+              />
+            </label>
           )}
         </section>
 

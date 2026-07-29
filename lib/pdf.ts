@@ -130,6 +130,29 @@ function addParagraph(doc: jsPDF, text: string, y: number) {
   return addWrappedText(doc, text, 16, y, 178, 5) + 3;
 }
 
+function addGuidanceText(doc: jsPDF, text: string, y: number) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(25, 40, 55);
+
+  const paragraphs = text
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  for (const paragraph of paragraphs) {
+    const lines = doc.splitTextToSize(paragraph, 178) as string[];
+    for (const line of lines) {
+      y = ensurePage(doc, y, 7);
+      doc.text(line, 16, y);
+      y += 5;
+    }
+    y += 3;
+  }
+
+  return y;
+}
+
 function addNotes(doc: jsPDF, notes: string | undefined, y: number) {
   const lines = notes
     ?.split(/\n+/)
@@ -570,6 +593,12 @@ async function buildQuotePdf(input: OfferTemplateInput) {
     if (expansionWorkItems.length > 0) {
       y = addSectionTitle(doc, "Werkzaamheden", y + 2);
       y = addBullets(doc, expansionWorkItems, y);
+    }
+
+    const guidanceText = input.assetsExpansion?.guidanceText?.trim();
+    if (guidanceText) {
+      y = addSectionTitle(doc, "Toelichting", y + 2);
+      y = addGuidanceText(doc, guidanceText, y);
     }
 
     y = addSectionTitle(doc, "Tot slot", y + 2);

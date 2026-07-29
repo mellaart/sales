@@ -1191,6 +1191,17 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     </div>
                   </div>
                 </div>
+
+                <div className="section">
+                  <TextArea
+                    label="Toelichting offerte"
+                    value={assetsExpansion?.guidanceText ?? ""}
+                    onChange={(guidanceText) => setAssetsExpansion((currentExpansion) => (
+                      currentExpansion ? { ...currentExpansion, guidanceText } : currentExpansion
+                    ))}
+                    placeholder="Begeleidende tekst voor de klant"
+                  />
+                </div>
               </>
             ) : (
               <>

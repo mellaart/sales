@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, MapPin, Search, Sparkles } from "lucide-react";
 import { NumberStepper } from "@/components/number-stepper";
@@ -530,6 +530,7 @@ export default function AssetsDashboardCurrent() {
   const [serviceCostQuantities, setServiceCostQuantities] = useState<Record<string, number>>(getInitialServiceCostQuantities);
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
+  const travelPostcodeManuallyEditedRef = useRef(false);
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
 
@@ -1026,9 +1027,21 @@ export default function AssetsDashboardCurrent() {
     setSmartConnectConnections(0);
     setServiceCostQuantities(getInitialServiceCostQuantities());
     setIncludeTravelCosts(true);
+    travelPostcodeManuallyEditedRef.current = false;
     setTravelPostcodePrefix(normalizePostcodePrefix(relation.postcode ?? ""));
 
     try {
+      const relationPostcodePromise = relation.postcode
+        ? Promise.resolve(relation.postcode)
+        : fetch(`/api/smart-trade/relations/${encodeURIComponent(relation.id)}`)
+          .then(async (relationResponse) => {
+            if (!relationResponse.ok) return null;
+            const relationJson = await relationResponse.json();
+            return typeof relationJson.relation?.postcode === "string"
+              ? relationJson.relation.postcode
+              : null;
+          })
+          .catch(() => null);
       const response = await fetch(`/api/smart-trade/assets/by-relation?relationId=${encodeURIComponent(relation.id)}`);
       const json = await response.json();
 
@@ -1042,6 +1055,11 @@ export default function AssetsDashboardCurrent() {
       setAssets(nextAssets);
       setSelectedModuleKeys(applyModuleDependencies(getModuleKeysFromAssets(nextVisibleAssets, modules)));
       setSelectedCustomerPortalOptionKeys(getCustomerPortalKeysFromAssets(nextVisibleAssets, pricingConfig.customerPortalOptions));
+
+      const relationPostcode = await relationPostcodePromise;
+      if (relationPostcode && !travelPostcodeManuallyEditedRef.current) {
+        setTravelPostcodePrefix(normalizePostcodePrefix(relationPostcode));
+      }
 
       if (nextAssets.length === 0) setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
     } catch (error) {
@@ -1526,7 +1544,10 @@ export default function AssetsDashboardCurrent() {
                     inputMode="numeric"
                     maxLength={2}
                     value={travelPostcodePrefix}
-                    onChange={(event) => setTravelPostcodePrefix(normalizePostcodePrefix(event.target.value))}
+                    onChange={(event) => {
+                      travelPostcodeManuallyEditedRef.current = true;
+                      setTravelPostcodePrefix(normalizePostcodePrefix(event.target.value));
+                    }}
                     placeholder="Bijv. 22"
                   />
                 </label>

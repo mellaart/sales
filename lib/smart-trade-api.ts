@@ -15,6 +15,19 @@ export type SmartTradeRelation = {
   city?: string | null;
 };
 
+type SmartTradeAddress = {
+  street?: string | null;
+  postcode?: string | null;
+  city?: string | null;
+  isContact?: boolean | null;
+};
+
+type SmartTradeRelationDetail = SmartTradeRelation & {
+  contactAddress?: {
+    data?: SmartTradeAddress | null;
+  } | SmartTradeAddress | null;
+};
+
 type AssetModule = {
   id: string;
   name: string;
@@ -408,6 +421,24 @@ function mapRelationRow(row: NonNullable<SmartTradeRelationsApiResponse["data"]>
   } satisfies SmartTradeRelation;
 }
 
+function getContactAddress(relation: SmartTradeRelationDetail): SmartTradeAddress | null {
+  const contactAddress = relation.contactAddress;
+  if (!contactAddress) return null;
+  if ("data" in contactAddress) return contactAddress.data ?? null;
+  return contactAddress as SmartTradeAddress;
+}
+
+function mapRelationDetail(relation: SmartTradeRelationDetail, fallbackAddress?: SmartTradeAddress | null) {
+  const contactAddress = getContactAddress(relation) ?? fallbackAddress ?? null;
+
+  return {
+    ...relation,
+    street: relation.street ?? contactAddress?.street ?? null,
+    postcode: relation.postcode ?? contactAddress?.postcode ?? null,
+    city: relation.city ?? contactAddress?.city ?? null,
+  } satisfies SmartTradeRelation;
+}
+
 function getRelationCacheKey(config: SmartTradeConfig) {
   return `${config.baseUrl}|${config.company}`;
 }
@@ -640,10 +671,23 @@ export async function getRelationById(relationId: string | number, overrides?: P
   const headers = getHeaders(config);
 
   const relationUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/relations/${encodeURIComponent(id)}`);
+  relationUrl.searchParams.set("include", "contactAddress");
   const response = await fetchWithTimeout(relationUrl.toString(), headers, config.timeoutMs);
-  const json = await readSmartTradeJson<{ data?: SmartTradeRelation | null }>(response);
+  const json = await readSmartTradeJson<{ data?: SmartTradeRelationDetail | null }>(response);
 
   if (!json.data) throw new Error(`Relatie ${id} niet gevonden.`);
 
-  return json.data;
+  const mappedRelation = mapRelationDetail(json.data);
+  if (mappedRelation.postcode) return mappedRelation;
+
+  const addressesUrl = new URL(`/api/v1/relations/${encodeURIComponent(id)}/addresses`, config.baseUrl);
+  const fallbackAddress = await fetchWithTimeout(addressesUrl.toString(), headers, config.timeoutMs)
+    .then((addressResponse) => readSmartTradeJson<{ data?: SmartTradeAddress[] | null }>(addressResponse))
+    .then((addressJson) => {
+      const addresses = Array.isArray(addressJson.data) ? addressJson.data : [];
+      return addresses.find((address) => address.isContact !== false) ?? addresses[0] ?? null;
+    })
+    .catch(() => null);
+
+  return mapRelationDetail(json.data, fallbackAddress);
 }

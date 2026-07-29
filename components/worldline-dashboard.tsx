@@ -62,6 +62,11 @@ type QueuedAgreementSave = {
 
 type WorldlineArchiveView = "active" | "archived";
 
+type PreparedWorldlineFile = {
+  blob: Blob;
+  fileName: string;
+};
+
 type SignedUploadResponse = {
   upload?: {
     storagePath: string;
@@ -816,6 +821,76 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function showOutlookPopupStatus(
+  outlookWindow: Window | null,
+  title: string,
+  message: string,
+  tone: "loading" | "error" = "loading",
+) {
+  if (!outlookWindow || outlookWindow.closed) return;
+
+  try {
+    const popupDocument = outlookWindow.document;
+    popupDocument.title = title;
+    popupDocument.documentElement.lang = "nl";
+    popupDocument.body.replaceChildren();
+    Object.assign(popupDocument.body.style, {
+      margin: "0",
+      minHeight: "100vh",
+      display: "grid",
+      placeItems: "center",
+      padding: "24px",
+      boxSizing: "border-box",
+      background: "#0b1425",
+      color: "#eef4ff",
+      fontFamily: "Calibri, Arial, sans-serif",
+    });
+
+    const panel = popupDocument.createElement("main");
+    Object.assign(panel.style, {
+      width: "min(100%, 520px)",
+      padding: "28px",
+      border: `1px solid ${tone === "error" ? "#7f3540" : "#274a7f"}`,
+      borderRadius: "8px",
+      background: "#131f34",
+      boxSizing: "border-box",
+    });
+
+    const heading = popupDocument.createElement("h1");
+    heading.textContent = title;
+    Object.assign(heading.style, {
+      margin: "0 0 12px",
+      fontSize: "24px",
+      lineHeight: "1.2",
+    });
+
+    const description = popupDocument.createElement("p");
+    description.textContent = message;
+    Object.assign(description.style, {
+      margin: "0",
+      color: tone === "error" ? "#fecaca" : "#b9c8df",
+      fontSize: "16px",
+      lineHeight: "1.5",
+    });
+
+    panel.append(heading, description);
+    popupDocument.body.append(panel);
+  } catch {
+    // Het tabblad kan al naar Microsoft zijn genavigeerd.
+  }
+}
+
+function navigateOutlookPopup(outlookWindow: Window | null, url: string) {
+  if (!outlookWindow || outlookWindow.closed) return false;
+
+  try {
+    outlookWindow.location.replace(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function escapeWordXmlText(value: string) {
   return value.replace(
     /[&<>"']/g,
@@ -919,11 +994,11 @@ function renderCheckResult(checkResult: WorldlineCheckResult) {
   );
 }
 
-async function downloadAgreementPdf(
+async function prepareAgreementPdf(
   relation: RelationOption,
   project: WorldlineProject,
   fields: WorldlineAgreementFields,
-) {
+): Promise<PreparedWorldlineFile> {
   const [{ PDFCheckBox, PDFDocument, PDFDropdown, PDFRadioGroup, PDFTextField, StandardFonts }, templateResponse] = await Promise.all([
     import("pdf-lib"),
     fetch(WORLDLINE_AGREEMENT_TEMPLATE_PATH),
@@ -993,14 +1068,26 @@ async function downloadAgreementPdf(
   const pdfArrayBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
   const safeRelationName = sanitizeFileName(relation.name) || "worldline";
   const fileName = `${safeRelationName}-worldline-aansluitovereenkomst.pdf`;
-  downloadBlob(new Blob([pdfArrayBuffer], { type: "application/pdf" }), fileName);
+  return {
+    blob: new Blob([pdfArrayBuffer], { type: "application/pdf" }),
+    fileName,
+  };
 }
 
-async function downloadUboDocuments(
+async function downloadAgreementPdf(
   relation: RelationOption,
   project: WorldlineProject,
   fields: WorldlineAgreementFields,
 ) {
+  const file = await prepareAgreementPdf(relation, project, fields);
+  downloadBlob(file.blob, file.fileName);
+}
+
+async function prepareUboDocuments(
+  relation: RelationOption,
+  project: WorldlineProject,
+  fields: WorldlineAgreementFields,
+): Promise<PreparedWorldlineFile[]> {
   const [{ PDFDocument, StandardFonts }, pdfTemplateResponse, questionnaireResponse] = await Promise.all([
     import("pdf-lib"),
     fetch(WORLDLINE_UBO_REGISTRATION_TEMPLATE_PATH),
@@ -1034,14 +1121,31 @@ async function downloadUboDocuments(
   ]);
   const pdfArrayBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
 
-  downloadBlob(questionnaireBlob, "KYC- en AML-vragenlijst.docx");
-  downloadBlob(new Blob([pdfArrayBuffer], { type: "application/pdf" }), "UBO-registratieformulier.pdf");
+  return [
+    {
+      blob: questionnaireBlob,
+      fileName: "KYC- en AML-vragenlijst.docx",
+    },
+    {
+      blob: new Blob([pdfArrayBuffer], { type: "application/pdf" }),
+      fileName: "UBO-registratieformulier.pdf",
+    },
+  ];
 }
 
-async function downloadRefundAddendum(
+async function downloadUboDocuments(
   relation: RelationOption,
+  project: WorldlineProject,
   fields: WorldlineAgreementFields,
 ) {
+  const files = await prepareUboDocuments(relation, project, fields);
+  files.forEach((file) => downloadBlob(file.blob, file.fileName));
+}
+
+async function prepareRefundAddendum(
+  relation: RelationOption,
+  fields: WorldlineAgreementFields,
+): Promise<PreparedWorldlineFile> {
   const companyName = (fields.companyName || relation.name).trim();
   const businessAddress = (fields.businessAddress || "").trim();
   const businessPostcode = (fields.businessPostcode || "").trim();
@@ -1084,10 +1188,21 @@ async function downloadRefundAddendum(
   const result = zipSync(archive, { level: 6 });
   const resultBuffer = result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength) as ArrayBuffer;
   const safeRelationName = sanitizeFileName(relation.name) || "worldline";
-  downloadBlob(
-    new Blob([resultBuffer], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
-    `${safeRelationName}-worldline-refund-addendum.docx`,
-  );
+  return {
+    blob: new Blob(
+      [resultBuffer],
+      { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    ),
+    fileName: `${safeRelationName}-worldline-refund-addendum.docx`,
+  };
+}
+
+async function downloadRefundAddendum(
+  relation: RelationOption,
+  fields: WorldlineAgreementFields,
+) {
+  const file = await prepareRefundAddendum(relation, fields);
+  downloadBlob(file.blob, file.fileName);
 }
 
 function renderAgreementFieldControl(
@@ -1186,6 +1301,7 @@ export default function WorldlineDashboard() {
   const [loadingProjectOverview, setLoadingProjectOverview] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [savingAgreementFields, setSavingAgreementFields] = useState(false);
+  const [outlookBusy, setOutlookBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [refundDownloadStatus, setRefundDownloadStatus] = useState("");
@@ -1215,6 +1331,17 @@ export default function WorldlineDashboard() {
     [overviewProjects],
   );
   const visibleOverviewProjects = archiveView === "archived" ? archivedOverviewProjects : activeOverviewProjects;
+
+  useEffect(() => {
+    if (authLoading || typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("outlook") !== "connected") return;
+
+    setStatus("Outlook is verbonden. Klik nogmaals op 'Klaarzetten in Outlook' om het concept te maken.");
+    url.searchParams.delete("outlook");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [authLoading]);
 
   useEffect(() => {
     activeProjectRef.current = activeProject;
@@ -2411,6 +2538,138 @@ export default function WorldlineDashboard() {
     }
   }
 
+  async function handleWorldlineOutlookDraft() {
+    if (!selectedRelation || !activeProject || outlookBusy) return;
+
+    const currentFields = agreementFieldsRef.current;
+    const recipientEmail = (
+      currentFields.companyEmail ||
+      selectedRelation.email ||
+      activeProject.relation_email ||
+      ""
+    ).trim().toLowerCase();
+
+    if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setStatus("Vul eerst een geldig e-mailadres in bij Bedrijfsgegevens.");
+      return;
+    }
+
+    const returnTo = "/worldline";
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    showOutlookPopupStatus(
+      outlookWindow,
+      "Worldline-mail voorbereiden",
+      "De documenten worden ingevuld en aan een nieuw Outlook-concept toegevoegd.",
+    );
+    setOutlookBusy(true);
+    setStatus("Outlook-verbinding wordt gecontroleerd...");
+
+    try {
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (!statusResponse.ok) {
+        const message = statusJson.error || "Outlook-verbinding controleren mislukt.";
+        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        throw new Error(message);
+      }
+
+      if (!statusJson.connected) {
+        const connectUrl =
+          statusJson.connectUrl ||
+          `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
+        setStatus("Outlook wordt eenmalig verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, connectUrl)) {
+          window.location.assign(connectUrl);
+        }
+        return;
+      }
+
+      setStatus("Worldline-gegevens worden opgeslagen...");
+      await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
+      const fields = agreementFieldsRef.current;
+      const refundSelected = isYesValue(fields.refund);
+      setStatus("Worldline-documenten en Outlook-concept worden gemaakt...");
+      showOutlookPopupStatus(
+        outlookWindow,
+        "Worldline-mail voorbereiden",
+        refundSelected
+          ? "De aansluitovereenkomst, UBO-documenten en het Refund-formulier worden toegevoegd."
+          : "De aansluitovereenkomst en UBO-documenten worden toegevoegd.",
+      );
+
+      const [agreementFile, uboFiles, refundFile] = await Promise.all([
+        prepareAgreementPdf(selectedRelation, activeProject, fields),
+        prepareUboDocuments(selectedRelation, activeProject, fields),
+        refundSelected
+          ? prepareRefundAddendum(selectedRelation, fields)
+          : Promise.resolve(null),
+      ]);
+      const attachments = [
+        agreementFile,
+        ...uboFiles,
+        ...(refundFile ? [{ ...refundFile, fileName: "Addendum Refund NL 2026 v2.docx" }] : []),
+      ];
+      const formData = new FormData();
+      formData.set("template", "worldline-contract");
+      formData.set("recipientEmail", recipientEmail);
+      formData.set("customerName", fields.companyName || selectedRelation.name);
+      formData.set("contactName", fields.contactPerson || "");
+      formData.set("refundEnabled", String(refundSelected));
+      attachments.forEach((attachment) => {
+        formData.append("attachments", attachment.blob, attachment.fileName);
+      });
+
+      const response = await fetch(
+        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        { method: "POST", body: formData },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (json.reconnectRequired && json.connectUrl) {
+        setStatus("Outlook moet opnieuw worden verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, json.connectUrl)) {
+          window.location.assign(json.connectUrl);
+        }
+        return;
+      }
+
+      if (!response.ok || !json.webLink) {
+        const message = json.error || "Outlook-concept maken mislukt.";
+        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        throw new Error(message);
+      }
+
+      if (!navigateOutlookPopup(outlookWindow, json.webLink)) {
+        window.location.assign(json.webLink);
+      }
+      setStatus(
+        refundSelected
+          ? "Outlook-concept met vier Worldline-documenten is aangemaakt."
+          : "Outlook-concept met drie Worldline-documenten is aangemaakt.",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error, "Outlook-concept maken mislukt.");
+      showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+      setStatus(message);
+    } finally {
+      setOutlookBusy(false);
+    }
+  }
+
   async function downloadDocument(document: WorldlineDocument) {
     if (!supabase) return;
 
@@ -2806,6 +3065,15 @@ export default function WorldlineDashboard() {
                   >
                     <FileText size={16} />
                     Refund
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void handleWorldlineOutlookDraft()}
+                    disabled={busy || savingAgreementFields || outlookBusy}
+                  >
+                    <Mail size={16} />
+                    {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
                   </button>
                   <button
                     type="button"

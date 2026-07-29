@@ -9,10 +9,14 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MAX_PDF_SIZE = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024;
+const MAX_WORLDLINE_ATTACHMENT_COUNT = 4;
+const MAX_WORLDLINE_TOTAL_SIZE = 50 * 1024 * 1024;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const WORD_DOCUMENT_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-type OutlookDraftTemplate = "customer-intake" | "dns-instructions";
+type OutlookDraftTemplate = "customer-intake" | "dns-instructions" | "worldline-contract";
 
 function textValue(formData: FormData, key: string, maxLength: number) {
   const value = formData.get(key);
@@ -110,6 +114,54 @@ function dnsInstructionsEmail(input: {
   ].join("");
 }
 
+function worldlineContractEmail(input: {
+  contactName: string;
+  refundEnabled: boolean;
+}) {
+  const greetingName = firstName(input.contactName);
+  const greeting = greetingName ? `Beste ${escapeHtml(greetingName)},` : "Beste,";
+  const listStyle = "margin:0 0 12pt;padding-left:22px";
+  const refundInstructions = input.refundEnabled
+    ? [
+      '<p style="margin:0 0 4pt"><strong>Bijlage Refund</strong></p>',
+      `<ul style="${listStyle}"><li>Plaats</li><li>Datum</li><li>Handtekening</li><li>Naam tekenbevoegde</li></ul>`,
+    ]
+    : [];
+
+  return [
+    `<p style="margin:0 0 12pt">${greeting}</p>`,
+    '<p style="margin:0 0 12pt">Hierbij ontvangt u de overeenkomst voor het accepteren van betaalkaarten via Worldline.</p>',
+    '<p style="margin:0 0 12pt">Graag ontvangen we deze overeenkomst volledig ingevuld en getekend terug. Er kunnen personen gezamenlijk tekenbevoegd zijn; in dat geval dienen al deze personen de overeenkomst te tekenen.</p>',
+    '<p style="margin:0 0 12pt"><strong>Wilt u de volgende verplichte velden invullen?</strong></p>',
+    '<p style="margin:0 0 4pt"><strong>Sectie: Bedrijfsgegevens (Company)</strong></p>',
+    `<ul style="${listStyle}"><li>BTW-nummer</li><li>E-mailadres voor facturatie</li></ul>`,
+    '<p style="margin:0 0 4pt"><strong>Sectie: Betaalkaarten en tarieven</strong></p>',
+    `<ul style="${listStyle}"><li>Gewenste betaalkaarten</li><li>Refund</li><li>Verwacht gemiddeld debit transactiebedrag</li><li>Verwacht aantal debit transacties per jaar</li></ul>`,
+    '<p style="margin:0 0 4pt"><strong>Sectie: Uitbetaling</strong></p>',
+    `<ul style="${listStyle}"><li>Naam rekeninghouder</li><li>Rekeningnummer (IBAN)</li><li>BIC-code</li></ul>`,
+    '<p style="margin:0 0 4pt"><strong>Sectie: Handtekening akkoord overeenkomst en algemene voorwaarden</strong></p>',
+    `<ul style="${listStyle}"><li>Plaats en datum</li><li>Functie</li><li>Handtekening tekenbevoegde(n). Let op: ondertekening mag uitsluitend met een natte handtekening. Digitale ondertekening wordt niet geaccepteerd.</li></ul>`,
+    '<p style="margin:0 0 12pt"><strong>Daarnaast ontvangen we graag de volgende documenten:</strong></p>',
+    `<ul style="${listStyle}"><li>Kopie van een geldig legitimatiebewijs van de tekenbevoegde persoon of personen. Alleen het BSN mag afgeschermd zijn. Bij een identiteitskaart ook de achterkant meesturen.</li><li>Uittreksel KvK, niet ouder dan twee maanden, inclusief eventuele vervolguittreksels. De tekenbevoegde natuurlijke persoon of personen moeten hierop zichtbaar zijn. Troublefree vraagt deze documenten rechtstreeks op bij de Kamer van Koophandel; hiervoor hoeft u zelf niets te doen.</li><li>Kopie rekeningafschrift, niet ouder dan twee maanden. Hierop moeten de naam van de bank, bedrijfsnaam, het IBAN en de datum zichtbaar zijn.</li></ul>`,
+    '<p style="margin:0 0 4pt"><strong>Bijlage: UBO-registratieformulier</strong></p>',
+    `<ul style="${listStyle}"><li>Alle velden die van toepassing zijn</li><li>Datum en plaats</li><li>Voorna(a)m(en) en achterna(a)m(en) van de wettelijke vertegenwoordiger(s) in blokletters</li><li>Handtekeningen van de wettelijke vertegenwoordiger(s)</li></ul>`,
+    '<p style="margin:0 0 4pt"><strong>Bijlage: KYC- en AML-vragenlijst</strong></p>',
+    `<ul style="${listStyle}"><li>Alle velden die van toepassing zijn</li></ul>`,
+    ...refundInstructions,
+    '<p style="margin:0 0 12pt">Wilt u alles naar mij mailen, zodat Worldline de aanvraag kan starten?</p>',
+    '<p style="margin:0 0 12pt">Binnenkort zal iemand van Worldline contact met u opnemen voor een korte UBO-check. Dit gebeurt telefonisch of per e-mail. Let op: de telefonische oproep komt vanuit België. Deze controle is verplicht ter voorkoming van witwassen en financiering van terrorisme.</p>',
+    '<p style="margin:0 0 12pt">Na de controle ontvangt u van Worldline een e-mail met toegang tot het extranet voor het inzien van de pintransacties.</p>',
+    '<p style="margin:0">Mochten er nog vragen zijn, dan hoor ik het graag.</p>',
+  ].join("");
+}
+
+function worldlineAttachmentContentType(file: File) {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".pdf")) return "application/pdf";
+  if (lowerName.endsWith(".docx")) return WORD_DOCUMENT_CONTENT_TYPE;
+  return null;
+}
+
 function validHttpUrl(value: string) {
   try {
     const url = new URL(value);
@@ -186,18 +238,87 @@ export async function POST(request: Request) {
     }
 
     const formData = await request.formData();
+    const template = textValue(formData, "template", 40) as OutlookDraftTemplate;
     const recipientEmail = textValue(formData, "recipientEmail", 320).toLowerCase();
     const customerName = textValue(formData, "customerName", 200);
     const contactName = textValue(formData, "contactName", 200);
-    const attachment = formData.get("attachment");
 
     if (!EMAIL_PATTERN.test(recipientEmail)) {
       return NextResponse.json({ error: "Vul een geldig e-mailadres van de klant in." }, { status: 400 });
     }
+
+    if (template === "worldline-contract") {
+      const refundEnabled = textValue(formData, "refundEnabled", 10).toLowerCase() === "true";
+      const expectedAttachmentCount = refundEnabled ? 4 : 3;
+      const attachmentFiles = formData
+        .getAll("attachments")
+        .filter((value): value is File => value instanceof File);
+
+      if (
+        attachmentFiles.length !== expectedAttachmentCount ||
+        attachmentFiles.length > MAX_WORLDLINE_ATTACHMENT_COUNT
+      ) {
+        return NextResponse.json(
+          {
+            error: refundEnabled
+              ? "De aansluitovereenkomst, beide UBO-documenten en het Refund-formulier zijn verplicht."
+              : "De aansluitovereenkomst en beide UBO-documenten zijn verplicht.",
+          },
+          { status: 400 },
+        );
+      }
+
+      let totalAttachmentSize = 0;
+      const attachments = [];
+      for (const attachment of attachmentFiles) {
+        const contentType = worldlineAttachmentContentType(attachment);
+        if (!contentType) {
+          return NextResponse.json(
+            { error: "Worldline-bijlagen moeten PDF- of DOCX-bestanden zijn." },
+            { status: 400 },
+          );
+        }
+        if (attachment.size <= 0 || attachment.size > MAX_ATTACHMENT_SIZE) {
+          return NextResponse.json(
+            { error: "Een Worldline-bijlage is leeg of groter dan 25 MB." },
+            { status: 400 },
+          );
+        }
+
+        totalAttachmentSize += attachment.size;
+        attachments.push({
+          fileName: attachment.name.replace(/[\\/\0]/g, "-").slice(0, 180),
+          contentType,
+          fileContent: Buffer.from(await attachment.arrayBuffer()),
+        });
+      }
+
+      if (totalAttachmentSize > MAX_WORLDLINE_TOTAL_SIZE) {
+        return NextResponse.json(
+          { error: "De Worldline-bijlagen zijn samen groter dan 50 MB." },
+          { status: 400 },
+        );
+      }
+
+      const webLink = await createOutlookDraft(request, verified.user.id, {
+        recipientEmail,
+        subject: "Worldline Transactiecontract",
+        htmlBody: worldlineContractEmail({ contactName, refundEnabled }),
+        signature,
+        attachments,
+      });
+
+      return NextResponse.json(
+        { webLink },
+        { status: 201, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    const attachment = formData.get("attachment");
     if (!(attachment instanceof File) || attachment.type !== "application/pdf") {
       return NextResponse.json({ error: "De offerte-PDF ontbreekt." }, { status: 400 });
     }
-    if (attachment.size <= 0 || attachment.size > MAX_PDF_SIZE) {
+    if (attachment.size <= 0 || attachment.size > MAX_ATTACHMENT_SIZE) {
       return NextResponse.json(
         { error: "De offerte-PDF mag maximaal 25 MB groot zijn." },
         { status: 400 },

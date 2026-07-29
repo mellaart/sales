@@ -551,6 +551,7 @@ export async function createOutlookDraft(
     subject: string;
     htmlBody: string;
     signature?: OutlookSignatureInput;
+    attachments?: OutlookAttachment[];
     fileName?: string;
     fileContent?: Buffer;
   },
@@ -602,7 +603,7 @@ export async function createOutlookDraft(
     throw new Error(draft.error?.message || "Outlook kon het concept niet aanmaken.");
   }
 
-  const attachments = [...signature.attachments];
+  const attachments = [...(input.attachments ?? []), ...signature.attachments];
   if (input.fileName && input.fileContent) {
     attachments.unshift({
       fileName: input.fileName,

@@ -71,6 +71,11 @@ export function normalizeIban(value: unknown) {
   return typeof value === "string" ? value.replace(/[^A-Z0-9]/gi, "").toUpperCase() : "";
 }
 
+export function isValidIban(value: unknown) {
+  const normalized = normalizeIban(value);
+  return Boolean(normalized && normalizeCandidate(normalized) === normalized);
+}
+
 function normalizeDutchAccountDigits(value: string) {
   return value
     .replace(/[OQD]/g, "0")

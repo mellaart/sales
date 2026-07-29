@@ -2,9 +2,14 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
 import { createId, query } from "@/lib/local-db";
 import {
+  DEFAULT_DIRECT_DEBIT_CREDITOR_NAME,
+  DIRECT_DEBIT_CONSENT_VERSION,
   EMPTY_CUSTOMER_INTAKE_DATA,
+  directDebitConsentText,
   normalizeCustomerIntakeData,
   splitCustomerContactName,
+  type CustomerDirectDebitMandateDetails,
+  type CustomerDirectDebitMandateEvidence,
   type CustomerIntakeData,
   type CustomerIntakeStatus,
   type CustomerIntakeSummary,
@@ -34,6 +39,7 @@ type CustomerIntakeRow = {
   token_version: number;
   recipient_email: string | null;
   form_data: unknown;
+  direct_debit_mandate: unknown;
   expires_at: string;
   submitted_at: string | null;
   processed_at: string | null;
@@ -43,6 +49,77 @@ type CustomerIntakeRow = {
   created_at: string;
   updated_at: string;
 };
+
+function directDebitCreditorName() {
+  return (
+    process.env.SALES_SEPA_CREDITOR_NAME || DEFAULT_DIRECT_DEBIT_CREDITOR_NAME
+  ).trim().slice(0, 180) || DEFAULT_DIRECT_DEBIT_CREDITOR_NAME;
+}
+
+function directDebitCreditorIdentifier() {
+  return (process.env.SALES_SEPA_CREDITOR_ID || "").trim().toUpperCase().slice(0, 35);
+}
+
+function directDebitMandateReference(intakeId: string) {
+  return `ST${intakeId.replace(/[^a-f0-9]/gi, "").toUpperCase()}`.slice(0, 35);
+}
+
+function directDebitMandateDetails(intakeId: string): CustomerDirectDebitMandateDetails {
+  const creditorName = directDebitCreditorName();
+  return {
+    mandateReference: directDebitMandateReference(intakeId),
+    creditorName,
+    creditorIdentifier: directDebitCreditorIdentifier(),
+    consentText: directDebitConsentText(creditorName),
+    consentVersion: DIRECT_DEBIT_CONSENT_VERSION,
+  };
+}
+
+function textProperty(source: Record<string, unknown>, key: string, maxLength: number) {
+  return typeof source[key] === "string" ? source[key].trim().slice(0, maxLength) : "";
+}
+
+function normalizeDirectDebitMandateEvidence(value: unknown): CustomerDirectDebitMandateEvidence | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const evidence: CustomerDirectDebitMandateEvidence = {
+    mandateReference: textProperty(source, "mandateReference", 35),
+    creditorName: textProperty(source, "creditorName", 180),
+    creditorIdentifier: textProperty(source, "creditorIdentifier", 35),
+    accountHolder: textProperty(source, "accountHolder", 180),
+    iban: textProperty(source, "iban", 60),
+    consentText: textProperty(source, "consentText", 2_000),
+    consentVersion: textProperty(source, "consentVersion", 80),
+    acceptedAt: textProperty(source, "acceptedAt", 80),
+    ipAddress: textProperty(source, "ipAddress", 100),
+    userAgent: textProperty(source, "userAgent", 500),
+  };
+  return evidence.mandateReference && evidence.acceptedAt ? evidence : null;
+}
+
+function requestIpAddress(request: Request) {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    ""
+  ).slice(0, 100);
+}
+
+function createDirectDebitMandateEvidence(
+  request: Request,
+  intakeId: string,
+  formData: CustomerIntakeData,
+): CustomerDirectDebitMandateEvidence | null {
+  if (formData.directDebit !== "yes" || formData.directDebitConsent !== "accepted") return null;
+  return {
+    ...directDebitMandateDetails(intakeId),
+    accountHolder: formData.directDebitAccountHolder,
+    iban: formData.directDebitBankAccount,
+    acceptedAt: new Date().toISOString(),
+    ipAddress: requestIpAddress(request),
+    userAgent: (request.headers.get("user-agent") || "").trim().slice(0, 500),
+  };
+}
 
 function signingKey() {
   const key = (
@@ -105,6 +182,7 @@ function toSummary(request: Request, row: CustomerIntakeRow): CustomerIntakeSumm
     status: row.status,
     recipientEmail: row.recipient_email ?? "",
     formData: normalizeCustomerIntakeData(row.form_data),
+    directDebitMandate: normalizeDirectDebitMandateEvidence(row.direct_debit_mandate),
     publicUrl: getCustomerIntakePublicUrl(request, row),
     expiresAt: row.expires_at,
     submittedAt: row.submitted_at,
@@ -262,23 +340,45 @@ export async function getPublicCustomerIntake(
     return { error: "Deze klantlink is verlopen. Vraag uw contactpersoon om een nieuwe link." } as const;
   }
 
+  const formData = normalizeCustomerIntakeData(row.form_data);
+  const mandateDetails = directDebitMandateDetails(row.id);
+  const storedMandate = normalizeDirectDebitMandateEvidence(row.direct_debit_mandate);
+  if (
+    formData.directDebitConsent === "accepted" &&
+    (
+      !storedMandate ||
+      storedMandate.consentVersion !== mandateDetails.consentVersion ||
+      storedMandate.creditorName !== mandateDetails.creditorName ||
+      storedMandate.creditorIdentifier !== mandateDetails.creditorIdentifier
+    )
+  ) {
+    formData.directDebitConsent = "";
+  }
+
   return {
     intake: {
       id: row.id,
       status: row.status,
-      formData: normalizeCustomerIntakeData(row.form_data),
+      formData,
       expiresAt: row.expires_at,
       submittedAt: row.submitted_at,
       customerName: row.customer_name ?? "",
+      directDebitMandateDetails: mandateDetails,
     },
   } as const;
 }
 
-export async function submitPublicCustomerIntake(id: string, formData: CustomerIntakeData) {
+export async function submitPublicCustomerIntake(
+  request: Request,
+  id: string,
+  formData: CustomerIntakeData,
+) {
+  const directDebitMandate = createDirectDebitMandateEvidence(request, id, formData);
   const { rows } = await query<CustomerIntakeRow>(
     `update public.customer_intakes
      set form_data = $2::jsonb,
          recipient_email = coalesce(nullif($3, ''), recipient_email),
+         direct_debit_mandate = $4::jsonb,
          status = 'submitted',
          submitted_at = now(),
          notification_sent_at = null,
@@ -288,7 +388,12 @@ export async function submitPublicCustomerIntake(id: string, formData: CustomerI
        and status <> 'revoked'
        and expires_at > now()
      returning *`,
-    [id, JSON.stringify(formData), formData.contactEmail || formData.generalEmail],
+    [
+      id,
+      JSON.stringify(formData),
+      formData.contactEmail || formData.generalEmail,
+      directDebitMandate ? JSON.stringify(directDebitMandate) : null,
+    ],
   );
 
   return rows[0] ?? null;

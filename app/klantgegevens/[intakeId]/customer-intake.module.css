@@ -163,10 +163,6 @@
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
-.bankAccountField {
-  width: min(100%, 430px);
-}
-
 .field {
   display: block;
   min-width: 0;
@@ -248,6 +244,99 @@
 
 .choiceField input:focus-visible + span {
   box-shadow: 0 0 0 3px rgba(47, 123, 220, 0.18);
+}
+
+.directDebitPanel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #a9c5e7;
+  border-radius: 6px;
+  background: #f5f9fe;
+}
+
+.directDebitHeading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  color: #1d5fae;
+}
+
+.directDebitHeading strong,
+.directDebitHeading span {
+  display: block;
+}
+
+.directDebitHeading span {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.directDebitFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px;
+}
+
+.mandateDetails {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.mandateDetails div {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #d4e1ef;
+  background: #ffffff;
+}
+
+.mandateDetails dt {
+  color: #718096;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.mandateDetails dd {
+  margin: 4px 0 0;
+  color: #223a54;
+  font-size: 13px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.consentField {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 11px;
+  align-items: flex-start;
+  color: #263d56;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.consentField input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #2368bf;
+}
+
+.consentField input:focus-visible {
+  outline: 3px solid rgba(47, 123, 220, 0.2);
+  outline-offset: 2px;
+}
+
+.mandateNote {
+  margin: -4px 0 0 31px;
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .error {
@@ -413,6 +502,14 @@
 
   .fields {
     grid-template-columns: 1fr;
+  }
+
+  .directDebitFields {
+    grid-template-columns: 1fr;
+  }
+
+  .directDebitPanel {
+    padding: 17px;
   }
 
   .formFooter {

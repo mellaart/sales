@@ -110,7 +110,12 @@ function customerDetails(formData: CustomerIntakeData): DetailSection[] {
             ? "Ja"
             : formData.directDebit === "no" ? "Nee" : "",
         },
-        { label: "Bankrekening", value: formData.directDebitBankAccount },
+        { label: "Naam rekeninghouder", value: formData.directDebitAccountHolder },
+        { label: "IBAN", value: formData.directDebitBankAccount },
+        {
+          label: "Incassomachtiging bevestigd",
+          value: formData.directDebitConsent === "accepted" ? "Ja" : "Nee",
+        },
       ],
     },
   ];

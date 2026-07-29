@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import { useEffect, useState, type FormEvent } from "react";
-import { CheckCircle2, LoaderCircle, LockKeyhole, Send } from "lucide-react";
+import { CheckCircle2, LoaderCircle, LockKeyhole, Send, ShieldCheck } from "lucide-react";
 import {
+  directDebitConsentText,
   EMPTY_CUSTOMER_INTAKE_DATA,
+  type CustomerDirectDebitMandateDetails,
   type CustomerIntakeData,
   type CustomerIntakeStatus,
 } from "@/lib/customer-intake";
@@ -17,6 +19,7 @@ type PublicIntake = {
   expiresAt: string;
   submittedAt: string | null;
   customerName: string;
+  directDebitMandateDetails: CustomerDirectDebitMandateDetails;
 };
 
 type TextFieldProps = {
@@ -110,7 +113,23 @@ export default function CustomerIntakeForm({
   }, [endpoint, token, tokenVersion]);
 
   function setField(field: keyof CustomerIntakeData, value: string) {
-    setFormData((current) => ({ ...current, [field]: value }) as CustomerIntakeData);
+    setFormData((current) => {
+      const next = { ...current, [field]: value } as CustomerIntakeData;
+
+      if (field === "directDebit" && value !== "yes") {
+        next.directDebitAccountHolder = "";
+        next.directDebitBankAccount = "";
+        next.directDebitConsent = "";
+      }
+      if (
+        (field === "directDebitAccountHolder" || field === "directDebitBankAccount") &&
+        value !== current[field]
+      ) {
+        next.directDebitConsent = "";
+      }
+
+      return next;
+    });
     setSaved(false);
     setError("");
   }
@@ -335,15 +354,68 @@ export default function CustomerIntakeForm({
                 </label>
               </fieldset>
 
-              <div className={styles.bankAccountField}>
-                <CustomerTextField
-                  label="Bankrekening voor automatische incasso"
-                  field="directDebitBankAccount"
-                  formData={formData}
-                  onChange={setField}
-                  required={formData.directDebit === "yes"}
-                />
-              </div>
+              {formData.directDebit === "yes" ? (
+                <div className={styles.directDebitPanel}>
+                  <div className={styles.directDebitHeading}>
+                    <ShieldCheck size={24} aria-hidden="true" />
+                    <div>
+                      <strong>Doorlopende incassomachtiging</strong>
+                      <span>Vul de rekeninggegevens in en bevestig de machtiging.</span>
+                    </div>
+                  </div>
+
+                  <div className={styles.directDebitFields}>
+                    <CustomerTextField
+                      label="Naam rekeninghouder"
+                      field="directDebitAccountHolder"
+                      formData={formData}
+                      onChange={setField}
+                      autoComplete="name"
+                    />
+                    <CustomerTextField
+                      label="IBAN"
+                      field="directDebitBankAccount"
+                      formData={formData}
+                      onChange={setField}
+                    />
+                  </div>
+
+                  <dl className={styles.mandateDetails}>
+                    <div>
+                      <dt>Incassant</dt>
+                      <dd>{intake?.directDebitMandateDetails.creditorName || "Troublefree B.V."}</dd>
+                    </div>
+                    <div>
+                      <dt>Mandaatkenmerk</dt>
+                      <dd>{intake?.directDebitMandateDetails.mandateReference || "-"}</dd>
+                    </div>
+                    {intake?.directDebitMandateDetails.creditorIdentifier ? (
+                      <div>
+                        <dt>Incassant-ID</dt>
+                        <dd>{intake.directDebitMandateDetails.creditorIdentifier}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+
+                  <label className={styles.consentField}>
+                    <input
+                      type="checkbox"
+                      required
+                      checked={formData.directDebitConsent === "accepted"}
+                      onChange={(event) => setField(
+                        "directDebitConsent",
+                        event.target.checked ? "accepted" : "",
+                      )}
+                    />
+                    <span>
+                      {intake?.directDebitMandateDetails.consentText || directDebitConsentText()}
+                    </span>
+                  </label>
+                  <p className={styles.mandateNote}>
+                    Datum, tijd, IP-adres en browser worden bij het opslaan als bewijs vastgelegd.
+                  </p>
+                </div>
+              ) : null}
             </div>
           </section>
 

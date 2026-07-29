@@ -221,10 +221,22 @@ export async function exportCustomerIntakePdf(input: CustomerIntakePdfInput) {
       labelWidth: 55,
     },
   );
+  addRow(
+    {
+      label: "Naam rekeninghouder",
+      value: data.directDebitAccountHolder,
+      labelWidth: 42,
+    },
+    {
+      label: "IBAN",
+      value: data.directDebitBankAccount,
+      labelWidth: 15,
+    },
+  );
   addFullRow({
-    label: "Bankrekening voor automatische incasso",
-    value: data.directDebitBankAccount,
-    labelWidth: 67,
+    label: "Incassomachtiging bevestigd",
+    value: data.directDebitConsent === "accepted" ? "ja" : "",
+    labelWidth: 55,
   });
 
   y += 7;

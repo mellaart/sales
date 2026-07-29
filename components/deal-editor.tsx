@@ -1013,7 +1013,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           administrationContact: "",
           administrationPhone: "",
           directDebit: "",
+          directDebitAccountHolder: "",
           directDebitBankAccount: "",
+          directDebitConsent: "",
         },
       });
       setCustomerIntakeStatus(customerIntake?.submittedAt
@@ -1707,6 +1709,54 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <span>KvK-nummer</span>
                   <strong>{customerIntake.formData.chamberOfCommerceNumber || "-"}</strong>
                 </div>
+                <div>
+                  <span>Automatische incasso</span>
+                  <strong>{customerIntake.formData.directDebit === "yes" ? "Ja" : "Nee"}</strong>
+                </div>
+                {customerIntake.formData.directDebit === "yes" ? (
+                  <>
+                    <div>
+                      <span>Naam rekeninghouder</span>
+                      <strong>{customerIntake.formData.directDebitAccountHolder || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>IBAN</span>
+                      <strong>{customerIntake.formData.directDebitBankAccount || "-"}</strong>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            {customerIntake?.directDebitMandate ? (
+              <div className="customer-intake-mandate-summary">
+                <div className="customer-intake-mandate-heading">
+                  <span>Digitale incassomachtiging</span>
+                  <strong>Bewijs lokaal vastgelegd</strong>
+                </div>
+                <dl>
+                  <div>
+                    <dt>Mandaatkenmerk</dt>
+                    <dd>{customerIntake.directDebitMandate.mandateReference}</dd>
+                  </div>
+                  <div>
+                    <dt>Geaccepteerd op</dt>
+                    <dd>
+                      {new Intl.DateTimeFormat("nl-NL", {
+                        dateStyle: "long",
+                        timeStyle: "short",
+                      }).format(new Date(customerIntake.directDebitMandate.acceptedAt))}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>IP-adres</dt>
+                    <dd>{customerIntake.directDebitMandate.ipAddress || "Niet beschikbaar"}</dd>
+                  </div>
+                  <div>
+                    <dt>Browser</dt>
+                    <dd>{customerIntake.directDebitMandate.userAgent || "Niet beschikbaar"}</dd>
+                  </div>
+                </dl>
               </div>
             ) : null}
 

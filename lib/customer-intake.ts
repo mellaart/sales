@@ -1,4 +1,29 @@
+import { isValidIban, normalizeIban } from "@/lib/iban";
+
 export type CustomerIntakeStatus = "open" | "submitted" | "processed" | "revoked";
+
+export const DIRECT_DEBIT_CONSENT_VERSION = "2026-07-29-v1";
+export const DEFAULT_DIRECT_DEBIT_CREDITOR_NAME = "Troublefree B.V.";
+
+export function directDebitConsentText(creditorName = DEFAULT_DIRECT_DEBIT_CREDITOR_NAME) {
+  return `Ik geef ${creditorName} toestemming om doorlopende incasso-opdrachten naar mijn bank te sturen voor de overeengekomen producten en diensten. Ik geef mijn bank toestemming om deze bedragen volgens de opdrachten van ${creditorName} van mijn rekening af te schrijven. Ik verklaar bevoegd te zijn om deze rekening te gebruiken.`;
+}
+
+export type CustomerDirectDebitMandateDetails = {
+  mandateReference: string;
+  creditorName: string;
+  creditorIdentifier: string;
+  consentText: string;
+  consentVersion: string;
+};
+
+export type CustomerDirectDebitMandateEvidence = CustomerDirectDebitMandateDetails & {
+  accountHolder: string;
+  iban: string;
+  acceptedAt: string;
+  ipAddress: string;
+  userAgent: string;
+};
 
 export type CustomerIntakeData = {
   deliveryName: string;
@@ -28,7 +53,9 @@ export type CustomerIntakeData = {
   administrationContact: string;
   administrationPhone: string;
   directDebit: "" | "yes" | "no";
+  directDebitAccountHolder: string;
   directDebitBankAccount: string;
+  directDebitConsent: "" | "accepted";
 };
 
 export type CustomerIntakeSummary = {
@@ -37,6 +64,7 @@ export type CustomerIntakeSummary = {
   status: CustomerIntakeStatus;
   recipientEmail: string;
   formData: CustomerIntakeData;
+  directDebitMandate: CustomerDirectDebitMandateEvidence | null;
   publicUrl: string;
   expiresAt: string;
   submittedAt: string | null;
@@ -72,7 +100,9 @@ export const EMPTY_CUSTOMER_INTAKE_DATA: CustomerIntakeData = {
   administrationContact: "",
   administrationPhone: "",
   directDebit: "",
+  directDebitAccountHolder: "",
   directDebitBankAccount: "",
+  directDebitConsent: "",
 };
 
 const FIELD_LIMITS: Record<keyof CustomerIntakeData, number> = {
@@ -103,7 +133,9 @@ const FIELD_LIMITS: Record<keyof CustomerIntakeData, number> = {
   administrationContact: 180,
   administrationPhone: 80,
   directDebit: 10,
+  directDebitAccountHolder: 180,
   directDebitBankAccount: 60,
+  directDebitConsent: 20,
 };
 
 function textValue(value: unknown, maxLength: number) {
@@ -162,13 +194,20 @@ export function normalizeCustomerIntakeData(value: unknown): CustomerIntakeData 
   normalized.vatNumber = normalized.vatNumber.toUpperCase();
   normalized.contactEmail = normalized.contactEmail.toLowerCase();
   normalized.administrationEmail = normalized.administrationEmail.toLowerCase();
-  normalized.directDebitBankAccount = normalized.directDebitBankAccount.toUpperCase();
+  normalized.directDebitBankAccount = normalizeIban(normalized.directDebitBankAccount);
   normalized.invoiceDelivery = input.invoiceDelivery === "mail" || input.invoiceDelivery === "post"
     ? input.invoiceDelivery
     : "";
   normalized.directDebit = input.directDebit === "yes" || input.directDebit === "no"
     ? input.directDebit
     : "";
+  normalized.directDebitConsent = input.directDebitConsent === "accepted" ? "accepted" : "";
+
+  if (normalized.directDebit !== "yes") {
+    normalized.directDebitAccountHolder = "";
+    normalized.directDebitBankAccount = "";
+    normalized.directDebitConsent = "";
+  }
 
   return normalized;
 }
@@ -221,8 +260,19 @@ export function validateCustomerIntakeData(data: CustomerIntakeData) {
     return "Controleer de drie e-mailadressen.";
   }
 
-  if (data.directDebit === "yes" && !data.directDebitBankAccount) {
-    return "Vul de bankrekening voor automatische incasso in.";
+  if (data.directDebit === "yes") {
+    if (!data.directDebitAccountHolder) {
+      return "Vul de naam van de rekeninghouder voor automatische incasso in.";
+    }
+    if (!data.directDebitBankAccount) {
+      return "Vul het IBAN voor automatische incasso in.";
+    }
+    if (!isValidIban(data.directDebitBankAccount)) {
+      return "Controleer het IBAN voor automatische incasso.";
+    }
+    if (data.directDebitConsent !== "accepted") {
+      return "Bevestig de machtiging voor automatische incasso.";
+    }
   }
 
   return null;

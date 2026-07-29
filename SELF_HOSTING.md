@@ -59,6 +59,15 @@ https://sales.troublefree.nl/api/outlook/callback
 Geef de app de gedelegeerde Microsoft Graph-machtiging `Mail.ReadWrite`. De app maakt
 uitsluitend een conceptbericht; verzenden blijft een bewuste handeling in Outlook.
 
+## Automatische incasso
+
+Voor digitale machtigingen voor automatische incasso voeg je toe:
+
+```dotenv
+SALES_SEPA_CREDITOR_NAME=Troublefree B.V.
+SALES_SEPA_CREDITOR_ID=vul-hier-de-officiele-incassant-id-in
+```
+
 ## Data
 
 De database-tabellen worden automatisch aangemaakt bij de eerste server-aanroep. Documenten worden opgeslagen onder:

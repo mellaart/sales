@@ -1064,7 +1064,7 @@ async function prepareAgreementPdf(
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   form.updateFieldAppearances(font);
 
-  const pdfBytes = await pdfDoc.save();
+  const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
   const pdfArrayBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
   const safeRelationName = sanitizeFileName(relation.name) || "worldline";
   const fileName = `${safeRelationName}-worldline-aansluitovereenkomst.pdf`;
@@ -1116,7 +1116,7 @@ async function prepareUboDocuments(
   form.updateFieldAppearances(font);
 
   const [pdfBytes, questionnaireBlob] = await Promise.all([
-    pdfDoc.save(),
+    pdfDoc.save({ useObjectStreams: true }),
     questionnaireResponse.blob(),
   ]);
   const pdfArrayBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;

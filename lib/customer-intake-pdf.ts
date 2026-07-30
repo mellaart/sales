@@ -3,6 +3,7 @@ import {
   normalizeCustomerIntakeData,
   type CustomerIntakeData,
 } from "@/lib/customer-intake";
+import { loadPdfImage } from "@/lib/pdf-image";
 
 type CustomerIntakePdfInput = {
   customerName?: string;
@@ -17,23 +18,13 @@ type FieldCell = {
 
 const SMART_TRADE_LOGO_URL = "/smart-trade-logo.png";
 
-function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-
 async function loadLogo() {
-  try {
-    const response = await fetch(SMART_TRADE_LOGO_URL);
-    if (!response.ok) return null;
-    return blobToDataUrl(await response.blob());
-  } catch {
-    return null;
-  }
+  return loadPdfImage(SMART_TRADE_LOGO_URL, {
+    alias: "smart-trade-logo",
+    maxWidth: 720,
+    maxHeight: 520,
+    quality: 0.9,
+  });
 }
 
 function cleanFileName(value: string) {
@@ -59,7 +50,12 @@ function directDebitLabel(value: CustomerIntakeData["directDebit"]) {
 }
 
 export async function exportCustomerIntakePdf(input: CustomerIntakePdfInput) {
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const doc = new jsPDF({
+    unit: "mm",
+    format: "a4",
+    orientation: "portrait",
+    compress: true,
+  });
   const logo = await loadLogo();
   const data = normalizeCustomerIntakeData(input.formData);
   const left = 16;
@@ -73,7 +69,16 @@ export async function exportCustomerIntakePdf(input: CustomerIntakePdfInput) {
   doc.rect(0, 0, 210, 297, "F");
 
   if (logo) {
-    doc.addImage(logo, "PNG", left, y, 54, 37);
+    doc.addImage(
+      logo.dataUrl,
+      logo.format,
+      left,
+      y,
+      54,
+      37,
+      logo.alias,
+      "MEDIUM",
+    );
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);

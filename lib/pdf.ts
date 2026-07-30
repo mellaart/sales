@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { getAssetExpansionTotals, getAssetExpansionUnitAmount } from "@/lib/asset-expansions";
+import { loadPdfImage, type PdfImageAsset } from "@/lib/pdf-image";
 import { DEFAULT_PRICE_CONFIG, getDefaultModuleWorkItems, type ExpansionWorkItemConfig, type ExpansionWorkItemKey } from "@/lib/price-config";
 import { euro } from "@/lib/pricing";
 import { getQuoteLayout } from "@/lib/quote-layouts";
@@ -22,7 +23,7 @@ type PdfTableRow = {
   total: number;
 };
 
-type LoadedLogo = string | null;
+type LoadedLogo = PdfImageAsset | null;
 
 const SMART_TRADE_LOGO_URL = "/smart-trade-logo.png";
 const TROUBLEFREE_BADGE_URL = "/troublefree-software-badge.png";
@@ -55,49 +56,26 @@ const SALES_SIGNATURE_PRESETS: Record<string, Partial<{
   },
 };
 
-let smartTradeLogoDataUrlPromise: Promise<LoadedLogo> | null = null;
-let troublefreeBadgeDataUrlPromise: Promise<LoadedLogo> | null = null;
-
 function valueOrDash(value: string) {
   return value?.trim() ? value : "-";
 }
 
-function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
+async function getSmartTradeLogoDataUrl(): Promise<LoadedLogo> {
+  return loadPdfImage(SMART_TRADE_LOGO_URL, {
+    alias: "smart-trade-logo",
+    maxWidth: 720,
+    maxHeight: 520,
+    quality: 0.9,
   });
 }
 
-async function loadImageDataUrl(url: string): Promise<LoadedLogo> {
-  if (typeof window === "undefined") return null;
-
-  return fetch(url)
-    .then((response) => {
-      if (!response.ok) throw new Error("Afbeelding kon niet worden geladen.");
-      return response.blob();
-    })
-    .then(blobToDataUrl)
-    .catch(() => null);
-}
-
-async function getSmartTradeLogoDataUrl(): Promise<LoadedLogo> {
-  if (!smartTradeLogoDataUrlPromise) {
-    smartTradeLogoDataUrlPromise = loadImageDataUrl(SMART_TRADE_LOGO_URL);
-  }
-
-  return smartTradeLogoDataUrlPromise;
-}
-
 async function getTroublefreeBadgeDataUrl(): Promise<LoadedLogo> {
-  if (!troublefreeBadgeDataUrlPromise) {
-    troublefreeBadgeDataUrlPromise = loadImageDataUrl(TROUBLEFREE_BADGE_URL);
-  }
-
-  return troublefreeBadgeDataUrlPromise;
+  return loadPdfImage(TROUBLEFREE_BADGE_URL, {
+    alias: "troublefree-software-badge",
+    maxWidth: 180,
+    maxHeight: 200,
+    quality: 0.9,
+  });
 }
 
 function addWrappedText(doc: jsPDF, text: string, x: number, y: number, width: number, lineHeight = 5) {
@@ -188,7 +166,16 @@ function addQuoteHeader(
   doc.rect(0, 0, 210, 104, "F");
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", 16, 8, 68, 47);
+    doc.addImage(
+      logoDataUrl.dataUrl,
+      logoDataUrl.format,
+      16,
+      8,
+      68,
+      47,
+      logoDataUrl.alias,
+      "MEDIUM",
+    );
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(21);
@@ -506,7 +493,16 @@ function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number, logoData
 
   const companyY = Math.max(y + 5, signatureTop + 36);
   if (troublefreeBadgeDataUrl) {
-    doc.addImage(troublefreeBadgeDataUrl, "PNG", 16, companyY - 3, 13, 14.5);
+    doc.addImage(
+      troublefreeBadgeDataUrl.dataUrl,
+      troublefreeBadgeDataUrl.format,
+      16,
+      companyY - 3,
+      13,
+      14.5,
+      troublefreeBadgeDataUrl.alias,
+      "MEDIUM",
+    );
   }
 
   doc.setFontSize(8);
@@ -523,7 +519,16 @@ function addSignature(doc: jsPDF, input: OfferTemplateInput, y: number, logoData
   doc.line(105, signatureTop - 4, 105, signatureTop + 46);
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", 124, signatureTop + 12, 34, 24);
+    doc.addImage(
+      logoDataUrl.dataUrl,
+      logoDataUrl.format,
+      124,
+      signatureTop + 12,
+      34,
+      24,
+      logoDataUrl.alias,
+      "MEDIUM",
+    );
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -560,7 +565,7 @@ function addFooter(doc: jsPDF, salesName: string, salesEmail?: string, salesPhon
 }
 
 async function buildQuotePdf(input: OfferTemplateInput) {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ compress: true });
   const layout = getQuoteLayout(input.quoteLayout);
   const isCompactLayout = layout.key === "compact";
   const isAssetsExpansionLayout = layout.key === "assets-expansion";

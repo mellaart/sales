@@ -616,13 +616,14 @@ export default function PricesDashboard() {
           </div>
 
           <div className="price-table-wrap">
-            <table className="price-table">
+            <table className="price-table modules-price-table">
               <thead>
                 <tr>
                   <th>Module</th>
                   <th>Vereiste</th>
                   <th className="price-table-money-cell">Prijs p/m</th>
                   <th>Geen pakketwissel</th>
+                  <th className="price-table-checkbox-cell">Reiskosten</th>
                   <th className="price-table-money-cell">Setupkosten</th>
                 </tr>
               </thead>
@@ -655,6 +656,17 @@ export default function PricesDashboard() {
                           onChange={(event) => updateModule(moduleConfig.key, "noPackageSwitch", event.target.checked)}
                         />
                         Geen pakketwissel nodig
+                      </label>
+                    </td>
+                    <td className="price-table-checkbox-cell">
+                      <label className="price-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={moduleConfig.requiresTravel !== false}
+                          disabled={!canEditPrices}
+                          onChange={(event) => updateModule(moduleConfig.key, "requiresTravel", event.target.checked)}
+                        />
+                        Berekenen
                       </label>
                     </td>
                     <td className="price-table-money-cell">

@@ -371,13 +371,29 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
   const implementationBaseTotal = isAssetsExpansionDeal ? expansionTotals.once : activeResult.implementationAfterAdjustment;
-  const implementationDays = Math.max(0, implementationBaseTotal / pricingConfig.implementationDayRate);
+  const implementationDays = pricingConfig.implementationDayRate > 0
+    ? Math.max(0, implementationBaseTotal / pricingConfig.implementationDayRate)
+    : 0;
+  const assetTravelImplementationTotal = modules
+    .filter((module) => (quantities[module.key] ?? 0) > 0 && module.requiresTravel !== false)
+    .reduce(
+      (sum, module) => sum + (module.setupCost ?? 0) * Math.max(0, quantities[module.key] ?? 0),
+      0,
+    );
+  const travelImplementationBaseTotal = isAssetsExpansionDeal
+    ? assetTravelImplementationTotal
+    : activeResult.travelEligibleImplementationAfterAdjustment;
+  const travelImplementationDays = pricingConfig.implementationDayRate > 0
+    ? Math.max(0, travelImplementationBaseTotal / pricingConfig.implementationDayRate)
+    : 0;
+  const canCalculateTravelCosts = travelImplementationDays > 0;
+  const effectiveIncludeTravelCosts = includeTravelCosts && canCalculateTravelCosts;
   const travelCostQuote = useMemo(
     () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
     [pricingConfig, travelPostcodePrefix],
   );
-  const travelCostTotal = includeTravelCosts && travelCostQuote
-    ? implementationDays * travelCostQuote.pricePerDay
+  const travelCostTotal = effectiveIncludeTravelCosts && travelCostQuote
+    ? travelImplementationDays * travelCostQuote.pricePerDay
     : 0;
   const implementationTotal = implementationBaseTotal + travelCostTotal;
   const adjustedResult = useMemo(() => ({
@@ -507,7 +523,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             selectedPackage: activeResult.key,
             manualImplementationAdjustment: expansionTotals.once,
             includeVat,
-            includeTravelCosts,
+            includeTravelCosts: effectiveIncludeTravelCosts,
             travelPostcodePrefix,
             travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
             travelCostTotal,
@@ -544,7 +560,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         manualImplementationAdjustment,
         includeVat,
         includeSupport,
-        includeTravelCosts,
+        includeTravelCosts: effectiveIncludeTravelCosts,
         travelPostcodePrefix,
         travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
         travelCostTotal,
@@ -598,7 +614,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       selectedModules: selectedModuleRows,
       extraMonthlyRows,
       result: adjustedResult,
-      includeTravelCosts,
+      includeTravelCosts: effectiveIncludeTravelCosts,
       travelPostcodePrefix,
       travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
       travelDescription: travelCostQuote?.postcodeRow?.description ?? "",
@@ -1143,17 +1159,24 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <div className="section">
                   <div className="section-title"><MapPin size={16} /> Reiskosten</div>
                   <div className="calculator-module-grid travel-toggle-grid">
-                    <label className={`calculator-module-card travel-toggle-card ${includeTravelCosts ? "active" : ""}`}>
+                    <label className={`calculator-module-card travel-toggle-card ${effectiveIncludeTravelCosts ? "active" : ""}`}>
                       <input
                         type="checkbox"
-                        checked={includeTravelCosts}
+                        checked={effectiveIncludeTravelCosts}
+                        disabled={!canCalculateTravelCosts}
                         onChange={(event) => setIncludeTravelCosts(event.target.checked)}
                       />
                       <span className="calculator-module-main">
-                        <strong>Setup inclusief reiskosten</strong>
-                        <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                        <strong>{canCalculateTravelCosts ? "Setup inclusief reiskosten" : "Geen reiskosten voor geselecteerde modules"}</strong>
+                        <span>
+                          {canCalculateTravelCosts
+                            ? `${formatDays(travelImplementationDays)} x ${euro.format(travelCostQuote?.pricePerDay ?? 0)}`
+                            : "Deze modules worden op afstand ingesteld"}
+                        </span>
                       </span>
-                      <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
+                      <span className="calculator-module-state">
+                        {canCalculateTravelCosts ? (effectiveIncludeTravelCosts ? "Aan" : "Uit") : "Niet nodig"}
+                      </span>
                     </label>
                   </div>
 
@@ -1207,17 +1230,18 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <div className="section">
                   <div className="section-title"><MapPin size={16} /> Reiskosten</div>
                   <div className="calculator-module-grid travel-toggle-grid">
-                    <label className={`calculator-module-card travel-toggle-card ${includeTravelCosts ? "active" : ""}`}>
+                    <label className={`calculator-module-card travel-toggle-card ${effectiveIncludeTravelCosts ? "active" : ""}`}>
                       <input
                         type="checkbox"
-                        checked={includeTravelCosts}
+                        checked={effectiveIncludeTravelCosts}
+                        disabled={!canCalculateTravelCosts}
                         onChange={(event) => setIncludeTravelCosts(event.target.checked)}
                       />
                       <span className="calculator-module-main">
                         <strong>Prijs implementatie inclusief reiskosten</strong>
-                        <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                        <span>{formatDays(travelImplementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
                       </span>
-                      <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
+                      <span className="calculator-module-state">{effectiveIncludeTravelCosts ? "Aan" : "Uit"}</span>
                     </label>
                   </div>
 

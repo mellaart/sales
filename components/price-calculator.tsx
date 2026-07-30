@@ -193,13 +193,18 @@ export default function PriceCalculator() {
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
   const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
-  const implementationDays = Math.max(0, activeResult.implementationAfterAdjustment / pricingConfig.implementationDayRate);
+  const implementationDays = pricingConfig.implementationDayRate > 0
+    ? Math.max(0, activeResult.implementationAfterAdjustment / pricingConfig.implementationDayRate)
+    : 0;
+  const travelImplementationDays = pricingConfig.implementationDayRate > 0
+    ? Math.max(0, activeResult.travelEligibleImplementationAfterAdjustment / pricingConfig.implementationDayRate)
+    : 0;
   const travelCostQuote = useMemo(
     () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
     [pricingConfig, travelPostcodePrefix],
   );
   const travelCostTotal = includeTravelCosts && travelCostQuote
-    ? implementationDays * travelCostQuote.pricePerDay
+    ? travelImplementationDays * travelCostQuote.pricePerDay
     : 0;
   const implementationTotal = activeResult.implementationAfterAdjustment + travelCostTotal;
   const selectedExpansionCount = selectedCustomerPortalOptions.length + (smartConnectPricing.connectionCount > 0 ? 1 : 0);
@@ -518,7 +523,7 @@ export default function PriceCalculator() {
                   />
                   <span className="calculator-module-main">
                     <strong>Prijs implementatie inclusief reiskosten</strong>
-                    <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                    <span>{formatDays(travelImplementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
                   </span>
                   <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
                 </label>

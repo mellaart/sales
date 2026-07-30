@@ -92,7 +92,7 @@ export function getTravelCostQuoteForPostcode(
   };
 }
 
-const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependencyNote" | "noPackageSwitch">> = {
+const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependencyNote" | "noPackageSwitch" | "requiresTravel">> = {
   mailchimp: { setupCost: 360, noPackageSwitch: true },
   rapportage: { setupCost: 360 },
   scanHerken: { setupCost: 720 },
@@ -130,6 +130,7 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     setupCost: MODULE_DETAILS[module.key]?.setupCost ?? 0,
     dependencyNote: MODULE_DETAILS[module.key]?.dependencyNote ?? null,
     noPackageSwitch: MODULE_DETAILS[module.key]?.noPackageSwitch ?? false,
+    requiresTravel: MODULE_DETAILS[module.key]?.requiresTravel ?? true,
     workItems: getDefaultModuleWorkItems(module.name),
   })),
   customerPortalOptions: [
@@ -330,6 +331,7 @@ function normalizeModule(input: unknown, fallback: ModuleConfig): ModuleConfig {
       ? source.dependencyNote.trim()
       : fallback.dependencyNote ?? null,
     noPackageSwitch: Boolean(source.noPackageSwitch ?? fallback.noPackageSwitch),
+    requiresTravel: Boolean(source.requiresTravel ?? fallback.requiresTravel ?? true),
     workItems: workItems ?? fallback.workItems ?? getDefaultModuleWorkItems(fallback.name),
   };
 }

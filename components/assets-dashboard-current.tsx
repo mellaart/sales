@@ -817,15 +817,20 @@ export default function AssetsDashboardCurrent() {
     targetPackage,
   ]);
   const assetExpansionTotals = useMemo(() => getAssetExpansionTotals(assetDealLines), [assetDealLines]);
-  const implementationDays = pricingConfig.implementationDayRate > 0
-    ? Math.max(0, assetExpansionTotals.once / pricingConfig.implementationDayRate)
+  const travelImplementationTotal = addedModules
+    .filter((moduleConfig) => moduleConfig.requiresTravel !== false)
+    .reduce((sum, moduleConfig) => sum + (moduleConfig.setupCost ?? 0), 0);
+  const travelImplementationDays = pricingConfig.implementationDayRate > 0
+    ? Math.max(0, travelImplementationTotal / pricingConfig.implementationDayRate)
     : 0;
+  const canCalculateTravelCosts = travelImplementationDays > 0;
+  const effectiveIncludeTravelCosts = includeTravelCosts && canCalculateTravelCosts;
   const travelCostQuote = useMemo(
     () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
     [pricingConfig, travelPostcodePrefix],
   );
-  const travelCostTotal = includeTravelCosts && travelCostQuote
-    ? implementationDays * travelCostQuote.pricePerDay
+  const travelCostTotal = effectiveIncludeTravelCosts && travelCostQuote
+    ? travelImplementationDays * travelCostQuote.pricePerDay
     : 0;
   const transferHint = !selectedRelation
     ? "Kies eerst een relatie. Daarna kun je geselecteerde uitbreidingen doorzetten naar Deals."
@@ -930,7 +935,7 @@ export default function AssetsDashboardCurrent() {
           selectedPackage: activeResult.key,
           manualImplementationAdjustment,
           includeVat: false,
-          includeTravelCosts,
+          includeTravelCosts: effectiveIncludeTravelCosts,
           travelPostcodePrefix,
           travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
           travelCostTotal,
@@ -1597,17 +1602,24 @@ export default function AssetsDashboardCurrent() {
           ) : (
             <>
               <div className="calculator-module-grid travel-toggle-grid">
-                <label className={`calculator-module-card travel-toggle-card ${includeTravelCosts ? "active" : ""}`}>
+                <label className={`calculator-module-card travel-toggle-card ${effectiveIncludeTravelCosts ? "active" : ""}`}>
                   <input
                     type="checkbox"
-                    checked={includeTravelCosts}
+                    checked={effectiveIncludeTravelCosts}
+                    disabled={!canCalculateTravelCosts}
                     onChange={(event) => setIncludeTravelCosts(event.target.checked)}
                   />
                   <span className="calculator-module-main">
-                    <strong>Prijs implementatie inclusief reiskosten</strong>
-                    <span>{formatDays(implementationDays)} x {euro.format(travelCostQuote?.pricePerDay ?? 0)}</span>
+                    <strong>{canCalculateTravelCosts ? "Prijs implementatie inclusief reiskosten" : "Geen reiskosten voor geselecteerde modules"}</strong>
+                    <span>
+                      {canCalculateTravelCosts
+                        ? `${formatDays(travelImplementationDays)} x ${euro.format(travelCostQuote?.pricePerDay ?? 0)}`
+                        : "Deze modules worden op afstand ingesteld"}
+                    </span>
                   </span>
-                  <span className="calculator-module-state">{includeTravelCosts ? "Aan" : "Uit"}</span>
+                  <span className="calculator-module-state">
+                    {canCalculateTravelCosts ? (effectiveIncludeTravelCosts ? "Aan" : "Uit") : "Niet nodig"}
+                  </span>
                 </label>
               </div>
 

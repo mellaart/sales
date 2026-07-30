@@ -2164,6 +2164,10 @@ td {
   min-width: 560px;
 }
 
+.price-table.modules-price-table {
+  min-width: 1080px;
+}
+
 .price-table.travel-cost-table {
   min-width: 720px;
 }
@@ -2266,6 +2270,16 @@ td {
 .price-table th.price-table-money-cell,
 .price-table td.price-table-money-cell {
   text-align: right;
+}
+
+.price-table th.price-table-checkbox-cell,
+.price-table td.price-table-checkbox-cell {
+  min-width: 125px;
+  text-align: center;
+}
+
+.price-table-checkbox-cell .price-checkbox {
+  justify-content: center;
 }
 
 .price-table-money-cell .price-table-stepper {

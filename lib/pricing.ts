@@ -16,6 +16,7 @@ export type ModuleConfig = {
   setupCost?: number;
   dependencyNote?: string | null;
   noPackageSwitch?: boolean;
+  requiresTravel?: boolean;
   workItems?: string[];
 };
 
@@ -174,8 +175,11 @@ export type PricingResult = PackageConfig & {
   visits: number;
   packageImplementationBase: number;
   moduleImplementationExtra: number;
+  moduleTravelImplementationExtra: number;
   implementationBase: number;
   implementationAfterAdjustment: number;
+  travelEligibleImplementationBase: number;
+  travelEligibleImplementationAfterAdjustment: number;
   recurringTotalContract: number;
   contractValue: number;
   annualRecurring: number;
@@ -274,8 +278,16 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
     const visits = getVisitsForUsers(pkg, totalUsers);
     const packageImplementationBase = visits * resolvedCatalog.implementationDayRate;
     const moduleImplementationExtra = extraModuleUnits.reduce((sum, module) => sum + (module.setupCost ?? 0), 0);
+    const moduleTravelImplementationExtra = extraModuleUnits
+      .filter((module) => module.requiresTravel !== false)
+      .reduce((sum, module) => sum + (module.setupCost ?? 0), 0);
     const implementationBase = packageImplementationBase + moduleImplementationExtra;
     const implementationAfterAdjustment = Math.max(0, implementationBase + manualImplementationAdjustment);
+    const travelEligibleImplementationBase = packageImplementationBase + moduleTravelImplementationExtra;
+    const travelEligibleImplementationAfterAdjustment = Math.min(
+      implementationAfterAdjustment,
+      Math.max(0, travelEligibleImplementationBase + manualImplementationAdjustment),
+    );
     const recurringTotalContract = monthlyAfterDiscount * contractMonths;
     const contractValue = recurringTotalContract + implementationAfterAdjustment;
     const annualRecurring = monthlyAfterDiscount * 12;
@@ -292,8 +304,11 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
       visits,
       packageImplementationBase,
       moduleImplementationExtra,
+      moduleTravelImplementationExtra,
       implementationBase,
       implementationAfterAdjustment,
+      travelEligibleImplementationBase,
+      travelEligibleImplementationAfterAdjustment,
       recurringTotalContract,
       contractValue,
       annualRecurring,

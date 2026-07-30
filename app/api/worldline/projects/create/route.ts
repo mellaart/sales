@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServiceClient, type ServiceClient } from "@/lib/admin-api";
-import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
+import { getServiceClient } from "@/lib/admin-api";
 import { DEFAULT_WORLDLINE_AGREEMENT_FIELDS, type WorldlineProject } from "@/lib/worldline";
+import { verifyWorldlineAccess } from "@/lib/worldline-access-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,25 +25,6 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function verifyUser(request: Request, service: ServiceClient) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-  if (!token) return { ok: false as const, message: "Niet ingelogd." };
-
-  const { data: userData, error: userError } = await service.auth.getUser(token);
-  if (userError || !userData.user) {
-    return { ok: false as const, message: "Ongeldige sessie." };
-  }
-
-  await ensureProtectedAdminRole(service, userData.user);
-
-  return {
-    ok: true as const,
-    userId: userData.user.id,
-  };
-}
-
 export async function POST(request: Request) {
   try {
     const service = getServiceClient();
@@ -51,9 +32,9 @@ export async function POST(request: Request) {
       return jsonResponse({ error: "Server configuratie ontbreekt." }, 500);
     }
 
-    const verified = await verifyUser(request, service);
+    const verified = await verifyWorldlineAccess(request, service, "write");
     if (!verified.ok) {
-      return jsonResponse({ error: verified.message }, 401);
+      return jsonResponse({ error: verified.message }, verified.status);
     }
 
     const body = (await request.json().catch(() => null)) as CreateWorldlineProjectBody | null;

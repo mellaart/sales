@@ -4,6 +4,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
 import { WORLDLINE_REFUND_TEMPLATE_PATH } from "@/lib/worldline";
+import { getLocalWorldlinePermission } from "@/lib/worldline-access-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -71,6 +72,10 @@ export async function POST(request: Request) {
     const verified = await requireLocalUser(request);
     if (!verified.ok) {
       return NextResponse.json({ error: verified.message }, { status: 401 });
+    }
+
+    if (await getLocalWorldlinePermission(verified.profile) === "none") {
+      return NextResponse.json({ error: "Geen toegang tot Worldline." }, { status: 403 });
     }
 
     const body = (await request.json().catch(() => null)) as RefundFormBody | null;

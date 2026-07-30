@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
 import { readStoredFile } from "@/lib/local-storage";
+import { WORLDLINE_DOCUMENT_BUCKET } from "@/lib/worldline";
+import { getLocalWorldlinePermission } from "@/lib/worldline-access-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,6 +19,13 @@ export async function GET(request: Request) {
 
   if (!bucket || !filePath) {
     return NextResponse.json({ error: "Bestand ontbreekt." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  }
+
+  if (
+    bucket === WORLDLINE_DOCUMENT_BUCKET &&
+    await getLocalWorldlinePermission(verified.profile) === "none"
+  ) {
+    return NextResponse.json({ error: "Geen toegang tot Worldline." }, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
 
   try {

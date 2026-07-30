@@ -1319,7 +1319,6 @@ export default function WorldlineDashboard() {
 
   const canAccessWorldline = canAccessTab(role, "worldline", roleTabAccess);
   const canWriteWorldline = canWriteTab(role, "worldline", roleTabAccess);
-  const canViewAllWorldlineProjects = role === "admin" || role === "manager" || role === "worldline";
   const activeOverviewProjects = useMemo(
     () => overviewProjects.filter((project) => !project.archived_at),
     [overviewProjects],
@@ -1406,7 +1405,7 @@ export default function WorldlineDashboard() {
       .from("worldline_projects")
       .select("*")
       .order("updated_at", { ascending: false })
-      .limit(canViewAllWorldlineProjects ? 250 : 100);
+      .limit(250);
 
     if (error) {
       setStatus(`Worldline-projecten laden mislukt: ${error.message}`);
@@ -1417,7 +1416,7 @@ export default function WorldlineDashboard() {
 
     setOverviewProjects((data ?? []) as WorldlineProject[]);
     setLoadingProjectOverview(false);
-  }, [canViewAllWorldlineProjects, supabase]);
+  }, [supabase]);
 
   useEffect(() => {
     if (!supabase || roleAccessLoading || !canAccessWorldline) return;
@@ -2852,9 +2851,7 @@ export default function WorldlineDashboard() {
               <div className="eyebrow">Projectoverzicht</div>
               <h2 className="headline">Worldline-projecten</h2>
               <p className="subtext">
-                {canViewAllWorldlineProjects
-                  ? "Open actieve en gearchiveerde Worldline-dossiers, ook als een andere gebruiker ze heeft aangemaakt."
-                  : "Open je actieve dossiers of zoek een afgerond project terug in het archief."}
+                Open actieve en gearchiveerde Worldline-dossiers, ook als een andere gebruiker ze heeft aangemaakt.
               </p>
             </div>
             <div className="button-row compact">

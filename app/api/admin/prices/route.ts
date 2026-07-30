@@ -4,8 +4,9 @@ import { normalizePricingConfig } from "@/lib/price-config";
 import { readStoredPricingConfig, writeStoredPricingConfig } from "@/lib/price-settings-storage";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
-import { ROLE_TAB_ACCESS, canWriteTab, normalizeRoleTabAccess } from "@/lib/role-tabs";
+import { canWriteTab } from "@/lib/role-tabs";
 import type { AppTabKey } from "@/lib/role-tabs";
+import { readRoleTabAccess } from "@/lib/role-tab-access-storage";
 import type { UserRole } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -16,25 +17,6 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { "Cache-Control": "no-store" },
   });
-}
-
-async function readRoleTabAccess(service: ServiceClient) {
-  const { data, error } = await service.storage.from("smart-trade-settings").download("role-tab-access.json");
-
-  if (error || !data) {
-    return ROLE_TAB_ACCESS;
-  }
-
-  try {
-    const parsed = JSON.parse(await data.text()) as unknown;
-    const source = parsed && typeof parsed === "object" && "roleTabAccess" in parsed
-      ? (parsed as { roleTabAccess?: unknown }).roleTabAccess
-      : parsed;
-
-    return normalizeRoleTabAccess(source);
-  } catch {
-    return ROLE_TAB_ACCESS;
-  }
 }
 
 type PriceSettingsTabKey = Extract<AppTabKey, "prices" | "postcode">;

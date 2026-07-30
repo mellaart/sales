@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { getServiceClient, type ServiceClient } from "@/lib/admin-api";
-import { isProtectedAdminEmail } from "@/lib/protected-admin";
-import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import {
   WORLDLINE_DOCUMENT_BUCKET,
   getWorldlineDocumentDefinition,
@@ -10,7 +8,7 @@ import {
   type WorldlineDocumentType,
   type WorldlineProject,
 } from "@/lib/worldline";
-import type { UserRole } from "@/lib/supabase";
+import { verifyWorldlineAccess } from "@/lib/worldline-access-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -117,49 +115,8 @@ function normalizeFileSize(value: unknown) {
   return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : 0;
 }
 
-async function verifyUser(request: Request, service: ServiceClient) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-  if (!token) return { ok: false as const, message: "Niet ingelogd." };
-
-  const { data: userData, error: userError } = await service.auth.getUser(token);
-  if (userError || !userData.user) {
-    return { ok: false as const, message: "Ongeldige sessie." };
-  }
-
-  await ensureProtectedAdminRole(service, userData.user);
-
-  const { data: profile } = await service
-    .from("profiles")
-    .select("role")
-    .eq("id", userData.user.id)
-    .maybeSingle();
-
-  return {
-    ok: true as const,
-    userId: userData.user.id,
-    email: userData.user.email ?? null,
-    role: ((profile as { role?: UserRole } | null)?.role ?? "sales") as UserRole,
-  };
-}
-
-function canUploadDocument(
-  user: { userId: string; email: string | null; role: UserRole },
-  project: Pick<WorldlineProject, "created_by">,
-) {
-  return (
-    project.created_by === user.userId ||
-    user.role === "admin" ||
-    user.role === "manager" ||
-    user.role === "worldline" ||
-    isProtectedAdminEmail(user.email)
-  );
-}
-
 async function loadAuthorizedProject(
   service: ServiceClient,
-  user: { userId: string; email: string | null; role: UserRole },
   projectId: string,
 ) {
   const { data: projectRow, error: projectError } = await service
@@ -175,15 +132,7 @@ async function loadAuthorizedProject(
     };
   }
 
-  const project = projectRow as WorldlineProject;
-  if (!canUploadDocument(user, project)) {
-    return {
-      ok: false as const,
-      response: jsonResponse({ error: "Geen toegang tot dit Worldline-project." }, 403),
-    };
-  }
-
-  return { ok: true as const, project };
+  return { ok: true as const, project: projectRow as WorldlineProject };
 }
 
 function validateDocumentInput(documentType: WorldlineDocumentType, fileName: string, mimeType: string) {
@@ -201,7 +150,10 @@ function validateDocumentInput(documentType: WorldlineDocumentType, fileName: st
   return "";
 }
 
-async function prepareSignedUpload(service: ServiceClient, verified: Extract<Awaited<ReturnType<typeof verifyUser>>, { ok: true }>, body: UploadPrepareBody) {
+async function prepareSignedUpload(
+  service: ServiceClient,
+  body: UploadPrepareBody,
+) {
   const projectId = normalizeText(body.projectId);
   const documentType = normalizeText(body.documentType) as WorldlineDocumentType;
   const fileName = normalizeText(body.fileName);
@@ -217,7 +169,7 @@ async function prepareSignedUpload(service: ServiceClient, verified: Extract<Awa
     return jsonResponse({ error: validationError }, 400);
   }
 
-  const projectResult = await loadAuthorizedProject(service, verified, projectId);
+  const projectResult = await loadAuthorizedProject(service, projectId);
   if (!projectResult.ok) return projectResult.response;
 
   const project = projectResult.project;
@@ -271,7 +223,11 @@ async function prepareSignedUpload(service: ServiceClient, verified: Extract<Awa
   });
 }
 
-async function completeSignedUpload(service: ServiceClient, verified: Extract<Awaited<ReturnType<typeof verifyUser>>, { ok: true }>, body: UploadCompleteBody) {
+async function completeSignedUpload(
+  service: ServiceClient,
+  verified: Extract<Awaited<ReturnType<typeof verifyWorldlineAccess>>, { ok: true }>,
+  body: UploadCompleteBody,
+) {
   const projectId = normalizeText(body.projectId);
   const documentType = normalizeText(body.documentType) as WorldlineDocumentType;
   const fileName = normalizeText(body.fileName);
@@ -294,7 +250,7 @@ async function completeSignedUpload(service: ServiceClient, verified: Extract<Aw
     return jsonResponse({ error: validationError }, 400);
   }
 
-  const projectResult = await loadAuthorizedProject(service, verified, projectId);
+  const projectResult = await loadAuthorizedProject(service, projectId);
   if (!projectResult.ok) return projectResult.response;
 
   const project = projectResult.project;
@@ -352,9 +308,9 @@ export async function POST(request: Request) {
       return jsonResponse({ error: "Server configuratie ontbreekt." }, 500);
     }
 
-    const verified = await verifyUser(request, service);
+    const verified = await verifyWorldlineAccess(request, service, "write");
     if (!verified.ok) {
-      return jsonResponse({ error: verified.message }, 401);
+      return jsonResponse({ error: verified.message }, verified.status);
     }
 
     const contentType = request.headers.get("content-type") ?? "";
@@ -363,7 +319,7 @@ export async function POST(request: Request) {
       const action = normalizeText(body?.action);
 
       if (action === "prepare") {
-        return prepareSignedUpload(service, verified, body ?? {});
+        return prepareSignedUpload(service, body ?? {});
       }
 
       if (action === "complete") {
@@ -406,9 +362,6 @@ export async function POST(request: Request) {
     }
 
     const project = projectRow as WorldlineProject;
-    if (!canUploadDocument(verified, project)) {
-      return jsonResponse({ error: "Geen toegang tot dit Worldline-project." }, 403);
-    }
 
     const documentTitle = normalizeText(checkResult.documentTitle) || getDocumentTitleFromFileName(file.name);
     const documentTitleKey = getDocumentTitleKey(documentTitle);

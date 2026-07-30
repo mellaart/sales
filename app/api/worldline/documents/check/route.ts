@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/admin-api";
-import { isProtectedAdminEmail } from "@/lib/protected-admin";
-import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { DocumentTextExtractionError, extractWorldlineDocumentText } from "@/lib/worldline-document-text";
 import { analyzeWorldlineBankStatementText } from "@/lib/worldline-bank-statement-check";
 import { analyzeWorldlineGenericDocumentText } from "@/lib/worldline-generic-document-check";
 import { analyzeWorldlineKvkText } from "@/lib/worldline-kvk-check";
 import { WORLDLINE_DOCUMENT_BUCKET, getWorldlineDocumentDefinition, type WorldlineCheckResult, type WorldlineDocument, type WorldlineProject } from "@/lib/worldline";
-import type { UserRole } from "@/lib/supabase";
+import { verifyWorldlineAccess } from "@/lib/worldline-access-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -61,47 +59,6 @@ function getStringArray(value: unknown) {
     : [];
 }
 
-async function verifyUser(request: Request, service: NonNullable<ReturnType<typeof getServiceClient>>) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-
-  if (!token) return { ok: false as const, message: "Niet ingelogd." };
-
-  const { data: userData, error: userError } = await service.auth.getUser(token);
-
-  if (userError || !userData.user) {
-    return { ok: false as const, message: "Ongeldige sessie." };
-  }
-
-  await ensureProtectedAdminRole(service, userData.user);
-
-  const { data: profile } = await service
-    .from("profiles")
-    .select("role")
-    .eq("id", userData.user.id)
-    .maybeSingle();
-
-  return {
-    ok: true as const,
-    userId: userData.user.id,
-    email: userData.user.email ?? null,
-    role: ((profile as { role?: UserRole } | null)?.role ?? "sales") as UserRole,
-  };
-}
-
-function canCheckWorldlineDocument(
-  user: { userId: string; email: string | null; role: UserRole },
-  project: Pick<WorldlineProject, "created_by">,
-) {
-  return (
-    project.created_by === user.userId ||
-    user.role === "admin" ||
-    user.role === "manager" ||
-    user.role === "worldline" ||
-    isProtectedAdminEmail(user.email)
-  );
-}
-
 export async function POST(request: Request) {
   try {
     const service = getServiceClient();
@@ -110,9 +67,9 @@ export async function POST(request: Request) {
       return jsonResponse({ error: "Server configuratie ontbreekt." }, 500);
     }
 
-    const verified = await verifyUser(request, service);
+    const verified = await verifyWorldlineAccess(request, service, "write");
     if (!verified.ok) {
-      return jsonResponse({ error: verified.message }, 401);
+      return jsonResponse({ error: verified.message }, verified.status);
     }
 
     const body = (await request.json().catch(() => null)) as {
@@ -153,10 +110,6 @@ export async function POST(request: Request) {
     }
 
     const project = projectRow as WorldlineProject;
-
-    if (!canCheckWorldlineDocument(verified, project)) {
-      return jsonResponse({ error: "Geen toegang tot dit Worldline-project." }, 403);
-    }
 
     const documentTitle = getWorldlineDocumentDefinition(document.document_type)?.title ?? "Document";
     const currentResult = readCheckResult(document.check_result);

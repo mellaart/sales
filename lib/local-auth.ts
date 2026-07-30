@@ -742,10 +742,6 @@ export function canReadAllDeals(role: UserRole | null) {
   return role === "admin" || role === "manager" || role === "support";
 }
 
-export function canManageWorldline(role: UserRole | null) {
-  return role === "admin" || role === "manager" || role === "worldline";
-}
-
 export function isLocalAdmin(profile: Pick<ProfileRecord, "email" | "role">) {
   return profile.role === "admin" || isProtectedAdminEmail(profile.email);
 }

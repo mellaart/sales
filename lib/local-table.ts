@@ -1,5 +1,7 @@
 import { query } from "@/lib/local-db";
-import { canManageWorldline, canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
+import { canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
+import { readLocalRoleTabAccess } from "@/lib/role-tab-access-storage";
+import { getTabPermission } from "@/lib/role-tabs";
 import type { ProfileRecord, UserRole } from "@/lib/supabase";
 
 export type LocalFilter = {
@@ -220,17 +222,18 @@ function appendFilters(
   return where;
 }
 
-async function getAccessibleWorldlineProjectIds(actor: Actor) {
-  if (canManageWorldline(actor.profile.role) || isLocalAdmin(actor.profile)) return null;
-
-  const { rows } = await query<{ id: string }>(
-    `select id from public.worldline_projects where created_by = $1`,
-    [actor.user.id],
-  );
-  return rows.map((row) => row.id);
+async function getWorldlinePermission(actor: Actor) {
+  const roleTabAccess = await readLocalRoleTabAccess();
+  return getTabPermission(actor.profile.role, "worldline", roleTabAccess);
 }
 
-async function getAccessWhere(table: TableName, actor: Actor | null, serviceMode: boolean, values: unknown[]) {
+async function getAccessWhere(
+  table: TableName,
+  action: LocalTableQuery["action"],
+  actor: Actor | null,
+  serviceMode: boolean,
+  values: unknown[],
+) {
   if (serviceMode) return [];
   if (!actor) throw new Error("Niet ingelogd.");
 
@@ -246,17 +249,11 @@ async function getAccessWhere(table: TableName, actor: Actor | null, serviceMode
     return [`"user_id" = $${values.length}`];
   }
 
-  if (table === "worldline_projects") {
-    if (canManageWorldline(actor.profile.role) || isLocalAdmin(actor.profile)) return [];
-    values.push(actor.user.id);
-    return [`"created_by" = $${values.length}`];
-  }
-
-  if (table === "worldline_documents") {
-    const projectIds = await getAccessibleWorldlineProjectIds(actor);
-    if (projectIds === null) return [];
-    values.push(projectIds);
-    return [`"project_id" = any($${values.length})`];
+  if (table === "worldline_projects" || table === "worldline_documents") {
+    const permission = await getWorldlinePermission(actor);
+    if (action === "select") return permission === "none" ? ["false"] : [];
+    if (permission === "write") return [];
+    throw new Error("Geen schrijfrechten voor Worldline.");
   }
 
   return [];
@@ -312,7 +309,7 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
   const values: unknown[] = [];
 
   if (input.action === "select") {
-    const accessWhere = await getAccessWhere(table, actor, serviceMode, values);
+    const accessWhere = await getAccessWhere(table, input.action, actor, serviceMode, values);
     const where = appendFilters(table, input.filters, values, accessWhere);
     const sql = [
       `select ${normalizeSelect(table, input.select)} from public.${table}`,
@@ -327,7 +324,7 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
 
   if (input.action === "delete") {
     const deleteAccessWhere = getDeleteAccessWhere(table, actor, serviceMode, values);
-    const accessWhere = deleteAccessWhere ?? await getAccessWhere(table, actor, serviceMode, values);
+    const accessWhere = deleteAccessWhere ?? await getAccessWhere(table, input.action, actor, serviceMode, values);
     const where = appendFilters(table, input.filters, values, accessWhere);
     if (where.length === 0) throw new Error("Verwijderen zonder selectie is niet toegestaan.");
     const { rows } = await query(`delete from public.${table} where ${where.join(" and ")} returning *`, values);
@@ -342,6 +339,9 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
   if (columns.length === 0) throw new Error("Geen gegevens ontvangen.");
 
   if (input.action === "insert") {
+    if (table === "worldline_projects" || table === "worldline_documents") {
+      await getAccessWhere(table, input.action, actor, serviceMode, []);
+    }
     const placeholders = columns.map((_, index) => `$${index + 1}`);
     const insertValues = columns.map((column) => payload[column]);
     const { rows } = await query(
@@ -354,6 +354,9 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
   }
 
   if (input.action === "upsert") {
+    if (table === "worldline_projects" || table === "worldline_documents") {
+      await getAccessWhere(table, input.action, actor, serviceMode, []);
+    }
     const insertValues = columns.map((column) => payload[column]);
     const placeholders = columns.map((_, index) => `$${index + 1}`);
     const conflictColumn = table === "profiles" ? "id" : "id";
@@ -370,7 +373,7 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
     return formatResult(rows, input);
   }
 
-  const accessWhere = await getAccessWhere(table, actor, serviceMode, values);
+  const accessWhere = await getAccessWhere(table, input.action, actor, serviceMode, values);
   const where = appendFilters(table, input.filters, values, accessWhere);
   if (where.length === 0) throw new Error("Wijzigen zonder selectie is niet toegestaan.");
 

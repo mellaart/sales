@@ -386,7 +386,7 @@ export default function CustomerIntakeForm({
                       <dd>{intake?.directDebitMandateDetails.creditorName || "Troublefree B.V."}</dd>
                     </div>
                     <div>
-                      <dt>Mandaatkenmerk</dt>
+                      <dt>Voorlopig mandaatnummer</dt>
                       <dd>{intake?.directDebitMandateDetails.mandateReference || "-"}</dd>
                     </div>
                     {intake?.directDebitMandateDetails.creditorIdentifier ? (
@@ -412,7 +412,8 @@ export default function CustomerIntakeForm({
                     </span>
                   </label>
                   <p className={styles.mandateNote}>
-                    Datum, tijd, IP-adres en browser worden bij het opslaan als bewijs vastgelegd.
+                    Het mandaatnummer, datum, tijd, IP-adres en de browser worden pas na uw
+                    akkoord bij het opslaan als bewijs vastgelegd.
                   </p>
                 </div>
               ) : null}

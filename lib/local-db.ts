@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Pool, types, type QueryResultRow } from "pg";
+import { Pool, types, type PoolClient, type QueryResultRow } from "pg";
 
 types.setTypeParser(1700, (value) => Number(value));
 types.setTypeParser(20, (value) => Number(value));
@@ -38,6 +38,23 @@ export async function query<T extends QueryResultRow = QueryResultRow>(sql: stri
 
 export async function queryWithoutSchema<T extends QueryResultRow = QueryResultRow>(sql: string, values: unknown[] = []) {
   return getPool().query<T>(sql, values);
+}
+
+export async function withTransaction<T>(callback: (client: PoolClient) => Promise<T>) {
+  await ensureLocalSchema();
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+    const result = await callback(client);
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export function createId() {
@@ -138,6 +155,7 @@ export async function ensureLocalSchema() {
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now(),
           archived_at timestamptz,
+          smart_trade_relation_id bigint,
           customer_name text,
           quote_title text,
           contact_name text,
@@ -168,6 +186,7 @@ export async function ensureLocalSchema() {
 
         alter table public.deals add column if not exists updated_at timestamptz not null default now();
         alter table public.deals add column if not exists archived_at timestamptz;
+        alter table public.deals add column if not exists smart_trade_relation_id bigint;
         alter table public.deals add column if not exists customer_name text;
         alter table public.deals add column if not exists quote_title text;
         alter table public.deals add column if not exists contact_name text;
@@ -197,6 +216,9 @@ export async function ensureLocalSchema() {
 
         create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
         create index if not exists deals_archived_at_created_at_idx on public.deals(archived_at, created_at desc);
+        create unique index if not exists deals_smart_trade_relation_id_idx
+          on public.deals(smart_trade_relation_id)
+          where smart_trade_relation_id is not null;
 
         create table if not exists public.customer_intakes (
           id uuid primary key default gen_random_uuid(),

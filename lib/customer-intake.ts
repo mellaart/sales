@@ -61,6 +61,7 @@ export type CustomerIntakeData = {
 export type CustomerIntakeSummary = {
   id: string;
   dealId: string;
+  smartTradeRelationId: number | null;
   status: CustomerIntakeStatus;
   recipientEmail: string;
   formData: CustomerIntakeData;

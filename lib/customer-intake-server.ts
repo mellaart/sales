@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
-import { createId, query } from "@/lib/local-db";
+import { createId, query, withTransaction } from "@/lib/local-db";
 import {
   DEFAULT_DIRECT_DEBIT_CREDITOR_NAME,
   DIRECT_DEBIT_CONSENT_VERSION,
@@ -14,6 +14,10 @@ import {
   type CustomerIntakeStatus,
   type CustomerIntakeSummary,
 } from "@/lib/customer-intake";
+import {
+  createLiveSmartTradeRelation,
+  formatSmartTradeMandateReference,
+} from "@/lib/smart-trade-relations";
 import type { ProfileRecord } from "@/lib/supabase";
 
 const CUSTOMER_INTAKE_TTL_DAYS = 30;
@@ -26,6 +30,7 @@ type Actor = {
 type DealRow = {
   id: string;
   user_id: string;
+  smart_trade_relation_id: number | null;
   customer_name: string | null;
   contact_name: string | null;
   calculator_inputs: Record<string, unknown> | null;
@@ -60,14 +65,19 @@ function directDebitCreditorIdentifier() {
   return (process.env.SALES_SEPA_CREDITOR_ID || "").trim().toUpperCase().slice(0, 35);
 }
 
-function directDebitMandateReference(intakeId: string) {
+function legacyDirectDebitMandateReference(intakeId: string) {
   return `ST${intakeId.replace(/[^a-f0-9]/gi, "").toUpperCase()}`.slice(0, 35);
 }
 
-function directDebitMandateDetails(intakeId: string): CustomerDirectDebitMandateDetails {
+function directDebitMandateDetails(
+  intakeId: string,
+  smartTradeRelationId: number | null,
+): CustomerDirectDebitMandateDetails {
   const creditorName = directDebitCreditorName();
   return {
-    mandateReference: directDebitMandateReference(intakeId),
+    mandateReference: smartTradeRelationId
+      ? formatSmartTradeMandateReference(smartTradeRelationId)
+      : legacyDirectDebitMandateReference(intakeId),
     creditorName,
     creditorIdentifier: directDebitCreditorIdentifier(),
     consentText: directDebitConsentText(creditorName),
@@ -107,12 +117,12 @@ function requestIpAddress(request: Request) {
 
 function createDirectDebitMandateEvidence(
   request: Request,
-  intakeId: string,
   formData: CustomerIntakeData,
+  mandateDetails: CustomerDirectDebitMandateDetails,
 ): CustomerDirectDebitMandateEvidence | null {
   if (formData.directDebit !== "yes" || formData.directDebitConsent !== "accepted") return null;
   return {
-    ...directDebitMandateDetails(intakeId),
+    ...mandateDetails,
     accountHolder: formData.directDebitAccountHolder,
     iban: formData.directDebitBankAccount,
     acceptedAt: new Date().toISOString(),
@@ -175,10 +185,15 @@ export function getCustomerIntakePublicUrl(request: Request, row: Pick<CustomerI
   return url.toString();
 }
 
-function toSummary(request: Request, row: CustomerIntakeRow): CustomerIntakeSummary {
+function toSummary(
+  request: Request,
+  row: CustomerIntakeRow,
+  smartTradeRelationId: number | null,
+): CustomerIntakeSummary {
   return {
     id: row.id,
     dealId: row.deal_id,
+    smartTradeRelationId,
     status: row.status,
     recipientEmail: row.recipient_email ?? "",
     formData: normalizeCustomerIntakeData(row.form_data),
@@ -205,7 +220,7 @@ function isCalculatorDeal(deal: DealRow) {
 
 async function getDeal(dealId: string) {
   const { rows } = await query<DealRow>(
-    `select id, user_id, customer_name, contact_name, calculator_inputs
+    `select id, user_id, smart_trade_relation_id, customer_name, contact_name, calculator_inputs
      from public.deals
      where id = $1
      limit 1`,
@@ -243,7 +258,9 @@ export async function getCustomerIntakeForDeal(request: Request, dealId: string,
 
   return {
     deal: access.deal,
-    intake: rows[0] ? toSummary(request, rows[0]) : null,
+    intake: rows[0]
+      ? toSummary(request, rows[0], access.deal.smart_trade_relation_id)
+      : null,
   } as const;
 }
 
@@ -271,48 +288,91 @@ export async function createOrRefreshCustomerIntake(
   };
   const id = createId();
 
-  const { rows } = await query<CustomerIntakeRow>(
-    `insert into public.customer_intakes
-      (id, deal_id, created_by, recipient_email, form_data, expires_at)
-     values ($1, $2, $3, $4, $5::jsonb, now() + ($6 * interval '1 day'))
-     on conflict (deal_id) do update
-       set recipient_email = case
-             when $4 = '' then public.customer_intakes.recipient_email
-             else $4
-           end,
-           token_version = case
-             when $7 then public.customer_intakes.token_version + 1
-             else public.customer_intakes.token_version
-           end,
-           status = case
-             when $7 then 'open'
-             else public.customer_intakes.status
-           end,
-           submitted_at = case
-             when $7 then null
-             else public.customer_intakes.submitted_at
-           end,
-           expires_at = case
-             when $7 or public.customer_intakes.expires_at <= now()
-               then now() + ($6 * interval '1 day')
-             else public.customer_intakes.expires_at
-           end,
-           updated_at = now()
-     returning *`,
-    [
-      id,
-      dealId,
-      actor.user.id,
-      recipientEmail,
-      JSON.stringify(initialFormData),
-      CUSTOMER_INTAKE_TTL_DAYS,
-      Boolean(input.regenerate),
-    ],
-  );
+  const result = await withTransaction(async (client) => {
+    const lockedDealResult = await client.query<DealRow>(
+      `select id, user_id, smart_trade_relation_id, customer_name, contact_name, calculator_inputs
+       from public.deals
+       where id = $1
+       for update`,
+      [dealId],
+    );
+    const lockedDeal = lockedDealResult.rows[0];
+    if (!lockedDeal) throw new Error("Deal niet gevonden.");
+    if (!canAccessDeal(actor, lockedDeal)) {
+      throw new Error("Je hebt geen toegang tot deze deal.");
+    }
+
+    const existingIntakeResult = await client.query(
+      `select 1
+       from public.customer_intakes
+       where deal_id = $1
+       limit 1`,
+      [dealId],
+    );
+    const isNewIntake = existingIntakeResult.rowCount === 0;
+
+    const intakeResult = await client.query<CustomerIntakeRow>(
+      `insert into public.customer_intakes
+        (id, deal_id, created_by, recipient_email, form_data, expires_at)
+       values ($1, $2, $3, $4, $5::jsonb, now() + ($6 * interval '1 day'))
+       on conflict (deal_id) do update
+         set recipient_email = case
+               when $4 = '' then public.customer_intakes.recipient_email
+               else $4
+             end,
+             token_version = case
+               when $7 then public.customer_intakes.token_version + 1
+               else public.customer_intakes.token_version
+             end,
+             status = case
+               when $7 then 'open'
+               else public.customer_intakes.status
+             end,
+             submitted_at = case
+               when $7 then null
+               else public.customer_intakes.submitted_at
+             end,
+             expires_at = case
+               when $7 or public.customer_intakes.expires_at <= now()
+                 then now() + ($6 * interval '1 day')
+               else public.customer_intakes.expires_at
+             end,
+             updated_at = now()
+       returning *`,
+      [
+        id,
+        dealId,
+        actor.user.id,
+        recipientEmail,
+        JSON.stringify(initialFormData),
+        CUSTOMER_INTAKE_TTL_DAYS,
+        Boolean(input.regenerate),
+      ],
+    );
+
+    let relationId = lockedDeal.smart_trade_relation_id;
+    if (!relationId && isNewIntake) {
+      const createdRelation = await createLiveSmartTradeRelation(lockedDeal.customer_name ?? "");
+      relationId = createdRelation.relationId;
+      await client.query(
+        `update public.deals
+         set smart_trade_relation_id = $2,
+             updated_at = now()
+         where id = $1`,
+        [dealId, relationId],
+      );
+    }
+
+    return {
+      deal: { ...lockedDeal, smart_trade_relation_id: relationId },
+      intake: intakeResult.rows[0],
+      relationId,
+    };
+  });
 
   return {
-    deal: access.deal,
-    intake: toSummary(request, rows[0]),
+    deal: result.deal,
+    intake: toSummary(request, result.intake, result.relationId),
   } as const;
 }
 
@@ -322,8 +382,11 @@ export async function getPublicCustomerIntake(
   tokenVersion: number,
   token: string,
 ) {
-  const { rows } = await query<CustomerIntakeRow & { customer_name: string | null }>(
-    `select ci.*, d.customer_name
+  const { rows } = await query<CustomerIntakeRow & {
+    customer_name: string | null;
+    smart_trade_relation_id: number | null;
+  }>(
+    `select ci.*, d.customer_name, d.smart_trade_relation_id
      from public.customer_intakes ci
      join public.deals d on d.id = ci.deal_id
      where ci.id = $1
@@ -341,13 +404,14 @@ export async function getPublicCustomerIntake(
   }
 
   const formData = normalizeCustomerIntakeData(row.form_data);
-  const mandateDetails = directDebitMandateDetails(row.id);
+  const mandateDetails = directDebitMandateDetails(row.id, row.smart_trade_relation_id);
   const storedMandate = normalizeDirectDebitMandateEvidence(row.direct_debit_mandate);
   if (
     formData.directDebitConsent === "accepted" &&
     (
       !storedMandate ||
       storedMandate.consentVersion !== mandateDetails.consentVersion ||
+      storedMandate.mandateReference !== mandateDetails.mandateReference ||
       storedMandate.creditorName !== mandateDetails.creditorName ||
       storedMandate.creditorIdentifier !== mandateDetails.creditorIdentifier
     )
@@ -372,8 +436,13 @@ export async function submitPublicCustomerIntake(
   request: Request,
   id: string,
   formData: CustomerIntakeData,
+  mandateDetails: CustomerDirectDebitMandateDetails,
 ) {
-  const directDebitMandate = createDirectDebitMandateEvidence(request, id, formData);
+  const directDebitMandate = createDirectDebitMandateEvidence(
+    request,
+    formData,
+    mandateDetails,
+  );
   const { rows } = await query<CustomerIntakeRow>(
     `update public.customer_intakes
      set form_data = $2::jsonb,

@@ -65,7 +65,12 @@ export async function POST(
     const validationError = validateCustomerIntakeData(formData);
     if (validationError) return jsonResponse({ error: validationError }, 400);
 
-    const updated = await submitPublicCustomerIntake(request, intakeId, formData);
+    const updated = await submitPublicCustomerIntake(
+      request,
+      intakeId,
+      formData,
+      access.intake.directDebitMandateDetails,
+    );
     if (!updated) {
       return jsonResponse(
         { error: "Het formulier kon niet worden opgeslagen. Vraag een nieuwe klantlink aan." },

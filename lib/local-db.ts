@@ -248,17 +248,6 @@ export async function ensureLocalSchema() {
         create index if not exists customer_intakes_status_idx
           on public.customer_intakes(status, expires_at);
 
-        update public.deals
-        set smart_trade_relation_id = 2499,
-            updated_at = now()
-        where id = '403df0b0-1177-4dfb-a2cb-7d07bb62de2e'
-          and smart_trade_relation_id is null
-          and not exists (
-            select 1
-            from public.deals
-            where smart_trade_relation_id = 2499
-          );
-
         update public.customer_intakes ci
         set direct_debit_mandate = ci.direct_debit_mandate || jsonb_build_object(
               'mandateReference', 'R002499D001',
@@ -268,12 +257,9 @@ export async function ensureLocalSchema() {
             updated_at = now()
         from public.deals d
         where d.id = ci.deal_id
-          and (
-            d.smart_trade_relation_id = 2499
-            or d.id = '403df0b0-1177-4dfb-a2cb-7d07bb62de2e'
-          )
+          and d.id = '403df0b0-1177-4dfb-a2cb-7d07bb62de2e'
           and ci.direct_debit_mandate is not null
-          and coalesce(ci.direct_debit_mandate->>'mandateReference', '') <> 'R002499D001';
+          and ci.direct_debit_mandate->>'mandateReference' = 'STC640995A0732483C8579FA664FC05611';
 
         create table if not exists public.outlook_connections (
           user_id uuid primary key references public.profiles(id) on delete cascade,

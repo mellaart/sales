@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -129,7 +130,15 @@ export function AppShellHeader() {
     <header className="app-nav">
       <div className="app-nav-inner">
         <Link href="/" className="app-nav-brand">
-          <span className="brand-dot" />
+          <Image
+            src="/icon.png"
+            alt=""
+            width={24}
+            height={24}
+            className="app-nav-brand-logo"
+            aria-hidden="true"
+            priority
+          />
           <span className="app-nav-brand-text">Smart Trade</span>
         </Link>
 

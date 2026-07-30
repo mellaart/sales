@@ -7,7 +7,7 @@ create table if not exists public.profiles (
   job_title text,
   workdays text,
   mobile_phone text,
-  role text not null default 'sales' check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')),
+  role text not null default 'sales' check (role in ('sales', 'support', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin')),
   created_at timestamptz not null default now()
 );
 
@@ -36,7 +36,7 @@ begin
     new.raw_user_meta_data->>'workdays',
     new.raw_user_meta_data->>'mobile_phone',
     case
-      when new.raw_user_meta_data->>'role' in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')
+      when new.raw_user_meta_data->>'role' in ('sales', 'support', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin')
         then new.raw_user_meta_data->>'role'
       else 'sales'
     end
@@ -394,6 +394,6 @@ create policy "Authenticated users manage worldline storage"
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles
   add constraint profiles_role_check
-  check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin'));
+  check (role in ('sales', 'support', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin'));
 
 notify pgrst, 'reload schema';

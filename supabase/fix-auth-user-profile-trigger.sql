@@ -18,7 +18,7 @@ alter table public.profiles add column if not exists created_at timestamptz not 
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles
   add constraint profiles_role_check
-  check (role in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin'));
+  check (role in ('sales', 'support', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin'));
 
 create or replace function public.handle_new_user_profile()
 returns trigger
@@ -36,7 +36,7 @@ begin
     nullif(new.raw_user_meta_data->>'workdays', ''),
     nullif(new.raw_user_meta_data->>'mobile_phone', ''),
     case
-      when new.raw_user_meta_data->>'role' in ('sales', 'support', 'consultant', 'worldline', 'manager', 'admin')
+      when new.raw_user_meta_data->>'role' in ('sales', 'support', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin')
         then new.raw_user_meta_data->>'role'
       else 'sales'
     end

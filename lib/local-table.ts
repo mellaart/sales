@@ -391,7 +391,12 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
 }
 
 export function toUserRole(value: unknown): UserRole {
-  return value === "admin" || value === "manager" || value === "support" || value === "consultant" || value === "worldline"
+  return value === "admin" ||
+    value === "manager" ||
+    value === "support" ||
+    value === "consultant" ||
+    value === "worldline" ||
+    value === "worldline_consultant"
     ? value
     : "sales";
 }

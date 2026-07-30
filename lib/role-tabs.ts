@@ -21,13 +21,22 @@ export type AppTabConfig = {
 export type TabPermission = "none" | "read" | "write";
 export type RoleTabAccessMap = Record<UserRole, Record<AppTabKey, TabPermission>>;
 
-export const USER_ROLES: UserRole[] = ["sales", "support", "consultant", "worldline", "manager", "admin"];
+export const USER_ROLES: UserRole[] = [
+  "sales",
+  "support",
+  "consultant",
+  "worldline",
+  "worldline_consultant",
+  "manager",
+  "admin",
+];
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   sales: "Sales",
   support: "Support",
   consultant: "Consultant",
-  worldline: "Worldline",
+  worldline: "Support Worldline",
+  worldline_consultant: "Consultant Worldline",
   manager: "Manager",
   admin: "Admin",
 };
@@ -49,6 +58,7 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   consultant: buildRoleAccess(["calculator", "deals", "assets"], ["prices", "postcode"]),
   support: buildRoleAccess(["deals", "assets", "testen"]),
   worldline: buildRoleAccess(["worldline"]),
+  worldline_consultant: buildRoleAccess(["worldline"]),
   manager: buildRoleAccess(["calculator", "deals", "assets", "testen"]),
   admin: buildRoleAccess([
     "calculator",

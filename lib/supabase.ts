@@ -3,7 +3,14 @@ import { getEffectiveUserRole, getProtectedAdminProfile } from "@/lib/protected-
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 import { getLocalBrowserClient } from "@/lib/local-browser-client";
 
-export type UserRole = "sales" | "manager" | "admin" | "support" | "consultant" | "worldline";
+export type UserRole =
+  | "sales"
+  | "manager"
+  | "admin"
+  | "support"
+  | "consultant"
+  | "worldline"
+  | "worldline_consultant";
 
 export type ProfileRecord = {
   id: string;

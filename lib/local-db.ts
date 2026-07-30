@@ -248,6 +248,19 @@ export async function ensureLocalSchema() {
         create index if not exists customer_intakes_status_idx
           on public.customer_intakes(status, expires_at);
 
+        update public.customer_intakes ci
+        set direct_debit_mandate = ci.direct_debit_mandate || jsonb_build_object(
+              'mandateReference', 'R002499D001',
+              'previousMandateReference', ci.direct_debit_mandate->>'mandateReference',
+              'mandateReferenceCorrectedAt', now()
+            ),
+            updated_at = now()
+        from public.deals d
+        where d.id = ci.deal_id
+          and d.smart_trade_relation_id = 2499
+          and ci.direct_debit_mandate is not null
+          and coalesce(ci.direct_debit_mandate->>'mandateReference', '') <> 'R002499D001';
+
         create table if not exists public.outlook_connections (
           user_id uuid primary key references public.profiles(id) on delete cascade,
           refresh_token_encrypted text not null,

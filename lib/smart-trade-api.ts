@@ -13,6 +13,14 @@ export type SmartTradeRelation = {
   street?: string | null;
   postcode?: string | null;
   city?: string | null;
+  customFields?: SmartTradeRelationCustomField[] | null;
+};
+
+type SmartTradeRelationCustomField = {
+  name?: string | null;
+  type?: number | string | null;
+  typeId?: number | string | null;
+  value?: unknown;
 };
 
 export type SmartTradePrimaryContact = {
@@ -81,6 +89,7 @@ type SmartTradeRelationsApiResponse = {
         city?: string | null;
       } | null;
     } | null;
+    customFields?: SmartTradeRelationCustomField[] | null;
   }>;
 };
 
@@ -141,7 +150,7 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
-const RELATION_CACHE_TTL_MS = 5 * 60 * 1000;
+const RELATION_CACHE_TTL_MS = 30 * 60 * 1000;
 const ASSET_PAGE_SIZE = 500;
 const ASSET_CLASS_PAGE_SIZE = 1000;
 const ASSET_CLASS_MAX_PAGES = 5;
@@ -151,6 +160,11 @@ let relationCache: {
   cacheKey: string;
   expiresAt: number;
   relations: SmartTradeRelation[];
+} | null = null;
+
+let relationCacheLoad: {
+  cacheKey: string;
+  promise: Promise<SmartTradeRelation[]>;
 } | null = null;
 
 let assetClassCache: {
@@ -420,6 +434,7 @@ function buildRelationsUrl(baseUrl: string, page: number) {
   const url = new URL(`${baseUrl.replace(/\/+$/, "")}/relations`);
   url.searchParams.set("page", String(page));
   url.searchParams.set("per_page", String(RELATION_PAGE_SIZE));
+  url.searchParams.set("include", "customFields");
   return url;
 }
 
@@ -465,6 +480,12 @@ function relationSearchText(relation: SmartTradeRelation) {
     .toLowerCase();
 }
 
+function isSoftwareRelation(relation: SmartTradeRelation) {
+  return relation.customFields?.some((field) => (
+    Number(field.typeId) === 6 && booleanValue(field.value)
+  )) ?? false;
+}
+
 function mapRelationRow(row: NonNullable<SmartTradeRelationsApiResponse["data"]>[number]) {
   if (row.id === undefined || row.id === null) return null;
 
@@ -483,6 +504,7 @@ function mapRelationRow(row: NonNullable<SmartTradeRelationsApiResponse["data"]>
     street: row.contactAddress?.data?.street ?? null,
     postcode: row.contactAddress?.data?.postcode ?? null,
     city: row.contactAddress?.data?.city ?? null,
+    customFields: Array.isArray(row.customFields) ? row.customFields : [],
   } satisfies SmartTradeRelation;
 }
 
@@ -520,30 +542,45 @@ async function getCachedRelations(config: SmartTradeConfig, headers: Record<stri
     return relationCache.relations;
   }
 
-  const relations = new Map<string, SmartTradeRelation>();
-
-  for (let page = 1; page <= RELATION_MAX_PAGES; page += 1) {
-    const relationsUrl = buildRelationsUrl(config.baseUrl, page);
-    const response = await fetchWithTimeout(relationsUrl.toString(), headers, config.timeoutMs);
-    const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
-    const rows = Array.isArray(json.data) ? json.data : [];
-
-    for (const row of rows) {
-      const relation = mapRelationRow(row);
-      if (!relation) continue;
-      relations.set(String(relation.id), relation);
-    }
-
-    if (rows.length < RELATION_PAGE_SIZE) break;
+  if (relationCacheLoad?.cacheKey === cacheKey) {
+    return relationCacheLoad.promise;
   }
 
-  relationCache = {
-    cacheKey,
-    expiresAt: now + RELATION_CACHE_TTL_MS,
-    relations: Array.from(relations.values()),
-  };
+  const loadPromise = Promise.all(
+    Array.from({ length: RELATION_MAX_PAGES }, (_, index) => index + 1).map(async (page) => {
+      const relationsUrl = buildRelationsUrl(config.baseUrl, page);
+      const response = await fetchWithTimeout(relationsUrl.toString(), headers, config.timeoutMs);
+      const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
+      return Array.isArray(json.data) ? json.data : [];
+    }),
+  ).then((pages) => {
+    const relations = new Map<string, SmartTradeRelation>();
 
-  return relationCache.relations;
+    for (const rows of pages) {
+      for (const row of rows) {
+        const relation = mapRelationRow(row);
+        if (!relation) continue;
+        relations.set(String(relation.id), relation);
+      }
+    }
+
+    const loadedRelations = Array.from(relations.values()).filter(isSoftwareRelation);
+    relationCache = {
+      cacheKey,
+      expiresAt: Date.now() + RELATION_CACHE_TTL_MS,
+      relations: loadedRelations,
+    };
+
+    return loadedRelations;
+  });
+
+  relationCacheLoad = { cacheKey, promise: loadPromise };
+
+  try {
+    return await loadPromise;
+  } finally {
+    if (relationCacheLoad?.promise === loadPromise) relationCacheLoad = null;
+  }
 }
 
 async function getCachedAssetClasses(config: SmartTradeConfig, headers: Record<string, string>) {
@@ -633,7 +670,8 @@ export async function searchRelations(term?: string) {
 
   if (/^\d+$/.test(normalizedTerm)) {
     try {
-      return [await getRelationById(normalizedTerm)];
+      const relation = await getRelationById(normalizedTerm);
+      return isSoftwareRelation(relation) ? [relation] : [];
     } catch {
       // Als het nummer geen relatie-ID is, zoeken we alsnog in de opgehaalde lijst.
     }
@@ -736,7 +774,7 @@ export async function getRelationById(relationId: string | number, overrides?: P
   const headers = getHeaders(config);
 
   const relationUrl = new URL(`${config.baseUrl.replace(/\/+$/, "")}/relations/${encodeURIComponent(id)}`);
-  relationUrl.searchParams.set("include", "contactAddress");
+  relationUrl.searchParams.set("include", "contactAddress,customFields");
   const response = await fetchWithTimeout(relationUrl.toString(), headers, config.timeoutMs);
   const json = await readSmartTradeJson<{ data?: SmartTradeRelationDetail | null }>(response);
 

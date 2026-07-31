@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, MapPin, Search, Sparkles, UserRound } from "lucide-react";
 import { NumberStepper } from "@/components/number-stepper";
@@ -547,6 +547,17 @@ export default function AssetsDashboardCurrent() {
   const [offerGuidance, setOfferGuidance] = useState("");
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetch("/api/smart-trade/relations/search?query=", {
+      cache: "no-store",
+      signal: controller.signal,
+    }).then((response) => response.json()).catch(() => undefined);
+
+    return () => controller.abort();
+  }, []);
 
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
   const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);

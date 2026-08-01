@@ -545,6 +545,11 @@ select option {
   box-shadow: var(--shadow);
 }
 
+.nav-menu-panel-start {
+  left: 0;
+  right: auto;
+}
+
 .nav-menu-item {
   display: flex;
   align-items: center;

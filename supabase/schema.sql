@@ -125,6 +125,34 @@ create index if not exists deals_user_id_created_at_idx on public.deals(user_id,
 create index if not exists deals_archived_at_created_at_idx on public.deals(archived_at, created_at desc);
 create index if not exists profiles_role_idx on public.profiles(role);
 
+create table if not exists public.implementations (
+  id uuid primary key default gen_random_uuid(),
+  deal_id uuid not null unique references public.deals(id) on delete restrict,
+  customer_name text not null,
+  contact_name text,
+  quote_title text,
+  package_name text,
+  implementation_total numeric not null default 0,
+  sales_name text,
+  created_by uuid not null default auth.uid() references auth.users(id) on delete restrict,
+  assigned_consultant_id uuid references auth.users(id) on delete set null,
+  assigned_consultant_name text,
+  assigned_consultant_email text,
+  assigned_by uuid references auth.users(id) on delete set null,
+  assigned_at timestamptz,
+  status text not null default 'new'
+    check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed')),
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.implementations enable row level security;
+create index if not exists implementations_assigned_consultant_idx
+  on public.implementations(assigned_consultant_id, updated_at desc);
+create index if not exists implementations_status_updated_at_idx
+  on public.implementations(status, updated_at desc);
+
 create table if not exists public.worldline_projects (
   id uuid primary key default gen_random_uuid(),
   relation_id text not null,
@@ -202,6 +230,13 @@ drop policy if exists "Users delete own deals" on public.deals;
 drop policy if exists "Managers and admins view all deals" on public.deals;
 drop policy if exists "Managers and admins update all deals" on public.deals;
 drop policy if exists "Managers and admins delete all deals" on public.deals;
+drop policy if exists "Users insert own implementations" on public.implementations;
+drop policy if exists "Sales view own implementations" on public.implementations;
+drop policy if exists "Sales update own implementations" on public.implementations;
+drop policy if exists "Consultants view assigned implementations" on public.implementations;
+drop policy if exists "Consultants update assigned implementations" on public.implementations;
+drop policy if exists "Managers and admins view all implementations" on public.implementations;
+drop policy if exists "Admins update all implementations" on public.implementations;
 drop policy if exists "Users insert own worldline projects" on public.worldline_projects;
 drop policy if exists "Users view own worldline projects" on public.worldline_projects;
 drop policy if exists "Users update own worldline projects" on public.worldline_projects;
@@ -277,6 +312,51 @@ create policy "Managers and admins delete all deals"
   for delete
   to authenticated
   using (public.current_user_role() in ('manager', 'admin'));
+
+create policy "Users insert own implementations"
+  on public.implementations
+  for insert
+  to authenticated
+  with check (auth.uid() = created_by);
+
+create policy "Sales view own implementations"
+  on public.implementations
+  for select
+  to authenticated
+  using (auth.uid() = created_by);
+
+create policy "Sales update own implementations"
+  on public.implementations
+  for update
+  to authenticated
+  using (auth.uid() = created_by)
+  with check (auth.uid() = created_by);
+
+create policy "Consultants view assigned implementations"
+  on public.implementations
+  for select
+  to authenticated
+  using (public.current_user_role() = 'consultant' and auth.uid() = assigned_consultant_id);
+
+create policy "Consultants update assigned implementations"
+  on public.implementations
+  for update
+  to authenticated
+  using (public.current_user_role() = 'consultant' and auth.uid() = assigned_consultant_id)
+  with check (public.current_user_role() = 'consultant' and auth.uid() = assigned_consultant_id);
+
+create policy "Managers and admins view all implementations"
+  on public.implementations
+  for select
+  to authenticated
+  using (public.current_user_role() in ('manager', 'admin'));
+
+create policy "Admins update all implementations"
+  on public.implementations
+  for update
+  to authenticated
+  using (public.current_user_role() = 'admin')
+  with check (public.current_user_role() = 'admin');
 
 create policy "Users insert own worldline projects"
   on public.worldline_projects

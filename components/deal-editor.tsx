@@ -9,6 +9,7 @@ import {
   Boxes,
   Calculator,
   CheckCircle2,
+  ClipboardCheck,
   ClipboardCopy,
   CloudUpload,
   Download,
@@ -32,6 +33,7 @@ import {
   type CustomerIntakeSummary,
 } from "@/lib/customer-intake";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
+import type { ImplementationRecord } from "@/lib/implementations";
 import { calculatePricing, euro, getMinimumPackageForPaidModules, getPaidSelectedModuleCount, MODULES, type ModuleConfig } from "@/lib/pricing";
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
@@ -230,6 +232,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [dealOwnerId, setDealOwnerId] = useState<string | null>(null);
   const [archivedAt, setArchivedAt] = useState<string | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
+  const [implementation, setImplementation] = useState<ImplementationRecord | null>(null);
+  const [implementationBusy, setImplementationBusy] = useState(false);
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeSummary | null>(null);
   const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
   const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
@@ -300,6 +304,17 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setQuoteLayout(normalizeQuoteLayout(inputs.quoteLayout));
       setAssetsExpansion(inputs.assetsExpansion ?? null);
       setStatus(result.warning ?? "");
+
+      if (inputs.quoteLayout !== "assets-expansion" && supabase) {
+        const { data: implementationData } = await supabase
+          .from("implementations")
+          .select("*")
+          .eq("deal_id", dealId)
+          .maybeSingle();
+        setImplementation((implementationData as ImplementationRecord | null) ?? null);
+      } else {
+        setImplementation(null);
+      }
 
       if (inputs.quoteLayout !== "assets-expansion") {
         try {
@@ -491,14 +506,79 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     }
   }
 
-  async function handleSave() {
+  async function handleStartImplementation() {
+    if (!user || !supabase || implementationBusy || isAssetsExpansionDeal || implementation) return;
+
+    const confirmed = window.confirm(
+      `Is ${customerName || quoteTitle || "deze klant"} een nieuwe klant? De deal wordt opgeslagen, naar het archief verplaatst en als implementatie klaargezet.`,
+    );
+    if (!confirmed) return;
+
+    setImplementationBusy(true);
+    setStatus("Deal wordt opgeslagen en de implementatie wordt aangemaakt...");
+
+    try {
+      const saved = await handleSave();
+      if (!saved) return;
+
+      const { data, error } = await supabase
+        .from("implementations")
+        .insert({
+          deal_id: dealId,
+          customer_name: customerName.trim() || quoteTitle.trim() || "Nieuwe Smart Trade-klant",
+          contact_name: contactName.trim() || null,
+          quote_title: quoteTitle.trim() || null,
+          package_name: activeResult.name,
+          implementation_total: implementationTotal,
+          sales_name: salesName.trim() || currentSalesName || null,
+          status: "new",
+          notes: null,
+        } as never)
+        .select("*")
+        .single();
+
+      if (error) {
+        const { data: existingImplementation } = await supabase
+          .from("implementations")
+          .select("*")
+          .eq("deal_id", dealId)
+          .maybeSingle();
+
+        if (!existingImplementation) {
+          setStatus(`Implementatie aanmaken mislukt: ${error.message}`);
+          return;
+        }
+
+        setImplementation(existingImplementation as ImplementationRecord);
+      } else {
+        setImplementation(data as ImplementationRecord);
+      }
+
+      const nextArchivedAt = archivedAt ?? new Date().toISOString();
+      const archiveResult = await updateDealWithFallback(supabase, dealId, {
+        archived_at: nextArchivedAt,
+      });
+
+      if (archiveResult.error) {
+        setStatus(`Implementatie is aangemaakt, maar de deal kon niet worden gearchiveerd: ${archiveResult.error}`);
+        return;
+      }
+
+      setArchivedAt(archiveResult.deal?.archived_at ?? nextArchivedAt);
+      setStatus("Nieuwe klant is als implementatie aangemaakt en staat klaar om toe te wijzen.");
+    } finally {
+      setImplementationBusy(false);
+    }
+  }
+
+  async function handleSave(): Promise<boolean> {
     if (!user) {
       setStatus("Je moet ingelogd zijn om deze deal op te slaan.");
-      return;
+      return false;
     }
     const payload = isAssetsExpansionDeal
       ? {
-          user_id: user.id,
+          user_id: dealOwnerId || user.id,
           customer_name: customerName || null,
           quote_title: quoteTitle,
           contact_name: contactName || null,
@@ -534,7 +614,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           },
         }
       : {
-      user_id: user.id,
+      user_id: dealOwnerId || user.id,
       customer_name: customerName || null,
       quote_title: quoteTitle,
       contact_name: contactName || null,
@@ -582,9 +662,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     const result = await updateDealWithFallback(supabase, dealId, payload);
     if (result.error) {
       setStatus(`Opslaan mislukt: ${result.error}`);
-      return;
+      return false;
     }
     setStatus(result.warning ?? "Deal opnieuw berekend en opgeslagen.");
+    return true;
   }
 
   async function handlePdfExport() {
@@ -1073,12 +1154,28 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           </div>
           <div className="brand-actions">
             <Link href="/deals" className="secondary-button"><ArrowLeft size={16} /> Terug naar deals</Link>
-            {canArchiveDeal ? (
+            {implementation ? (
+              <Link href="/implementatie" className="primary-button">
+                <ClipboardCheck size={16} /> Open implementatie
+              </Link>
+            ) : null}
+            {canArchiveDeal && !isAssetsExpansionDeal && !implementation ? (
               <button
                 type="button"
-                className={archivedAt ? "secondary-button" : "primary-button"}
+                className="primary-button"
+                onClick={() => void handleStartImplementation()}
+                disabled={implementationBusy || archiveBusy}
+              >
+                <ClipboardCheck size={16} />
+                {implementationBusy ? "Implementatie starten..." : "Nieuwe klant - start implementatie"}
+              </button>
+            ) : null}
+            {canArchiveDeal && !implementation ? (
+              <button
+                type="button"
+                className="secondary-button"
                 onClick={() => void handleArchiveToggle()}
-                disabled={archiveBusy}
+                disabled={archiveBusy || implementationBusy}
               >
                 {archivedAt ? <ArchiveRestore size={16} /> : <Archive size={16} />}
                 {archiveBusy
@@ -1087,11 +1184,13 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     : "Archiveren..."
                   : archivedAt
                     ? "Terugzetten naar actief"
-                    : "Klaar en archiveren"}
+                    : isAssetsExpansionDeal
+                      ? "Klaar en archiveren"
+                      : "Niet gewonnen - archiveren"}
               </button>
             ) : null}
-            <StatusPill tone={archivedAt ? "neutral" : "success"}>
-              {archivedAt ? "Gearchiveerd" : "Versie 8"}
+            <StatusPill tone={implementation ? "success" : archivedAt ? "neutral" : "success"}>
+              {implementation ? "Implementatie gestart" : archivedAt ? "Gearchiveerd" : "Versie 8"}
             </StatusPill>
           </div>
         </header>

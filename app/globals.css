@@ -657,6 +657,120 @@ select option {
   line-height: 1;
 }
 
+.implementation-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(2, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.implementation-search-box {
+  width: 100%;
+  min-height: 48px;
+}
+
+.implementation-list {
+  display: grid;
+  margin-top: 18px;
+}
+
+.implementation-row {
+  display: grid;
+  gap: 18px;
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+}
+
+.implementation-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.implementation-row-header,
+.implementation-title-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.implementation-row-header h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+}
+
+.implementation-row-header p {
+  margin: 7px 0 0;
+  color: var(--muted);
+}
+
+.implementation-title-line {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.implementation-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--line);
+}
+
+.implementation-meta-grid span {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px;
+  background: rgba(10, 20, 36, 0.95);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.implementation-meta-grid strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.implementation-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(220px, 0.8fr) minmax(320px, 1.4fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.implementation-notes .textarea {
+  min-height: 104px;
+}
+
+@media (max-width: 980px) {
+  .implementation-filter-grid,
+  .implementation-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .implementation-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .implementation-row-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .implementation-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .save-status,
 .empty-state {
   padding: 16px;

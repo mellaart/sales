@@ -1,5 +1,6 @@
 import { query } from "@/lib/local-db";
 import { canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
+import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { readLocalRoleTabAccess } from "@/lib/role-tab-access-storage";
 import { getTabPermission } from "@/lib/role-tabs";
 import type { ProfileRecord, UserRole } from "@/lib/supabase";
@@ -82,6 +83,26 @@ const TABLES = {
     "modules",
     "notes",
     "calculator_inputs",
+  ]),
+  implementations: new Set([
+    "id",
+    "deal_id",
+    "customer_name",
+    "contact_name",
+    "quote_title",
+    "package_name",
+    "implementation_total",
+    "sales_name",
+    "created_by",
+    "assigned_consultant_id",
+    "assigned_consultant_name",
+    "assigned_consultant_email",
+    "assigned_by",
+    "assigned_at",
+    "status",
+    "notes",
+    "created_at",
+    "updated_at",
   ]),
   worldline_projects: new Set([
     "id",
@@ -189,6 +210,7 @@ function cleanPayload(table: TableName, payload: unknown, actor?: Actor | null) 
   }
 
   if (table === "deals" && actor && !next.user_id) next.user_id = actor.user.id;
+  if (table === "implementations" && actor && !next.created_by) next.created_by = actor.user.id;
   if (table === "worldline_projects" && actor && !next.created_by) next.created_by = actor.user.id;
   if (table === "worldline_documents" && actor && !next.uploaded_by) next.uploaded_by = actor.user.id;
 
@@ -227,6 +249,13 @@ async function getWorldlinePermission(actor: Actor) {
   return getTabPermission(actor.profile.role, "worldline", roleTabAccess);
 }
 
+async function getImplementationPermission(actor: Actor) {
+  if (isProtectedAdminEmail(actor.user.email)) return "write" as const;
+
+  const roleTabAccess = await readLocalRoleTabAccess();
+  return getTabPermission(actor.profile.role, "implementation", roleTabAccess);
+}
+
 async function getAccessWhere(
   table: TableName,
   action: LocalTableQuery["action"],
@@ -247,6 +276,29 @@ async function getAccessWhere(
     if (canReadAllDeals(actor.profile.role) || isLocalAdmin(actor.profile)) return [];
     values.push(actor.user.id);
     return [`"user_id" = $${values.length}`];
+  }
+
+  if (table === "implementations") {
+    const permission = await getImplementationPermission(actor);
+
+    if (permission === "none") {
+      if (action === "select") return ["false"];
+      throw new Error("Geen toegang tot Implementatie.");
+    }
+
+    if (action !== "select" && permission !== "write") {
+      throw new Error("Je hebt alleen leesrechten voor Implementatie.");
+    }
+
+    if (isLocalAdmin(actor.profile) || actor.profile.role === "manager") return [];
+
+    if (actor.profile.role === "consultant") {
+      values.push(actor.user.id);
+      return [`"assigned_consultant_id" = $${values.length}`];
+    }
+
+    values.push(actor.user.id);
+    return [`"created_by" = $${values.length}`];
   }
 
   if (table === "worldline_projects" || table === "worldline_documents") {
@@ -322,7 +374,15 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
 
   if (!serviceMode && !actor) throw new Error("Niet ingelogd.");
 
+  if (input.action === "upsert" && table === "implementations") {
+    throw new Error("Implementaties kunnen alleen vanuit een calculator-deal worden aangemaakt.");
+  }
+
   if (input.action === "delete") {
+    if (table === "implementations") {
+      throw new Error("Implementaties kunnen niet worden verwijderd.");
+    }
+
     const deleteAccessWhere = getDeleteAccessWhere(table, actor, serviceMode, values);
     const accessWhere = deleteAccessWhere ?? await getAccessWhere(table, input.action, actor, serviceMode, values);
     const where = appendFilters(table, input.filters, values, accessWhere);
@@ -334,13 +394,93 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
     return formatResult(rows, input);
   }
 
+  const rawPayload = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
+    ? input.payload as Record<string, unknown>
+    : {};
+
+  if (
+    table === "implementations" &&
+    actor &&
+    Object.prototype.hasOwnProperty.call(rawPayload, "created_by")
+  ) {
+    throw new Error("De eigenaar van een implementatie wordt automatisch bepaald.");
+  }
+
+  if (
+    table === "implementations" &&
+    input.action === "update" &&
+    Object.keys(rawPayload).some((column) => ![
+      "status",
+      "notes",
+      "assigned_consultant_id",
+      "assigned_consultant_name",
+      "assigned_consultant_email",
+      "assigned_by",
+      "assigned_at",
+    ].includes(column))
+  ) {
+    throw new Error("Deze implementatiegegevens kunnen hier niet worden gewijzigd.");
+  }
+
+  if (
+    table === "implementations" &&
+    actor &&
+    !isProtectedAdminEmail(actor.user.email) &&
+    [
+      "assigned_consultant_id",
+      "assigned_consultant_name",
+      "assigned_consultant_email",
+      "assigned_by",
+      "assigned_at",
+    ].some((column) => Object.prototype.hasOwnProperty.call(rawPayload, column))
+  ) {
+    throw new Error("Alleen Erik Mellaart kan een implementatie toewijzen.");
+  }
+
   const payload = cleanPayload(table, input.payload, actor);
   const columns = Object.keys(payload).map((column) => normalizeColumn(table, column));
   if (columns.length === 0) throw new Error("Geen gegevens ontvangen.");
 
   if (input.action === "insert") {
-    if (table === "worldline_projects" || table === "worldline_documents") {
+    if (table === "worldline_projects" || table === "worldline_documents" || table === "implementations") {
       await getAccessWhere(table, input.action, actor, serviceMode, []);
+    }
+
+    if (table === "implementations" && !serviceMode && actor) {
+      const dealId = typeof payload.deal_id === "string" ? payload.deal_id : "";
+      if (!dealId) throw new Error("De calculator-deal ontbreekt.");
+
+      const { rows: dealRows } = await query<{
+        user_id: string;
+        calculator_inputs: unknown;
+      }>(
+        "select user_id, calculator_inputs from public.deals where id = $1 limit 1",
+        [dealId],
+      );
+      const deal = dealRows[0];
+      if (!deal) throw new Error("De calculator-deal is niet gevonden.");
+      if (!isLocalAdmin(actor.profile) && deal.user_id !== actor.user.id) {
+        throw new Error("Je kunt alleen vanuit je eigen calculator-deal een implementatie starten.");
+      }
+
+      payload.created_by = deal.user_id;
+
+      const calculatorInputs = typeof deal.calculator_inputs === "string"
+        ? JSON.parse(deal.calculator_inputs) as Record<string, unknown>
+        : deal.calculator_inputs as Record<string, unknown> | null;
+      if (calculatorInputs?.quoteLayout === "assets-expansion" || calculatorInputs?.assetsExpansion) {
+        throw new Error("Een uitbreiding vanuit Assets is geen nieuwe implementatie.");
+      }
+    }
+
+    if (table === "implementations" && payload.assigned_consultant_id) {
+      const { rows: consultantRows } = await query<{ role: string }>(
+        "select role from public.profiles where id = $1 limit 1",
+        [payload.assigned_consultant_id],
+      );
+      if (consultantRows[0]?.role !== "consultant") {
+        throw new Error("Selecteer een gebruiker met de rol Consultant.");
+      }
     }
     const placeholders = columns.map((_, index) => `$${index + 1}`);
     const insertValues = columns.map((column) => payload[column]);
@@ -374,6 +514,16 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
   }
 
   const accessWhere = await getAccessWhere(table, input.action, actor, serviceMode, values);
+
+  if (table === "implementations" && payload.assigned_consultant_id) {
+    const { rows: consultantRows } = await query<{ role: string }>(
+      "select role from public.profiles where id = $1 limit 1",
+      [payload.assigned_consultant_id],
+    );
+    if (consultantRows[0]?.role !== "consultant") {
+      throw new Error("Selecteer een gebruiker met de rol Consultant.");
+    }
+  }
   const where = appendFilters(table, input.filters, values, accessWhere);
   if (where.length === 0) throw new Error("Wijzigen zonder selectie is niet toegestaan.");
 

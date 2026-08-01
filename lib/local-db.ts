@@ -220,6 +220,58 @@ export async function ensureLocalSchema() {
           on public.deals(smart_trade_relation_id)
           where smart_trade_relation_id is not null;
 
+        create table if not exists public.implementations (
+          id uuid primary key default gen_random_uuid(),
+          deal_id uuid not null references public.deals(id) on delete restrict,
+          customer_name text not null,
+          contact_name text,
+          quote_title text,
+          package_name text,
+          implementation_total numeric not null default 0,
+          sales_name text,
+          created_by uuid references public.profiles(id) on delete set null,
+          assigned_consultant_id uuid references public.profiles(id) on delete set null,
+          assigned_consultant_name text,
+          assigned_consultant_email text,
+          assigned_by uuid references public.profiles(id) on delete set null,
+          assigned_at timestamptz,
+          status text not null default 'new'
+            check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed')),
+          notes text,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        alter table public.implementations add column if not exists contact_name text;
+        alter table public.implementations add column if not exists quote_title text;
+        alter table public.implementations add column if not exists package_name text;
+        alter table public.implementations add column if not exists implementation_total numeric not null default 0;
+        alter table public.implementations add column if not exists sales_name text;
+        alter table public.implementations add column if not exists created_by uuid references public.profiles(id) on delete set null;
+        alter table public.implementations add column if not exists assigned_consultant_id uuid references public.profiles(id) on delete set null;
+        alter table public.implementations add column if not exists assigned_consultant_name text;
+        alter table public.implementations add column if not exists assigned_consultant_email text;
+        alter table public.implementations add column if not exists assigned_by uuid references public.profiles(id) on delete set null;
+        alter table public.implementations add column if not exists assigned_at timestamptz;
+        alter table public.implementations add column if not exists status text not null default 'new';
+        alter table public.implementations add column if not exists notes text;
+        alter table public.implementations add column if not exists created_at timestamptz not null default now();
+        alter table public.implementations add column if not exists updated_at timestamptz not null default now();
+        alter table public.implementations drop constraint if exists implementations_deal_id_fkey;
+        alter table public.implementations
+          add constraint implementations_deal_id_fkey
+          foreign key (deal_id) references public.deals(id) on delete restrict;
+        alter table public.implementations drop constraint if exists implementations_status_check;
+        alter table public.implementations
+          add constraint implementations_status_check
+          check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed'));
+
+        create unique index if not exists implementations_deal_id_idx on public.implementations(deal_id);
+        create index if not exists implementations_assigned_consultant_idx
+          on public.implementations(assigned_consultant_id, updated_at desc);
+        create index if not exists implementations_status_updated_at_idx
+          on public.implementations(status, updated_at desc);
+
         create table if not exists public.customer_intakes (
           id uuid primary key default gen_random_uuid(),
           deal_id uuid not null unique references public.deals(id) on delete cascade,

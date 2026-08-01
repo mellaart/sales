@@ -3,6 +3,7 @@ import type { UserRole } from "@/lib/supabase";
 export type AppTabKey =
   | "calculator"
   | "deals"
+  | "implementation"
   | "assets"
   | "worldline"
   | "testen"
@@ -44,6 +45,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export const APP_TABS: AppTabConfig[] = [
   { key: "calculator", label: "Calculator", href: "/calculator", pathPrefix: "/calculator" },
   { key: "deals", label: "Deals", href: "/deals", pathPrefix: "/deals" },
+  { key: "implementation", label: "Implementatie", href: "/implementatie", pathPrefix: "/implementatie" },
   { key: "assets", label: "Assets", href: "/assets", pathPrefix: "/assets" },
   { key: "worldline", label: "Worldline", href: "/worldline", pathPrefix: "/worldline" },
   { key: "testen", label: "Testen", href: "/testen", pathPrefix: "/testen" },
@@ -54,15 +56,16 @@ export const APP_TABS: AppTabConfig[] = [
 ];
 
 export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
-  sales: buildRoleAccess(["calculator", "deals", "assets"]),
-  consultant: buildRoleAccess(["calculator", "deals", "assets"], ["prices", "postcode"]),
+  sales: buildRoleAccess(["calculator", "deals", "assets", "implementation"]),
+  consultant: buildRoleAccess(["calculator", "deals", "assets", "implementation"], ["prices", "postcode"]),
   support: buildRoleAccess(["deals", "assets", "testen"]),
   worldline: buildRoleAccess(["worldline"]),
   worldline_consultant: buildRoleAccess(["worldline"]),
-  manager: buildRoleAccess(["calculator", "deals", "assets", "testen"]),
+  manager: buildRoleAccess(["calculator", "deals", "assets", "testen"], ["implementation"]),
   admin: buildRoleAccess([
     "calculator",
     "deals",
+    "implementation",
     "assets",
     "worldline",
     "testen",
@@ -84,6 +87,9 @@ const MINIMUM_ROLE_TAB_ACCESS: Partial<Record<UserRole, Partial<Record<AppTabKey
   consultant: {
     prices: "read",
     postcode: "read",
+  },
+  manager: {
+    implementation: "read",
   },
 };
 

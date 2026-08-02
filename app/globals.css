@@ -762,6 +762,7 @@ select option {
 .implementation-notes .textarea {
   height: 50px;
   min-height: 50px;
+  resize: none;
 }
 
 .implementation-detail-hero h1 {

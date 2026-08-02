@@ -548,6 +548,7 @@ export async function createOutlookDraft(
   userId: string,
   input: {
     recipientEmail: string;
+    ccRecipientEmails?: string[];
     subject: string;
     htmlBody: string;
     signature?: OutlookSignatureInput;
@@ -586,6 +587,9 @@ export async function createOutlookDraft(
           },
         },
       ],
+      ccRecipients: (input.ccRecipientEmails ?? []).map((email) => ({
+        emailAddress: { address: email },
+      })),
     }),
     cache: "no-store",
   });

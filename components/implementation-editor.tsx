@@ -253,7 +253,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [customerIntakeLoadFailed, setCustomerIntakeLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [outlookBusy, setOutlookBusy] = useState(false);
+  const [dnsOutlookBusy, setDnsOutlookBusy] = useState(false);
+  const [newCustomerOutlookBusy, setNewCustomerOutlookBusy] = useState(false);
   const [dnsCheck, setDnsCheck] = useState<ImplementationDnsCheck | null>(null);
   const [dnsCheckLoading, setDnsCheckLoading] = useState(false);
   const [dnsCheckError, setDnsCheckError] = useState("");
@@ -500,7 +501,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function handleDnsOutlookDraft() {
-    if (!implementation || !customerIntake?.submittedAt || outlookBusy) return;
+    if (!implementation || !customerIntake?.submittedAt || dnsOutlookBusy) return;
 
     const recipientEmail = (
       customerIntake.recipientEmail || customerIntake.formData.contactEmail
@@ -523,7 +524,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
       "DNS-instructies voorbereiden",
       "Het Outlook-concept met de SPF- en DKIM-instructies wordt gemaakt.",
     );
-    setOutlookBusy(true);
+    setDnsOutlookBusy(true);
     setMessage("Outlook-verbinding wordt gecontroleerd...");
 
     const returnTo = `/implementatie/${encodeURIComponent(implementation.id)}`;
@@ -586,7 +587,73 @@ export default function ImplementationEditor({ implementationId }: { implementat
       showOutlookPopupStatus(outlookWindow, "DNS-concept niet gemaakt", errorMessage, "error");
       setMessage(errorMessage);
     } finally {
-      setOutlookBusy(false);
+      setDnsOutlookBusy(false);
+    }
+  }
+
+  async function handleNewCustomerOutlookDraft() {
+    if (!implementation || newCustomerOutlookBusy) return;
+
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    showOutlookPopupStatus(
+      outlookWindow,
+      "Nieuwe klantmail voorbereiden",
+      "Het Outlook-concept met alle klant- en implementatiegegevens wordt gemaakt.",
+    );
+    setNewCustomerOutlookBusy(true);
+    setMessage("Outlook-verbinding wordt gecontroleerd...");
+
+    const returnTo = `/implementatie/${encodeURIComponent(implementation.id)}`;
+
+    try {
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!statusResponse.ok) {
+        throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+      }
+      if (!statusJson.connected) {
+        const connectUrl = statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
+        setMessage("Outlook wordt eenmalig verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, connectUrl)) window.location.assign(connectUrl);
+        return;
+      }
+
+      setMessage("Nieuwe klantmail wordt gemaakt...");
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/new-customer-draft?returnTo=${encodeURIComponent(returnTo)}`,
+        { method: "POST" },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (json.reconnectRequired && json.connectUrl) {
+        setMessage("Outlook moet opnieuw worden verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, json.connectUrl)) window.location.assign(json.connectUrl);
+        return;
+      }
+      if (!response.ok || !json.webLink) {
+        throw new Error(json.error || "Nieuwe klantmail maken mislukt.");
+      }
+      if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
+      setMessage("Nieuwe klantmail is in Outlook klaargezet.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Nieuwe klantmail maken mislukt.";
+      showOutlookPopupStatus(outlookWindow, "Nieuwe klantmail niet gemaakt", errorMessage, "error");
+      setMessage(errorMessage);
+    } finally {
+      setNewCustomerOutlookBusy(false);
     }
   }
 
@@ -639,6 +706,15 @@ export default function ImplementationEditor({ implementationId }: { implementat
   );
   const customerDomain = getWebsiteDomain(customerIntake?.formData.website ?? "");
   const customerEmail = customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || "";
+  const newCustomerMailMissingFields = [
+    !customerIntake?.submittedAt ? "klantgegevensformulier" : "",
+    !implementation.assigned_consultant_name?.trim() ? "consultant" : "",
+    !implementation.administration_name?.trim() ? "administratie" : "",
+    !implementation.planned_go_live_date?.trim() ? "livegang" : "",
+    !implementation.financial_package?.trim() ? "financieel pakket" : "",
+    !implementation.website_webshop?.trim() ? "website/webshop" : "",
+  ].filter(Boolean);
+  const newCustomerMailReady = newCustomerMailMissingFields.length === 0;
   const progressRows = [
     ...IMPLEMENTATION_PROGRESS_ITEMS.map((item) => ({ kind: "check" as const, ...item })),
     { kind: "intake" as const, number: 2, key: "customerIntake", label: "Klantgegevensformulier" },
@@ -928,10 +1004,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={!canEdit || !customerIntake?.submittedAt || !customerDomain || outlookBusy}
+                  disabled={!canEdit || !customerIntake?.submittedAt || !customerDomain || dnsOutlookBusy}
                   onClick={() => void handleDnsOutlookDraft()}
                 >
-                  <Mail size={16} /> {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                  <Mail size={16} /> {dnsOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
                 </button>
               </div>
 
@@ -986,16 +1062,23 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <div className="implementation-communication-icon"><Mail size={22} /></div>
               <div className="implementation-communication-copy">
                 <span>Nieuwe klantmail</span>
-                <strong>Mailinhoud volgt</strong>
-                <p>De Outlook-knop wordt actief zodra de mailtekst is toegevoegd.</p>
+                <strong>{newCustomerMailReady ? "Klaar om te maken" : "Nog niet compleet"}</strong>
+                <p>
+                  {newCustomerMailReady
+                    ? "Aan martijn@troublefree.nl, met de overige gebruikers in CC."
+                    : `Nog nodig: ${newCustomerMailMissingFields.join(", ")}.`}
+                </p>
               </div>
               <button
                 type="button"
                 className="primary-button"
-                disabled
-                title="De inhoud van de nieuwe klantmail wordt nog toegevoegd"
+                disabled={!canEdit || !newCustomerMailReady || newCustomerOutlookBusy}
+                title={newCustomerMailReady
+                  ? "Maak de interne nieuwe klantmail in Outlook"
+                  : `Nog nodig: ${newCustomerMailMissingFields.join(", ")}`}
+                onClick={() => void handleNewCustomerOutlookDraft()}
               >
-                <Mail size={16} /> Klaarzetten in Outlook
+                <Mail size={16} /> {newCustomerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
               </button>
             </article>
           </div>

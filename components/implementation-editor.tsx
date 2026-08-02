@@ -815,11 +815,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 type="date"
                 value={implementation.planned_go_live_date ?? ""}
                 disabled={!canEdit}
-                onChange={(event) => setImplementation({
-                  ...implementation,
-                  planned_go_live_date: event.target.value,
-                })}
-                onBlur={(event) => saveImplementationDetail(
+                onChange={(event) => saveImplementationDetail(
                   "planned_go_live_date",
                   event.currentTarget.value,
                   "Geplande livegang",

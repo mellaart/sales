@@ -233,7 +233,7 @@ export function buildNewCustomerEmail(input: NewCustomerEmailInput) {
     licenseLines.push(`${chauffeurExtraUsers}x Licentie extra gebruiker - chauffeursmodule`);
   }
   if (planningAppUsers > 0) {
-    licenseLines.push(`${planningAppUsers}x Planningsapp gebruiker`);
+    licenseLines.push(`${planningAppUsers}x Smart Trade ${escapeHtml(packageName)} - planningsapp gebruikers`);
   }
 
   const supportLines = includeSupport

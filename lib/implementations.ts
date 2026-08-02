@@ -60,6 +60,10 @@ export type ImplementationRecord = {
   status: ImplementationStatus;
   notes?: string | null;
   progress?: ImplementationProgress | null;
+  administration_name?: string | null;
+  planned_go_live_date?: string | null;
+  financial_package?: string | null;
+  website_webshop?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

@@ -810,6 +810,37 @@ select option {
   margin-top: 4px;
 }
 
+.implementation-data-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.implementation-data-grid .input-wrap {
+  margin: 0;
+}
+
+.implementation-data-grid input[type="date"] {
+  color-scheme: dark;
+}
+
+.implementation-data-save-state {
+  min-height: 20px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.implementation-data-save-state.saved {
+  color: #86efac;
+}
+
+.implementation-data-save-state.error {
+  color: #fca5a5;
+}
+
 .implementation-progress-block {
   overflow: hidden;
   margin-top: 22px;
@@ -1013,6 +1044,10 @@ select option {
     grid-template-columns: 1fr;
   }
 
+  .implementation-data-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .implementation-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1072,6 +1107,10 @@ select option {
   }
 
   .implementation-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .implementation-data-grid {
     grid-template-columns: 1fr;
   }
 }

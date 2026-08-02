@@ -155,6 +155,9 @@ export default function ImplementationDashboard() {
         implementation.sales_name,
         implementation.assigned_consultant_name,
         implementation.assigned_consultant_email,
+        implementation.administration_name,
+        implementation.financial_package,
+        implementation.website_webshop,
         implementation.notes,
       ].some((value) => String(value ?? "").toLowerCase().includes(search));
     });

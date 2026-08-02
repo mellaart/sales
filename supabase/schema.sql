@@ -144,12 +144,20 @@ create table if not exists public.implementations (
     check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed')),
   notes text,
   progress jsonb not null default '{}'::jsonb,
+  administration_name text,
+  planned_go_live_date date,
+  financial_package text,
+  website_webshop text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.implementations
   add column if not exists progress jsonb not null default '{}'::jsonb;
+alter table public.implementations add column if not exists administration_name text;
+alter table public.implementations add column if not exists planned_go_live_date date;
+alter table public.implementations add column if not exists financial_package text;
+alter table public.implementations add column if not exists website_webshop text;
 
 alter table public.implementations enable row level security;
 create index if not exists implementations_assigned_consultant_idx

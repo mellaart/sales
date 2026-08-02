@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
   CircleDollarSign,
   ClipboardCheck,
+  Database,
   ExternalLink,
   FileText,
   Globe2,
@@ -71,6 +72,12 @@ type CustomerIntakeProgress = {
     contactEmail: string;
   };
 };
+
+type ImplementationDetailField =
+  | "administration_name"
+  | "planned_go_live_date"
+  | "financial_package"
+  | "website_webshop";
 
 function getWebsiteDomain(website: string) {
   const value = website.trim();
@@ -183,6 +190,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [outlookBusy, setOutlookBusy] = useState(false);
+  const [detailSaveState, setDetailSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [detailSaveMessage, setDetailSaveMessage] = useState("Automatisch opgeslagen");
+  const detailSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingDetailSavesRef = useRef(0);
   const [message, setMessage] = useState("");
 
   const canAssign = isProtectedAdminEmail(user?.email);
@@ -344,6 +355,50 @@ export default function ImplementationEditor({ implementationId }: { implementat
     }, consultant
       ? `Implementatie toegewezen aan ${consultant.full_name || consultant.email}.`
       : "Toewijzing verwijderd.");
+  }
+
+  function saveImplementationDetail(
+    field: ImplementationDetailField,
+    rawValue: string,
+    label: string,
+  ) {
+    if (!implementation || !supabase || !canEdit) return;
+
+    const value = field === "planned_go_live_date"
+      ? rawValue || null
+      : rawValue.trim() || null;
+    const implementationIdToSave = implementation.id;
+
+    setImplementation((current) => current ? { ...current, [field]: value } : current);
+    pendingDetailSavesRef.current += 1;
+    setDetailSaveState("saving");
+    setDetailSaveMessage(`${label} wordt opgeslagen...`);
+
+    const persist = async () => {
+      try {
+        const { error } = await supabase
+          .from("implementations")
+          .update({ [field]: value } as never)
+          .eq("id", implementationIdToSave);
+
+        if (error) throw new Error(error.message);
+        setDetailSaveState("saved");
+        setDetailSaveMessage(`${label} opgeslagen`);
+      } catch (error) {
+        setDetailSaveState("error");
+        setDetailSaveMessage(
+          `${label} opslaan mislukt: ${error instanceof Error ? error.message : "onbekende fout"}`,
+        );
+      } finally {
+        pendingDetailSavesRef.current -= 1;
+        if (pendingDetailSavesRef.current > 0) {
+          setDetailSaveState("saving");
+          setDetailSaveMessage("Wijzigingen worden opgeslagen...");
+        }
+      }
+    };
+
+    detailSaveQueueRef.current = detailSaveQueueRef.current.then(persist, persist);
   }
 
   async function handleDnsOutlookDraft() {
@@ -545,6 +600,104 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <span>Sales<strong>{implementation.sales_name || "-"}</strong></span>
             <span>Status<strong>{IMPLEMENTATION_STATUS_LABELS[implementation.status]}</strong></span>
             <span>Laatst gewijzigd<strong>{formatDate(implementation.updated_at)}</strong></span>
+          </div>
+        </section>
+
+        <section className="card panel implementation-data-panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Inrichting</div>
+              <h2 className="headline">Implementatiegegevens</h2>
+            </div>
+            <Database size={28} aria-hidden="true" />
+          </div>
+
+          <div className="implementation-data-grid">
+            <label className="input-wrap">
+              <span className="input-label">Administratie</span>
+              <input
+                className="input"
+                type="text"
+                maxLength={180}
+                value={implementation.administration_name ?? ""}
+                disabled={!canEdit}
+                placeholder="Databasenaam"
+                onChange={(event) => setImplementation({
+                  ...implementation,
+                  administration_name: event.target.value,
+                })}
+                onBlur={(event) => saveImplementationDetail(
+                  "administration_name",
+                  event.currentTarget.value,
+                  "Administratie",
+                )}
+              />
+            </label>
+
+            <label className="input-wrap">
+              <span className="input-label">Geplande livegang</span>
+              <input
+                className="input"
+                type="date"
+                value={implementation.planned_go_live_date ?? ""}
+                disabled={!canEdit}
+                onChange={(event) => setImplementation({
+                  ...implementation,
+                  planned_go_live_date: event.target.value,
+                })}
+                onBlur={(event) => saveImplementationDetail(
+                  "planned_go_live_date",
+                  event.currentTarget.value,
+                  "Geplande livegang",
+                )}
+              />
+            </label>
+
+            <label className="input-wrap">
+              <span className="input-label">Financieel pakket</span>
+              <input
+                className="input"
+                type="text"
+                maxLength={180}
+                value={implementation.financial_package ?? ""}
+                disabled={!canEdit}
+                placeholder="Naam extern pakket"
+                onChange={(event) => setImplementation({
+                  ...implementation,
+                  financial_package: event.target.value,
+                })}
+                onBlur={(event) => saveImplementationDetail(
+                  "financial_package",
+                  event.currentTarget.value,
+                  "Financieel pakket",
+                )}
+              />
+            </label>
+
+            <label className="input-wrap">
+              <span className="input-label">Website/webshop</span>
+              <input
+                className="input"
+                type="text"
+                maxLength={180}
+                value={implementation.website_webshop ?? ""}
+                disabled={!canEdit}
+                placeholder="Naam extern pakket"
+                onChange={(event) => setImplementation({
+                  ...implementation,
+                  website_webshop: event.target.value,
+                })}
+                onBlur={(event) => saveImplementationDetail(
+                  "website_webshop",
+                  event.currentTarget.value,
+                  "Website/webshop",
+                )}
+              />
+            </label>
+          </div>
+
+          <div className={`implementation-data-save-state ${detailSaveState}`} aria-live="polite">
+            {detailSaveMessage}
           </div>
         </section>
 

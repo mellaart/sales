@@ -3,16 +3,20 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarDays,
+  CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
   Database,
   ExternalLink,
   FileText,
   Globe2,
+  LoaderCircle,
   Mail,
   Package,
+  RefreshCw,
   Save,
   UserRoundCheck,
 } from "lucide-react";
@@ -49,10 +53,24 @@ const dateFormatter = new Intl.DateTimeFormat("nl-NL", {
   year: "numeric",
 });
 
+const dateTimeFormatter = new Intl.DateTimeFormat("nl-NL", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "Geen datum";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Geen datum" : dateFormatter.format(date);
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : dateTimeFormatter.format(date);
 }
 
 function getStatusTone(status: ImplementationStatus): "success" | "warning" | "neutral" {
@@ -78,6 +96,53 @@ type ImplementationDetailField =
   | "planned_go_live_date"
   | "financial_package"
   | "website_webshop";
+
+type DnsCheckStatus = "pass" | "fail" | "error";
+
+type DnsCheckItem = {
+  status: DnsCheckStatus;
+  message: string;
+};
+
+type ImplementationDnsCheck = {
+  domain: string;
+  checkedAt: string;
+  checks: {
+    spfSmartsoft: DnsCheckItem;
+    spfTroublefree: DnsCheckItem;
+    dkimSmartsoft: DnsCheckItem;
+    dkimTroublefree: DnsCheckItem;
+  };
+};
+
+function DnsCheckRow({
+  label,
+  value,
+  result,
+  loading,
+}: {
+  label?: string;
+  value: string;
+  result?: DnsCheckItem;
+  loading: boolean;
+}) {
+  const status = loading ? "loading" : result?.status ?? "pending";
+
+  return (
+    <div className={`implementation-dns-row ${status}`}>
+      <span className="implementation-dns-status" aria-hidden="true">
+        {status === "loading" ? <LoaderCircle className="implementation-dns-spinner" size={17} /> : null}
+        {status === "pass" ? <CheckCircle2 size={17} /> : null}
+        {status === "fail" || status === "error" ? <AlertTriangle size={17} /> : null}
+      </span>
+      <div>
+        {label ? <span>{label}</span> : null}
+        <strong>{value}</strong>
+        {!loading && result?.message ? <small>{result.message}</small> : null}
+      </div>
+    </div>
+  );
+}
 
 function getWebsiteDomain(website: string) {
   const value = website.trim();
@@ -190,6 +255,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [outlookBusy, setOutlookBusy] = useState(false);
+  const [dnsCheck, setDnsCheck] = useState<ImplementationDnsCheck | null>(null);
+  const [dnsCheckLoading, setDnsCheckLoading] = useState(false);
+  const [dnsCheckError, setDnsCheckError] = useState("");
   const [detailSaveState, setDetailSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [detailSaveMessage, setDetailSaveMessage] = useState("Automatisch opgeslagen");
   const detailSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -272,6 +340,32 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setLoading(false);
   }, [canAssign, implementationId, supabase, user]);
 
+  const loadDnsCheck = useCallback(async () => {
+    if (!customerIntake?.submittedAt || !customerIntake.formData.website) {
+      setDnsCheck(null);
+      setDnsCheckError("");
+      return;
+    }
+
+    setDnsCheckLoading(true);
+    setDnsCheckError("");
+
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementationId)}/dns-check`,
+        { cache: "no-store" },
+      );
+      const json = await response.json().catch(() => ({})) as ImplementationDnsCheck & { error?: string };
+      if (!response.ok) throw new Error(json.error || "DNS-controle mislukt.");
+      setDnsCheck(json);
+    } catch (error) {
+      setDnsCheck(null);
+      setDnsCheckError(error instanceof Error ? error.message : "DNS-controle mislukt.");
+    } finally {
+      setDnsCheckLoading(false);
+    }
+  }, [customerIntake, implementationId]);
+
   useEffect(() => {
     void loadRoleAccess();
   }, [loadRoleAccess]);
@@ -283,6 +377,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
     }
     void loadImplementation();
   }, [accessLoaded, canView, loadImplementation]);
+
+  useEffect(() => {
+    if (!customerIntakeLoaded) return;
+    void loadDnsCheck();
+  }, [customerIntakeLoaded, loadDnsCheck]);
 
   useEffect(() => {
     if (loading || typeof window === "undefined") return;
@@ -810,21 +909,78 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <StatusPill tone={intakePresentation.tone}>{intakePresentation.label}</StatusPill>
             </article>
 
-            <article className="implementation-communication-card">
+            <article className="implementation-communication-card implementation-dns-card">
               <div className="implementation-communication-icon"><Globe2 size={22} /></div>
               <div className="implementation-communication-copy">
                 <span>DNS-instructies</span>
                 <strong>{customerDomain || "Website nog niet ontvangen"}</strong>
-                <p>SPF- en DKIM-instructies voor de domeinbeheerder.</p>
+                <p>Automatische controle van de verplichte SPF- en DKIM-records.</p>
               </div>
-              <button
-                type="button"
-                className="primary-button"
-                disabled={!canEdit || !customerIntake?.submittedAt || !customerDomain || outlookBusy}
-                onClick={() => void handleDnsOutlookDraft()}
-              >
-                <Mail size={16} /> {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
-              </button>
+              <div className="implementation-dns-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!customerIntake?.submittedAt || !customerDomain || dnsCheckLoading}
+                  onClick={() => void loadDnsCheck()}
+                >
+                  <RefreshCw className={dnsCheckLoading ? "implementation-dns-spinner" : ""} size={16} />
+                  {dnsCheckLoading ? "Controleren..." : "Opnieuw controleren"}
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={!canEdit || !customerIntake?.submittedAt || !customerDomain || outlookBusy}
+                  onClick={() => void handleDnsOutlookDraft()}
+                >
+                  <Mail size={16} /> {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                </button>
+              </div>
+
+              <div className="implementation-dns-results">
+                <div className="implementation-dns-group">
+                  <h4>SPF-record</h4>
+                  <DnsCheckRow
+                    value="include:_spf.smartsoft.nu"
+                    result={dnsCheck?.checks.spfSmartsoft}
+                    loading={dnsCheckLoading}
+                  />
+                  <DnsCheckRow
+                    value="include:_spf.troublefreehosting.nl"
+                    result={dnsCheck?.checks.spfTroublefree}
+                    loading={dnsCheckLoading}
+                  />
+                </div>
+
+                <div className="implementation-dns-group">
+                  <h4>DKIM-record 1</h4>
+                  <DnsCheckRow
+                    label="Naam: smtp01-smartsoft._domainkey"
+                    value="Type: CNAME | Waarde: smtp01._domainkey.smartsoft.nu"
+                    result={dnsCheck?.checks.dkimSmartsoft}
+                    loading={dnsCheckLoading}
+                  />
+                </div>
+
+                <div className="implementation-dns-group">
+                  <h4>DKIM-record 2</h4>
+                  <DnsCheckRow
+                    label="Naam: smtp02-tfh._domainkey"
+                    value="Type: CNAME | Waarde: smtp02-tfh._domainkey.troublefreehosting.nl"
+                    result={dnsCheck?.checks.dkimTroublefree}
+                    loading={dnsCheckLoading}
+                  />
+                </div>
+              </div>
+
+              <div className={`implementation-dns-summary ${dnsCheckError ? "error" : ""}`}>
+                {dnsCheckError
+                  ? dnsCheckError
+                  : dnsCheck?.checkedAt
+                    ? `Laatst gecontroleerd: ${formatDateTime(dnsCheck.checkedAt)}`
+                    : customerIntake?.submittedAt
+                      ? "DNS-controle wordt voorbereid."
+                      : "Beschikbaar zodra het klantgegevensformulier is ontvangen."}
+              </div>
             </article>
 
             <article className="implementation-communication-card">

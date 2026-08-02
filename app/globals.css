@@ -1005,6 +1005,132 @@ select option {
   opacity: 0.48;
 }
 
+.implementation-dns-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.implementation-dns-actions .primary-button,
+.implementation-dns-actions .secondary-button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.implementation-dns-results {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.implementation-dns-group {
+  min-width: 0;
+  padding: 0 18px;
+}
+
+.implementation-dns-group:first-child {
+  padding-left: 0;
+}
+
+.implementation-dns-group:last-child {
+  padding-right: 0;
+}
+
+.implementation-dns-group + .implementation-dns-group {
+  border-left: 1px solid var(--line);
+}
+
+.implementation-dns-group h4 {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.implementation-dns-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 8px 0;
+  color: var(--muted);
+}
+
+.implementation-dns-status {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: #94a3b8;
+}
+
+.implementation-dns-row.pass .implementation-dns-status {
+  color: #34d399;
+}
+
+.implementation-dns-row.fail .implementation-dns-status {
+  color: #f87171;
+}
+
+.implementation-dns-row.error .implementation-dns-status {
+  color: #fbbf24;
+}
+
+.implementation-dns-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.implementation-dns-row span,
+.implementation-dns-row small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.implementation-dns-row strong {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.implementation-dns-row.pass small {
+  color: #86efac;
+}
+
+.implementation-dns-row.fail small {
+  color: #fca5a5;
+}
+
+.implementation-dns-row.error small {
+  color: #fde68a;
+}
+
+.implementation-dns-summary {
+  grid-column: 1 / -1;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.implementation-dns-summary.error {
+  color: #fca5a5;
+}
+
+.implementation-dns-spinner {
+  animation: implementation-dns-spin 900ms linear infinite;
+}
+
+@keyframes implementation-dns-spin {
+  to { transform: rotate(360deg); }
+}
+
 .implementation-readonly-field {
   display: grid;
   gap: 8px;
@@ -1050,6 +1176,27 @@ select option {
 
   .implementation-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .implementation-dns-results {
+    grid-template-columns: 1fr;
+  }
+
+  .implementation-dns-group {
+    padding: 14px 0;
+  }
+
+  .implementation-dns-group:first-child {
+    padding-top: 0;
+  }
+
+  .implementation-dns-group:last-child {
+    padding-bottom: 0;
+  }
+
+  .implementation-dns-group + .implementation-dns-group {
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 }
 
@@ -1103,6 +1250,18 @@ select option {
   .implementation-communication-card > .primary-button {
     grid-column: 1 / -1;
     justify-self: stretch;
+    width: 100%;
+  }
+
+  .implementation-dns-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .implementation-dns-actions .primary-button,
+  .implementation-dns-actions .secondary-button {
     width: 100%;
   }
 

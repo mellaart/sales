@@ -96,27 +96,6 @@ function formatDays(days: number) {
   return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
 }
 
-function getWebsiteDomain(website: string) {
-  const value = website.trim();
-  if (!value) return "";
-
-  try {
-    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`);
-    return url.hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return value
-      .replace(/^[a-z][a-z\d+.-]*:\/\//i, "")
-      .split("/")[0]
-      .split(":")[0]
-      .toLowerCase()
-      .replace(/^www\./, "");
-  }
-}
-
-function getGreetingName(name: string) {
-  return name.trim().split(/\s+/)[0] || "";
-}
-
 function getSmartConnectPricing(
   connectionCount: number,
   tiers: SmartConnectPriceTier[],
@@ -920,12 +899,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   async function openOutlookTemplateDraft(
     outlookWindow: Window | null,
     payload: {
-      template: "customer-intake" | "dns-instructions";
+      template: "customer-intake";
       recipientEmail: string;
       customerName: string;
       contactName: string;
       publicUrl?: string;
-      domain?: string;
     },
     successMessage: string,
   ) {
@@ -1021,54 +999,6 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       outlookWindow?.close();
       setCustomerIntakeStatus(
         error instanceof Error ? error.message : "Outlook-concept maken mislukt.",
-      );
-    } finally {
-      setCustomerOutlookBusy(false);
-    }
-  }
-
-  async function handleDnsOutlookDraft() {
-    if (!customerIntake?.submittedAt) {
-      setCustomerIntakeStatus("De klantgegevens moeten eerst ontvangen zijn.");
-      return;
-    }
-
-    const recipientEmail = customerIntakeEmail.trim().toLowerCase();
-    if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
-      setCustomerIntakeStatus("Vul eerst een geldig e-mailadres van de ontvanger in.");
-      return;
-    }
-
-    const domain = getWebsiteDomain(customerIntake.formData.website);
-    if (!domain) {
-      setCustomerIntakeStatus("In het klantgegevensformulier ontbreekt een geldige website.");
-      return;
-    }
-    if (customerOutlookBusy) return;
-
-    const greetingName =
-      customerIntake.formData.contactFirstName ||
-      getGreetingName(customerIntake.formData.contactName || contactName);
-    const outlookWindow = window.open("about:blank", "_blank");
-    if (outlookWindow) outlookWindow.opener = null;
-    setCustomerOutlookBusy(true);
-
-    try {
-      await openOutlookTemplateDraft(
-        outlookWindow,
-        {
-          template: "dns-instructions",
-          recipientEmail,
-          customerName,
-          contactName: greetingName,
-          domain,
-        },
-        `DNS-concept voor ${domain} is aangemaakt.`,
-      );
-    } catch (error) {
-      outlookWindow?.close();
-      setCustomerIntakeStatus(
-        error instanceof Error ? error.message : "DNS-concept maken mislukt.",
       );
     } finally {
       setCustomerOutlookBusy(false);
@@ -1761,17 +1691,6 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                   <Download size={16} />
                   {customerIntake?.submittedAt ? "Download ingevulde PDF" : "Download lege PDF"}
                 </button>
-                {customerIntake?.submittedAt ? (
-                  <button
-                    type="button"
-                    className="primary-button"
-                    disabled={customerIntakeBusy || customerOutlookBusy}
-                    onClick={() => void handleDnsOutlookDraft()}
-                  >
-                    <Mail size={16} />
-                    {customerOutlookBusy ? "Concept maken..." : "DNS-instructies in Outlook"}
-                  </button>
-                ) : null}
                 {customerIntake ? (
                   <>
                     <button

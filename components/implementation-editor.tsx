@@ -8,6 +8,9 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   ExternalLink,
+  FileText,
+  Globe2,
+  Mail,
   Package,
   Save,
   UserRoundCheck,
@@ -60,7 +63,97 @@ function getStatusTone(status: ImplementationStatus): "success" | "warning" | "n
 type CustomerIntakeProgress = {
   status: CustomerIntakeStatus;
   expiresAt: string;
+  submittedAt: string | null;
+  recipientEmail: string;
+  formData: {
+    website: string;
+    contactFirstName: string;
+    contactEmail: string;
+  };
 };
+
+function getWebsiteDomain(website: string) {
+  const value = website.trim();
+  if (!value) return "";
+
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`);
+    return url.hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return value
+      .replace(/^[a-z][a-z\d+.-]*:\/\//i, "")
+      .split("/")[0]
+      .split(":")[0]
+      .toLowerCase()
+      .replace(/^www\./, "");
+  }
+}
+
+function showOutlookPopupStatus(
+  outlookWindow: Window | null,
+  title: string,
+  description: string,
+  tone: "loading" | "error" = "loading",
+) {
+  if (!outlookWindow || outlookWindow.closed) return;
+
+  try {
+    const popupDocument = outlookWindow.document;
+    popupDocument.title = title;
+    popupDocument.documentElement.lang = "nl";
+    popupDocument.body.replaceChildren();
+    Object.assign(popupDocument.body.style, {
+      margin: "0",
+      minHeight: "100vh",
+      display: "grid",
+      placeItems: "center",
+      padding: "24px",
+      boxSizing: "border-box",
+      background: "#0b1425",
+      color: "#eef4ff",
+      fontFamily: "Calibri, Arial, sans-serif",
+    });
+
+    const panel = popupDocument.createElement("main");
+    Object.assign(panel.style, {
+      width: "min(100%, 520px)",
+      padding: "28px",
+      border: `1px solid ${tone === "error" ? "#7f3540" : "#274a7f"}`,
+      borderRadius: "8px",
+      background: "#131f34",
+      boxSizing: "border-box",
+    });
+
+    const heading = popupDocument.createElement("h1");
+    heading.textContent = title;
+    Object.assign(heading.style, { margin: "0 0 12px", fontSize: "24px", lineHeight: "1.2" });
+
+    const message = popupDocument.createElement("p");
+    message.textContent = description;
+    Object.assign(message.style, {
+      margin: "0",
+      color: tone === "error" ? "#fecaca" : "#b9c8df",
+      fontSize: "16px",
+      lineHeight: "1.5",
+    });
+
+    panel.append(heading, message);
+    popupDocument.body.append(panel);
+  } catch {
+    // Het tabblad kan al naar Microsoft zijn genavigeerd.
+  }
+}
+
+function navigateOutlookPopup(outlookWindow: Window | null, url: string) {
+  if (!outlookWindow || outlookWindow.closed) return false;
+
+  try {
+    outlookWindow.location.replace(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function getCustomerIntakePresentation(
   loaded: boolean,
@@ -89,6 +182,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [customerIntakeLoadFailed, setCustomerIntakeLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [outlookBusy, setOutlookBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   const canAssign = isProtectedAdminEmail(user?.email);
@@ -179,6 +273,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
     void loadImplementation();
   }, [accessLoaded, canView, loadImplementation]);
 
+  useEffect(() => {
+    if (loading || typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("outlook") !== "connected") return;
+
+    setMessage("Outlook is verbonden. Klik nogmaals op 'Klaarzetten in Outlook'.");
+    url.searchParams.delete("outlook");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [loading]);
+
   async function saveImplementation(
     patch: Partial<ImplementationRecord>,
     successMessage: string,
@@ -241,6 +346,97 @@ export default function ImplementationEditor({ implementationId }: { implementat
       : "Toewijzing verwijderd.");
   }
 
+  async function handleDnsOutlookDraft() {
+    if (!implementation || !customerIntake?.submittedAt || outlookBusy) return;
+
+    const recipientEmail = (
+      customerIntake.recipientEmail || customerIntake.formData.contactEmail
+    ).trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setMessage("In het klantgegevensformulier ontbreekt een geldig e-mailadres.");
+      return;
+    }
+
+    const domain = getWebsiteDomain(customerIntake.formData.website);
+    if (!domain) {
+      setMessage("In het klantgegevensformulier ontbreekt een geldige website.");
+      return;
+    }
+
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    showOutlookPopupStatus(
+      outlookWindow,
+      "DNS-instructies voorbereiden",
+      "Het Outlook-concept met de SPF- en DKIM-instructies wordt gemaakt.",
+    );
+    setOutlookBusy(true);
+    setMessage("Outlook-verbinding wordt gecontroleerd...");
+
+    const returnTo = `/implementatie/${encodeURIComponent(implementation.id)}`;
+
+    try {
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!statusResponse.ok) {
+        throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+      }
+      if (!statusJson.connected) {
+        const connectUrl = statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
+        setMessage("Outlook wordt eenmalig verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, connectUrl)) window.location.assign(connectUrl);
+        return;
+      }
+
+      setMessage("DNS-concept wordt gemaakt...");
+      const response = await fetch(
+        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: "dns-instructions",
+            recipientEmail,
+            customerName: implementation.customer_name,
+            contactName:
+              customerIntake.formData.contactFirstName || implementation.contact_name || "",
+            domain,
+          }),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (json.reconnectRequired && json.connectUrl) {
+        setMessage("Outlook moet opnieuw worden verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, json.connectUrl)) window.location.assign(json.connectUrl);
+        return;
+      }
+      if (!response.ok || !json.webLink) {
+        throw new Error(json.error || "DNS-concept maken mislukt.");
+      }
+      if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
+      setMessage(`DNS-concept voor ${domain} is aangemaakt.`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "DNS-concept maken mislukt.";
+      showOutlookPopupStatus(outlookWindow, "DNS-concept niet gemaakt", errorMessage, "error");
+      setMessage(errorMessage);
+    } finally {
+      setOutlookBusy(false);
+    }
+  }
+
   if (!accessLoaded || loading) {
     return (
       <div className="page-shell">
@@ -288,6 +484,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
     customerIntakeLoadFailed,
     customerIntake,
   );
+  const customerDomain = getWebsiteDomain(customerIntake?.formData.website ?? "");
+  const customerEmail = customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || "";
   const progressRows = [
     ...IMPLEMENTATION_PROGRESS_ITEMS.map((item) => ({ kind: "check" as const, ...item })),
     { kind: "intake" as const, number: 2, key: "customerIntake", label: "Klantgegevensformulier" },
@@ -446,6 +644,52 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 )
               ))}
             </div>
+          </div>
+
+          <div className="implementation-communication-stack">
+            <article className="implementation-communication-card">
+              <div className="implementation-communication-icon"><FileText size={22} /></div>
+              <div className="implementation-communication-copy">
+                <span>Klantgegevensformulier</span>
+                <strong>{intakePresentation.label}</strong>
+                <p>{customerEmail || "Nog geen e-mailadres beschikbaar"}</p>
+              </div>
+              <StatusPill tone={intakePresentation.tone}>{intakePresentation.label}</StatusPill>
+            </article>
+
+            <article className="implementation-communication-card">
+              <div className="implementation-communication-icon"><Globe2 size={22} /></div>
+              <div className="implementation-communication-copy">
+                <span>DNS-instructies</span>
+                <strong>{customerDomain || "Website nog niet ontvangen"}</strong>
+                <p>SPF- en DKIM-instructies voor de domeinbeheerder.</p>
+              </div>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!canEdit || !customerIntake?.submittedAt || !customerDomain || outlookBusy}
+                onClick={() => void handleDnsOutlookDraft()}
+              >
+                <Mail size={16} /> {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+              </button>
+            </article>
+
+            <article className="implementation-communication-card">
+              <div className="implementation-communication-icon"><Mail size={22} /></div>
+              <div className="implementation-communication-copy">
+                <span>Nieuwe klantmail</span>
+                <strong>Mailinhoud volgt</strong>
+                <p>De Outlook-knop wordt actief zodra de mailtekst is toegevoegd.</p>
+              </div>
+              <button
+                type="button"
+                className="primary-button"
+                disabled
+                title="De inhoud van de nieuwe klantmail wordt nog toegevoegd"
+              >
+                <Mail size={16} /> Klaarzetten in Outlook
+              </button>
+            </article>
           </div>
 
           <div className="implementation-save-row">

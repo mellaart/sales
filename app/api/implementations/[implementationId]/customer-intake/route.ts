@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
 import { query } from "@/lib/local-db";
 import { executeLocalTableQuery } from "@/lib/local-table";
-import type { CustomerIntakeStatus } from "@/lib/customer-intake";
+import {
+  normalizeCustomerIntakeData,
+  type CustomerIntakeStatus,
+} from "@/lib/customer-intake";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,16 +45,30 @@ export async function GET(
     const { rows } = await query<{
       status: CustomerIntakeStatus;
       expires_at: string;
+      submitted_at: string | null;
+      recipient_email: string | null;
+      form_data: unknown;
     }>(
-      `select status, expires_at
+      `select status, expires_at, submitted_at, recipient_email, form_data
        from public.customer_intakes
        where deal_id = $1
        limit 1`,
       [implementation.deal_id],
     );
 
-    const intake = rows[0]
-      ? { status: rows[0].status, expiresAt: rows[0].expires_at }
+    const intakeFormData = rows[0] ? normalizeCustomerIntakeData(rows[0].form_data) : null;
+    const intake = rows[0] && intakeFormData
+      ? {
+        status: rows[0].status,
+        expiresAt: rows[0].expires_at,
+        submittedAt: rows[0].submitted_at,
+        recipientEmail: rows[0].recipient_email ?? "",
+        formData: {
+          website: intakeFormData.website,
+          contactFirstName: intakeFormData.contactFirstName,
+          contactEmail: intakeFormData.contactEmail,
+        },
+      }
       : null;
     return jsonResponse({ intake });
   } catch (error) {

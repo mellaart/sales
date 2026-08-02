@@ -3,6 +3,7 @@ import { Pool, types, type PoolClient, type QueryResultRow } from "pg";
 
 types.setTypeParser(1700, (value) => Number(value));
 types.setTypeParser(20, (value) => Number(value));
+types.setTypeParser(1082, (value) => value);
 
 let pool: Pool | null = null;
 let schemaReady: Promise<void> | null = null;

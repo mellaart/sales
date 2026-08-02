@@ -120,6 +120,7 @@ class LocalBrowserQueryBuilder {
       const response = await apiFetch("/api/local/data", {
         method: "POST",
         body: JSON.stringify(this.state),
+        keepalive: this.state.action === "update" && this.state.table === "implementations",
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {

@@ -165,7 +165,7 @@ export function getNewCustomerEmailMissingFields(input: {
   intakeSubmitted: boolean;
 }) {
   const missing: string[] = [];
-  if (!input.intakeSubmitted) missing.push("ontvangen klantgegevensformulier");
+  if (!input.intakeSubmitted) missing.push("ontvangen klantformulier");
   if (!input.implementation.assigned_consultant_name?.trim()) missing.push("toegewezen consultant");
   if (!input.implementation.administration_name?.trim()) missing.push("administratie");
   if (!input.implementation.planned_go_live_date?.trim()) missing.push("geplande livegang");

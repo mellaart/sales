@@ -149,7 +149,7 @@ export async function GET(
 
     const domain = websiteDomain(normalizeCustomerIntakeData(intake.form_data).website);
     if (!domain) {
-      return jsonResponse({ error: "In het klantgegevensformulier ontbreekt een geldige website." }, 409);
+      return jsonResponse({ error: "In het klantformulier ontbreekt een geldige website." }, 409);
     }
 
     const [spf, dkimSmartsoft, dkimTroublefree] = await Promise.all([

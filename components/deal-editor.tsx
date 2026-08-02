@@ -1006,7 +1006,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   }
 
   async function handleCustomerIntakePdf() {
-    setCustomerIntakeStatus("Klantgegevens-PDF wordt gemaakt...");
+    setCustomerIntakeStatus("PDF van het klantformulier wordt gemaakt...");
     const fallbackContact = splitCustomerContactName(contactName);
 
     try {
@@ -1046,10 +1046,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
         },
       });
       setCustomerIntakeStatus(customerIntake?.submittedAt
-        ? "Ingevulde klantgegevens-PDF is gemaakt."
-        : "Leeg klantgegevensformulier is gemaakt.");
+        ? "Ingevuld klantformulier is als PDF gemaakt."
+        : "Leeg klantformulier is gemaakt.");
     } catch {
-      setCustomerIntakeStatus("Klantgegevens-PDF maken mislukt.");
+      setCustomerIntakeStatus("PDF van het klantformulier maken mislukt.");
     }
   }
 
@@ -1619,7 +1619,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             <div className="top-row customer-intake-heading">
               <div>
                 <div className="eyebrow">Nieuwe klant</div>
-                <h2 className="headline">Klantgegevensformulier</h2>
+                <h2 className="headline">Klantformulier</h2>
                 <div className="subtext">
                   {customerIntake?.submittedAt
                     ? `Ontvangen op ${new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeStyle: "short" }).format(new Date(customerIntake.submittedAt))}`

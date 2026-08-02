@@ -139,7 +139,7 @@ function htmlBody(input: NotificationInput, dealUrl: string, sections: DetailSec
   return [
     '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.45;color:#172033">',
     '<p style="margin:0 0 12px">Beste Erik,</p>',
-    `<p style="margin:0 0 12px">Het klantgegevensformulier van <strong>${companyName}</strong> is ontvangen op ${submittedAt}.</p>`,
+    `<p style="margin:0 0 12px">Het klantformulier van <strong>${companyName}</strong> is ontvangen op ${submittedAt}.</p>`,
     `<p style="margin:0 0 18px"><a href="${escapeHtml(dealUrl)}" style="color:#146edb;text-decoration:underline">Open de bijbehorende deal</a></p>`,
     sectionHtml,
     `<p style="margin:24px 0 0;color:#64748b;font-size:9pt">Formulier-ID: ${escapeHtml(input.intakeId)}</p>`,
@@ -151,7 +151,7 @@ function textBody(input: NotificationInput, dealUrl: string, sections: DetailSec
   const lines = [
     "Beste Erik,",
     "",
-    `Het klantgegevensformulier van ${input.formData.deliveryName || "Nieuwe klant"} is ontvangen op ${formatSubmittedAt(input.submittedAt)}.`,
+    `Het klantformulier van ${input.formData.deliveryName || "Nieuwe klant"} is ontvangen op ${formatSubmittedAt(input.submittedAt)}.`,
     `Open de bijbehorende deal: ${dealUrl}`,
     "",
   ];

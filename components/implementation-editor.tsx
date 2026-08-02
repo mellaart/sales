@@ -475,12 +475,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
     const persist = async () => {
       try {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("implementations")
           .update({ [field]: value } as never)
-          .eq("id", implementationIdToSave);
+          .eq("id", implementationIdToSave)
+          .select("*")
+          .single();
 
         if (error) throw new Error(error.message);
+        const persistedValue = (data as ImplementationRecord | null)?.[field] ?? null;
+        if (persistedValue !== value) {
+          throw new Error("De database heeft de wijziging niet bevestigd.");
+        }
+        setImplementation((current) => current ? { ...current, [field]: persistedValue } : current);
         setDetailSaveState("saved");
         setDetailSaveMessage(`${label} opgeslagen`);
       } catch (error) {
@@ -507,13 +514,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
       customerIntake.recipientEmail || customerIntake.formData.contactEmail
     ).trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
-      setMessage("In het klantgegevensformulier ontbreekt een geldig e-mailadres.");
+      setMessage("In het klantformulier ontbreekt een geldig e-mailadres.");
       return;
     }
 
     const domain = getWebsiteDomain(customerIntake.formData.website);
     if (!domain) {
-      setMessage("In het klantgegevensformulier ontbreekt een geldige website.");
+      setMessage("In het klantformulier ontbreekt een geldige website.");
       return;
     }
 
@@ -707,7 +714,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const customerDomain = getWebsiteDomain(customerIntake?.formData.website ?? "");
   const customerEmail = customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || "";
   const newCustomerMailMissingFields = [
-    !customerIntake?.submittedAt ? "klantgegevensformulier" : "",
+    !customerIntake?.submittedAt ? "klantformulier" : "",
     !implementation.assigned_consultant_name?.trim() ? "consultant" : "",
     !implementation.administration_name?.trim() ? "administratie" : "",
     !implementation.planned_go_live_date?.trim() ? "livegang" : "",
@@ -717,7 +724,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const newCustomerMailReady = newCustomerMailMissingFields.length === 0;
   const progressRows = [
     ...IMPLEMENTATION_PROGRESS_ITEMS.map((item) => ({ kind: "check" as const, ...item })),
-    { kind: "intake" as const, number: 2, key: "customerIntake", label: "Klantgegevensformulier" },
+    { kind: "intake" as const, number: 2, key: "customerIntake", label: "Klantformulier" },
   ].sort((left, right) => left.number - right.number);
 
   return (
@@ -816,6 +823,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 value={implementation.planned_go_live_date ?? ""}
                 disabled={!canEdit}
                 onChange={(event) => saveImplementationDetail(
+                  "planned_go_live_date",
+                  event.currentTarget.value,
+                  "Geplande livegang",
+                )}
+                onBlur={(event) => saveImplementationDetail(
                   "planned_go_live_date",
                   event.currentTarget.value,
                   "Geplande livegang",
@@ -973,7 +985,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <article className="implementation-communication-card">
               <div className="implementation-communication-icon"><FileText size={22} /></div>
               <div className="implementation-communication-copy">
-                <span>Klantgegevensformulier</span>
+                <span>Klantformulier</span>
                 <strong>{intakePresentation.label}</strong>
                 <p>{customerEmail || "Nog geen e-mailadres beschikbaar"}</p>
               </div>
@@ -1050,7 +1062,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     ? `Laatst gecontroleerd: ${formatDateTime(dnsCheck.checkedAt)}`
                     : customerIntake?.submittedAt
                       ? "DNS-controle wordt voorbereid."
-                      : "Beschikbaar zodra het klantgegevensformulier is ontvangen."}
+                      : "Beschikbaar zodra het klantformulier is ontvangen."}
               </div>
             </article>
 

@@ -73,7 +73,7 @@ export async function GET(
     return jsonResponse({ intake });
   } catch (error) {
     return jsonResponse({
-      error: error instanceof Error ? error.message : "Status klantgegevensformulier laden mislukt.",
+      error: error instanceof Error ? error.message : "Status klantformulier laden mislukt.",
     }, 500);
   }
 }

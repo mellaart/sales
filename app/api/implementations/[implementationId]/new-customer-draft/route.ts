@@ -128,7 +128,7 @@ export async function POST(
     const intakeRow = intakeRows[0];
 
     if (!deal) return jsonResponse({ error: "De calculator-deal ontbreekt." }, 404);
-    if (!intakeRow) return jsonResponse({ error: "Het klantgegevensformulier ontbreekt." }, 409);
+    if (!intakeRow) return jsonResponse({ error: "Het klantformulier ontbreekt." }, 409);
 
     const intakeSubmitted = Boolean(
       intakeRow.submitted_at && ["submitted", "processed"].includes(intakeRow.status),

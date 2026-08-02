@@ -238,7 +238,7 @@ export async function requireAccessibleCalculatorDeal(dealId: string, actor: Act
   if (!isCalculatorDeal(deal)) {
     return {
       ok: false,
-      error: "Een klantgegevensformulier is alleen beschikbaar voor calculator-deals.",
+      error: "Een klantformulier is alleen beschikbaar voor calculator-deals.",
     } as const;
   }
   return { ok: true, deal } as const;

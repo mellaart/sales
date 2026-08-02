@@ -17,7 +17,6 @@ import {
   Mail,
   Package,
   RefreshCw,
-  Save,
   UserRoundCheck,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
@@ -1001,22 +1000,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
             </article>
           </div>
 
-          <div className="implementation-save-row">
-            {message ? <div className="save-status">{message}</div> : <span />}
-            {canEdit ? (
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={saving}
-                onClick={() => void saveImplementation(
-                  { notes: implementation.notes ?? "" },
-                  "Implementatie opgeslagen.",
-                )}
-              >
-                <Save size={16} /> {saving ? "Opslaan..." : "Opslaan"}
-              </button>
-            ) : null}
-          </div>
+          {message ? (
+            <div className="implementation-save-row">
+              <div className="save-status">{message}</div>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

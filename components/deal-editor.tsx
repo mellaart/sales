@@ -1124,7 +1124,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 {implementationBusy ? "Implementatie starten..." : "Nieuwe klant - start implementatie"}
               </button>
             ) : null}
-            {canArchiveDeal && !implementation ? (
+            {canArchiveDeal ? (
               <button
                 type="button"
                 className="secondary-button"
@@ -1138,9 +1138,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                     : "Archiveren..."
                   : archivedAt
                     ? "Terugzetten naar actief"
-                    : isAssetsExpansionDeal
-                      ? "Klaar en archiveren"
-                      : "Niet gewonnen - archiveren"}
+                    : "Klaar en archiveren"}
               </button>
             ) : null}
             <StatusPill tone={implementation ? "success" : archivedAt ? "neutral" : "success"}>

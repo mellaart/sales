@@ -39,6 +39,7 @@ import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConne
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
+import ExtraUserOffer from "@/components/extra-user-offer";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -59,6 +60,8 @@ function normalizeInputs(deal: DealRecord, modules: ModuleConfig[]): DealCalcula
 
   return {
     extraUsers: Math.max(0, Number(deal.calculator_inputs?.extraUsers ?? Number(deal.total_users || 1) - 1)),
+    chauffeurExtraUsers: Math.max(0, Number(deal.calculator_inputs?.chauffeurExtraUsers ?? 0)),
+    planningAppUsers: Math.max(0, Number(deal.calculator_inputs?.planningAppUsers ?? 0)),
     selectedPackage: String(deal.calculator_inputs?.selectedPackage || deal.package_key || "enterprise"),
     manualImplementationAdjustment: Number(deal.calculator_inputs?.manualImplementationAdjustment ?? deal.manual_implementation_adjustment ?? 0),
     includeVat: Boolean(deal.calculator_inputs?.includeVat ?? deal.include_vat ?? false),
@@ -228,6 +231,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [notes, setNotes] = useState("");
 
   const [extraUsers, setExtraUsers] = useState(1);
+  const [chauffeurExtraUsers, setChauffeurExtraUsers] = useState(0);
+  const [planningAppUsers, setPlanningAppUsers] = useState(0);
   const [selectedPackage, setSelectedPackage] = useState("enterprise");
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
   const includeVat = false;
@@ -272,6 +277,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       setSalesName(deal.user_id === user.id && currentSalesName ? currentSalesName : deal.sales_name || "");
       setNotes(deal.notes || "");
       setExtraUsers(inputs.extraUsers);
+      setChauffeurExtraUsers(inputs.chauffeurExtraUsers ?? 0);
+      setPlanningAppUsers(inputs.planningAppUsers ?? 0);
       setSelectedPackage(inputs.selectedPackage);
       setManualImplementationAdjustment(inputs.manualImplementationAdjustment);
       setIncludeSupport(inputs.includeSupport ?? true);
@@ -334,10 +341,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }, [loading]);
 
-  const totalUsers = extraUsers + 1;
+  const smartTradeExtraUsers = extraUsers + chauffeurExtraUsers;
+  const totalUsers = smartTradeExtraUsers + 1;
   const results = useMemo(
-    () => calculatePricing({ extraUsers, manualImplementationAdjustment, includeVat: false, quantities }, pricingConfig),
-    [extraUsers, manualImplementationAdjustment, pricingConfig, quantities],
+    () => calculatePricing({ extraUsers: smartTradeExtraUsers, manualImplementationAdjustment, includeVat: false, quantities }, pricingConfig),
+    [manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
   );
   const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
   const minimumPackage = getMinimumPackageForPaidModules(paidModuleCount, packages);
@@ -360,10 +368,18 @@ export default function DealEditor({ dealId }: { dealId: string }) {
     [pricingConfig.smartConnectExtraConnectionPrice, pricingConfig.smartConnectTiers, smartConnectConnections],
   );
   const supportMonthly = includeSupport ? activeResult.supportMonthly : 0;
-  const licenseWithModulesMonthly = activeResult.licenseMonthly + activeResult.moduleMonthly;
+  const planningAppMonthlyTotal = planningAppUsers * pricingConfig.planningAppUserMonthly;
+  const licenseWithModulesMonthly = activeResult.licenseMonthly + activeResult.moduleMonthly + planningAppMonthlyTotal;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
-  const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
+  const monthlyTotal = Math.max(
+    0,
+    activeResult.monthlyAfterDiscount
+      - activeResult.supportMonthly
+      + supportMonthly
+      + expansionMonthlyTotal
+      + planningAppMonthlyTotal,
+  );
   const implementationBaseTotal = isAssetsExpansionDeal ? expansionTotals.once : activeResult.implementationAfterAdjustment;
   const implementationDays = pricingConfig.implementationDayRate > 0
     ? Math.max(0, implementationBaseTotal / pricingConfig.implementationDayRate)
@@ -579,6 +595,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           notes,
           calculator_inputs: {
             extraUsers,
+            chauffeurExtraUsers,
+            planningAppUsers,
             selectedPackage: activeResult.key,
             manualImplementationAdjustment: expansionTotals.once,
             includeVat,
@@ -615,6 +633,8 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       notes,
       calculator_inputs: {
         extraUsers,
+        chauffeurExtraUsers,
+        planningAppUsers,
         selectedPackage: activeResult.key,
         manualImplementationAdjustment,
         includeVat,
@@ -671,6 +691,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       notes,
       includeVat,
       totalUsers,
+      extraUsers,
+      chauffeurExtraUsers,
+      planningAppUsers,
+      planningAppUserMonthly: pricingConfig.planningAppUserMonthly,
       selectedModules: selectedModuleRows,
       extraMonthlyRows,
       result: adjustedResult,
@@ -1134,7 +1158,14 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             </>
           ) : (
             <>
-              <StatCard title="Gebruikers" value={String(totalUsers)} icon={Users} sublabel="1 hoofdgebruiker + extra gebruikers" />
+              <StatCard
+                title="Gebruikers"
+                value={String(totalUsers)}
+                icon={Users}
+                sublabel={planningAppUsers > 0
+                  ? `1 hoofdgebruiker + ${smartTradeExtraUsers} extra + ${planningAppUsers} planningapp`
+                  : "1 hoofdgebruiker + extra gebruikers"}
+              />
               <StatCard title="Maandprijs" value={euro.format(monthlyTotal)} icon={FileText} sublabel="ex. BTW" />
               <StatCard title="Implementatie" value={euro.format(implementationTotal)} icon={Package} sublabel={`${formatDays(implementationDays)} implementatie`} />
             </>
@@ -1250,8 +1281,21 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             ) : (
               <>
                 <div className="section">
-                  <div className="field-grid-2">
-                    <NumberInput label="Extra gebruikers" value={extraUsers} onChange={(v) => setExtraUsers(Math.max(0, v))} />
+                  <div className="section-title"><Users size={16} /> Extra gebruikers</div>
+                  <ExtraUserOffer
+                    packageName={activeResult.name}
+                    licenseExtra={activeResult.licenseExtra}
+                    supportExtra={activeResult.supportExtra}
+                    includeSupport={includeSupport}
+                    extraUsers={extraUsers}
+                    chauffeurExtraUsers={chauffeurExtraUsers}
+                    planningAppUsers={planningAppUsers}
+                    planningAppUserMonthly={pricingConfig.planningAppUserMonthly}
+                    onExtraUsersChange={setExtraUsers}
+                    onChauffeurExtraUsersChange={setChauffeurExtraUsers}
+                    onPlanningAppUsersChange={setPlanningAppUsers}
+                  />
+                  <div className="field-grid-2 extra-user-correction">
                     <NumberInput label="Correctie implementatie (€)" value={manualImplementationAdjustment} onChange={setManualImplementationAdjustment} step={0.01} />
                   </div>
                 </div>

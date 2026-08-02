@@ -30,6 +30,7 @@ import {
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
+import ExtraUserOffer from "@/components/extra-user-offer";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
 
@@ -130,6 +131,8 @@ export default function PriceCalculator() {
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
   const [salesName, setSalesName] = useState("");
   const [extraUsers, setExtraUsers] = useState(1);
+  const [chauffeurExtraUsers, setChauffeurExtraUsers] = useState(0);
+  const [planningAppUsers, setPlanningAppUsers] = useState(0);
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
@@ -170,12 +173,13 @@ export default function PriceCalculator() {
 
   const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
   const recommendedPackage = getCalculatorPackageForPaidModules(paidModuleCount, calculatorPackages);
+  const smartTradeExtraUsers = extraUsers + chauffeurExtraUsers;
   const pricingResults = useMemo(
-    () => calculatePricing({ extraUsers, manualImplementationAdjustment, quantities }, pricingConfig),
-    [extraUsers, manualImplementationAdjustment, pricingConfig, quantities],
+    () => calculatePricing({ extraUsers: smartTradeExtraUsers, manualImplementationAdjustment, quantities }, pricingConfig),
+    [manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
   );
   const activeResult = pricingResults.find((result) => result.key === recommendedPackage.key) ?? pricingResults[0];
-  const totalUsers = extraUsers + 1;
+  const totalUsers = smartTradeExtraUsers + 1;
   const selectedCustomerPortalOptions = useMemo(
     () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
     [pricingConfig.customerPortalOptions, selectedCustomerPortalOptionKeys],
@@ -189,10 +193,18 @@ export default function PriceCalculator() {
     [pricingConfig.smartConnectExtraConnectionPrice, pricingConfig.smartConnectTiers, smartConnectConnections],
   );
   const supportMonthly = includeSupport ? activeResult.supportMonthly : 0;
-  const licenseWithModulesMonthly = activeResult.licenseMonthly + activeResult.moduleMonthly;
+  const planningAppMonthlyTotal = planningAppUsers * pricingConfig.planningAppUserMonthly;
+  const licenseWithModulesMonthly = activeResult.licenseMonthly + activeResult.moduleMonthly + planningAppMonthlyTotal;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
   const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
-  const monthlyTotal = Math.max(0, activeResult.monthlyAfterDiscount - activeResult.supportMonthly + supportMonthly + expansionMonthlyTotal);
+  const monthlyTotal = Math.max(
+    0,
+    activeResult.monthlyAfterDiscount
+      - activeResult.supportMonthly
+      + supportMonthly
+      + expansionMonthlyTotal
+      + planningAppMonthlyTotal,
+  );
   const implementationDays = pricingConfig.implementationDayRate > 0
     ? Math.max(0, activeResult.implementationAfterAdjustment / pricingConfig.implementationDayRate)
     : 0;
@@ -297,6 +309,8 @@ export default function PriceCalculator() {
         notes: notes.trim() || null,
         calculator_inputs: {
           extraUsers,
+          chauffeurExtraUsers,
+          planningAppUsers,
           selectedPackage: activeResult.key,
           manualImplementationAdjustment,
           includeVat: false,
@@ -354,6 +368,10 @@ export default function PriceCalculator() {
         notes,
         includeVat: false,
         totalUsers,
+        extraUsers,
+        chauffeurExtraUsers,
+        planningAppUsers,
+        planningAppUserMonthly: pricingConfig.planningAppUserMonthly,
         selectedModules: selectedModuleRows,
         extraMonthlyRows,
         result: pdfResult,
@@ -491,16 +509,20 @@ export default function PriceCalculator() {
 
             <div className="section">
               <div className="section-title"><Users size={16} /> Basis invoer</div>
-              <div className="field-grid-2">
-                <label className="input-wrap">
-                  <span className="input-label">Extra gebruikers</span>
-                  <NumberStepper
-                    ariaLabel="Extra gebruikers"
-                    min={0}
-                    value={extraUsers}
-                    onChange={(nextValue) => setExtraUsers(Math.max(0, Math.floor(nextValue)))}
-                  />
-                </label>
+              <ExtraUserOffer
+                packageName={activeResult.name}
+                licenseExtra={activeResult.licenseExtra}
+                supportExtra={activeResult.supportExtra}
+                includeSupport={includeSupport}
+                extraUsers={extraUsers}
+                chauffeurExtraUsers={chauffeurExtraUsers}
+                planningAppUsers={planningAppUsers}
+                planningAppUserMonthly={pricingConfig.planningAppUserMonthly}
+                onExtraUsersChange={setExtraUsers}
+                onChauffeurExtraUsersChange={setChauffeurExtraUsers}
+                onPlanningAppUsersChange={setPlanningAppUsers}
+              />
+              <div className="field-grid-2 extra-user-correction">
                 <label className="input-wrap">
                   <span className="input-label">Correctie implementatie (€)</span>
                   <NumberStepper

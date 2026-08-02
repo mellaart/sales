@@ -179,7 +179,17 @@ export function buildNewCustomerEmail(input: NewCustomerEmailInput) {
   const calculatorInputs = asRecord(deal.calculator_inputs);
   const packageName = deal.package_name?.trim() || "Smart Trade";
   const totalUsers = Math.max(1, positiveInteger(deal.total_users) || 1);
-  const extraUsers = Math.max(0, totalUsers - 1);
+  const totalExtraUsers = Math.max(0, totalUsers - 1);
+  const chauffeurExtraUsers = Math.min(
+    totalExtraUsers,
+    positiveInteger(calculatorInputs.chauffeurExtraUsers),
+  );
+  const configuredRegularExtraUsers = positiveInteger(calculatorInputs.extraUsers);
+  const regularExtraUsers = calculatorInputs.chauffeurExtraUsers === undefined
+    ? totalExtraUsers
+    : Math.min(totalExtraUsers - chauffeurExtraUsers, configuredRegularExtraUsers);
+  const extraUsers = regularExtraUsers
+    + Math.max(0, totalExtraUsers - regularExtraUsers - chauffeurExtraUsers);
   const includeSupport = calculatorInputs.includeSupport !== false;
   const includeTravelCosts = calculatorInputs.includeTravelCosts !== false;
   const planningAppUsers = positiveInteger(
@@ -219,8 +229,11 @@ export function buildNewCustomerEmail(input: NewCustomerEmailInput) {
   if (extraUsers > 0) {
     licenseLines.push(`${extraUsers}x Smart Trade ${escapeHtml(packageName)} - extra gebruikers`);
   }
+  if (chauffeurExtraUsers > 0) {
+    licenseLines.push(`${chauffeurExtraUsers}x Licentie extra gebruiker - chauffeursmodule`);
+  }
   if (planningAppUsers > 0) {
-    licenseLines.push(`${planningAppUsers}x Smart Trade ${escapeHtml(packageName)} - planningsapp gebruikers`);
+    licenseLines.push(`${planningAppUsers}x Planningsapp gebruiker`);
   }
 
   const supportLines = includeSupport
@@ -228,6 +241,9 @@ export function buildNewCustomerEmail(input: NewCustomerEmailInput) {
       `1x Supportcontract Smart Trade ${escapeHtml(packageName)} - 1e gebruiker`,
       ...(extraUsers > 0
         ? [`${extraUsers}x Supportcontract Smart Trade ${escapeHtml(packageName)} - extra gebruikers`]
+        : []),
+      ...(chauffeurExtraUsers > 0
+        ? [`${chauffeurExtraUsers}x Supportcontract extra gebruiker - chauffeursmodule`]
         : []),
     ]
     : ["Geen supportcontract"];

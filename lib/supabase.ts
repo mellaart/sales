@@ -50,6 +50,8 @@ export type AssetExpansionSummary = {
 
 export type DealCalculatorInputs = {
   extraUsers: number;
+  chauffeurExtraUsers?: number;
+  planningAppUsers?: number;
   selectedPackage: string;
   manualImplementationAdjustment: number;
   includeVat: boolean;

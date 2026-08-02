@@ -33,6 +33,10 @@ export type OfferTemplateInput = {
   notes?: string;
   includeVat: boolean;
   totalUsers: number;
+  extraUsers?: number;
+  chauffeurExtraUsers?: number;
+  planningAppUsers?: number;
+  planningAppUserMonthly?: number;
   selectedModules: OfferModule[];
   extraMonthlyRows?: OfferMonthlyRow[];
   result: PricingResult;
@@ -151,7 +155,21 @@ export function getModuleSummaryText(selectedModules: OfferModule[], result: Pri
 }
 
 export function getLicenseRows(input: OfferTemplateInput) {
-  const extraUsers = Math.max(0, input.totalUsers - 1);
+  const totalExtraUsers = Math.max(0, Math.floor(input.totalUsers - 1));
+  const chauffeurExtraUsers = Math.min(
+    totalExtraUsers,
+    Math.max(0, Math.floor(input.chauffeurExtraUsers ?? 0)),
+  );
+  const regularExtraUsers = input.extraUsers === undefined
+    ? totalExtraUsers - chauffeurExtraUsers
+    : Math.min(
+        totalExtraUsers - chauffeurExtraUsers,
+        Math.max(0, Math.floor(input.extraUsers)),
+      );
+  const unassignedExtraUsers = Math.max(0, totalExtraUsers - regularExtraUsers - chauffeurExtraUsers);
+  const displayedRegularExtraUsers = regularExtraUsers + unassignedExtraUsers;
+  const planningAppUsers = Math.max(0, Math.floor(input.planningAppUsers ?? 0));
+  const planningAppUserMonthly = Math.max(0, Number(input.planningAppUserMonthly) || 0);
 
   return [
     {
@@ -160,13 +178,33 @@ export function getLicenseRows(input: OfferTemplateInput) {
       price: input.result.licenseFirst,
       total: input.result.licenseFirst,
     },
-    ...(extraUsers > 0
+    ...(displayedRegularExtraUsers > 0
       ? [
           {
-            amount: `${extraUsers}x`,
+            amount: `${displayedRegularExtraUsers}x`,
             description: `Smart Trade ${input.result.name} Extra gebruiker`,
             price: input.result.licenseExtra,
-            total: input.result.licenseExtra * extraUsers,
+            total: input.result.licenseExtra * displayedRegularExtraUsers,
+          },
+        ]
+      : []),
+    ...(chauffeurExtraUsers > 0
+      ? [
+          {
+            amount: `${chauffeurExtraUsers}x`,
+            description: "Licentie extra gebruiker (chauffeursmodule)",
+            price: input.result.licenseExtra,
+            total: input.result.licenseExtra * chauffeurExtraUsers,
+          },
+        ]
+      : []),
+    ...(planningAppUsers > 0
+      ? [
+          {
+            amount: `${planningAppUsers}x`,
+            description: "Planningapp gebruiker",
+            price: planningAppUserMonthly,
+            total: planningAppUserMonthly * planningAppUsers,
           },
         ]
       : []),
@@ -174,7 +212,19 @@ export function getLicenseRows(input: OfferTemplateInput) {
 }
 
 export function getSupportRows(input: OfferTemplateInput) {
-  const extraUsers = Math.max(0, input.totalUsers - 1);
+  const totalExtraUsers = Math.max(0, Math.floor(input.totalUsers - 1));
+  const chauffeurExtraUsers = Math.min(
+    totalExtraUsers,
+    Math.max(0, Math.floor(input.chauffeurExtraUsers ?? 0)),
+  );
+  const regularExtraUsers = input.extraUsers === undefined
+    ? totalExtraUsers - chauffeurExtraUsers
+    : Math.min(
+        totalExtraUsers - chauffeurExtraUsers,
+        Math.max(0, Math.floor(input.extraUsers)),
+      );
+  const unassignedExtraUsers = Math.max(0, totalExtraUsers - regularExtraUsers - chauffeurExtraUsers);
+  const displayedRegularExtraUsers = regularExtraUsers + unassignedExtraUsers;
 
   return [
     {
@@ -183,13 +233,23 @@ export function getSupportRows(input: OfferTemplateInput) {
       price: input.result.supportFirst,
       total: input.result.supportFirst,
     },
-    ...(extraUsers > 0
+    ...(displayedRegularExtraUsers > 0
       ? [
           {
-            amount: `${extraUsers}x`,
+            amount: `${displayedRegularExtraUsers}x`,
             description: `Smart Trade ${input.result.name} Supportcontract Extra gebruiker`,
             price: input.result.supportExtra,
-            total: input.result.supportExtra * extraUsers,
+            total: input.result.supportExtra * displayedRegularExtraUsers,
+          },
+        ]
+      : []),
+    ...(chauffeurExtraUsers > 0
+      ? [
+          {
+            amount: `${chauffeurExtraUsers}x`,
+            description: "Supportcontract extra gebruiker (chauffeursmodule)",
+            price: input.result.supportExtra,
+            total: input.result.supportExtra * chauffeurExtraUsers,
           },
         ]
       : []),

@@ -15,9 +15,16 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { StatCard, StatusPill } from "@/components/ui";
 import {
+  customerIntakeStatusLabel,
+  type CustomerIntakeStatus,
+} from "@/lib/customer-intake";
+import {
+  IMPLEMENTATION_PROGRESS_ITEMS,
   IMPLEMENTATION_STATUSES,
   IMPLEMENTATION_STATUS_LABELS,
+  normalizeImplementationProgress,
   type ImplementationRecord,
+  type ImplementationProgressKey,
   type ImplementationStatus,
 } from "@/lib/implementations";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
@@ -49,6 +56,26 @@ function getStatusTone(status: ImplementationStatus): "success" | "warning" | "n
   return "neutral";
 }
 
+type CustomerIntakeProgress = {
+  status: CustomerIntakeStatus;
+  expiresAt: string;
+};
+
+function getCustomerIntakePresentation(
+  loaded: boolean,
+  loadFailed: boolean,
+  intake: CustomerIntakeProgress | null,
+): { label: string; tone: "success" | "warning" | "danger" } {
+  if (!loaded) return { label: "Laden...", tone: "warning" };
+  if (loadFailed) return { label: "Niet beschikbaar", tone: "danger" };
+  if (!intake) return { label: "Niet aangemaakt", tone: "warning" };
+
+  const label = customerIntakeStatusLabel(intake.status, intake.expiresAt);
+  if (label === "Ontvangen" || label === "Verwerkt") return { label, tone: "success" };
+  if (label === "Verlopen" || label === "Ingetrokken") return { label, tone: "danger" };
+  return { label, tone: "warning" };
+}
+
 export default function ImplementationEditor({ implementationId }: { implementationId: string }) {
   const { user, role } = useAuth();
   const supabase = getSupabaseClient();
@@ -56,6 +83,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [accessLoaded, setAccessLoaded] = useState(false);
   const [implementation, setImplementation] = useState<ImplementationRecord | null>(null);
   const [consultants, setConsultants] = useState<ProfileRecord[]>([]);
+  const [customerIntake, setCustomerIntake] = useState<CustomerIntakeProgress | null>(null);
+  const [customerIntakeLoaded, setCustomerIntakeLoaded] = useState(false);
+  const [customerIntakeLoadFailed, setCustomerIntakeLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -82,6 +112,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
     setLoading(true);
     setMessage("");
+    setCustomerIntakeLoaded(false);
+    setCustomerIntakeLoadFailed(false);
 
     const { data, error } = await supabase
       .from("implementations")
@@ -93,6 +125,27 @@ export default function ImplementationEditor({ implementationId }: { implementat
       setMessage(`Implementatie laden mislukt: ${error.message}`);
     } else {
       setImplementation((data as ImplementationRecord | null) ?? null);
+    }
+
+    try {
+      if (data) {
+        const intakeResponse = await fetch(
+          `/api/implementations/${encodeURIComponent(implementationId)}/customer-intake`,
+          { cache: "no-store" },
+        );
+        const intakeJson = await intakeResponse.json().catch(() => ({})) as {
+          intake?: CustomerIntakeProgress | null;
+        };
+        setCustomerIntake(intakeResponse.ok ? intakeJson.intake ?? null : null);
+        setCustomerIntakeLoadFailed(!intakeResponse.ok);
+      } else {
+        setCustomerIntake(null);
+      }
+    } catch {
+      setCustomerIntake(null);
+      setCustomerIntakeLoadFailed(true);
+    } finally {
+      setCustomerIntakeLoaded(true);
     }
 
     if (canAssign) {
@@ -128,9 +181,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
   async function saveImplementation(
     patch: Partial<ImplementationRecord>,
     successMessage: string,
+    optimistic = false,
   ) {
     if (!implementation || !supabase || saving) return;
 
+    const previousImplementation = implementation;
+    if (optimistic) setImplementation({ ...implementation, ...patch });
     setSaving(true);
     setMessage("Implementatie wordt opgeslagen...");
 
@@ -142,6 +198,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
       .single();
 
     if (error) {
+      if (optimistic) setImplementation(previousImplementation);
       setMessage(`Opslaan mislukt: ${error.message}`);
     } else {
       setImplementation(data as ImplementationRecord);
@@ -149,6 +206,16 @@ export default function ImplementationEditor({ implementationId }: { implementat
     }
 
     setSaving(false);
+  }
+
+  function updateProgress(key: ImplementationProgressKey, checked: boolean) {
+    if (!implementation || !canEdit || saving) return;
+
+    const progress = {
+      ...normalizeImplementationProgress(implementation.progress),
+      [key]: checked,
+    };
+    void saveImplementation({ progress }, `${IMPLEMENTATION_PROGRESS_ITEMS.find((item) => item.key === key)?.label ?? "Stap"} bijgewerkt.`, true);
   }
 
   async function assignConsultant(consultantId: string) {
@@ -213,6 +280,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
       </div>
     );
   }
+
+  const progress = normalizeImplementationProgress(implementation.progress);
+  const intakePresentation = getCustomerIntakePresentation(
+    customerIntakeLoaded,
+    customerIntakeLoadFailed,
+    customerIntake,
+  );
+  const progressRows = [
+    ...IMPLEMENTATION_PROGRESS_ITEMS.map((item) => ({ kind: "check" as const, ...item })),
+    { kind: "intake" as const, number: 2, key: "customerIntake", label: "Klantgegevensformulier" },
+  ].sort((left, right) => left.number - right.number);
 
   return (
     <div className="page-shell">
@@ -334,6 +412,42 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 )}
               />
             </label>
+          </div>
+
+          <div className="implementation-progress-block">
+            <div className="implementation-progress-heading">
+              <div>
+                <span>Werkzaamheden</span>
+                <strong>Voortgang implementatie</strong>
+              </div>
+              <span>Automatisch opgeslagen</span>
+            </div>
+            <div className="implementation-progress-list">
+              {progressRows.map((item) => (
+                item.kind === "intake" ? (
+                  <div key={item.key} className="implementation-progress-row">
+                    <span className="implementation-progress-number">{item.number}</span>
+                    <strong>{item.label}</strong>
+                    <StatusPill tone={intakePresentation.tone}>{intakePresentation.label}</StatusPill>
+                  </div>
+                ) : (
+                  <label
+                    key={item.key}
+                    className={`implementation-progress-row implementation-progress-check ${progress[item.key] ? "completed" : ""}`}
+                  >
+                    <span className="implementation-progress-number">{item.number}</span>
+                    <strong>{item.label}</strong>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(progress[item.key])}
+                      disabled={!canEdit || saving}
+                      aria-label={`${item.label} afgerond`}
+                      onChange={(event) => updateProgress(item.key, event.target.checked)}
+                    />
+                  </label>
+                )
+              ))}
+            </div>
           </div>
 
           <div className="implementation-save-row">

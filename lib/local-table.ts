@@ -101,6 +101,7 @@ const TABLES = {
     "assigned_at",
     "status",
     "notes",
+    "progress",
     "created_at",
     "updated_at",
   ]),
@@ -139,6 +140,9 @@ const JSON_COLUMNS: Partial<Record<TableName, Record<string, unknown>>> = {
   deals: {
     modules: [],
     calculator_inputs: {},
+  },
+  implementations: {
+    progress: {},
   },
   worldline_projects: {
     agreement_fields: {},
@@ -412,6 +416,7 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
     Object.keys(rawPayload).some((column) => ![
       "status",
       "notes",
+      "progress",
       "assigned_consultant_id",
       "assigned_consultant_name",
       "assigned_consultant_email",

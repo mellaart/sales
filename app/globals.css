@@ -777,6 +777,104 @@ select option {
   margin-top: 4px;
 }
 
+.implementation-progress-block {
+  overflow: hidden;
+  margin-top: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(10, 20, 36, 0.62);
+}
+
+.implementation-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(37,99,235,0.12);
+}
+
+.implementation-progress-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.implementation-progress-heading span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.implementation-progress-heading strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.implementation-progress-list {
+  display: grid;
+}
+
+.implementation-progress-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.implementation-progress-row:first-child {
+  border-top: 0;
+}
+
+.implementation-progress-row > strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.implementation-progress-number {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(96,165,250,0.28);
+  border-radius: 50%;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.implementation-progress-check {
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.implementation-progress-check:hover {
+  background: rgba(255,255,255,0.035);
+}
+
+.implementation-progress-check.completed {
+  background: rgba(6,78,59,0.14);
+}
+
+.implementation-progress-check.completed > strong {
+  color: #bbf7d0;
+}
+
+.implementation-progress-check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: #34d399;
+  cursor: pointer;
+}
+
+.implementation-progress-check input:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .implementation-readonly-field {
   display: grid;
   gap: 8px;
@@ -837,6 +935,22 @@ select option {
   .implementation-save-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .implementation-progress-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .implementation-progress-row {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-inline: 12px;
+  }
+
+  .implementation-progress-row .status-pill {
+    min-width: 0;
+    white-space: nowrap;
   }
 
   .implementation-meta-grid {

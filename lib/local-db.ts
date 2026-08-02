@@ -238,6 +238,7 @@ export async function ensureLocalSchema() {
           status text not null default 'new'
             check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed')),
           notes text,
+          progress jsonb not null default '{}'::jsonb,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -255,6 +256,7 @@ export async function ensureLocalSchema() {
         alter table public.implementations add column if not exists assigned_at timestamptz;
         alter table public.implementations add column if not exists status text not null default 'new';
         alter table public.implementations add column if not exists notes text;
+        alter table public.implementations add column if not exists progress jsonb not null default '{}'::jsonb;
         alter table public.implementations add column if not exists created_at timestamptz not null default now();
         alter table public.implementations add column if not exists updated_at timestamptz not null default now();
         alter table public.implementations drop constraint if exists implementations_deal_id_fkey;

@@ -143,9 +143,13 @@ create table if not exists public.implementations (
   status text not null default 'new'
     check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed')),
   notes text,
+  progress jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.implementations
+  add column if not exists progress jsonb not null default '{}'::jsonb;
 
 alter table public.implementations enable row level security;
 create index if not exists implementations_assigned_consultant_idx

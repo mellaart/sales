@@ -1155,7 +1155,7 @@ export default function DealEditor({ dealId }: { dealId: string }) {
           <div className="brand-actions">
             <Link href="/deals" className="secondary-button"><ArrowLeft size={16} /> Terug naar deals</Link>
             {implementation ? (
-              <Link href="/implementatie" className="primary-button">
+              <Link href={`/implementatie/${implementation.id}`} className="primary-button">
                 <ClipboardCheck size={16} /> Open implementatie
               </Link>
             ) : null}

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ExternalLink,
+  FolderOpen,
   RefreshCw,
   Search,
   UserRoundCheck,
@@ -357,9 +358,14 @@ export default function ImplementationDashboard() {
                     </div>
                     <p>{implementation.quote_title || "Nieuwe Smart Trade-klant"}</p>
                   </div>
-                  <Link href={`/deals/${implementation.deal_id}`} className="secondary-button">
-                    <ExternalLink size={16} /> Open deal
-                  </Link>
+                  <div className="implementation-row-actions">
+                    <Link href={`/implementatie/${implementation.id}`} className="primary-button">
+                      <FolderOpen size={16} /> Open implementatie
+                    </Link>
+                    <Link href={`/deals/${implementation.deal_id}`} className="secondary-button">
+                      <ExternalLink size={16} /> Open deal
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="implementation-meta-grid">

@@ -710,6 +710,20 @@ select option {
   flex-wrap: wrap;
 }
 
+.implementation-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.implementation-row-actions .primary-button,
+.implementation-row-actions .secondary-button {
+  min-height: 46px;
+  padding: 11px 15px;
+  border-radius: 8px;
+}
+
 .implementation-meta-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -749,6 +763,51 @@ select option {
   min-height: 104px;
 }
 
+.implementation-detail-hero h1 {
+  overflow-wrap: anywhere;
+}
+
+.implementation-detail-meta {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.implementation-detail-controls {
+  margin-top: 4px;
+}
+
+.implementation-readonly-field {
+  display: grid;
+  gap: 8px;
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+}
+
+.implementation-readonly-field span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.implementation-readonly-field strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.implementation-save-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.implementation-save-row .save-status {
+  flex: 1;
+}
+
 @media (max-width: 980px) {
   .implementation-filter-grid,
   .implementation-controls {
@@ -763,6 +822,18 @@ select option {
 @media (max-width: 640px) {
   .implementation-row-header {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .implementation-row-actions,
+  .implementation-row-actions .primary-button,
+  .implementation-row-actions .secondary-button,
+  .implementation-save-row .secondary-button {
+    width: 100%;
+  }
+
+  .implementation-save-row {
+    align-items: stretch;
     flex-direction: column;
   }
 

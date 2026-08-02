@@ -759,10 +759,43 @@ select option {
   gap: 14px;
 }
 
-.implementation-notes .textarea {
+.implementation-controls select {
+  color-scheme: dark;
+}
+
+.implementation-controls select option,
+.implementation-controls select optgroup {
+  background: #172238;
+  color: #eef4ff;
+}
+
+.implementation-notes-control {
+  position: relative;
+  height: 50px;
+}
+
+.implementation-notes-textarea {
+  display: block;
   height: 50px;
   min-height: 50px;
+  padding-right: 56px;
+  overflow-y: auto;
   resize: none;
+  scrollbar-width: none;
+}
+
+.implementation-notes-textarea::-webkit-scrollbar {
+  display: none;
+}
+
+.implementation-notes-scroll-controls {
+  top: 7px;
+  right: 8px;
+  bottom: 7px;
+}
+
+.implementation-notes-scroll-controls button {
+  background: rgba(15,23,42,0.82);
 }
 
 .implementation-detail-hero h1 {

@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import ImplementationNotesField from "@/components/implementation-notes-field";
 import { StatCard, StatusPill } from "@/components/ui";
 import {
   IMPLEMENTATION_STATUSES,
@@ -413,21 +414,18 @@ export default function ImplementationDashboard() {
                     </select>
                   </label>
 
-                  <label className="input-wrap implementation-notes">
-                    <span className="input-label">Interne notities</span>
-                    <textarea
-                      className="textarea"
-                      value={implementation.notes ?? ""}
-                      disabled={!canEdit || savingId === implementation.id}
-                      placeholder="Planning, afspraken of aandachtspunten"
-                      onChange={(event) => updateLocalRecord(implementation.id, { notes: event.target.value })}
-                      onBlur={(event) => void saveImplementation(
+                  <ImplementationNotesField
+                    label="Interne notities"
+                    value={implementation.notes ?? ""}
+                    disabled={!canEdit || savingId === implementation.id}
+                    placeholder="Planning, afspraken of aandachtspunten"
+                    onChange={(value) => updateLocalRecord(implementation.id, { notes: value })}
+                    onBlur={(value) => void saveImplementation(
                         implementation,
-                        { notes: event.currentTarget.value },
+                        { notes: value },
                         "Notities opgeslagen.",
                       )}
-                    />
-                  </label>
+                  />
                 </div>
               </article>
             ))}

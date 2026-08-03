@@ -2,12 +2,35 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Calculator, CalendarDays, ExternalLink, FileText, Layers3, RefreshCw, WalletCards } from "lucide-react";
+import {
+  AlertTriangle,
+  BarChart3,
+  Calculator,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  ExternalLink,
+  FileText,
+  Layers3,
+  RefreshCw,
+  WalletCards,
+} from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { getDealSalesName, loadDealSalesNames, type SalesNamesByUserId } from "@/lib/deal-sales-names";
 import { listDealsWithFallback } from "@/lib/deal-storage";
+import {
+  IMPLEMENTATION_STATUS_LABELS,
+  type ImplementationRecord,
+} from "@/lib/implementations";
+import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { canViewAllDeals, getSupabaseClient, getUserDisplayName, type DealRecord } from "@/lib/supabase";
 import { euro } from "@/lib/pricing";
+import {
+  ROLE_TAB_ACCESS,
+  canAccessTab,
+  normalizeRoleTabAccess,
+} from "@/lib/role-tabs";
 import { StatusPill } from "@/components/ui";
 
 const dashboardDateFormatter = new Intl.DateTimeFormat("nl-NL", {
@@ -44,10 +67,46 @@ function getDealDateLabel(deal: DealRecord) {
   return dashboardDateFormatter.format(date);
 }
 
+function getLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getImplementationDateKey(value: string | null | undefined) {
+  if (!value) return null;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== Number(match[1]) ||
+    date.getMonth() !== Number(match[2]) - 1 ||
+    date.getDate() !== Number(match[3])
+  ) {
+    return null;
+  }
+
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+function getImplementationDateLabel(value: string | null | undefined) {
+  const dateKey = getImplementationDateKey(value);
+  if (!dateKey) return "Geen datum";
+
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return dashboardDateFormatter.format(new Date(year, month - 1, day));
+}
+
 export default function HomeDashboard() {
   const { user, profile, role } = useAuth();
   const supabase = getSupabaseClient();
   const [deals, setDeals] = useState<DealRecord[]>([]);
+  const [implementations, setImplementations] = useState<ImplementationRecord[]>([]);
+  const [showImplementationStats, setShowImplementationStats] = useState(false);
   const [salesNamesByUserId, setSalesNamesByUserId] = useState<SalesNamesByUserId>({});
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -61,17 +120,53 @@ export default function HomeDashboard() {
     }
 
     setLoading(true);
-    const result = await listDealsWithFallback(supabase, user.id, canViewAllDeals(role), 250);
-    if (result.error) {
-      setStatus(`Dashboard laden mislukt: ${result.error}`);
-      setLoading(false);
-      return;
+    const messages: string[] = [];
+
+    let roleTabAccess = ROLE_TAB_ACCESS;
+    try {
+      const response = await fetch("/api/admin/role-tabs", { cache: "no-store" });
+      const json = await response.json().catch(() => ({})) as { roleTabAccess?: unknown };
+      if (response.ok) roleTabAccess = normalizeRoleTabAccess(json.roleTabAccess);
+    } catch {
+      // The default role settings remain available if the custom settings cannot be loaded.
     }
 
-    const nextDeals = result.deals ?? [];
-    setDeals(nextDeals);
-    setSalesNamesByUserId(await loadDealSalesNames(supabase, nextDeals, user, profile));
-    setStatus(result.warning ?? "");
+    const canViewImplementations = isProtectedAdminEmail(user.email) || canAccessTab(
+      role,
+      "implementation",
+      roleTabAccess,
+    );
+    setShowImplementationStats(canViewImplementations);
+
+    const dealResult = await listDealsWithFallback(supabase, user.id, canViewAllDeals(role), 250);
+    if (dealResult.error) {
+      setDeals([]);
+      setSalesNamesByUserId({});
+      messages.push(`Deals laden mislukt: ${dealResult.error}`);
+    } else {
+      const nextDeals = dealResult.deals ?? [];
+      setDeals(nextDeals);
+      setSalesNamesByUserId(await loadDealSalesNames(supabase, nextDeals, user, profile));
+      if (dealResult.warning) messages.push(dealResult.warning);
+    }
+
+    if (canViewImplementations) {
+      const { data, error } = await supabase
+        .from("implementations")
+        .select("*")
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        setImplementations([]);
+        messages.push(`Implementaties laden mislukt: ${error.message}`);
+      } else {
+        setImplementations((data ?? []) as ImplementationRecord[]);
+      }
+    } else {
+      setImplementations([]);
+    }
+
+    setStatus(messages.join(" "));
     setLoading(false);
   }, [profile, role, user, supabase]);
 
@@ -97,6 +192,37 @@ export default function HomeDashboard() {
   }, [deals]);
 
   const recentDeals = useMemo(() => deals.slice(0, 5), [deals]);
+  const implementationStats = useMemo(() => {
+    const today = new Date();
+    const todayKey = getLocalDateKey(today);
+    const upcomingLimit = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
+    const upcomingLimitKey = getLocalDateKey(upcomingLimit);
+    const active = implementations.filter((implementation) => implementation.status !== "completed");
+    const overdue = active
+      .filter((implementation) => {
+        const dateKey = getImplementationDateKey(implementation.planned_go_live_date);
+        return Boolean(dateKey && dateKey < todayKey);
+      })
+      .sort((left, right) => (
+        (getImplementationDateKey(left.planned_go_live_date) ?? "")
+          .localeCompare(getImplementationDateKey(right.planned_go_live_date) ?? "")
+      ));
+    const upcoming = active.filter((implementation) => {
+      const dateKey = getImplementationDateKey(implementation.planned_go_live_date);
+      return Boolean(dateKey && dateKey >= todayKey && dateKey <= upcomingLimitKey);
+    });
+    const withoutDate = active.filter(
+      (implementation) => !getImplementationDateKey(implementation.planned_go_live_date),
+    );
+
+    return {
+      total: implementations.length,
+      active: active.length,
+      overdue,
+      upcoming: upcoming.length,
+      withoutDate: withoutDate.length,
+    };
+  }, [implementations]);
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
   return (
@@ -158,6 +284,86 @@ export default function HomeDashboard() {
             </div>
           </Link>
         </section>
+
+        {showImplementationStats ? (
+          <section className="dashboard-implementation-overview">
+            <div className="top-row">
+              <div>
+                <div className="eyebrow">Implementatie</div>
+                <h2 className="headline">Planning en voortgang</h2>
+                <p className="subtext">
+                  {role === "manager" || role === "admin"
+                    ? "Overzicht van alle implementaties."
+                    : "Overzicht van de implementaties die jij mag bekijken."}
+                </p>
+              </div>
+              <Link href="/implementatie" className="secondary-button">Volledig overzicht</Link>
+            </div>
+
+            <div className="dashboard-implementation-stat-grid">
+              <article className="deals-stat">
+                <div className="stat-icon"><ClipboardCheck size={18} /></div>
+                <div><span>Totaal</span><strong>{implementationStats.total}</strong></div>
+              </article>
+              <article className="deals-stat">
+                <div className="stat-icon"><CalendarClock size={18} /></div>
+                <div><span>Actief</span><strong>{implementationStats.active}</strong></div>
+              </article>
+              <article className={`deals-stat ${implementationStats.overdue.length ? "dashboard-stat-danger" : "dashboard-stat-success"}`}>
+                <div className="stat-icon"><AlertTriangle size={18} /></div>
+                <div><span>Livegang verstreken</span><strong>{implementationStats.overdue.length}</strong></div>
+              </article>
+              <article className="deals-stat dashboard-stat-upcoming">
+                <div className="stat-icon"><CalendarDays size={18} /></div>
+                <div><span>Binnen 30 dagen</span><strong>{implementationStats.upcoming}</strong></div>
+              </article>
+              <article className={`deals-stat ${implementationStats.withoutDate ? "dashboard-stat-warning" : ""}`}>
+                <div className="stat-icon"><CalendarClock size={18} /></div>
+                <div><span>Zonder livegang</span><strong>{implementationStats.withoutDate}</strong></div>
+              </article>
+            </div>
+
+            <div className="dashboard-implementation-attention">
+              <div className="dashboard-implementation-attention-header">
+                <div>
+                  <strong>Aandacht nodig</strong>
+                  <span>Actieve implementaties waarvan de geplande livegang is verstreken</span>
+                </div>
+                <StatusPill tone={implementationStats.overdue.length ? "danger" : "success"}>
+                  {implementationStats.overdue.length ? `${implementationStats.overdue.length} te laat` : "Alles op schema"}
+                </StatusPill>
+              </div>
+
+              {implementationStats.overdue.length ? (
+                <div className="dashboard-overdue-list">
+                  {implementationStats.overdue.slice(0, 5).map((implementation) => (
+                    <Link
+                      key={implementation.id}
+                      href={`/implementatie/${implementation.id}`}
+                      className="dashboard-overdue-row"
+                    >
+                      <div>
+                        <strong>{implementation.customer_name || "Onbekende klant"}</strong>
+                        <span>
+                          {IMPLEMENTATION_STATUS_LABELS[implementation.status]} · {implementation.assigned_consultant_name || "Nog niet toegewezen"}
+                        </span>
+                      </div>
+                      <div className="dashboard-overdue-date">
+                        <span>Geplande livegang</span>
+                        <strong>{getImplementationDateLabel(implementation.planned_go_live_date)}</strong>
+                      </div>
+                      <ExternalLink size={17} aria-hidden="true" />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="dashboard-implementation-clear">
+                  <CheckCircle2 size={18} /> Geen actieve implementaties met een verstreken livegang.
+                </div>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <section className="deals-results card panel">
           <div className="top-row">

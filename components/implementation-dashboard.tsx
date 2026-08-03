@@ -34,6 +34,15 @@ import { getSupabaseClient, type ProfileRecord } from "@/lib/supabase";
 
 type StatusFilter = "all" | ImplementationStatus;
 type ConsultantFilter = "all" | "unassigned" | string;
+type PlanningFilter = "all" | "active" | "overdue" | "upcoming" | "missing";
+
+const PLANNING_FILTERS = new Set<PlanningFilter>([
+  "all",
+  "active",
+  "overdue",
+  "upcoming",
+  "missing",
+]);
 
 const dateFormatter = new Intl.DateTimeFormat("nl-NL", {
   day: "2-digit",
@@ -45,6 +54,19 @@ function formatDate(value: string | null | undefined) {
   if (!value) return "Geen datum";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Geen datum" : dateFormatter.format(date);
+}
+
+function getLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getPlannedDateKey(value: string | null | undefined) {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
 
 function getStatusTone(status: ImplementationStatus): "success" | "warning" | "neutral" {
@@ -66,6 +88,7 @@ export default function ImplementationDashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [consultantFilter, setConsultantFilter] = useState<ConsultantFilter>("all");
+  const [planningFilter, setPlanningFilter] = useState<PlanningFilter>("all");
 
   const canAssign = isProtectedAdminEmail(user?.email);
   const canView = canAssign || canAccessTab(role, "implementation", roleTabAccess);
@@ -125,6 +148,13 @@ export default function ImplementationDashboard() {
   }, [loadRoleAccess]);
 
   useEffect(() => {
+    const requestedFilter = new URLSearchParams(window.location.search).get("planning") as PlanningFilter | null;
+    if (requestedFilter && PLANNING_FILTERS.has(requestedFilter)) {
+      setPlanningFilter(requestedFilter);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!accessLoaded || !canView) {
       if (accessLoaded) setLoading(false);
       return;
@@ -134,6 +164,10 @@ export default function ImplementationDashboard() {
 
   const filteredImplementations = useMemo(() => {
     const search = query.trim().toLowerCase();
+    const today = new Date();
+    const todayKey = getLocalDateKey(today);
+    const upcomingLimit = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
+    const upcomingLimitKey = getLocalDateKey(upcomingLimit);
 
     return implementations.filter((implementation) => {
       if (statusFilter !== "all" && implementation.status !== statusFilter) return false;
@@ -143,6 +177,16 @@ export default function ImplementationDashboard() {
         consultantFilter !== "unassigned" &&
         implementation.assigned_consultant_id !== consultantFilter
       ) return false;
+
+      const isActive = implementation.status !== "completed";
+      const plannedDateKey = getPlannedDateKey(implementation.planned_go_live_date);
+      if (planningFilter === "active" && !isActive) return false;
+      if (planningFilter === "overdue" && !(isActive && plannedDateKey && plannedDateKey < todayKey)) return false;
+      if (
+        planningFilter === "upcoming" &&
+        !(isActive && plannedDateKey && plannedDateKey >= todayKey && plannedDateKey <= upcomingLimitKey)
+      ) return false;
+      if (planningFilter === "missing" && !(isActive && !plannedDateKey)) return false;
 
       if (!search) return true;
       return [
@@ -159,7 +203,7 @@ export default function ImplementationDashboard() {
         implementation.notes,
       ].some((value) => String(value ?? "").toLowerCase().includes(search));
     });
-  }, [consultantFilter, implementations, query, statusFilter]);
+  }, [consultantFilter, implementations, planningFilter, query, statusFilter]);
 
   const stats = useMemo(() => ({
     total: implementations.length,
@@ -192,6 +236,15 @@ export default function ImplementationDashboard() {
     setImplementations((current) => current.map((implementation) => (
       implementation.id === implementationId ? { ...implementation, ...patch } : implementation
     )));
+  }
+
+  function changePlanningFilter(value: PlanningFilter) {
+    setPlanningFilter(value);
+
+    const url = new URL(window.location.href);
+    if (value === "all") url.searchParams.delete("planning");
+    else url.searchParams.set("planning", value);
+    window.history.replaceState(null, "", url);
   }
 
   async function saveImplementation(
@@ -300,7 +353,7 @@ export default function ImplementationDashboard() {
             <div className="eyebrow">Zoeken en filteren</div>
             <h2 className="headline">Implementaties vinden</h2>
           </div>
-          <div className="implementation-filter-grid">
+          <div className={`implementation-filter-grid ${seesAllImplementations ? "with-user-filter" : ""}`}>
             <label className="input-wrap">
               <span className="input-label">Zoeken</span>
               <span className="search-box implementation-search-box">
@@ -320,6 +373,20 @@ export default function ImplementationDashboard() {
                 {IMPLEMENTATION_STATUSES.map((status) => (
                   <option key={status} value={status}>{IMPLEMENTATION_STATUS_LABELS[status]}</option>
                 ))}
+              </select>
+            </label>
+            <label className="input-wrap">
+              <span className="input-label">Livegang</span>
+              <select
+                className="input implementation-dark-select"
+                value={planningFilter}
+                onChange={(event) => changePlanningFilter(event.target.value as PlanningFilter)}
+              >
+                <option value="all">Alle livegangen</option>
+                <option value="active">Alle actieve implementaties</option>
+                <option value="overdue">Livegang verstreken</option>
+                <option value="upcoming">Livegang binnen 30 dagen</option>
+                <option value="missing">Nog niet gepland</option>
               </select>
             </label>
             {seesAllImplementations ? (

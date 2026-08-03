@@ -301,36 +301,46 @@ export default function HomeDashboard() {
             </div>
 
             <div className="dashboard-implementation-stat-grid">
-              <article className="deals-stat">
+              <Link href="/implementatie" className="deals-stat dashboard-implementation-stat-link">
                 <div className="stat-icon"><ClipboardCheck size={18} /></div>
                 <div><span>Totaal</span><strong>{implementationStats.total}</strong></div>
-              </article>
-              <article className="deals-stat">
+              </Link>
+              <Link href="/implementatie?planning=active" className="deals-stat dashboard-implementation-stat-link">
                 <div className="stat-icon"><CalendarClock size={18} /></div>
                 <div><span>Actief</span><strong>{implementationStats.active}</strong></div>
-              </article>
-              <article className={`deals-stat ${implementationStats.overdue.length ? "dashboard-stat-danger" : "dashboard-stat-success"}`}>
+              </Link>
+              <Link
+                href="/implementatie?planning=overdue"
+                className={`deals-stat dashboard-implementation-stat-link ${implementationStats.overdue.length ? "dashboard-stat-danger" : "dashboard-stat-success"}`}
+              >
                 <div className="stat-icon"><AlertTriangle size={18} /></div>
                 <div><span>Livegang verstreken</span><strong>{implementationStats.overdue.length}</strong></div>
-              </article>
-              <article className="deals-stat dashboard-stat-upcoming">
+              </Link>
+              <Link href="/implementatie?planning=upcoming" className="deals-stat dashboard-implementation-stat-link dashboard-stat-upcoming">
                 <div className="stat-icon"><CalendarDays size={18} /></div>
                 <div><span>Binnen 30 dagen</span><strong>{implementationStats.upcoming}</strong></div>
-              </article>
-              <article className={`deals-stat ${implementationStats.withoutDate ? "dashboard-stat-warning" : ""}`}>
+              </Link>
+              <Link
+                href="/implementatie?planning=missing"
+                className={`deals-stat dashboard-implementation-stat-link ${implementationStats.withoutDate ? "dashboard-stat-warning" : ""}`}
+              >
                 <div className="stat-icon"><CalendarClock size={18} /></div>
                 <div><span>Zonder livegang</span><strong>{implementationStats.withoutDate}</strong></div>
-              </article>
+              </Link>
             </div>
 
             <div className="dashboard-implementation-attention">
               <div className="dashboard-implementation-attention-header">
                 <div>
                   <strong>Aandacht nodig</strong>
-                  <span>Actieve implementaties waarvan de geplande livegang is verstreken</span>
+                  <span>Actieve implementaties met een verstreken of ontbrekende livegang</span>
                 </div>
-                <StatusPill tone={implementationStats.overdue.length ? "danger" : "success"}>
-                  {implementationStats.overdue.length ? `${implementationStats.overdue.length} te laat` : "Alles op schema"}
+                <StatusPill tone={implementationStats.overdue.length ? "danger" : implementationStats.withoutDate ? "warning" : "success"}>
+                  {implementationStats.overdue.length
+                    ? `${implementationStats.overdue.length} te laat${implementationStats.withoutDate ? ` · ${implementationStats.withoutDate} zonder datum` : ""}`
+                    : implementationStats.withoutDate
+                      ? `${implementationStats.withoutDate} zonder datum`
+                      : "Alles op schema"}
                 </StatusPill>
               </div>
 
@@ -356,11 +366,24 @@ export default function HomeDashboard() {
                     </Link>
                   ))}
                 </div>
-              ) : (
+              ) : null}
+
+              {implementationStats.withoutDate ? (
+                <Link
+                  href="/implementatie?planning=missing"
+                  className="dashboard-implementation-clear dashboard-implementation-warning"
+                >
+                  <CalendarClock size={18} />
+                  {implementationStats.withoutDate} {implementationStats.withoutDate === 1 ? "actieve implementatie heeft" : "actieve implementaties hebben"} nog geen livegang.
+                  <ExternalLink size={16} aria-hidden="true" />
+                </Link>
+              ) : null}
+
+              {!implementationStats.overdue.length && !implementationStats.withoutDate ? (
                 <div className="dashboard-implementation-clear">
                   <CheckCircle2 size={18} /> Geen actieve implementaties met een verstreken livegang.
                 </div>
-              )}
+              ) : null}
             </div>
           </section>
         ) : null}

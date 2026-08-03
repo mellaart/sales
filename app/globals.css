@@ -664,6 +664,10 @@ select option {
   margin-top: 18px;
 }
 
+.implementation-filter-grid.with-user-filter {
+  grid-template-columns: minmax(240px, 1.45fr) repeat(3, minmax(170px, 1fr));
+}
+
 .implementation-search-box {
   width: 100%;
   min-height: 48px;
@@ -2751,6 +2755,19 @@ td {
   min-width: 0;
 }
 
+.dashboard-implementation-stat-link {
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.dashboard-implementation-stat-link:hover,
+.dashboard-implementation-stat-link:focus-visible {
+  border-color: rgba(96,165,250,0.52);
+  background: rgba(37,99,235,0.14);
+  transform: translateY(-1px);
+}
+
 .dashboard-stat-danger {
   border-color: rgba(248,113,113,0.36);
   background: rgba(127,29,29,0.18);
@@ -2889,6 +2906,23 @@ td {
 .dashboard-implementation-clear svg {
   flex: 0 0 auto;
   color: #22c55e;
+}
+
+.dashboard-implementation-warning {
+  color: #fde68a;
+  transition: background 180ms ease;
+}
+
+.dashboard-implementation-warning:hover {
+  background: rgba(120,53,15,0.18);
+}
+
+.dashboard-implementation-warning svg {
+  color: #f59e0b;
+}
+
+.dashboard-implementation-warning svg:last-child {
+  margin-left: auto;
 }
 
 .calculator-page {

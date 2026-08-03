@@ -37,7 +37,16 @@ import type { ImplementationRecord } from "@/lib/implementations";
 import { calculatePricing, euro, getMinimumPackageForPaidModules, getPaidSelectedModuleCount, MODULES, type ModuleConfig } from "@/lib/pricing";
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
-import { type AssetExpansionLine, type AssetExpansionSummary, type DealCalculatorInputs, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
+import {
+  type AssetExpansionLine,
+  type AssetExpansionSummary,
+  type DealCalculatorInputs,
+  type DealRecord,
+  type ProfileRecord,
+  getProfileDisplayName,
+  getSupabaseClient,
+  getUserDisplayName,
+} from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
 import ExtraUserOffer from "@/components/extra-user-offer";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput } from "@/components/ui";
@@ -212,6 +221,9 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const [dealOwnerId, setDealOwnerId] = useState<string | null>(null);
+  const [salesConsultants, setSalesConsultants] = useState<ProfileRecord[]>([]);
+  const [salesConsultantsLoaded, setSalesConsultantsLoaded] = useState(false);
+  const [salesConsultantBusy, setSalesConsultantBusy] = useState(false);
   const [archivedAt, setArchivedAt] = useState<string | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [implementation, setImplementation] = useState<ImplementationRecord | null>(null);
@@ -250,6 +262,41 @@ export default function DealEditor({ dealId }: { dealId: string }) {
   const currentSalesTitle = profile?.job_title ?? "";
   const currentSalesWorkdays = profile?.workdays ?? "";
   const currentSalesPhone = profile?.mobile_phone ?? "";
+  const selectedSalesConsultant = useMemo(
+    () => salesConsultants.find((consultant) => consultant.id === dealOwnerId) ?? null,
+    [dealOwnerId, salesConsultants],
+  );
+  const selectedSalesName = getProfileDisplayName(selectedSalesConsultant) || salesName || currentSalesName || "";
+  const selectedSalesEmail = selectedSalesConsultant?.email
+    || (dealOwnerId === user?.id ? currentSalesEmail : "");
+  const selectedSalesTitle = selectedSalesConsultant?.job_title
+    || (dealOwnerId === user?.id ? currentSalesTitle : "");
+  const selectedSalesWorkdays = selectedSalesConsultant?.workdays
+    || (dealOwnerId === user?.id ? currentSalesWorkdays : "");
+  const selectedSalesPhone = selectedSalesConsultant?.mobile_phone
+    || (dealOwnerId === user?.id ? currentSalesPhone : "");
+
+  useEffect(() => {
+    async function loadSalesConsultants() {
+      if (!user) return;
+
+      try {
+        const response = await fetch("/api/deals/consultants", { cache: "no-store" });
+        const json = await response.json().catch(() => ({})) as {
+          users?: ProfileRecord[];
+          error?: string;
+        };
+        if (!response.ok) throw new Error(json.error || "Gebruikers laden mislukt.");
+        setSalesConsultants(Array.isArray(json.users) ? json.users : []);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Gebruikers laden mislukt.");
+      } finally {
+        setSalesConsultantsLoaded(true);
+      }
+    }
+
+    void loadSalesConsultants();
+  }, [user]);
 
   useEffect(() => {
     async function loadDeal() {
@@ -463,6 +510,35 @@ export default function DealEditor({ dealId }: { dealId: string }) {
 
       return currentKeys.filter((key) => key !== optionKey);
     });
+  }
+
+  async function handleSalesConsultantChange(consultantId: string) {
+    if (!user || salesConsultantBusy || consultantId === dealOwnerId) return;
+
+    const consultant = salesConsultants.find((option) => option.id === consultantId);
+    if (!consultant) {
+      setStatus("De gekozen gebruiker is niet gevonden.");
+      return;
+    }
+
+    const consultantName = getProfileDisplayName(consultant) || consultant.email || "Onbekende gebruiker";
+    setSalesConsultantBusy(true);
+    setStatus(`Deal wordt gekoppeld aan ${consultantName}...`);
+
+    const result = await updateDealWithFallback(supabase, dealId, {
+      user_id: consultant.id,
+      sales_name: consultantName,
+    });
+
+    if (result.error) {
+      setStatus(`Consultant wijzigen mislukt: ${result.error}`);
+    } else {
+      setDealOwnerId(result.deal?.user_id || consultant.id);
+      setSalesName(result.deal?.sales_name || consultantName);
+      setStatus(`Deal is gekoppeld aan ${consultantName}.`);
+    }
+
+    setSalesConsultantBusy(false);
   }
 
   async function handleArchiveToggle() {
@@ -683,11 +759,11 @@ export default function DealEditor({ dealId }: { dealId: string }) {
       quoteTitle,
       customerName,
       contactName,
-      salesName: currentSalesName || salesName,
-      salesEmail: currentSalesEmail,
-      salesPhone: currentSalesPhone,
-      salesTitle: currentSalesTitle,
-      salesWorkdays: currentSalesWorkdays,
+      salesName: selectedSalesName,
+      salesEmail: selectedSalesEmail,
+      salesPhone: selectedSalesPhone,
+      salesTitle: selectedSalesTitle,
+      salesWorkdays: selectedSalesWorkdays,
       notes,
       includeVat,
       totalUsers,
@@ -1190,7 +1266,25 @@ export default function DealEditor({ dealId }: { dealId: string }) {
                 <TextInput label="Klantnaam" value={customerName} onChange={setCustomerName} />
                 <TextInput label="Titel voorstel" value={quoteTitle} onChange={setQuoteTitle} />
                 <TextInput label="Contactpersoon" value={contactName} onChange={setContactName} />
-                <TextInput label="Sales consultant" value={salesName} onChange={setSalesName} />
+                <label className="input-wrap">
+                  <span className="input-label">Sales consultant</span>
+                  <select
+                    className="input"
+                    value={dealOwnerId ?? ""}
+                    disabled={!salesConsultantsLoaded || salesConsultantBusy}
+                    onChange={(event) => void handleSalesConsultantChange(event.currentTarget.value)}
+                  >
+                    {!salesConsultantsLoaded ? <option value="">Gebruikers laden...</option> : null}
+                    {dealOwnerId && !salesConsultants.some((consultant) => consultant.id === dealOwnerId) ? (
+                      <option value={dealOwnerId}>{salesName || "Huidige consultant"}</option>
+                    ) : null}
+                    {salesConsultants.map((consultant) => (
+                      <option key={consultant.id} value={consultant.id}>
+                        {getProfileDisplayName(consultant) || consultant.email || "Naam ontbreekt"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
 

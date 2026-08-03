@@ -315,7 +315,7 @@ export default function ImplementationDashboard() {
             </label>
             <label className="input-wrap">
               <span className="input-label">Status</span>
-              <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+              <select className="input implementation-dark-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
                 <option value="all">Alle statussen</option>
                 {IMPLEMENTATION_STATUSES.map((status) => (
                   <option key={status} value={status}>{IMPLEMENTATION_STATUS_LABELS[status]}</option>
@@ -325,7 +325,7 @@ export default function ImplementationDashboard() {
             {seesAllImplementations ? (
               <label className="input-wrap">
                 <span className="input-label">Gebruiker</span>
-                <select className="input" value={consultantFilter} onChange={(event) => setConsultantFilter(event.target.value)}>
+                <select className="input implementation-dark-select" value={consultantFilter} onChange={(event) => setConsultantFilter(event.target.value)}>
                   <option value="all">Alle gebruikers</option>
                   <option value="unassigned">Niet toegewezen</option>
                   {consultantFilterOptions.map((consultant) => (
@@ -400,7 +400,7 @@ export default function ImplementationDashboard() {
                   <label className="input-wrap">
                     <span className="input-label">Status</span>
                     <select
-                      className="input"
+                      className="input implementation-dark-select"
                       value={implementation.status}
                       disabled={!canEdit || savingId === implementation.id}
                       onChange={(event) => void saveImplementation(

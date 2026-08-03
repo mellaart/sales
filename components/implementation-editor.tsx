@@ -925,7 +925,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <label className="input-wrap">
               <span className="input-label">Status</span>
               <select
-                className="input"
+                className="input implementation-dark-select"
                 value={implementation.status}
                 disabled={!canEdit || saving}
                 onChange={(event) => void saveImplementation(

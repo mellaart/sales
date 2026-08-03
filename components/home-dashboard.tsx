@@ -21,6 +21,8 @@ import { getDealSalesName, loadDealSalesNames, type SalesNamesByUserId } from "@
 import { listDealsWithFallback } from "@/lib/deal-storage";
 import {
   IMPLEMENTATION_STATUS_LABELS,
+  getImplementationDateKey,
+  getLocalDateKey,
   type ImplementationRecord,
 } from "@/lib/implementations";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
@@ -65,32 +67,6 @@ function getDealDateLabel(deal: DealRecord) {
   if (Number.isNaN(date.getTime())) return "Geen datum";
 
   return dashboardDateFormatter.format(date);
-}
-
-function getLocalDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getImplementationDateKey(value: string | null | undefined) {
-  if (!value) return null;
-
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!match) return null;
-
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  if (
-    Number.isNaN(date.getTime()) ||
-    date.getFullYear() !== Number(match[1]) ||
-    date.getMonth() !== Number(match[2]) - 1 ||
-    date.getDate() !== Number(match[3])
-  ) {
-    return null;
-  }
-
-  return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
 function getImplementationDateLabel(value: string | null | undefined) {
@@ -220,7 +196,7 @@ export default function HomeDashboard() {
       active: active.length,
       overdue,
       upcoming: upcoming.length,
-      withoutDate: withoutDate.length,
+      withoutDate,
     };
   }, [implementations]);
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
@@ -322,10 +298,10 @@ export default function HomeDashboard() {
               </Link>
               <Link
                 href="/implementatie?planning=missing"
-                className={`deals-stat dashboard-implementation-stat-link ${implementationStats.withoutDate ? "dashboard-stat-warning" : ""}`}
+                className={`deals-stat dashboard-implementation-stat-link ${implementationStats.withoutDate.length ? "dashboard-stat-warning" : ""}`}
               >
                 <div className="stat-icon"><CalendarClock size={18} /></div>
-                <div><span>Zonder livegang</span><strong>{implementationStats.withoutDate}</strong></div>
+                <div><span>Zonder livegang</span><strong>{implementationStats.withoutDate.length}</strong></div>
               </Link>
             </div>
 
@@ -335,11 +311,11 @@ export default function HomeDashboard() {
                   <strong>Aandacht nodig</strong>
                   <span>Actieve implementaties met een verstreken of ontbrekende livegang</span>
                 </div>
-                <StatusPill tone={implementationStats.overdue.length ? "danger" : implementationStats.withoutDate ? "warning" : "success"}>
+                <StatusPill tone={implementationStats.overdue.length ? "danger" : implementationStats.withoutDate.length ? "warning" : "success"}>
                   {implementationStats.overdue.length
-                    ? `${implementationStats.overdue.length} te laat${implementationStats.withoutDate ? ` · ${implementationStats.withoutDate} zonder datum` : ""}`
-                    : implementationStats.withoutDate
-                      ? `${implementationStats.withoutDate} zonder datum`
+                    ? `${implementationStats.overdue.length} te laat${implementationStats.withoutDate.length ? ` · ${implementationStats.withoutDate.length} zonder datum` : ""}`
+                    : implementationStats.withoutDate.length
+                      ? `${implementationStats.withoutDate.length} zonder datum`
                       : "Alles op schema"}
                 </StatusPill>
               </div>
@@ -368,18 +344,31 @@ export default function HomeDashboard() {
                 </div>
               ) : null}
 
-              {implementationStats.withoutDate ? (
-                <Link
-                  href="/implementatie?planning=missing"
-                  className="dashboard-implementation-clear dashboard-implementation-warning"
-                >
-                  <CalendarClock size={18} />
-                  {implementationStats.withoutDate} {implementationStats.withoutDate === 1 ? "actieve implementatie heeft" : "actieve implementaties hebben"} nog geen livegang.
-                  <ExternalLink size={16} aria-hidden="true" />
-                </Link>
+              {implementationStats.withoutDate.length ? (
+                <div className="dashboard-missing-list">
+                  {implementationStats.withoutDate.slice(0, 5).map((implementation) => (
+                    <Link
+                      key={implementation.id}
+                      href={`/implementatie/${implementation.id}`}
+                      className="dashboard-overdue-row dashboard-missing-row"
+                    >
+                      <div>
+                        <strong>{implementation.customer_name || "Onbekende klant"}</strong>
+                        <span>
+                          {IMPLEMENTATION_STATUS_LABELS[implementation.status]} · {implementation.assigned_consultant_name || "Nog niet toegewezen"}
+                        </span>
+                      </div>
+                      <div className="dashboard-overdue-date">
+                        <span>Livegang</span>
+                        <strong>Nog niet gepland</strong>
+                      </div>
+                      <ExternalLink size={17} aria-hidden="true" />
+                    </Link>
+                  ))}
+                </div>
               ) : null}
 
-              {!implementationStats.overdue.length && !implementationStats.withoutDate ? (
+              {!implementationStats.overdue.length && !implementationStats.withoutDate.length ? (
                 <div className="dashboard-implementation-clear">
                   <CheckCircle2 size={18} /> Geen actieve implementaties met een verstreken livegang.
                 </div>

@@ -18,6 +18,8 @@ import { StatCard, StatusPill } from "@/components/ui";
 import {
   IMPLEMENTATION_STATUSES,
   IMPLEMENTATION_STATUS_LABELS,
+  getImplementationDateKey,
+  getLocalDateKey,
   type ImplementationRecord,
   type ImplementationStatus,
 } from "@/lib/implementations";
@@ -54,19 +56,6 @@ function formatDate(value: string | null | undefined) {
   if (!value) return "Geen datum";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Geen datum" : dateFormatter.format(date);
-}
-
-function getLocalDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getPlannedDateKey(value: string | null | undefined) {
-  if (!value) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
-  return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
 
 function getStatusTone(status: ImplementationStatus): "success" | "warning" | "neutral" {
@@ -179,7 +168,7 @@ export default function ImplementationDashboard() {
       ) return false;
 
       const isActive = implementation.status !== "completed";
-      const plannedDateKey = getPlannedDateKey(implementation.planned_go_live_date);
+      const plannedDateKey = getImplementationDateKey(implementation.planned_go_live_date);
       if (planningFilter === "active" && !isActive) return false;
       if (planningFilter === "overdue" && !(isActive && plannedDateKey && plannedDateKey < todayKey)) return false;
       if (

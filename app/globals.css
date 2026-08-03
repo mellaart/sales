@@ -2829,7 +2829,8 @@ td {
   line-height: 1.4;
 }
 
-.dashboard-overdue-list {
+.dashboard-overdue-list,
+.dashboard-missing-list {
   border-top: 1px solid var(--line);
 }
 
@@ -2892,6 +2893,12 @@ td {
   font-size: 14px;
 }
 
+.dashboard-missing-row .dashboard-overdue-date span,
+.dashboard-missing-row .dashboard-overdue-date strong,
+.dashboard-missing-row > svg {
+  color: #fcd34d;
+}
+
 .dashboard-implementation-clear {
   display: flex;
   align-items: center;
@@ -2906,23 +2913,6 @@ td {
 .dashboard-implementation-clear svg {
   flex: 0 0 auto;
   color: #22c55e;
-}
-
-.dashboard-implementation-warning {
-  color: #fde68a;
-  transition: background 180ms ease;
-}
-
-.dashboard-implementation-warning:hover {
-  background: rgba(120,53,15,0.18);
-}
-
-.dashboard-implementation-warning svg {
-  color: #f59e0b;
-}
-
-.dashboard-implementation-warning svg:last-child {
-  margin-left: auto;
 }
 
 .calculator-page {

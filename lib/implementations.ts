@@ -33,6 +33,7 @@ export const IMPLEMENTATION_PROGRESS_ITEMS = [
 
 export type ImplementationProgressKey = typeof IMPLEMENTATION_PROGRESS_ITEMS[number]["key"];
 export type ImplementationProgress = Partial<Record<ImplementationProgressKey, boolean>>;
+export type ImplementationItemProgress = Record<string, boolean>;
 
 export function normalizeImplementationProgress(value: unknown): ImplementationProgress {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -42,6 +43,18 @@ export function normalizeImplementationProgress(value: unknown): ImplementationP
     progress[item.key] = source[item.key] === true;
     return progress;
   }, {});
+}
+
+export function normalizeImplementationItemProgress(value: unknown): ImplementationItemProgress {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<ImplementationItemProgress>(
+    (progress, [key, completed]) => {
+      progress[key] = completed === true;
+      return progress;
+    },
+    {},
+  );
 }
 
 export type ImplementationRecord = {
@@ -62,6 +75,7 @@ export type ImplementationRecord = {
   status: ImplementationStatus;
   notes?: string | null;
   progress?: ImplementationProgress | null;
+  implementation_item_progress?: ImplementationItemProgress | null;
   administration_name?: string | null;
   implementation_start_date?: string | null;
   planned_go_live_date?: string | null;

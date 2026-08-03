@@ -102,6 +102,7 @@ const TABLES = {
     "status",
     "notes",
     "progress",
+    "implementation_item_progress",
     "administration_name",
     "implementation_start_date",
     "planned_go_live_date",
@@ -149,6 +150,7 @@ const JSON_COLUMNS: Partial<Record<TableName, Record<string, unknown>>> = {
   },
   implementations: {
     progress: {},
+    implementation_item_progress: {},
   },
   worldline_projects: {
     agreement_fields: {},
@@ -423,6 +425,7 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
       "status",
       "notes",
       "progress",
+      "implementation_item_progress",
       "administration_name",
       "implementation_start_date",
       "planned_go_live_date",

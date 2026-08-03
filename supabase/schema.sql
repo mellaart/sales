@@ -144,6 +144,7 @@ create table if not exists public.implementations (
     check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed')),
   notes text,
   progress jsonb not null default '{}'::jsonb,
+  implementation_item_progress jsonb not null default '{}'::jsonb,
   administration_name text,
   implementation_start_date date,
   planned_go_live_date date,
@@ -156,6 +157,8 @@ create table if not exists public.implementations (
 
 alter table public.implementations
   add column if not exists progress jsonb not null default '{}'::jsonb;
+alter table public.implementations
+  add column if not exists implementation_item_progress jsonb not null default '{}'::jsonb;
 alter table public.implementations add column if not exists administration_name text;
 alter table public.implementations add column if not exists implementation_start_date date;
 alter table public.implementations add column if not exists planned_go_live_date date;

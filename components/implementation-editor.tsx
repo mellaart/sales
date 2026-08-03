@@ -30,11 +30,13 @@ import {
   IMPLEMENTATION_PROGRESS_ITEMS,
   IMPLEMENTATION_STATUSES,
   IMPLEMENTATION_STATUS_LABELS,
+  normalizeImplementationItemProgress,
   normalizeImplementationProgress,
   type ImplementationRecord,
   type ImplementationProgressKey,
   type ImplementationStatus,
 } from "@/lib/implementations";
+import type { ImplementationItem } from "@/lib/implementation-items";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { euro } from "@/lib/pricing";
 import {
@@ -261,6 +263,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeProgress | null>(null);
   const [customerIntakeLoaded, setCustomerIntakeLoaded] = useState(false);
   const [customerIntakeLoadFailed, setCustomerIntakeLoadFailed] = useState(false);
+  const [implementationItems, setImplementationItems] = useState<ImplementationItem[]>([]);
+  const [implementationItemsLoaded, setImplementationItemsLoaded] = useState(false);
+  const [implementationItemsError, setImplementationItemsError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dnsOutlookBusy, setDnsOutlookBusy] = useState(false);
@@ -298,6 +303,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setMessage("");
     setCustomerIntakeLoaded(false);
     setCustomerIntakeLoadFailed(false);
+    setImplementationItemsLoaded(false);
+    setImplementationItemsError("");
 
     const { data, error } = await supabase
       .from("implementations")
@@ -330,6 +337,28 @@ export default function ImplementationEditor({ implementationId }: { implementat
       setCustomerIntakeLoadFailed(true);
     } finally {
       setCustomerIntakeLoaded(true);
+    }
+
+    try {
+      if (data) {
+        const itemsResponse = await fetch(
+          `/api/implementations/${encodeURIComponent(implementationId)}/items`,
+          { cache: "no-store" },
+        );
+        const itemsJson = await itemsResponse.json().catch(() => ({})) as {
+          items?: ImplementationItem[];
+          error?: string;
+        };
+        if (!itemsResponse.ok) throw new Error(itemsJson.error || "Modules laden mislukt.");
+        setImplementationItems(Array.isArray(itemsJson.items) ? itemsJson.items : []);
+      } else {
+        setImplementationItems([]);
+      }
+    } catch (error) {
+      setImplementationItems([]);
+      setImplementationItemsError(error instanceof Error ? error.message : "Modules laden mislukt.");
+    } finally {
+      setImplementationItemsLoaded(true);
     }
 
     if (canAssign) {
@@ -440,6 +469,20 @@ export default function ImplementationEditor({ implementationId }: { implementat
       [key]: checked,
     };
     void saveImplementation({ progress }, `${IMPLEMENTATION_PROGRESS_ITEMS.find((item) => item.key === key)?.label ?? "Stap"} bijgewerkt.`, true);
+  }
+
+  function updateImplementationItem(item: ImplementationItem, checked: boolean) {
+    if (!implementation || !canEdit || saving) return;
+
+    const implementationItemProgress = {
+      ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
+      [item.key]: checked,
+    };
+    void saveImplementation(
+      { implementation_item_progress: implementationItemProgress },
+      `${item.label} bijgewerkt.`,
+      true,
+    );
   }
 
   async function assignConsultant(consultantId: string) {
@@ -741,6 +784,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
   ) || (
     key === "implementationEndInvoice" && Boolean(implementation.actual_go_live_date)
   );
+  const implementationItemProgress = normalizeImplementationItemProgress(
+    implementation.implementation_item_progress,
+  );
+  const completedImplementationItems = implementationItems.filter(
+    (item) => implementationItemProgress[item.key],
+  ).length;
 
   return (
     <div className="page-shell">
@@ -1155,6 +1204,50 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <Mail size={16} /> {newCustomerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
               </button>
             </article>
+          </div>
+
+          <div className="implementation-progress-block implementation-items-progress">
+            <div className="implementation-progress-heading">
+              <div>
+                <span>Modules</span>
+                <strong>Voortgang implementatie</strong>
+              </div>
+              <span>
+                {implementationItemsLoaded && !implementationItemsError
+                  ? `${completedImplementationItems}/${implementationItems.length} afgerond`
+                  : "Wordt geladen..."}
+              </span>
+            </div>
+            <div className="implementation-progress-list">
+              {!implementationItemsLoaded ? (
+                <div className="implementation-items-state">
+                  <LoaderCircle className="implementation-dns-spinner" size={17} /> Modules worden geladen...
+                </div>
+              ) : implementationItemsError ? (
+                <div className="implementation-items-state error">
+                  <AlertTriangle size={17} /> {implementationItemsError}
+                </div>
+              ) : implementationItems.length === 0 ? (
+                <div className="implementation-items-state">Geen modules gevonden in de calculator-deal.</div>
+              ) : implementationItems.map((item) => (
+                <label
+                  key={item.key}
+                  className={`implementation-progress-row implementation-progress-check ${
+                    implementationItemProgress[item.key] ? "completed" : ""
+                  }`}
+                >
+                  <span className="implementation-progress-number"><Package size={15} /></span>
+                  <strong>{item.label}</strong>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(implementationItemProgress[item.key])}
+                    disabled={!canEdit || saving}
+                    aria-label={`${item.label} afgerond`}
+                    onChange={(event) => updateImplementationItem(item, event.target.checked)}
+                  />
+                </label>
+              ))}
+            </div>
           </div>
 
           {message ? (

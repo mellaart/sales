@@ -966,6 +966,24 @@ select option {
   opacity: 0.55;
 }
 
+.implementation-items-progress {
+  margin-top: 24px;
+}
+
+.implementation-items-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 60px;
+  padding: 14px 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.implementation-items-state.error {
+  color: #fca5a5;
+}
+
 .implementation-communication-stack {
   display: grid;
   gap: 12px;

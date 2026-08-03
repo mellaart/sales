@@ -719,7 +719,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
     !implementation.administration_name?.trim() ? "administratie" : "",
     !implementation.planned_go_live_date?.trim() ? "livegang" : "",
     !implementation.financial_package?.trim() ? "financieel pakket" : "",
-    !implementation.website_webshop?.trim() ? "website/webshop" : "",
   ].filter(Boolean);
   const newCustomerMailReady = newCustomerMailMissingFields.length === 0;
   const progressRows = [
@@ -857,7 +856,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
             </label>
 
             <label className="input-wrap">
-              <span className="input-label">Website/webshop</span>
+              <span className="input-label">Website/webshop (optioneel)</span>
               <input
                 className="input"
                 type="text"

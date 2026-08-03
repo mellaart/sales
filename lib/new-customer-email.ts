@@ -170,7 +170,6 @@ export function getNewCustomerEmailMissingFields(input: {
   if (!input.implementation.administration_name?.trim()) missing.push("administratie");
   if (!input.implementation.planned_go_live_date?.trim()) missing.push("geplande livegang");
   if (!input.implementation.financial_package?.trim()) missing.push("financieel pakket");
-  if (!input.implementation.website_webshop?.trim()) missing.push("website/webshop");
   return missing;
 }
 

@@ -255,7 +255,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [accessLoaded, setAccessLoaded] = useState(false);
   const [implementation, setImplementation] = useState<ImplementationRecord | null>(null);
-  const [consultants, setConsultants] = useState<ProfileRecord[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<ProfileRecord[]>([]);
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeProgress | null>(null);
   const [customerIntakeLoaded, setCustomerIntakeLoaded] = useState(false);
   const [customerIntakeLoadFailed, setCustomerIntakeLoadFailed] = useState(false);
@@ -337,11 +337,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
         .order("full_name", { ascending: true });
 
       if (profileError) {
-        setMessage(`Consultants laden mislukt: ${profileError.message}`);
+        setMessage(`Gebruikers laden mislukt: ${profileError.message}`);
       } else {
-        setConsultants(
-          ((profileData ?? []) as ProfileRecord[]).filter((profile) => profile.role === "consultant"),
-        );
+        setAssignableUsers((profileData ?? []) as ProfileRecord[]);
       }
     }
 
@@ -445,22 +443,22 @@ export default function ImplementationEditor({ implementationId }: { implementat
   async function assignConsultant(consultantId: string) {
     if (!implementation || !canAssign) return;
 
-    const consultant = consultants.find((profile) => profile.id === consultantId) ?? null;
-    const nextStatus = consultant && implementation.status === "new"
+    const assignedUser = assignableUsers.find((profile) => profile.id === consultantId) ?? null;
+    const nextStatus = assignedUser && implementation.status === "new"
       ? "assigned"
-      : !consultant && implementation.status === "assigned"
+      : !assignedUser && implementation.status === "assigned"
         ? "new"
         : implementation.status;
 
     await saveImplementation({
-      assigned_consultant_id: consultant?.id ?? null,
-      assigned_consultant_name: consultant?.full_name || consultant?.email || null,
-      assigned_consultant_email: consultant?.email ?? null,
+      assigned_consultant_id: assignedUser?.id ?? null,
+      assigned_consultant_name: assignedUser?.full_name || assignedUser?.email || null,
+      assigned_consultant_email: assignedUser?.email ?? null,
       assigned_by: user?.id ?? null,
-      assigned_at: consultant ? new Date().toISOString() : null,
+      assigned_at: assignedUser ? new Date().toISOString() : null,
       status: nextStatus,
-    }, consultant
-      ? `Implementatie toegewezen aan ${consultant.full_name || consultant.email}.`
+    }, assignedUser
+      ? `Implementatie toegewezen aan ${assignedUser.full_name || assignedUser.email}.`
       : "Toewijzing verwijderd.");
   }
 
@@ -765,7 +763,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
             sublabel="Bedrag uit de deal"
           />
           <StatCard
-            title="Consultant"
+            title="Toegewezen aan"
             value={implementation.assigned_consultant_name || "Niet toegewezen"}
             icon={UserRoundCheck}
             sublabel={implementation.assigned_consultant_email || "Nog te plannen"}
@@ -904,7 +902,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
           <div className="implementation-controls implementation-detail-controls">
             {canAssign ? (
               <label className="input-wrap">
-                <span className="input-label">Toewijzen aan consultant</span>
+                <span className="input-label">Toewijzen aan gebruiker</span>
                 <select
                   className="input"
                   value={implementation.assigned_consultant_id ?? ""}
@@ -912,14 +910,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   onChange={(event) => void assignConsultant(event.target.value)}
                 >
                   <option value="">Nog niet toegewezen</option>
-                  {consultants.map((consultant) => (
-                    <option key={consultant.id} value={consultant.id}>{consultant.full_name || consultant.email}</option>
+                  {assignableUsers.map((assignableUser) => (
+                    <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.full_name || assignableUser.email}</option>
                   ))}
                 </select>
               </label>
             ) : (
               <div className="implementation-readonly-field">
-                <span>Toegewezen consultant</span>
+                <span>Toegewezen gebruiker</span>
                 <strong>{implementation.assigned_consultant_name || "Nog niet toegewezen"}</strong>
               </div>
             )}

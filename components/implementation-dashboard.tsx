@@ -59,7 +59,7 @@ export default function ImplementationDashboard() {
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [accessLoaded, setAccessLoaded] = useState(false);
   const [implementations, setImplementations] = useState<ImplementationRecord[]>([]);
-  const [consultants, setConsultants] = useState<ProfileRecord[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<ProfileRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -111,11 +111,9 @@ export default function ImplementationDashboard() {
         .order("full_name", { ascending: true });
 
       if (profileError) {
-        setMessage(`Consultants laden mislukt: ${profileError.message}`);
+        setMessage(`Gebruikers laden mislukt: ${profileError.message}`);
       } else {
-        setConsultants(
-          ((profileData ?? []) as ProfileRecord[]).filter((profile) => profile.role === "consultant"),
-        );
+        setAssignableUsers((profileData ?? []) as ProfileRecord[]);
       }
     }
 
@@ -173,14 +171,14 @@ export default function ImplementationDashboard() {
   const consultantFilterOptions = useMemo(() => {
     const options = new Map<string, string>();
 
-    consultants.forEach((consultant) => {
-      options.set(consultant.id, consultant.full_name || consultant.email || "Consultant");
+    assignableUsers.forEach((assignableUser) => {
+      options.set(assignableUser.id, assignableUser.full_name || assignableUser.email || "Gebruiker");
     });
     implementations.forEach((implementation) => {
       if (implementation.assigned_consultant_id) {
         options.set(
           implementation.assigned_consultant_id,
-          implementation.assigned_consultant_name || implementation.assigned_consultant_email || "Consultant",
+          implementation.assigned_consultant_name || implementation.assigned_consultant_email || "Gebruiker",
         );
       }
     });
@@ -188,7 +186,7 @@ export default function ImplementationDashboard() {
     return [...options.entries()]
       .map(([id, label]) => ({ id, label }))
       .sort((left, right) => left.label.localeCompare(right.label, "nl"));
-  }, [consultants, implementations]);
+  }, [assignableUsers, implementations]);
 
   function updateLocalRecord(implementationId: string, patch: Partial<ImplementationRecord>) {
     setImplementations((current) => current.map((implementation) => (
@@ -226,21 +224,21 @@ export default function ImplementationDashboard() {
   async function assignConsultant(implementation: ImplementationRecord, consultantId: string) {
     if (!canAssign) return;
 
-    const consultant = consultants.find((profile) => profile.id === consultantId) ?? null;
-    const nextStatus = consultant && implementation.status === "new"
+    const assignedUser = assignableUsers.find((profile) => profile.id === consultantId) ?? null;
+    const nextStatus = assignedUser && implementation.status === "new"
       ? "assigned"
-      : !consultant && implementation.status === "assigned"
+      : !assignedUser && implementation.status === "assigned"
         ? "new"
         : implementation.status;
 
     await saveImplementation(implementation, {
-      assigned_consultant_id: consultant?.id ?? null,
-      assigned_consultant_name: consultant?.full_name || consultant?.email || null,
-      assigned_consultant_email: consultant?.email ?? null,
+      assigned_consultant_id: assignedUser?.id ?? null,
+      assigned_consultant_name: assignedUser?.full_name || assignedUser?.email || null,
+      assigned_consultant_email: assignedUser?.email ?? null,
       assigned_by: user?.id ?? null,
-      assigned_at: consultant ? new Date().toISOString() : null,
+      assigned_at: assignedUser ? new Date().toISOString() : null,
       status: nextStatus,
-    }, consultant ? `Implementatie toegewezen aan ${consultant.full_name || consultant.email}.` : "Toewijzing verwijderd.");
+    }, assignedUser ? `Implementatie toegewezen aan ${assignedUser.full_name || assignedUser.email}.` : "Toewijzing verwijderd.");
   }
 
   if (!accessLoaded || loading) {
@@ -292,7 +290,7 @@ export default function ImplementationDashboard() {
 
         <section className="kpi-grid">
           <StatCard title="Implementaties" value={String(stats.total)} icon={ClipboardCheck} sublabel="In jouw overzicht" />
-          <StatCard title="Niet toegewezen" value={String(stats.unassigned)} icon={Users} sublabel="Wacht op consultant" />
+          <StatCard title="Niet toegewezen" value={String(stats.unassigned)} icon={Users} sublabel="Wacht op gebruiker" />
           <StatCard title="Actief" value={String(stats.active)} icon={UserRoundCheck} sublabel="Nog niet afgerond" />
           <StatCard title="Afgerond" value={String(stats.completed)} icon={CheckCircle2} sublabel="Voltooid" />
         </section>
@@ -311,7 +309,7 @@ export default function ImplementationDashboard() {
                   className="search-input"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Klant, contact, pakket of consultant"
+                  placeholder="Klant, contact, pakket of toegewezen gebruiker"
                 />
               </span>
             </label>
@@ -326,9 +324,9 @@ export default function ImplementationDashboard() {
             </label>
             {seesAllImplementations ? (
               <label className="input-wrap">
-                <span className="input-label">Consultant</span>
+                <span className="input-label">Gebruiker</span>
                 <select className="input" value={consultantFilter} onChange={(event) => setConsultantFilter(event.target.value)}>
-                  <option value="all">Alle consultants</option>
+                  <option value="all">Alle gebruikers</option>
                   <option value="unassigned">Niet toegewezen</option>
                   {consultantFilterOptions.map((consultant) => (
                     <option key={consultant.id} value={consultant.id}>{consultant.label}</option>
@@ -378,13 +376,13 @@ export default function ImplementationDashboard() {
                   <span>Implementatie<strong>{euro.format(Number(implementation.implementation_total || 0))}</strong></span>
                   <span>Sales<strong>{implementation.sales_name || "-"}</strong></span>
                   <span>Aangemaakt<strong>{formatDate(implementation.created_at)}</strong></span>
-                  <span>Consultant<strong>{implementation.assigned_consultant_name || "Nog niet toegewezen"}</strong></span>
+                  <span>Toegewezen aan<strong>{implementation.assigned_consultant_name || "Nog niet toegewezen"}</strong></span>
                 </div>
 
                 <div className="implementation-controls">
                   {canAssign ? (
                     <label className="input-wrap">
-                      <span className="input-label">Toewijzen aan consultant</span>
+                      <span className="input-label">Toewijzen aan gebruiker</span>
                       <select
                         className="input"
                         value={implementation.assigned_consultant_id ?? ""}
@@ -392,8 +390,8 @@ export default function ImplementationDashboard() {
                         onChange={(event) => void assignConsultant(implementation, event.target.value)}
                       >
                         <option value="">Nog niet toegewezen</option>
-                        {consultants.map((consultant) => (
-                          <option key={consultant.id} value={consultant.id}>{consultant.full_name || consultant.email}</option>
+                        {assignableUsers.map((assignableUser) => (
+                          <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.full_name || assignableUser.email}</option>
                         ))}
                       </select>
                     </label>

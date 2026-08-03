@@ -486,15 +486,6 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
       }
     }
 
-    if (table === "implementations" && payload.assigned_consultant_id) {
-      const { rows: consultantRows } = await query<{ role: string }>(
-        "select role from public.profiles where id = $1 limit 1",
-        [payload.assigned_consultant_id],
-      );
-      if (consultantRows[0]?.role !== "consultant") {
-        throw new Error("Selecteer een gebruiker met de rol Consultant.");
-      }
-    }
     const placeholders = columns.map((_, index) => `$${index + 1}`);
     const insertValues = columns.map((column) => payload[column]);
     const { rows } = await query(
@@ -528,15 +519,6 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
 
   const accessWhere = await getAccessWhere(table, input.action, actor, serviceMode, values);
 
-  if (table === "implementations" && payload.assigned_consultant_id) {
-    const { rows: consultantRows } = await query<{ role: string }>(
-      "select role from public.profiles where id = $1 limit 1",
-      [payload.assigned_consultant_id],
-    );
-    if (consultantRows[0]?.role !== "consultant") {
-      throw new Error("Selecteer een gebruiker met de rol Consultant.");
-    }
-  }
   const where = appendFilters(table, input.filters, values, accessWhere);
   if (where.length === 0) throw new Error("Wijzigen zonder selectie is niet toegestaan.");
 

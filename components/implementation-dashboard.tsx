@@ -384,7 +384,7 @@ export default function ImplementationDashboard() {
                     <label className="input-wrap">
                       <span className="input-label">Toewijzen aan gebruiker</span>
                       <select
-                        className="input"
+                        className="input implementation-user-select"
                         value={implementation.assigned_consultant_id ?? ""}
                         disabled={savingId === implementation.id}
                         onChange={(event) => void assignConsultant(implementation, event.target.value)}

@@ -904,7 +904,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <label className="input-wrap">
                 <span className="input-label">Toewijzen aan gebruiker</span>
                 <select
-                  className="input"
+                  className="input implementation-user-select"
                   value={implementation.assigned_consultant_id ?? ""}
                   disabled={saving}
                   onChange={(event) => void assignConsultant(event.target.value)}

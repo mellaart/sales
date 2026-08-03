@@ -769,6 +769,21 @@ select option {
   color: #eef4ff;
 }
 
+.implementation-user-select,
+.implementation-user-select:disabled {
+  background-color: #172238;
+  color: #eef4ff;
+  color-scheme: dark;
+  opacity: 1;
+  -webkit-text-fill-color: #eef4ff;
+}
+
+.implementation-user-select option,
+.implementation-user-select optgroup {
+  background-color: #172238 !important;
+  color: #eef4ff !important;
+}
+
 .implementation-notes-control {
   position: relative;
   height: 50px;

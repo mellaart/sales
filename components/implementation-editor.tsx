@@ -717,6 +717,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     customerIntakeLoadFailed,
     customerIntake,
   );
+  const customerIntakeComplete = intakePresentation.tone === "success";
   const customerDomain = getWebsiteDomain(customerIntake?.formData.website ?? "");
   const customerEmail = customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || "";
   const newCustomerMailMissingFields = [
@@ -963,7 +964,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <div className="implementation-progress-list">
               {progressRows.map((item) => (
                 item.kind === "intake" ? (
-                  <div key={item.key} className="implementation-progress-row">
+                  <div
+                    key={item.key}
+                    className={`implementation-progress-row ${customerIntakeComplete ? "completed" : ""}`}
+                  >
                     <span className="implementation-progress-number">{item.number}</span>
                     <strong>{item.label}</strong>
                     <StatusPill tone={intakePresentation.tone}>{intakePresentation.label}</StatusPill>

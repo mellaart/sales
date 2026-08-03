@@ -937,11 +937,11 @@ select option {
   background: rgba(255,255,255,0.035);
 }
 
-.implementation-progress-check.completed {
+.implementation-progress-row.completed {
   background: rgba(6,78,59,0.14);
 }
 
-.implementation-progress-check.completed > strong {
+.implementation-progress-row.completed > strong {
   color: #bbf7d0;
 }
 

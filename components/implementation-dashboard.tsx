@@ -371,7 +371,7 @@ export default function ImplementationDashboard() {
                 </div>
 
                 <div className="implementation-meta-grid">
-                  <span>Contact<strong>{implementation.contact_name || "-"}</strong></span>
+                  <span>Livegang<strong>{implementation.planned_go_live_date ? formatDate(implementation.planned_go_live_date) : "Nog niet gepland"}</strong></span>
                   <span>Pakket<strong>{implementation.package_name || "-"}</strong></span>
                   <span>Implementatie<strong>{euro.format(Number(implementation.implementation_total || 0))}</strong></span>
                   <span>Sales<strong>{implementation.sales_name || "-"}</strong></span>

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "import:supabase": "node scripts/import-supabase-data.mjs",
+    "mail:open-deals": "node scripts/send-weekly-open-deals.mjs",
     "lint": "next lint"
   },
   "dependencies": {

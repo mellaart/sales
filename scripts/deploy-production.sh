@@ -178,4 +178,7 @@ start_app() {
 }
 
 stop_app
+if [ "${SALES_INSTALL_WEEKLY_DEALS_CRON:-1}" = "1" ]; then
+  bash "$APP_DIR/scripts/install-weekly-open-deals-cron.sh"
+fi
 start_app

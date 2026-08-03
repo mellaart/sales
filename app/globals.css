@@ -2811,6 +2811,11 @@ td {
   box-shadow: 0 16px 38px rgba(2,6,23,0.18);
 }
 
+.dashboard-invoice-attention {
+  border-color: rgba(248,113,113,0.38);
+  background: rgba(127,29,29,0.14);
+}
+
 .dashboard-implementation-attention-header {
   display: flex;
   align-items: center;
@@ -2838,8 +2843,13 @@ td {
 }
 
 .dashboard-overdue-list,
-.dashboard-missing-list {
+.dashboard-missing-list,
+.dashboard-invoice-list {
   border-top: 1px solid var(--line);
+}
+
+.dashboard-invoice-row > svg {
+  color: #fca5a5;
 }
 
 .dashboard-overdue-row {

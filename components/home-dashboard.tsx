@@ -23,6 +23,7 @@ import {
   IMPLEMENTATION_STATUS_LABELS,
   getImplementationDateKey,
   getLocalDateKey,
+  normalizeImplementationProgress,
   type ImplementationRecord,
 } from "@/lib/implementations";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
@@ -76,6 +77,16 @@ function getImplementationDateLabel(value: string | null | undefined) {
   const [year, month, day] = dateKey.split("-").map(Number);
   return dashboardDateFormatter.format(new Date(year, month - 1, day));
 }
+
+type ImplementationInvoiceAction = {
+  key: string;
+  implementationId: string;
+  customerName: string;
+  consultantName: string;
+  label: string;
+  date: string;
+  dateKey: string;
+};
 
 export default function HomeDashboard() {
   const { user, profile, role } = useAuth();
@@ -199,6 +210,38 @@ export default function HomeDashboard() {
       withoutDate,
     };
   }, [implementations]);
+  const implementationInvoiceActions = useMemo(() => implementations
+    .flatMap<ImplementationInvoiceAction>((implementation) => {
+      const progress = normalizeImplementationProgress(implementation.progress);
+      const actions: ImplementationInvoiceAction[] = [];
+
+      if (implementation.implementation_start_date && !progress.implementationStartInvoice) {
+        actions.push({
+          key: `${implementation.id}-start`,
+          implementationId: implementation.id,
+          customerName: implementation.customer_name || "Onbekende klant",
+          consultantName: implementation.assigned_consultant_name || "Nog niet toegewezen",
+          label: "Factuur start implementatie",
+          date: getImplementationDateLabel(implementation.implementation_start_date),
+          dateKey: getImplementationDateKey(implementation.implementation_start_date) ?? "",
+        });
+      }
+
+      if (implementation.actual_go_live_date && !progress.implementationEndInvoice) {
+        actions.push({
+          key: `${implementation.id}-end`,
+          implementationId: implementation.id,
+          customerName: implementation.customer_name || "Onbekende klant",
+          consultantName: implementation.assigned_consultant_name || "Nog niet toegewezen",
+          label: "Factuur einde implementatie",
+          date: getImplementationDateLabel(implementation.actual_go_live_date),
+          dateKey: getImplementationDateKey(implementation.actual_go_live_date) ?? "",
+        });
+      }
+
+      return actions;
+    })
+    .sort((left, right) => left.dateKey.localeCompare(right.dateKey)), [implementations]);
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
   return (
@@ -304,6 +347,42 @@ export default function HomeDashboard() {
                 <div><span>Zonder livegang</span><strong>{implementationStats.withoutDate.length}</strong></div>
               </Link>
             </div>
+
+            {implementationInvoiceActions.length ? (
+              <div className="dashboard-implementation-attention dashboard-invoice-attention">
+                <div className="dashboard-implementation-attention-header">
+                  <div>
+                    <strong>Facturatie nodig</strong>
+                    <span>De implementatiedatum is ingevuld, maar de factuurstap is nog niet afgevinkt.</span>
+                  </div>
+                  <StatusPill tone="danger">
+                    {implementationInvoiceActions.length === 1
+                      ? "1 actie"
+                      : `${implementationInvoiceActions.length} acties`}
+                  </StatusPill>
+                </div>
+
+                <div className="dashboard-invoice-list">
+                  {implementationInvoiceActions.map((action) => (
+                    <Link
+                      key={action.key}
+                      href={`/implementatie/${action.implementationId}`}
+                      className="dashboard-overdue-row dashboard-invoice-row"
+                    >
+                      <div>
+                        <strong>{action.customerName}</strong>
+                        <span>{action.consultantName}</span>
+                      </div>
+                      <div className="dashboard-overdue-date">
+                        <span>{action.label}</span>
+                        <strong>{action.date}</strong>
+                      </div>
+                      <ExternalLink size={17} aria-hidden="true" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="dashboard-implementation-attention">
               <div className="dashboard-implementation-attention-header">

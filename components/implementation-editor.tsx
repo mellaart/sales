@@ -843,7 +843,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <label className="input-wrap">
               <span className="input-label">Financieel pakket</span>
               <select
-                className="input"
+                className="input implementation-dark-select"
                 value={FINANCIAL_PACKAGE_OPTIONS.includes(implementation.financial_package ?? "")
                   ? implementation.financial_package ?? ""
                   : implementation.financial_package
@@ -904,7 +904,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <label className="input-wrap">
                 <span className="input-label">Toewijzen aan gebruiker</span>
                 <select
-                  className="input implementation-user-select"
+                  className="input implementation-dark-select"
                   value={implementation.assigned_consultant_id ?? ""}
                   disabled={saving}
                   onChange={(event) => void assignConsultant(event.target.value)}

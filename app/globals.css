@@ -769,8 +769,8 @@ select option {
   color: #eef4ff;
 }
 
-.implementation-user-select,
-.implementation-user-select:disabled {
+.implementation-dark-select,
+.implementation-dark-select:disabled {
   background-color: #172238;
   color: #eef4ff;
   color-scheme: dark;
@@ -778,8 +778,8 @@ select option {
   -webkit-text-fill-color: #eef4ff;
 }
 
-.implementation-user-select option,
-.implementation-user-select optgroup {
+.implementation-dark-select option,
+.implementation-dark-select optgroup {
   background-color: #172238 !important;
   color: #eef4ff !important;
 }

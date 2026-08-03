@@ -60,6 +60,14 @@ const dateTimeFormatter = new Intl.DateTimeFormat("nl-NL", {
   minute: "2-digit",
 });
 
+const FINANCIAL_PACKAGE_OPTIONS = [
+  "Exact Online",
+  "Snelstart",
+  "Twinfield",
+  "King",
+  "Overig",
+];
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "Geen datum";
   const date = new Date(value);
@@ -836,23 +844,25 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
             <label className="input-wrap">
               <span className="input-label">Financieel pakket</span>
-              <input
+              <select
                 className="input"
-                type="text"
-                maxLength={180}
-                value={implementation.financial_package ?? ""}
+                value={FINANCIAL_PACKAGE_OPTIONS.includes(implementation.financial_package ?? "")
+                  ? implementation.financial_package ?? ""
+                  : implementation.financial_package
+                    ? "Overig"
+                    : ""}
                 disabled={!canEdit}
-                placeholder="Naam extern pakket"
-                onChange={(event) => setImplementation({
-                  ...implementation,
-                  financial_package: event.target.value,
-                })}
-                onBlur={(event) => saveImplementationDetail(
+                onChange={(event) => saveImplementationDetail(
                   "financial_package",
                   event.currentTarget.value,
                   "Financieel pakket",
                 )}
-              />
+              >
+                <option value="">Selecteer financieel pakket</option>
+                {FINANCIAL_PACKAGE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </label>
 
             <label className="input-wrap">

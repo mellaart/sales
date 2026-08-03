@@ -945,6 +945,14 @@ select option {
   color: #bbf7d0;
 }
 
+.implementation-progress-row.requires-action {
+  background: rgba(127,29,29,0.18);
+}
+
+.implementation-progress-row.requires-action > strong {
+  color: #fca5a5;
+}
+
 .implementation-progress-check input {
   width: 20px;
   height: 20px;

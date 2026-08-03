@@ -145,7 +145,9 @@ create table if not exists public.implementations (
   notes text,
   progress jsonb not null default '{}'::jsonb,
   administration_name text,
+  implementation_start_date date,
   planned_go_live_date date,
+  actual_go_live_date date,
   financial_package text,
   website_webshop text,
   created_at timestamptz not null default now(),
@@ -155,7 +157,9 @@ create table if not exists public.implementations (
 alter table public.implementations
   add column if not exists progress jsonb not null default '{}'::jsonb;
 alter table public.implementations add column if not exists administration_name text;
+alter table public.implementations add column if not exists implementation_start_date date;
 alter table public.implementations add column if not exists planned_go_live_date date;
+alter table public.implementations add column if not exists actual_go_live_date date;
 alter table public.implementations add column if not exists financial_package text;
 alter table public.implementations add column if not exists website_webshop text;
 

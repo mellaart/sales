@@ -100,7 +100,9 @@ type CustomerIntakeProgress = {
 
 type ImplementationDetailField =
   | "administration_name"
+  | "implementation_start_date"
   | "planned_go_live_date"
+  | "actual_go_live_date"
   | "financial_package"
   | "website_webshop";
 
@@ -470,6 +472,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
     if (!implementation || !supabase || !canEdit) return;
 
     const value = field === "planned_go_live_date"
+      || field === "implementation_start_date"
+      || field === "actual_go_live_date"
       ? rawValue || null
       : rawValue.trim() || null;
     const implementationIdToSave = implementation.id;
@@ -732,6 +736,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
     ...IMPLEMENTATION_PROGRESS_ITEMS.map((item) => ({ kind: "check" as const, ...item })),
     { kind: "intake" as const, number: 2, key: "customerIntake", label: "Klantformulier" },
   ].sort((left, right) => left.number - right.number);
+  const progressRequiresAction = (key: ImplementationProgressKey) => (
+    key === "implementationStartInvoice" && Boolean(implementation.implementation_start_date)
+  ) || (
+    key === "implementationEndInvoice" && Boolean(implementation.actual_go_live_date)
+  );
 
   return (
     <div className="page-shell">
@@ -822,6 +831,26 @@ export default function ImplementationEditor({ implementationId }: { implementat
             </label>
 
             <label className="input-wrap">
+              <span className="input-label">Start implementatie</span>
+              <input
+                className="input"
+                type="date"
+                value={implementation.implementation_start_date ?? ""}
+                disabled={!canEdit}
+                onChange={(event) => saveImplementationDetail(
+                  "implementation_start_date",
+                  event.currentTarget.value,
+                  "Start implementatie",
+                )}
+                onBlur={(event) => saveImplementationDetail(
+                  "implementation_start_date",
+                  event.currentTarget.value,
+                  "Start implementatie",
+                )}
+              />
+            </label>
+
+            <label className="input-wrap">
               <span className="input-label">Geplande livegang</span>
               <input
                 className="input"
@@ -837,6 +866,26 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   "planned_go_live_date",
                   event.currentTarget.value,
                   "Geplande livegang",
+                )}
+              />
+            </label>
+
+            <label className="input-wrap">
+              <span className="input-label">Livegang</span>
+              <input
+                className="input"
+                type="date"
+                value={implementation.actual_go_live_date ?? ""}
+                disabled={!canEdit}
+                onChange={(event) => saveImplementationDetail(
+                  "actual_go_live_date",
+                  event.currentTarget.value,
+                  "Livegang",
+                )}
+                onBlur={(event) => saveImplementationDetail(
+                  "actual_go_live_date",
+                  event.currentTarget.value,
+                  "Livegang",
                 )}
               />
             </label>
@@ -975,7 +1024,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 ) : (
                   <label
                     key={item.key}
-                    className={`implementation-progress-row implementation-progress-check ${progress[item.key] ? "completed" : ""}`}
+                    className={`implementation-progress-row implementation-progress-check ${
+                      progress[item.key]
+                        ? "completed"
+                        : progressRequiresAction(item.key)
+                          ? "requires-action"
+                          : ""
+                    }`}
                   >
                     <span className="implementation-progress-number">{item.number}</span>
                     <strong>{item.label}</strong>

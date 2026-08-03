@@ -27,6 +27,8 @@ export const IMPLEMENTATION_PROGRESS_ITEMS = [
   { number: 7, key: "adminDemoDisabled", label: "Admintool - Demo uitschakelen" },
   { number: 8, key: "adminModules", label: "Admintool - Modules" },
   { number: 9, key: "adminUserCount", label: "Admintool - Aantal gebruikers" },
+  { number: 10, key: "implementationStartInvoice", label: "Factuur start implementatie" },
+  { number: 11, key: "implementationEndInvoice", label: "Factuur einde implementatie" },
 ] as const;
 
 export type ImplementationProgressKey = typeof IMPLEMENTATION_PROGRESS_ITEMS[number]["key"];
@@ -61,7 +63,9 @@ export type ImplementationRecord = {
   notes?: string | null;
   progress?: ImplementationProgress | null;
   administration_name?: string | null;
+  implementation_start_date?: string | null;
   planned_go_live_date?: string | null;
+  actual_go_live_date?: string | null;
   financial_package?: string | null;
   website_webshop?: string | null;
   created_at?: string | null;

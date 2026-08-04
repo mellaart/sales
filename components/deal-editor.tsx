@@ -209,7 +209,7 @@ function navigateOutlookPopup(outlookWindow: Window | null, url: string) {
   }
 }
 
-export default function DealEditor({ dealId }: { dealId: string }) {
+export default function DealEditor({ dealId, focusMode = false }: { dealId: string; focusMode?: boolean }) {
   const { user, profile, role } = useAuth();
   const { pricingConfig } = usePricingConfig();
   const modules = pricingConfig.modules;
@@ -1183,8 +1183,10 @@ export default function DealEditor({ dealId }: { dealId: string }) {
             </p>
           </div>
           <div className="brand-actions">
-            <Link href="/deals" className="secondary-button"><ArrowLeft size={16} /> Terug naar deals</Link>
-            {implementation ? (
+            {!focusMode ? (
+              <Link href="/deals" className="secondary-button"><ArrowLeft size={16} /> Terug naar deals</Link>
+            ) : null}
+            {implementation && !focusMode ? (
               <Link href={`/implementatie/${implementation.id}`} className="primary-button">
                 <ClipboardCheck size={16} /> Open implementatie
               </Link>

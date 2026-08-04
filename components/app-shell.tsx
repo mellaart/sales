@@ -32,7 +32,9 @@ export function AppShellHeader() {
   const salesMenuRef = useRef<HTMLDivElement | null>(null);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const isAuthPage = pathname === "/login" || pathname === "/reset-password";
   const isPublicUtilityPage = pathname === "/worldline-test" || pathname.startsWith("/klantgegevens/");
+  const isFocusedDealPage = pathname.startsWith("/dealmail/");
 
   useEffect(() => {
     if (!user) return;
@@ -108,7 +110,7 @@ export function AppShellHeader() {
     };
   }, [salesMenuOpen, adminMenuOpen, accountMenuOpen]);
 
-  if (!user || isPublicUtilityPage) return null;
+  if (!user || isAuthPage || isPublicUtilityPage || isFocusedDealPage) return null;
 
   const accessibleTabs = roleTabAccessLoaded ? getAccessibleTabs(role ?? "sales", roleTabAccess) : [];
   const salesMenuTabs = SALES_MENU_TAB_KEYS

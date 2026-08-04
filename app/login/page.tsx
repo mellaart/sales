@@ -23,6 +23,17 @@ type TwoFactorAuthClient = {
   }>;
 };
 
+function getSafeReturnTo() {
+  if (typeof window === "undefined") return "/";
+
+  const returnTo = new URLSearchParams(window.location.search).get("returnTo")?.trim() ?? "";
+  if (!returnTo.startsWith("/") || returnTo.startsWith("//") || returnTo.startsWith("/login")) {
+    return "/";
+  }
+
+  return returnTo;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -37,18 +48,34 @@ export default function LoginPage() {
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
+  const [loginParametersLoaded, setLoginParametersLoaded] = useState(false);
+  const [reauthenticationRequired, setReauthenticationRequired] = useState(false);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("timeout") === "1") {
+    const searchParams = new URLSearchParams(window.location.search);
+    const requiresReauthentication = searchParams.get("reauth") === "1";
+
+    setReauthenticationRequired(requiresReauthentication);
+    setLoginParametersLoaded(true);
+
+    if (requiresReauthentication) {
+      setStatus("Log opnieuw in om de deal veilig te openen.");
+    } else if (searchParams.get("timeout") === "1") {
       setStatus("Je bent automatisch uitgelogd omdat de website langer dan 10 uur niet is gebruikt.");
     }
   }, []);
 
   useEffect(() => {
-    if (!loading && user) {
-      router.replace(mustSetPassword ? "/reset-password" : "/");
+    if (loginParametersLoaded && !loading && user && !reauthenticationRequired) {
+      router.replace(mustSetPassword ? "/reset-password" : getSafeReturnTo());
     }
-  }, [loading, mustSetPassword, router, user]);
+  }, [loading, loginParametersLoaded, mustSetPassword, reauthenticationRequired, router, user]);
+
+  useEffect(() => {
+    if (reauthenticationRequired && user?.email && !email) {
+      setEmail(user.email);
+    }
+  }, [email, reauthenticationRequired, user?.email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +168,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace("/");
+    router.replace(getSafeReturnTo());
   }
 
   async function handleTwoFactorSubmit(event: React.FormEvent) {
@@ -173,7 +200,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace("/");
+    router.replace(getSafeReturnTo());
   }
 
   function resetTwoFactorStep() {

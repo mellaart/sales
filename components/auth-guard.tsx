@@ -11,24 +11,34 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const isLoginPage = pathname === "/login";
   const isResetPasswordPage = pathname === "/reset-password";
+  const isPublicPage = isLoginPage
+    || pathname === "/worldline-test"
+    || pathname.startsWith("/klantgegevens/");
   const mustSetPassword = Boolean(user?.user_metadata?.must_set_password);
 
   useEffect(() => {
-    if (!loading && !user && !isLoginPage) {
-      router.replace("/login");
+    if (!loading && !user && !isPublicPage) {
+      const returnTo = typeof window === "undefined"
+        ? pathname
+        : `${window.location.pathname}${window.location.search}`;
+      router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
       return;
     }
 
-    if (!loading && user && mustSetPassword && !isResetPasswordPage) {
+    if (!loading && user && mustSetPassword && !isResetPasswordPage && !isPublicPage) {
       router.replace("/reset-password");
     }
-  }, [loading, user, isLoginPage, isResetPasswordPage, mustSetPassword, router]);
+  }, [isPublicPage, isResetPasswordPage, loading, mustSetPassword, pathname, router, user]);
 
-  if (!loading && !user && !isLoginPage) {
+  if (loading && !isPublicPage) {
     return null;
   }
 
-  if (!loading && user && mustSetPassword && !isResetPasswordPage) {
+  if (!loading && !user && !isPublicPage) {
+    return null;
+  }
+
+  if (!loading && user && mustSetPassword && !isResetPasswordPage && !isPublicPage) {
     return null;
   }
 

@@ -133,7 +133,9 @@ function telephoneLink(phone) {
 }
 
 function dealLink(deal) {
-  return `${publicUrl}/deals/${encodeURIComponent(deal.id)}`;
+  const returnTo = `/dealmail/${encodeURIComponent(deal.id)}`;
+  const searchParams = new URLSearchParams({ returnTo, reauth: "1" });
+  return `${publicUrl}/login?${searchParams.toString()}`;
 }
 
 function buildHtml(profile, deals, dateLabel) {

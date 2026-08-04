@@ -1,6 +1,7 @@
 import "./globals.css";
 
 import type { Metadata } from "next";
+import { AuthGuard } from "@/components/auth-guard";
 import { AuthProvider } from "@/components/auth-provider";
 import { AppShellHeader } from "@/components/app-shell";
 import { PricingProvider } from "@/components/pricing-provider";
@@ -24,8 +25,10 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <PricingProvider>
-            <AppShellHeader />
-            {children}
+            <AuthGuard>
+              <AppShellHeader />
+              {children}
+            </AuthGuard>
           </PricingProvider>
         </AuthProvider>
       </body>

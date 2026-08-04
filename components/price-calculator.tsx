@@ -133,6 +133,7 @@ export default function PriceCalculator() {
   const [extraUsers, setExtraUsers] = useState(1);
   const [chauffeurExtraUsers, setChauffeurExtraUsers] = useState(0);
   const [planningAppUsers, setPlanningAppUsers] = useState(0);
+  const [selectedPackage, setSelectedPackage] = useState("starter");
   const [manualImplementationAdjustment, setManualImplementationAdjustment] = useState(0);
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
@@ -143,7 +144,7 @@ export default function PriceCalculator() {
     Object.fromEntries(modules.map((module) => [module.key, 0])),
   );
   const [notes, setNotes] = useState(
-    "Bedragen zijn gebaseerd op het automatisch gekozen pakket, support, gekozen modules, uitbreidingen en de huidige implementatie-inschatting.",
+    "Bedragen zijn gebaseerd op het gekozen pakket, support, gekozen modules, uitbreidingen en de huidige implementatie-inschatting.",
   );
   const [savingDeal, setSavingDeal] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -173,12 +174,18 @@ export default function PriceCalculator() {
 
   const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
   const recommendedPackage = getCalculatorPackageForPaidModules(paidModuleCount, calculatorPackages);
+  const selectedPackageIndex = calculatorPackages.findIndex((packageConfig) => packageConfig.key === selectedPackage);
+  const recommendedPackageIndex = calculatorPackages.findIndex((packageConfig) => packageConfig.key === recommendedPackage.key);
+  const activePackage = calculatorPackages[
+    Math.max(selectedPackageIndex, recommendedPackageIndex, 0)
+  ] ?? recommendedPackage;
   const smartTradeExtraUsers = extraUsers + chauffeurExtraUsers;
   const pricingResults = useMemo(
     () => calculatePricing({ extraUsers: smartTradeExtraUsers, manualImplementationAdjustment, quantities }, pricingConfig),
     [manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
   );
-  const activeResult = pricingResults.find((result) => result.key === recommendedPackage.key) ?? pricingResults[0];
+  const activeResult = pricingResults.find((result) => result.key === activePackage.key) ?? pricingResults[0];
+  const packageWasManuallyRaised = selectedPackageIndex > recommendedPackageIndex;
   const totalUsers = smartTradeExtraUsers + 1;
   const selectedCustomerPortalOptions = useMemo(
     () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
@@ -666,13 +673,19 @@ export default function PriceCalculator() {
             </div>
 
             <div className="section">
-              <div className="section-title"><Package size={16} /> Pakket automatisch gekozen</div>
+              <div className="section-title"><Package size={16} /> Pakket</div>
               <div className="calculator-package-grid">
                 {calculatorPackages.map((packageConfig) => {
                   const active = packageConfig.key === activeResult.key;
 
                   return (
-                    <div key={packageConfig.key} className={`package-button ${active ? "active" : ""}`}>
+                    <button
+                      key={packageConfig.key}
+                      type="button"
+                      className={`package-button ${active ? "active" : ""}`}
+                      aria-pressed={active}
+                      onClick={() => setSelectedPackage(packageConfig.key)}
+                    >
                       <div className="package-header">
                         <div>
                           <div className="package-name">{packageConfig.name}</div>
@@ -680,7 +693,7 @@ export default function PriceCalculator() {
                         </div>
                         {active ? <CheckCircle2 size={18} /> : null}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -717,7 +730,9 @@ export default function PriceCalculator() {
                 <div className="eyebrow">Resultaat</div>
                 <h2 className="headline">{activeResult.name}</h2>
               </div>
-              <span className="status-pill success">Automatisch pakket</span>
+              <span className="status-pill success">
+                {packageWasManuallyRaised ? "Handmatig gekozen" : "Automatisch pakket"}
+              </span>
             </div>
 
             <div className="stats-grid">

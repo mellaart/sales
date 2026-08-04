@@ -2970,7 +2970,9 @@ td {
 }
 
 .calculator-package-grid .package-button {
-  cursor: default;
+  width: 100%;
+  font: inherit;
+  text-align: left;
 }
 
 .package-header {

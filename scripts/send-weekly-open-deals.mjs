@@ -170,7 +170,7 @@ function buildHtml(profile, deals, dateLabel) {
   return [
     '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.5;color:#172033">',
     `<p style="margin:0 0 12px">Goedemorgen ${escapeHtml(firstName(profile))},</p>`,
-    `<p style="margin:0 0 16px">Hieronder staat het overzicht van alle <strong>${deals.length} openstaande ${deals.length === 1 ? "deal" : "deals"}</strong> op ${escapeHtml(dateLabel)}. Gebruik dit overzicht om klanten op tijd na te bellen.</p>`,
+    `<p style="margin:0 0 16px">Hieronder staat het overzicht van <strong>${deals.length} openstaande ${deals.length === 1 ? "deal" : "deals"}</strong> die aan jou gekoppeld zijn op ${escapeHtml(dateLabel)}. Gebruik dit overzicht om klanten op tijd na te bellen.</p>`,
     overview,
     '<p style="margin:18px 0 0;color:#64748b">Is een deal afgerond? Gebruik dan in de deal de knop <strong>Klaar en archiveren</strong>. De deal staat daarna niet meer in deze wekelijkse e-mail.</p>',
     '<p style="margin:18px 0 0">Smart Trade Sales</p>',
@@ -182,7 +182,7 @@ function buildText(profile, deals, dateLabel) {
   const lines = [
     `Goedemorgen ${firstName(profile)},`,
     "",
-    `Hieronder staat het overzicht van alle ${deals.length} openstaande ${deals.length === 1 ? "deal" : "deals"} op ${dateLabel}.`,
+    `Hieronder staat het overzicht van ${deals.length} openstaande ${deals.length === 1 ? "deal" : "deals"} die aan jou gekoppeld zijn op ${dateLabel}.`,
     "",
   ];
 
@@ -304,6 +304,7 @@ async function readProfiles() {
 async function readOpenDeals() {
   const { rows } = await pool.query(
     `select d.id::text,
+            d.user_id::text,
             d.customer_name,
             d.contact_name,
             d.updated_at,
@@ -376,7 +377,17 @@ async function main() {
   console.log(`Openstaande deals: ${deals.length}`);
   console.log(`Ontvangers: ${profiles.map((profile) => profile.email).join(", ") || "geen"}`);
 
+  const dealsByUserId = new Map();
+  for (const deal of deals) {
+    const userId = String(deal.user_id ?? "");
+    if (!dealsByUserId.has(userId)) dealsByUserId.set(userId, []);
+    dealsByUserId.get(userId).push(deal);
+  }
+
   if (dryRun) {
+    for (const profile of profiles) {
+      console.log(`${profile.email}: ${(dealsByUserId.get(String(profile.id)) ?? []).length} openstaande deals`);
+    }
     console.log("Proef uitgevoerd; er zijn geen e-mails verstuurd.");
     return;
   }
@@ -387,17 +398,18 @@ async function main() {
 
   for (const profile of profiles) {
     const email = String(profile.email).trim().toLowerCase();
+    const profileDeals = dealsByUserId.get(String(profile.id)) ?? [];
     if (sentSet.has(email)) {
       console.log(`Overgeslagen, vandaag al verzonden: ${email}`);
       continue;
     }
 
     try {
-      await sendWithSendmail(mimeMessage(profile, deals, dateLabel));
+      await sendWithSendmail(mimeMessage(profile, profileDeals, dateLabel));
       sentRecipients.push(email);
       sentSet.add(email);
       await writeRunState(dateKey, sentRecipients, deals.length, false);
-      console.log(`Verzonden: ${email}`);
+      console.log(`Verzonden: ${email} (${profileDeals.length} openstaande deals)`);
     } catch (error) {
       failed += 1;
       console.error(`Verzenden mislukt voor ${email}: ${error instanceof Error ? error.message : String(error)}`);
@@ -411,7 +423,7 @@ async function main() {
     throw new Error(`De wekelijkse dealmail is niet voor alle ontvangers verzonden (${failed} mislukt).`);
   }
 
-  console.log(`Klaar: ${sentRecipients.length} e-mails met ${deals.length} openstaande deals.`);
+  console.log(`Klaar: ${sentRecipients.length} persoonlijke e-mails; ${deals.length} openstaande deals verdeeld op eigenaar.`);
 }
 
 try {

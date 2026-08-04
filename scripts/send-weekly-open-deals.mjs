@@ -48,7 +48,7 @@ if (hasFlag("--help")) {
   console.log([
     "Gebruik: npm run mail:open-deals -- [--dry-run] [--force]",
     "  --dry-run  Toon ontvangers en aantallen zonder e-mail te versturen.",
-    "  --force    Verstuur opnieuw, ook als de dinsdagmail vandaag al is verzonden.",
+    "  --force    Verstuur opnieuw, ook als de weekmail vandaag al is verzonden.",
   ].join("\n"));
   process.exit(0);
 }

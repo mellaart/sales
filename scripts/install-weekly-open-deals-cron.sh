@@ -27,8 +27,8 @@ CLEAN_CRONTAB="$(
   printf '%s\n' "$CLEAN_CRONTAB"
   printf '%s\n' "$START_MARKER"
   printf '%s\n' "CRON_TZ=Europe/Amsterdam"
-  printf '%s\n' "0 8 * * 2 /bin/bash $APP_DIR/scripts/run-weekly-open-deals.sh >> $CRON_LOG 2>&1"
+  printf '%s\n' "0 8 * * 1 /bin/bash $APP_DIR/scripts/run-weekly-open-deals.sh >> $CRON_LOG 2>&1"
   printf '%s\n' "$END_MARKER"
 } | sed '/^[[:space:]]*$/N;/^\n$/D' | crontab -
 
-printf '%s\n' "Wekelijkse dealmail ingepland op dinsdag om 08:00 uur (Europe/Amsterdam)."
+printf '%s\n' "Wekelijkse dealmail ingepland op maandag om 08:00 uur (Europe/Amsterdam)."

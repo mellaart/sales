@@ -66,8 +66,12 @@ REMOTE_COMMIT="$(git rev-parse "$REMOTE/$BRANCH")"
 DEPLOYED_COMMIT="$(cat "$DEPLOYED_FILE" 2>/dev/null || true)"
 
 if [ "$FORCE_DEPLOY" != "1" ] && [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ] && [ "$DEPLOYED_COMMIT" = "$REMOTE_COMMIT" ]; then
-  log "Geen nieuwe versie ($CURRENT_COMMIT)."
-  exit 0
+  if command -v curl >/dev/null 2>&1 && ! curl -fsS --max-time 10 "http://127.0.0.1:$PORT" >/dev/null; then
+    log "Geen nieuwe versie, maar de app op poort $PORT reageert niet. Herstel-deploy gestart."
+  else
+    log "Geen nieuwe versie ($CURRENT_COMMIT)."
+    exit 0
+  fi
 fi
 
 if [ "$FORCE_DEPLOY" = "1" ]; then

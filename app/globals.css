@@ -1330,6 +1330,31 @@ select option {
   color: var(--muted);
 }
 
+.deal-access-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.deal-read-only-note {
+  margin-bottom: 18px;
+  border-color: rgba(96,165,250,0.28);
+  color: #bfdbfe;
+}
+
+.deal-access-fieldset:disabled {
+  opacity: 1;
+}
+
+.deal-access-fieldset:disabled .input,
+.deal-access-fieldset:disabled .textarea,
+.deal-access-fieldset:disabled select {
+  opacity: 1;
+  color: #dbeafe;
+  -webkit-text-fill-color: #dbeafe;
+}
+
 .table-card {
   overflow: hidden;
   border-radius: 20px;

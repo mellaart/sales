@@ -1164,6 +1164,14 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const canArchiveDeal = Boolean(
     user && (role === "admin" || dealOwnerId === user.id),
   );
+  const canEditDeal = Boolean(
+    user && (
+      role === "admin" ||
+      role === "manager" ||
+      role === "support" ||
+      dealOwnerId === user.id
+    ),
+  );
 
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;
@@ -1222,6 +1230,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             <StatusPill tone={implementation ? "success" : archivedAt ? "neutral" : "success"}>
               {implementation ? "Implementatie gestart" : archivedAt ? "Gearchiveerd" : "Versie 8"}
             </StatusPill>
+            {!canEditDeal ? <StatusPill tone="neutral">Alleen lezen</StatusPill> : null}
           </div>
         </header>
 
@@ -1248,6 +1257,13 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           )}
         </div>
 
+        {!canEditDeal ? (
+          <div className="save-status deal-read-only-note">
+            Deze deal hoort bij een andere sales consultant. Je kunt hem vanuit jouw implementatie volledig bekijken, maar niet wijzigen.
+          </div>
+        ) : null}
+
+        <fieldset className="deal-access-fieldset" disabled={!canEditDeal}>
         <div className="grid-main">
           <section className="card panel">
             <div className="top-row">
@@ -1943,6 +1959,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             {customerIntakeStatus ? <div className="save-status">{customerIntakeStatus}</div> : null}
           </section>
         ) : null}
+        </fieldset>
       </div>
     </div>
   );

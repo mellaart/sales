@@ -287,7 +287,23 @@ async function getAccessWhere(
   if (table === "deals") {
     if (canReadAllDeals(actor.profile.role) || isLocalAdmin(actor.profile)) return [];
     values.push(actor.user.id);
-    return [`"user_id" = $${values.length}`];
+    const userParameter = `$${values.length}`;
+
+    if (action === "select") {
+      return [
+        `(
+          "user_id" = ${userParameter}
+          or exists (
+            select 1
+            from public.implementations
+            where public.implementations.deal_id = public.deals.id
+              and public.implementations.assigned_consultant_id = ${userParameter}
+          )
+        )`,
+      ];
+    }
+
+    return [`"user_id" = ${userParameter}`];
   }
 
   if (table === "implementations") {

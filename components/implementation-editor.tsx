@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import ImplementationNotesField from "@/components/implementation-notes-field";
+import PriceBreakdown from "@/components/price-breakdown";
+import { usePricingConfig } from "@/components/pricing-provider";
 import { StatCard, StatusPill } from "@/components/ui";
 import {
   customerIntakeStatusLabel,
@@ -37,6 +39,7 @@ import {
   type ImplementationStatus,
 } from "@/lib/implementations";
 import type { ImplementationItem } from "@/lib/implementation-items";
+import { getDealPriceSummary } from "@/lib/deal-price-summary";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { euro } from "@/lib/pricing";
 import {
@@ -46,7 +49,7 @@ import {
   normalizeRoleTabAccess,
   type RoleTabAccessMap,
 } from "@/lib/role-tabs";
-import { getSupabaseClient, type ProfileRecord } from "@/lib/supabase";
+import { getSupabaseClient, type DealRecord, type ProfileRecord } from "@/lib/supabase";
 
 const dateFormatter = new Intl.DateTimeFormat("nl-NL", {
   day: "2-digit",
@@ -255,10 +258,13 @@ function getCustomerIntakePresentation(
 
 export default function ImplementationEditor({ implementationId }: { implementationId: string }) {
   const { user, role } = useAuth();
+  const { pricingConfig } = usePricingConfig();
   const supabase = getSupabaseClient();
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
   const [accessLoaded, setAccessLoaded] = useState(false);
   const [implementation, setImplementation] = useState<ImplementationRecord | null>(null);
+  const [linkedDeal, setLinkedDeal] = useState<DealRecord | null>(null);
+  const [linkedDealError, setLinkedDealError] = useState("");
   const [assignableUsers, setAssignableUsers] = useState<ProfileRecord[]>([]);
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeProgress | null>(null);
   const [customerIntakeLoaded, setCustomerIntakeLoaded] = useState(false);
@@ -282,6 +288,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const canAssign = isProtectedAdminEmail(user?.email);
   const canView = canAssign || canAccessTab(role, "implementation", roleTabAccess);
   const canEdit = canAssign || canWriteTab(role, "implementation", roleTabAccess);
+  const dealPriceSummary = useMemo(
+    () => linkedDeal ? getDealPriceSummary(linkedDeal, pricingConfig) : null,
+    [linkedDeal, pricingConfig],
+  );
 
   const loadRoleAccess = useCallback(async () => {
     try {
@@ -305,17 +315,35 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setCustomerIntakeLoadFailed(false);
     setImplementationItemsLoaded(false);
     setImplementationItemsError("");
+    setLinkedDeal(null);
+    setLinkedDealError("");
 
     const { data, error } = await supabase
       .from("implementations")
       .select("*")
       .eq("id", implementationId)
       .maybeSingle();
+    const loadedImplementation = data as ImplementationRecord | null;
 
     if (error) {
       setMessage(`Implementatie laden mislukt: ${error.message}`);
     } else {
-      setImplementation((data as ImplementationRecord | null) ?? null);
+      setImplementation(loadedImplementation);
+    }
+
+    if (loadedImplementation?.deal_id) {
+      const { data: dealData, error: dealError } = await supabase
+        .from("deals")
+        .select("*")
+        .eq("id", loadedImplementation.deal_id)
+        .maybeSingle();
+
+      if (dealError) {
+        setLinkedDealError(`Prijsopbouw laden mislukt: ${dealError.message}`);
+      } else {
+        setLinkedDeal((dealData as DealRecord | null) ?? null);
+        if (!dealData) setLinkedDealError("De gekoppelde deal is niet gevonden.");
+      }
     }
 
     try {
@@ -828,6 +856,25 @@ export default function ImplementationEditor({ implementationId }: { implementat
             sublabel={implementation.assigned_consultant_email || "Nog te plannen"}
           />
           <StatCard title="Aangemaakt" value={formatDate(implementation.created_at)} icon={CalendarDays} sublabel="Start van het dossier" />
+        </section>
+
+        <section className="card panel implementation-price-breakdown">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Offerte</div>
+              <h2 className="headline">Prijsopbouw</h2>
+            </div>
+            <CircleDollarSign size={28} aria-hidden="true" />
+          </div>
+          {dealPriceSummary ? (
+            <div className="summary-list">
+              <PriceBreakdown summary={dealPriceSummary} />
+            </div>
+          ) : (
+            <div className="empty-state">
+              {linkedDealError || "Prijsopbouw is niet beschikbaar voor deze implementatie."}
+            </div>
+          )}
         </section>
 
         <section className="card panel">

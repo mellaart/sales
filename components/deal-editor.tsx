@@ -49,6 +49,7 @@ import {
 } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
 import ExtraUserOffer from "@/components/extra-user-offer";
+import PriceBreakdown from "@/components/price-breakdown";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -1629,23 +1630,17 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                         <div className="total-row"><span>Eenmalig totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
                       </>
                     ) : (
-                      <>
-                        <div><span>Licentie p/m</span><strong>{euro.format(licenseWithModulesMonthly)}</strong></div>
-                        <div><span>Support p/m</span><strong>{euro.format(supportMonthly)}</strong></div>
-                        {customerPortalMonthlyTotal > 0 ? (
-                          <div><span>Klantportaal p/m</span><strong>{euro.format(customerPortalMonthlyTotal)}</strong></div>
-                        ) : null}
-                        {smartConnectPricing.monthlyTotal > 0 ? (
-                          <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
-                        ) : null}
-                        <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
-                        <div><span>Implementatie</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
-                        <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
-                        {travelCostTotal > 0 ? (
-                          <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div>
-                        ) : null}
-                        <div className="total-row"><span>Implementatie totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
-                      </>
+                      <PriceBreakdown summary={{
+                        licenseMonthly: licenseWithModulesMonthly,
+                        supportMonthly,
+                        customerPortalMonthly: customerPortalMonthlyTotal,
+                        smartConnectMonthly: smartConnectPricing.monthlyTotal,
+                        monthlyTotal,
+                        implementationBase: activeResult.implementationBase,
+                        implementationAdjustment: manualImplementationAdjustment,
+                        travelCosts: travelCostTotal,
+                        implementationTotal,
+                      }} />
                     )}
                   </div>
                 </div>

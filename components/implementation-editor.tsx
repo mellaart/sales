@@ -1484,20 +1484,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   })}
                 />
               </label>
-              <label className="input-wrap implementation-appointment-note-field">
-                <span className="input-label">Toelichting voor de klant</span>
-                <input
-                  className="input"
-                  type="text"
-                  maxLength={1000}
-                  placeholder="Bijv. ontvangst om 09:00 uur"
-                  value={appointmentDraft.customerNote}
-                  onChange={(event) => setAppointmentDraft({
-                    ...appointmentDraft,
-                    customerNote: event.target.value,
-                  })}
-                />
-              </label>
+              <ImplementationNotesField
+                className="implementation-appointment-note-field"
+                label="Toelichting voor de klant"
+                value={appointmentDraft.customerNote}
+                maxLength={1000}
+                multiline
+                placeholder="Bijv. ontvangst om 09:00 uur"
+                onChange={(value) => setAppointmentDraft({
+                  ...appointmentDraft,
+                  customerNote: value,
+                })}
+                onBlur={() => undefined}
+              />
               <button
                 type="button"
                 className="primary-button implementation-appointment-add"
@@ -1605,23 +1604,21 @@ export default function ImplementationEditor({ implementationId }: { implementat
                       })}
                     />
                   </label>
-                  <label className="input-wrap implementation-appointment-row-note">
-                    <span className="input-label">Toelichting klant</span>
-                    <input
-                      className="input"
-                      type="text"
-                      maxLength={1000}
-                      disabled={!canEdit}
-                      value={appointment.customerNote}
-                      onChange={(event) => updateAppointmentLocal(appointment.id, {
-                        customerNote: event.target.value,
-                      })}
-                      onBlur={(event) => void saveAppointment({
-                        ...appointment,
-                        customerNote: event.currentTarget.value,
-                      })}
-                    />
-                  </label>
+                  <ImplementationNotesField
+                    className="implementation-appointment-row-note"
+                    label="Toelichting klant"
+                    value={appointment.customerNote}
+                    maxLength={1000}
+                    multiline
+                    disabled={!canEdit}
+                    onChange={(value) => updateAppointmentLocal(appointment.id, {
+                      customerNote: value,
+                    })}
+                    onBlur={(value) => void saveAppointment({
+                      ...appointment,
+                      customerNote: value,
+                    })}
+                  />
                   <label className="input-wrap">
                     <span className="input-label">Status</span>
                     <select

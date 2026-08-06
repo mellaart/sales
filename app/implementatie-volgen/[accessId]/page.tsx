@@ -83,7 +83,6 @@ export default async function ImplementationProgressPage({
   }
 
   const { portal } = result;
-  const completedMilestones = portal.milestones.filter((milestone) => milestone.completed).length;
   const completedItems = portal.items.filter((item) => item.completed).length;
 
   return (
@@ -124,7 +123,7 @@ export default async function ImplementationProgressPage({
               <span>Totale voortgang</span>
               <strong>{portal.progressPercentage}% afgerond</strong>
             </div>
-            <span>{completedMilestones}/{portal.milestones.length} mijlpalen</span>
+            <span>Planning en uitvoering</span>
           </div>
           <div
             className={styles.progressTrack}
@@ -182,24 +181,6 @@ export default async function ImplementationProgressPage({
               <div><strong>Nog geen afspraken gepland</strong><span>Uw consultant vult de planning hier aan.</span></div>
             </div>
           )}
-        </div>
-      </section>
-
-      <section className={`${styles.section} ${styles.altSection}`}>
-        <div className={styles.content}>
-          <div className={styles.sectionHeading}>
-            <div><span>Werkzaamheden</span><h2>Voortgang implementatie</h2></div>
-            <p>Afgeronde stappen zijn groen gemarkeerd.</p>
-          </div>
-          <div className={styles.milestoneList}>
-            {portal.milestones.map((milestone, index) => (
-              <div key={milestone.key} className={milestone.completed ? styles.done : ""}>
-                <span>{milestone.completed ? <Check size={18} /> : index + 1}</span>
-                <strong>{milestone.label}</strong>
-                <small>{milestone.completed ? "Afgerond" : "Openstaand"}</small>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 

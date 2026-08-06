@@ -521,7 +521,6 @@ export async function getPublicImplementationPortal(
     progressPercentage: allSteps.length > 0
       ? Math.round((completedSteps / allSteps.length) * 100)
       : 0,
-    milestones,
     items,
     appointments,
   };

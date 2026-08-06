@@ -807,6 +807,12 @@ select option {
   display: none;
 }
 
+.implementation-notes-multiline .implementation-notes-control,
+.implementation-notes-multiline .implementation-notes-textarea {
+  height: 104px;
+  min-height: 104px;
+}
+
 .implementation-notes-scroll-controls {
   top: 7px;
   right: 8px;

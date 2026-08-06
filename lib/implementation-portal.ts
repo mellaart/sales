@@ -30,12 +30,6 @@ export type ImplementationPortalAccess = {
   updatedAt: string;
 };
 
-export type PublicImplementationMilestone = {
-  key: string;
-  label: string;
-  completed: boolean;
-};
-
 export type PublicImplementationItem = {
   key: string;
   label: string;
@@ -54,7 +48,6 @@ export type PublicImplementationPortal = {
   actualGoLiveDate: string | null;
   updatedAt: string;
   progressPercentage: number;
-  milestones: PublicImplementationMilestone[];
   items: PublicImplementationItem[];
   appointments: ImplementationAppointment[];
 };

@@ -6,7 +6,10 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 type ImplementationNotesFieldProps = {
   label: string;
   value: string;
+  className?: string;
   disabled?: boolean;
+  maxLength?: number;
+  multiline?: boolean;
   placeholder?: string;
   onChange: (value: string) => void;
   onBlur: (value: string) => void;
@@ -15,7 +18,10 @@ type ImplementationNotesFieldProps = {
 export default function ImplementationNotesField({
   label,
   value,
+  className,
   disabled = false,
+  maxLength,
+  multiline = false,
   placeholder,
   onChange,
   onBlur,
@@ -46,7 +52,7 @@ export default function ImplementationNotesField({
   }
 
   return (
-    <div className="input-wrap implementation-notes">
+    <div className={`input-wrap implementation-notes${multiline ? " implementation-notes-multiline" : ""}${className ? ` ${className}` : ""}`}>
       <span className="input-label">{label}</span>
       <div className="implementation-notes-control">
         <textarea
@@ -54,6 +60,7 @@ export default function ImplementationNotesField({
           className="textarea implementation-notes-textarea"
           value={value}
           disabled={disabled}
+          maxLength={maxLength}
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
           onBlur={(event) => onBlur(event.currentTarget.value)}
@@ -62,7 +69,7 @@ export default function ImplementationNotesField({
         <div className="number-stepper-controls implementation-notes-scroll-controls">
           <button
             type="button"
-            aria-label="Omhoog door interne notities"
+            aria-label={`Omhoog door ${label.toLowerCase()}`}
             title="Omhoog"
             disabled={!canScrollUp}
             onMouseDown={(event) => event.preventDefault()}
@@ -72,7 +79,7 @@ export default function ImplementationNotesField({
           </button>
           <button
             type="button"
-            aria-label="Omlaag door interne notities"
+            aria-label={`Omlaag door ${label.toLowerCase()}`}
             title="Omlaag"
             disabled={!canScrollDown}
             onMouseDown={(event) => event.preventDefault()}

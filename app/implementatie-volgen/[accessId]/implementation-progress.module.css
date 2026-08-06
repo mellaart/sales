@@ -254,6 +254,7 @@
 .appointmentCopy p {
   margin: 2px 0 0;
   line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .appointmentStatus {

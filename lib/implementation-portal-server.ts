@@ -16,6 +16,7 @@ import {
   type ImplementationAppointment,
   type ImplementationAppointmentStatus,
   type ImplementationAppointmentType,
+  type ImplementationAppointmentWorkItem,
   type ImplementationPortalAccess,
   type PublicImplementationPortal,
 } from "@/lib/implementation-portal";
@@ -57,7 +58,12 @@ type AppointmentRow = {
   appointment_type: ImplementationAppointmentType;
   title: string;
   customer_note: string | null;
+  work_items: unknown;
   status: ImplementationAppointmentStatus;
+  created_by: string | null;
+  outlook_event_id: string | null;
+  outlook_user_id: string | null;
+  outlook_sync_error: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -85,6 +91,7 @@ type AppointmentInput = {
   appointmentType?: unknown;
   title?: unknown;
   customerNote?: unknown;
+  workItems?: unknown;
   status?: unknown;
 };
 
@@ -172,10 +179,35 @@ function toAppointment(row: AppointmentRow): ImplementationAppointment {
     appointmentType: row.appointment_type,
     title: row.title,
     customerNote: row.customer_note ?? "",
+    workItems: normalizeAppointmentWorkItems(row.work_items),
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function normalizeAppointmentWorkItems(value: unknown): ImplementationAppointmentWorkItem[] {
+  let source = value;
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source) as unknown;
+    } catch {
+      source = [];
+    }
+  }
+  if (!Array.isArray(source)) return [];
+
+  const seen = new Set<string>();
+  return source.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const key = textValue(row.key, 240);
+    const group = textValue(row.group, 180);
+    const label = textValue(row.label, 300);
+    if (!key || !label || seen.has(key)) return [];
+    seen.add(key);
+    return [{ key, group, label }];
+  }).slice(0, 150);
 }
 
 function requiredDate(value: unknown) {
@@ -203,6 +235,7 @@ function normalizeAppointmentInput(input: AppointmentInput, partial = false) {
     appointmentType?: ImplementationAppointmentType;
     title?: string;
     customerNote?: string | null;
+    workItems?: ImplementationAppointmentWorkItem[];
     status?: ImplementationAppointmentStatus;
   } = {};
 
@@ -222,6 +255,9 @@ function normalizeAppointmentInput(input: AppointmentInput, partial = false) {
   }
   if (!partial || input.customerNote !== undefined) {
     normalized.customerNote = textValue(input.customerNote, 1_000) || null;
+  }
+  if (!partial || input.workItems !== undefined) {
+    normalized.workItems = normalizeAppointmentWorkItems(input.workItems);
   }
   if (!partial || input.status !== undefined) {
     normalized.status = isImplementationAppointmentStatus(input.status)
@@ -336,8 +372,8 @@ export async function createImplementationAppointment(
   const { rows } = await query<AppointmentRow>(
     `insert into public.implementation_appointments
        (id, implementation_id, appointment_date, start_time, end_time,
-        appointment_type, title, customer_note, status, created_by)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        appointment_type, title, customer_note, work_items, status, created_by)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      returning *`,
     [
       createId(),
@@ -348,6 +384,7 @@ export async function createImplementationAppointment(
       appointment.appointmentType,
       appointment.title,
       appointment.customerNote,
+      JSON.stringify(appointment.workItems ?? []),
       appointment.status,
       actor.user.id,
     ],
@@ -374,9 +411,10 @@ export async function updateImplementationAppointment(
     appointmentType: "appointment_type",
     title: "title",
     customerNote: "customer_note",
+    workItems: "work_items",
     status: "status",
   };
-  const values = fields.map(([, value]) => value);
+  const values = fields.map(([key, value]) => key === "workItems" ? JSON.stringify(value) : value);
   const setClause = fields
     .map(([key], index) => `${columnMap[key]} = $${index + 1}`)
     .join(", ");

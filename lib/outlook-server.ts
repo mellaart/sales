@@ -8,12 +8,14 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { query } from "@/lib/local-db";
 
+const OUTLOOK_CALENDAR_SCOPE = "https://graph.microsoft.com/Calendars.ReadWrite";
 const OUTLOOK_SCOPE = [
   "openid",
   "profile",
   "email",
   "offline_access",
   "https://graph.microsoft.com/Mail.ReadWrite",
+  OUTLOOK_CALENDAR_SCOPE,
 ].join(" ");
 const TOKEN_PREFIX = "v1";
 const SIMPLE_ATTACHMENT_MAX_SIZE = 3 * 1024 * 1024;
@@ -21,6 +23,7 @@ const LARGE_ATTACHMENT_CHUNK_SIZE = 10 * 320 * 1024;
 
 type OutlookConnectionRow = {
   refresh_token_encrypted: string;
+  scope: string | null;
 };
 
 type OutlookStateRow = {
@@ -50,6 +53,16 @@ type OutlookAttachment = {
   fileContent: Buffer;
   isInline?: boolean;
   contentId?: string;
+};
+
+export type OutlookCalendarEventInput = {
+  subject: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  htmlBody: string;
+  transactionId: string;
 };
 
 type MicrosoftErrorPayload = {
@@ -316,18 +329,33 @@ export function getOutlookConnectUrl(request: Request, returnTo?: string | null)
   return url.toString();
 }
 
-export async function isOutlookConnected(userId: string) {
+function hasCalendarScope(scope: string | null | undefined) {
+  return (scope ?? "")
+    .split(/\s+/)
+    .some((value) => value.toLocaleLowerCase("en-US").endsWith("calendars.readwrite"));
+}
+
+export async function getOutlookConnectionStatus(userId: string) {
   outlookConfiguration();
   encryptionKey();
 
-  const { rows } = await query<{ connected: boolean }>(
-    `select exists(
-       select 1 from public.outlook_connections where user_id = $1
-     ) as connected`,
+  const { rows } = await query<{ scope: string | null }>(
+    `select scope
+     from public.outlook_connections
+     where user_id = $1
+     limit 1`,
     [userId],
   );
+  const connection = rows[0];
 
-  return rows[0]?.connected === true;
+  return {
+    connected: Boolean(connection),
+    calendarConnected: Boolean(connection && hasCalendarScope(connection.scope)),
+  };
+}
+
+export async function isOutlookConnected(userId: string) {
+  return (await getOutlookConnectionStatus(userId)).connected;
 }
 
 export async function createOutlookAuthorizationUrl(
@@ -404,7 +432,7 @@ export async function completeOutlookAuthorization(
 
 async function getOutlookAccessToken(request: Request, userId: string) {
   const { rows } = await query<OutlookConnectionRow>(
-    `select refresh_token_encrypted
+    `select refresh_token_encrypted, scope
      from public.outlook_connections
      where user_id = $1
      limit 1`,
@@ -441,6 +469,132 @@ async function getOutlookAccessToken(request: Request, userId: string) {
     }
     throw error;
   }
+}
+
+function calendarEventPayload(
+  input: OutlookCalendarEventInput,
+  includeTransactionId = false,
+) {
+  return {
+    subject: input.subject,
+    body: {
+      contentType: "HTML",
+      content: [
+        '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.5;color:#1f2937">',
+        input.htmlBody,
+        "</div>",
+      ].join(""),
+    },
+    start: {
+      dateTime: `${input.appointmentDate}T${input.startTime}:00`,
+      timeZone: "W. Europe Standard Time",
+    },
+    end: {
+      dateTime: `${input.appointmentDate}T${input.endTime}:00`,
+      timeZone: "W. Europe Standard Time",
+    },
+    location: { displayName: input.location },
+    showAs: "busy",
+    isReminderOn: true,
+    reminderMinutesBeforeStart: 30,
+    ...(includeTransactionId ? { transactionId: input.transactionId } : {}),
+  };
+}
+
+async function handleCalendarResponse(
+  response: Response,
+  userId: string,
+  fallbackMessage: string,
+) {
+  const payload = await response.json().catch(() => ({})) as {
+    id?: string;
+    webLink?: string;
+    error?: { message?: string };
+  };
+
+  if (response.status === 401) {
+    await query("delete from public.outlook_connections where user_id = $1", [userId]);
+    throw new OutlookReconnectRequiredError();
+  }
+  if (response.status === 403) {
+    throw new OutlookReconnectRequiredError(
+      "Verbind Outlook opnieuw om afspraken in de agenda te mogen beheren.",
+    );
+  }
+  if (!response.ok) throw new Error(payload.error?.message || fallbackMessage);
+  return payload;
+}
+
+export async function createOutlookCalendarEvent(
+  request: Request,
+  userId: string,
+  input: OutlookCalendarEventInput,
+) {
+  const accessToken = await getOutlookAccessToken(request, userId);
+  const response = await fetch("https://graph.microsoft.com/v1.0/me/events", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(calendarEventPayload(input, true)),
+    cache: "no-store",
+  });
+  const event = await handleCalendarResponse(
+    response,
+    userId,
+    "Outlook kon de agenda-afspraak niet aanmaken.",
+  );
+  if (!event.id) throw new Error("Outlook heeft geen afspraaknummer teruggegeven.");
+  return { id: event.id, webLink: event.webLink ?? "" };
+}
+
+export async function updateOutlookCalendarEvent(
+  request: Request,
+  userId: string,
+  eventId: string,
+  input: OutlookCalendarEventInput,
+) {
+  const accessToken = await getOutlookAccessToken(request, userId);
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(calendarEventPayload(input)),
+      cache: "no-store",
+    },
+  );
+  await handleCalendarResponse(
+    response,
+    userId,
+    "Outlook kon de agenda-afspraak niet bijwerken.",
+  );
+}
+
+export async function deleteOutlookCalendarEvent(
+  request: Request,
+  userId: string,
+  eventId: string,
+) {
+  const accessToken = await getOutlookAccessToken(request, userId);
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) return;
+  await handleCalendarResponse(
+    response,
+    userId,
+    "Outlook kon de agenda-afspraak niet verwijderen.",
+  );
 }
 
 async function deleteOutlookDraft(accessToken: string, draftId: string) {

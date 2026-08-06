@@ -6,6 +6,12 @@ export type ImplementationAppointmentType = typeof IMPLEMENTATION_APPOINTMENT_TY
 export const IMPLEMENTATION_APPOINTMENT_STATUSES = ["planned", "completed"] as const;
 export type ImplementationAppointmentStatus = typeof IMPLEMENTATION_APPOINTMENT_STATUSES[number];
 
+export type ImplementationAppointmentWorkItem = {
+  key: string;
+  group: string;
+  label: string;
+};
+
 export type ImplementationAppointment = {
   id: string;
   implementationId: string;
@@ -15,6 +21,7 @@ export type ImplementationAppointment = {
   appointmentType: ImplementationAppointmentType;
   title: string;
   customerNote: string;
+  workItems: ImplementationAppointmentWorkItem[];
   status: ImplementationAppointmentStatus;
   createdAt: string;
   updatedAt: string;

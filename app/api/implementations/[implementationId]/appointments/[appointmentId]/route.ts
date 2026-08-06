@@ -4,6 +4,11 @@ import {
   deleteImplementationAppointment,
   updateImplementationAppointment,
 } from "@/lib/implementation-portal-server";
+import {
+  removeImplementationAppointmentCalendarEvent,
+  syncImplementationAppointmentCalendar,
+} from "@/lib/implementation-calendar-server";
+import { getOutlookConnectUrl } from "@/lib/outlook-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,7 +36,21 @@ export async function PATCH(
       body,
     );
     if (!result.ok) return jsonResponse({ error: result.error }, result.status);
-    return jsonResponse({ appointment: result.appointment });
+    const calendar = await syncImplementationAppointmentCalendar(
+      request,
+      implementationId,
+      appointmentId,
+      verified,
+    );
+    return jsonResponse({
+      appointment: result.appointment,
+      calendar: {
+        ...calendar,
+        connectUrl: calendar.reconnectRequired
+          ? getOutlookConnectUrl(request, `/implementatie/${implementationId}`)
+          : "",
+      },
+    });
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Afspraak opslaan mislukt.",
@@ -47,13 +66,27 @@ export async function DELETE(
     const verified = await requireLocalUser(request);
     if (!verified.ok) return jsonResponse({ error: verified.message }, 401);
     const { implementationId, appointmentId } = await context.params;
+    const calendar = await removeImplementationAppointmentCalendarEvent(
+      request,
+      implementationId,
+      appointmentId,
+      verified,
+    );
     const result = await deleteImplementationAppointment(
       implementationId,
       appointmentId,
       verified,
     );
     if (!result.ok) return jsonResponse({ error: result.error }, result.status);
-    return jsonResponse({ deleted: true });
+    return jsonResponse({
+      deleted: true,
+      calendar: {
+        ...calendar,
+        connectUrl: calendar.reconnectRequired
+          ? getOutlookConnectUrl(request, `/implementatie/${implementationId}`)
+          : "",
+      },
+    });
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Afspraak verwijderen mislukt.",

@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ClipboardCheck,
   Clock3,
   Globe2,
   LockKeyhole,
@@ -210,6 +211,22 @@ export default async function ImplementationProgressPage({
                         : <><Monitor size={16} /> Online / op afstand</>}
                     </span>
                     {appointment.customerNote ? <p>{appointment.customerNote}</p> : null}
+                    {appointment.workItems.length > 0 ? (
+                      <div className={styles.appointmentWorkItems}>
+                        <strong>Werkzaamheden</strong>
+                        <ul>
+                          {appointment.workItems.map((workItem) => (
+                            <li key={workItem.key}>
+                              <ClipboardCheck size={15} aria-hidden="true" />
+                              <span>
+                                {workItem.group ? <small>{workItem.group}</small> : null}
+                                {workItem.label}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
                   <span className={`${styles.appointmentStatus} ${appointment.status === "completed" ? styles.completed : ""}`}>
                     {appointment.status === "completed" ? "Afgerond" : "Gepland"}

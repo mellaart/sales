@@ -4,6 +4,8 @@ import {
   createImplementationAppointment,
   listImplementationAppointments,
 } from "@/lib/implementation-portal-server";
+import { syncImplementationAppointmentCalendar } from "@/lib/implementation-calendar-server";
+import { getOutlookConnectUrl } from "@/lib/outlook-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,7 +46,21 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const result = await createImplementationAppointment(implementationId, verified, body);
     if (!result.ok) return jsonResponse({ error: result.error }, result.status);
-    return jsonResponse({ appointment: result.appointment }, 201);
+    const calendar = await syncImplementationAppointmentCalendar(
+      request,
+      implementationId,
+      result.appointment.id,
+      verified,
+    );
+    return jsonResponse({
+      appointment: result.appointment,
+      calendar: {
+        ...calendar,
+        connectUrl: calendar.reconnectRequired
+          ? getOutlookConnectUrl(request, `/implementatie/${implementationId}`)
+          : "",
+      },
+    }, 201);
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Afspraak toevoegen mislukt.",

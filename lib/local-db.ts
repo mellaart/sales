@@ -324,12 +324,21 @@ export async function ensureLocalSchema() {
             check (appointment_type in ('on_site', 'remote')),
           title text not null default 'Implementatieafspraak',
           customer_note text,
+          work_items jsonb not null default '[]'::jsonb,
           status text not null default 'planned'
             check (status in ('planned', 'completed')),
           created_by uuid references public.profiles(id) on delete set null,
+          outlook_event_id text,
+          outlook_user_id uuid references public.profiles(id) on delete set null,
+          outlook_sync_error text,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
+
+        alter table public.implementation_appointments add column if not exists work_items jsonb not null default '[]'::jsonb;
+        alter table public.implementation_appointments add column if not exists outlook_event_id text;
+        alter table public.implementation_appointments add column if not exists outlook_user_id uuid references public.profiles(id) on delete set null;
+        alter table public.implementation_appointments add column if not exists outlook_sync_error text;
 
         create index if not exists implementation_appointments_implementation_date_idx
           on public.implementation_appointments(implementation_id, appointment_date, start_time);

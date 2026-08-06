@@ -57,6 +57,7 @@ import type { DnsCheckItem, ImplementationDnsCheck } from "@/lib/implementation-
 import type {
   ImplementationAppointment,
   ImplementationAppointmentType,
+  ImplementationAppointmentWorkItem,
   ImplementationPortalAccess,
 } from "@/lib/implementation-portal";
 import { getDealPriceSummary } from "@/lib/deal-price-summary";
@@ -146,6 +147,14 @@ type AppointmentDraft = {
   appointmentType: ImplementationAppointmentType;
   title: string;
   customerNote: string;
+  workItems: ImplementationAppointmentWorkItem[];
+};
+
+type AppointmentCalendarSync = {
+  synced: boolean;
+  warning: string;
+  reconnectRequired: boolean;
+  connectUrl?: string;
 };
 
 const EMPTY_APPOINTMENT_DRAFT: AppointmentDraft = {
@@ -155,7 +164,76 @@ const EMPTY_APPOINTMENT_DRAFT: AppointmentDraft = {
   appointmentType: "on_site",
   title: "Implementatieafspraak",
   customerNote: "",
+  workItems: [],
 };
+
+function toggleAppointmentWorkItem(
+  selected: ImplementationAppointmentWorkItem[],
+  workItem: ImplementationAppointmentWorkItem,
+  checked: boolean,
+) {
+  if (!checked) return selected.filter((item) => item.key !== workItem.key);
+  if (selected.some((item) => item.key === workItem.key)) return selected;
+  return [...selected, workItem];
+}
+
+function AppointmentWorkSelector({
+  options,
+  selected,
+  disabled,
+  onChange,
+}: {
+  options: ImplementationAppointmentWorkItem[];
+  selected: ImplementationAppointmentWorkItem[];
+  disabled: boolean;
+  onChange: (workItem: ImplementationAppointmentWorkItem, checked: boolean) => void;
+}) {
+  const selectedKeys = new Set(selected.map((item) => item.key));
+  const availableOptions = [
+    ...options,
+    ...selected.filter((item) => !options.some((option) => option.key === item.key)),
+  ];
+  const groups = availableOptions.reduce<Array<{
+    label: string;
+    items: ImplementationAppointmentWorkItem[];
+  }>>((result, item) => {
+    const label = item.group || "Overige werkzaamheden";
+    const group = result.find((candidate) => candidate.label === label);
+    if (group) group.items.push(item);
+    else result.push({ label, items: [item] });
+    return result;
+  }, []);
+
+  return (
+    <details className="implementation-appointment-work-selector">
+      <summary>
+        <span>
+          <ClipboardCheck size={17} aria-hidden="true" />
+          Werkzaamheden voor deze afspraak
+        </span>
+        <small>{selected.length} geselecteerd</small>
+      </summary>
+      <div className="implementation-appointment-work-groups">
+        {groups.map((group) => (
+          <fieldset key={group.label}>
+            <legend>{group.label}</legend>
+            {group.items.map((workItem) => (
+              <label key={workItem.key}>
+                <input
+                  type="checkbox"
+                  checked={selectedKeys.has(workItem.key)}
+                  disabled={disabled}
+                  onChange={(event) => onChange(workItem, event.target.checked)}
+                />
+                <span>{workItem.label}</span>
+              </label>
+            ))}
+          </fieldset>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 function DnsCheckRow({
   label,
@@ -308,7 +386,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
   const [appointmentsBusy, setAppointmentsBusy] = useState(false);
   const [appointmentsError, setAppointmentsError] = useState("");
+  const [appointmentsWarning, setAppointmentsWarning] = useState("");
   const [appointmentDraft, setAppointmentDraft] = useState<AppointmentDraft>(EMPTY_APPOINTMENT_DRAFT);
+  const [calendarStatusLoaded, setCalendarStatusLoaded] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarConnectUrl, setCalendarConnectUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dnsOutlookBusy, setDnsOutlookBusy] = useState(false);
@@ -344,6 +426,20 @@ export default function ImplementationEditor({ implementationId }: { implementat
     }),
     [implementationItems, pricingConfig],
   );
+  const appointmentWorkOptions = useMemo(
+    () => [...configuredBaseFunctionalities, ...configuredImplementationItems].flatMap((item) => {
+      const workItems = (item.workItems ?? []).map((workItem) => workItem.trim()).filter(Boolean);
+      if (workItems.length === 0) {
+        return [{ key: item.key, group: "", label: item.label }];
+      }
+      return workItems.map((workItem) => ({
+        key: getImplementationWorkItemProgressKey(item.key, workItem),
+        group: item.label,
+        label: workItem,
+      }));
+    }),
+    [configuredBaseFunctionalities, configuredImplementationItems],
+  );
 
   const loadRoleAccess = useCallback(async () => {
     try {
@@ -354,6 +450,32 @@ export default function ImplementationEditor({ implementationId }: { implementat
       setAccessLoaded(true);
     }
   }, []);
+
+  const loadCalendarStatus = useCallback(async () => {
+    setCalendarStatusLoaded(false);
+    try {
+      const returnTo = `/implementatie/${encodeURIComponent(implementationId)}`;
+      const response = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        calendarConnected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(json.error || "Outlook-agenda controleren mislukt.");
+      setCalendarConnected(json.calendarConnected === true);
+      setCalendarConnectUrl(json.connectUrl ?? "");
+    } catch (error) {
+      setCalendarConnected(false);
+      setAppointmentsWarning(
+        error instanceof Error ? error.message : "Outlook-agenda controleren mislukt.",
+      );
+    } finally {
+      setCalendarStatusLoaded(true);
+    }
+  }, [implementationId]);
 
   const loadImplementation = useCallback(async () => {
     if (!user || !supabase) {
@@ -371,6 +493,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setPortalError("");
     setAppointmentsLoaded(false);
     setAppointmentsError("");
+    setAppointmentsWarning("");
     setLinkedDeal(null);
     setLinkedDealError("");
 
@@ -546,6 +669,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }, [accessLoaded, canView, loadImplementation]);
 
   useEffect(() => {
+    if (!accessLoaded || !canView) return;
+    void loadCalendarStatus();
+  }, [accessLoaded, canView, loadCalendarStatus]);
+
+  useEffect(() => {
     if (!customerIntakeLoaded) return;
     void loadDnsCheck();
   }, [customerIntakeLoaded, loadDnsCheck]);
@@ -556,10 +684,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
     const url = new URL(window.location.href);
     if (url.searchParams.get("outlook") !== "connected") return;
 
-    setMessage("Outlook is verbonden. Klik nogmaals op 'Klaarzetten in Outlook'.");
+    setMessage("Outlook is verbonden. Nieuwe en gewijzigde afspraken worden met je agenda gesynchroniseerd.");
+    void loadCalendarStatus();
     url.searchParams.delete("outlook");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [loading]);
+  }, [loadCalendarStatus, loading]);
 
   async function saveImplementation(
     patch: Partial<ImplementationRecord>,
@@ -785,6 +914,26 @@ export default function ImplementationEditor({ implementationId }: { implementat
     )));
   }
 
+  function applyAppointmentCalendarSync(
+    calendar: AppointmentCalendarSync | undefined,
+    salesMessage: string,
+    outlookMessage: string,
+  ) {
+    if (!calendar) {
+      setMessage(salesMessage);
+      return;
+    }
+    if (calendar.connectUrl) setCalendarConnectUrl(calendar.connectUrl);
+    if (calendar.synced) {
+      setAppointmentsWarning("");
+      setMessage(outlookMessage);
+      return;
+    }
+    if (calendar.reconnectRequired) setCalendarConnected(false);
+    setAppointmentsWarning(calendar.warning || "De Outlook-agenda kon niet worden bijgewerkt.");
+    setMessage(salesMessage);
+  }
+
   async function saveAppointment(appointment: ImplementationAppointment) {
     if (!implementation || !canEdit) return;
 
@@ -805,6 +954,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
         );
         const json = await response.json().catch(() => ({})) as {
           appointment?: ImplementationAppointment;
+          calendar?: AppointmentCalendarSync;
           error?: string;
         };
         if (!response.ok || !json.appointment) {
@@ -814,7 +964,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
         setAppointments((current) => sortAppointments(current.map((item) => (
           item.id === savedAppointment.id ? savedAppointment : item
         ))));
-        setMessage("Afspraak automatisch opgeslagen.");
+        applyAppointmentCalendarSync(
+          json.calendar,
+          "Afspraak automatisch opgeslagen.",
+          "Afspraak automatisch opgeslagen en bijgewerkt in Outlook.",
+        );
       } catch (error) {
         setAppointmentsError(error instanceof Error ? error.message : "Afspraak opslaan mislukt.");
       } finally {
@@ -846,6 +1000,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
       );
       const json = await response.json().catch(() => ({})) as {
         appointment?: ImplementationAppointment;
+        calendar?: AppointmentCalendarSync;
         error?: string;
       };
       if (!response.ok || !json.appointment) {
@@ -853,12 +1008,29 @@ export default function ImplementationEditor({ implementationId }: { implementat
       }
       setAppointments((current) => sortAppointments([...current, json.appointment as ImplementationAppointment]));
       setAppointmentDraft(EMPTY_APPOINTMENT_DRAFT);
-      setMessage("Afspraak toegevoegd en zichtbaar voor de klant.");
+      applyAppointmentCalendarSync(
+        json.calendar,
+        "Afspraak toegevoegd en zichtbaar voor de klant.",
+        "Afspraak toegevoegd, zichtbaar voor de klant en in Outlook.",
+      );
     } catch (error) {
       setAppointmentsError(error instanceof Error ? error.message : "Afspraak toevoegen mislukt.");
     } finally {
       setAppointmentsBusy(false);
     }
+  }
+
+  function updateAppointmentWorkSelection(
+    appointment: ImplementationAppointment,
+    workItem: ImplementationAppointmentWorkItem,
+    checked: boolean,
+  ) {
+    const nextAppointment = {
+      ...appointment,
+      workItems: toggleAppointmentWorkItem(appointment.workItems, workItem, checked),
+    };
+    updateAppointmentLocal(appointment.id, nextAppointment);
+    void saveAppointment(nextAppointment);
   }
 
   async function deleteAppointment(appointment: ImplementationAppointment) {
@@ -872,10 +1044,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
         `/api/implementations/${encodeURIComponent(implementation.id)}/appointments/${encodeURIComponent(appointment.id)}`,
         { method: "DELETE" },
       );
-      const json = await response.json().catch(() => ({})) as { error?: string };
+      const json = await response.json().catch(() => ({})) as {
+        calendar?: AppointmentCalendarSync;
+        error?: string;
+      };
       if (!response.ok) throw new Error(json.error || "Afspraak verwijderen mislukt.");
       setAppointments((current) => current.filter((item) => item.id !== appointment.id));
-      setMessage("Afspraak verwijderd.");
+      applyAppointmentCalendarSync(
+        json.calendar,
+        "Afspraak verwijderd uit Sales.",
+        "Afspraak verwijderd uit Sales en Outlook.",
+      );
     } catch (error) {
       setAppointmentsError(error instanceof Error ? error.message : "Afspraak verwijderen mislukt.");
     } finally {
@@ -1428,7 +1607,23 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <h2 className="headline">Afspraken</h2>
               <p className="subtext">Iedere afspraak wordt direct zichtbaar op de beveiligde klantpagina.</p>
             </div>
-            <CalendarDays size={28} aria-hidden="true" />
+            <div className="implementation-calendar-actions">
+              {!calendarStatusLoaded ? (
+                <span className="implementation-calendar-state">
+                  <LoaderCircle className="implementation-dns-spinner" size={17} /> Outlook controleren...
+                </span>
+              ) : calendarConnected ? (
+                <span className="implementation-calendar-state connected">
+                  <CheckCircle2 size={17} /> Outlook-agenda verbonden
+                </span>
+              ) : canEdit && calendarConnectUrl ? (
+                <a className="secondary-button" href={calendarConnectUrl}>
+                  <CalendarDays size={17} /> Outlook-agenda koppelen
+                </a>
+              ) : (
+                <span className="implementation-calendar-state">Outlook-agenda niet verbonden</span>
+              )}
+            </div>
           </div>
 
           <div className="implementation-appointment-stats">
@@ -1513,7 +1708,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               </label>
               <ImplementationNotesField
                 className="implementation-appointment-note-field"
-                label="Toelichting voor de klant"
+                label="Toelichting klant"
                 value={appointmentDraft.customerNote}
                 maxLength={1000}
                 multiline
@@ -1532,6 +1727,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
               >
                 <Plus size={17} /> {appointmentsBusy ? "Toevoegen..." : "Afspraak toevoegen"}
               </button>
+              <AppointmentWorkSelector
+                options={appointmentWorkOptions}
+                selected={appointmentDraft.workItems}
+                disabled={appointmentsBusy}
+                onChange={(workItem, checked) => setAppointmentDraft({
+                  ...appointmentDraft,
+                  workItems: toggleAppointmentWorkItem(
+                    appointmentDraft.workItems,
+                    workItem,
+                    checked,
+                  ),
+                })}
+              />
             </div>
           ) : null}
 
@@ -1682,12 +1890,31 @@ export default function ImplementationEditor({ implementationId }: { implementat
                       <Trash2 size={17} />
                     </button>
                   ) : null}
+                  <AppointmentWorkSelector
+                    options={appointmentWorkOptions}
+                    selected={appointment.workItems}
+                    disabled={!canEdit || appointmentsBusy}
+                    onChange={(workItem, checked) => updateAppointmentWorkSelection(
+                      appointment,
+                      workItem,
+                      checked,
+                    )}
+                  />
                 </article>
               ))}
             </div>
           )}
           {appointmentsError ? (
             <div className="implementation-inline-error">{appointmentsError}</div>
+          ) : null}
+          {appointmentsWarning ? (
+            <div className="implementation-inline-warning">
+              <AlertTriangle size={17} />
+              <span>{appointmentsWarning}</span>
+              {!calendarConnected && canEdit && calendarConnectUrl ? (
+                <a href={calendarConnectUrl}>Outlook-agenda koppelen</a>
+              ) : null}
+            </div>
           ) : null}
         </section>
 

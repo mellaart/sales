@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
-import { getOutlookConnectUrl, isOutlookConnected } from "@/lib/outlook-server";
+import {
+  getOutlookConnectionStatus,
+  getOutlookConnectUrl,
+} from "@/lib/outlook-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,9 +16,10 @@ export async function GET(request: Request) {
     }
 
     const returnTo = new URL(request.url).searchParams.get("returnTo");
+    const status = await getOutlookConnectionStatus(verified.user.id);
     return NextResponse.json(
       {
-        connected: await isOutlookConnected(verified.user.id),
+        ...status,
         connectUrl: getOutlookConnectUrl(request, returnTo),
       },
       { headers: { "Cache-Control": "no-store" } },

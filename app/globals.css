@@ -947,6 +947,61 @@ select option {
   font-size: 13px;
 }
 
+.implementation-inline-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  background: rgba(120, 53, 15, 0.16);
+  color: #fcd34d;
+  font-size: 13px;
+}
+
+.implementation-inline-warning svg {
+  flex: 0 0 auto;
+}
+
+.implementation-inline-warning a {
+  margin-left: auto;
+  color: #bfdbfe;
+  font-weight: 800;
+}
+
+.implementation-calendar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.implementation-calendar-actions .secondary-button {
+  min-height: 44px;
+  border-radius: 8px;
+}
+
+.implementation-calendar-state {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(10, 20, 36, 0.62);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.implementation-calendar-state.connected {
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(6, 78, 59, 0.18);
+  color: #86efac;
+}
+
 .implementation-appointment-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -999,6 +1054,86 @@ select option {
 .implementation-appointment-add {
   min-height: 50px;
   border-radius: 8px;
+}
+
+.implementation-appointment-work-selector {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+}
+
+.implementation-appointment-work-selector summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 2px 0;
+  color: #dbeafe;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.implementation-appointment-work-selector summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.implementation-appointment-work-selector summary small {
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.implementation-appointment-work-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 22px;
+  padding: 14px 0 2px;
+}
+
+.implementation-appointment-work-groups fieldset {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.implementation-appointment-work-groups legend {
+  margin-bottom: 6px;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.implementation-appointment-work-groups label {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.implementation-appointment-work-groups input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #3b82f6;
+}
+
+.implementation-appointment-work-groups input:disabled,
+.implementation-appointment-work-groups input:disabled + span {
+  cursor: default;
+  opacity: 0.62;
 }
 
 .implementation-appointment-list {
@@ -1547,6 +1682,10 @@ select option {
     grid-column: auto;
   }
 
+  .implementation-appointment-work-groups {
+    grid-template-columns: 1fr;
+  }
+
   .implementation-dns-results {
     grid-template-columns: 1fr;
   }
@@ -1680,6 +1819,27 @@ select option {
 
   .implementation-appointment-kind {
     min-height: 0;
+  }
+
+  .implementation-calendar-actions,
+  .implementation-calendar-actions .secondary-button,
+  .implementation-calendar-state {
+    width: 100%;
+  }
+
+  .implementation-calendar-actions .secondary-button,
+  .implementation-calendar-state {
+    justify-content: center;
+  }
+
+  .implementation-inline-warning {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .implementation-inline-warning a {
+    width: 100%;
+    margin-left: 27px;
   }
 }
 

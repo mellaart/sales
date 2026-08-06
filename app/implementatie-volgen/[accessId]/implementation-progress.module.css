@@ -250,6 +250,51 @@
   white-space: pre-wrap;
 }
 
+.appointmentWorkItems {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.appointmentWorkItems > strong {
+  color: #334a67;
+  font-size: 14px;
+}
+
+.appointmentWorkItems ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.appointmentWorkItems li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #334a67;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.appointmentWorkItems li > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #2f7ad7;
+}
+
+.appointmentWorkItems li > span {
+  display: grid;
+  gap: 1px;
+}
+
+.appointmentWorkItems li small {
+  color: #73849a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .appointmentStatus {
   min-width: 92px;
   padding: 8px 12px;

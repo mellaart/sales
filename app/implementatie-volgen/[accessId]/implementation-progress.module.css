@@ -470,6 +470,8 @@
 }
 
 .baseFeatureCard {
+  display: grid;
+  align-content: start;
   min-width: 0;
   padding: 20px;
   border: 1px solid #d6e1ee;
@@ -486,10 +488,15 @@
   font-size: 18px;
 }
 
-.baseFeatureCard svg {
+.baseFeatureStatus {
+  display: grid;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
-  color: #2aa66a;
-  stroke-width: 3;
+  place-items: center;
+  border: 1px solid #b9cbe0;
+  border-radius: 50%;
+  color: #55708e;
 }
 
 .baseFeatureCard p {
@@ -497,6 +504,29 @@
   color: #46617f;
   font-size: 15px;
   line-height: 1.55;
+}
+
+.baseFeatureCard > small {
+  margin-top: 12px;
+  color: #6a7d94;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.baseFeatureDone {
+  border-color: #b9dfcc;
+  background: #f0faf5;
+}
+
+.baseFeatureDone .baseFeatureStatus {
+  border-color: #2aa66a;
+  background: #2aa66a;
+  color: #ffffff;
+}
+
+.baseFeatureDone > div,
+.baseFeatureDone > small {
+  color: #166c46;
 }
 
 .milestoneList > div {

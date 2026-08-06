@@ -35,6 +35,7 @@ export type ImplementationPortalAccess = {
 export type PublicImplementationItem = {
   key: string;
   label: string;
+  description?: string;
   completed: boolean;
 };
 
@@ -53,6 +54,7 @@ export type PublicImplementationPortal = {
   dnsDomain: string;
   dnsCheck: ImplementationDnsCheck | null;
   dnsCheckMessage: string;
+  baseItems: PublicImplementationItem[];
   items: PublicImplementationItem[];
   appointments: ImplementationAppointment[];
 };

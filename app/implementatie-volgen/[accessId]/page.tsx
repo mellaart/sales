@@ -18,7 +18,6 @@ import {
   IMPLEMENTATION_DNS_RECORDS,
   type DnsCheckItem,
 } from "@/lib/implementation-dns";
-import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/implementation-items";
 import { getPublicImplementationPortal } from "@/lib/implementation-portal-server";
 import styles from "./implementation-progress.module.css";
 
@@ -126,6 +125,7 @@ export default async function ImplementationProgressPage({
   }
 
   const { portal } = result;
+  const completedBaseItems = portal.baseItems.filter((item) => item.completed).length;
   const completedItems = portal.items.filter((item) => item.completed).length;
 
   return (
@@ -288,13 +288,24 @@ export default async function ImplementationProgressPage({
         <div className={styles.content}>
           <div className={styles.sectionHeading}>
             <div><span>Uw pakket</span><h2>Basisfunctionaliteiten</h2></div>
-            <p>Standaard inbegrepen in {portal.packageName}.</p>
+            <p>{completedBaseItems}/{portal.baseItems.length} basisfunctionaliteiten afgerond</p>
           </div>
           <div className={styles.baseFeatureGrid}>
-            {IMPLEMENTATION_BASE_FUNCTIONALITIES.map((feature) => (
-              <article key={feature.key} className={styles.baseFeatureCard}>
-                <div><Check size={20} aria-hidden="true" /><strong>{feature.label}</strong></div>
+            {portal.baseItems.map((feature) => (
+              <article
+                key={feature.key}
+                className={`${styles.baseFeatureCard} ${feature.completed ? styles.baseFeatureDone : ""}`}
+              >
+                <div>
+                  <span className={styles.baseFeatureStatus}>
+                    {feature.completed
+                      ? <Check size={18} aria-hidden="true" />
+                      : <PackageCheck size={18} aria-hidden="true" />}
+                  </span>
+                  <strong>{feature.label}</strong>
+                </div>
                 <p>{feature.description}</p>
+                <small>{feature.completed ? "Afgerond" : "In voorbereiding"}</small>
               </article>
             ))}
           </div>

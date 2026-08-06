@@ -553,6 +553,7 @@ export async function getPublicImplementationPortal(
     dnsDomain,
     dnsCheck,
     dnsCheckMessage,
+    baseItems: baseFunctionalitySteps,
     items,
     appointments,
   };

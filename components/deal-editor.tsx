@@ -425,6 +425,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const activePackage = packages[Math.max(selectedPackageIndex, minimumPackageIndex, 0)] ?? minimumPackage;
   const activeResult = results.find((pkg) => pkg.key === activePackage.key) ?? results[0];
   const isAssetsExpansionDeal = quoteLayout === "assets-expansion" && Boolean(assetsExpansion?.lines?.length);
+  const quotedUserCount = isAssetsExpansionDeal ? smartTradeExtraUsers : totalUsers;
   const expansionTotals = useMemo(() => getAssetExpansionTotals(assetsExpansion?.lines ?? []), [assetsExpansion]);
   const selectedCustomerPortalOptions = useMemo(
     () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
@@ -714,7 +715,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           sales_name: salesName || currentSalesName || null,
           package_key: activeResult.key,
           package_name: "Uitbreiding",
-          total_users: totalUsers,
+          total_users: quotedUserCount,
           contract_months: 1,
           discount_pct: 0,
           include_vat: includeVat,
@@ -826,7 +827,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       salesWorkdays: selectedSalesWorkdays,
       notes,
       includeVat,
-      totalUsers,
+      totalUsers: quotedUserCount,
       extraUsers,
       chauffeurExtraUsers,
       planningAppUsers,

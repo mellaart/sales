@@ -928,7 +928,7 @@ export default function AssetsDashboardCurrent() {
         sales_name: getUserDisplayName(user, profile),
         package_key: activeResult.key,
         package_name: "Uitbreiding",
-        total_users: Math.max(1, extraUsersForDeal + 1),
+        total_users: extraUsersForDeal,
         contract_months: 1,
         discount_pct: 0,
         include_vat: false,

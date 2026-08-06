@@ -199,7 +199,7 @@ export default function DealApprovalForm({
               </div>
               <div>
                 <dt>Gebruikers</dt>
-                <dd>{approval.quote.totalUsers || "-"}</dd>
+                <dd>{approval.quote.totalUsers}</dd>
               </div>
               <div>
                 <dt>Maandbedrag</dt>

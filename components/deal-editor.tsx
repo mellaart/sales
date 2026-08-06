@@ -1749,7 +1749,14 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                         <div className="total-row"><span>Maandbedrag</span><strong>{euro.format(expansionTotals.monthly)}</strong></div>
                         {expansionTotals.annual > 0 ? <div><span>Jaarbedrag</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
                         {expansionTotals.once > 0 ? <div><span>Setup</span><strong>{euro.format(expansionTotals.once)}</strong></div> : null}
-                        {travelCostTotal > 0 ? <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div> : null}
+                        {effectiveIncludeTravelCosts && travelCostQuote ? (
+                          <div>
+                            <span>
+                              Reiskosten ({Math.ceil(travelImplementationDays)} {Math.ceil(travelImplementationDays) === 1 ? "afspraak" : "afspraken"} op locatie)
+                            </span>
+                            <strong>{euro.format(travelCostTotal)}</strong>
+                          </div>
+                        ) : null}
                         <div className="total-row"><span>Eenmalig totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
                       </>
                     ) : (
@@ -1762,6 +1769,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                         implementationBase: activeResult.implementationBase,
                         implementationAdjustment: manualImplementationAdjustment,
                         travelCosts: travelCostTotal,
+                        onSiteAppointments: effectiveIncludeTravelCosts && travelCostQuote
+                          ? Math.ceil(travelImplementationDays)
+                          : 0,
                         implementationTotal,
                       }} />
                     )}

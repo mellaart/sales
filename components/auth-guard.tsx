@@ -14,6 +14,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isPublicPage = isLoginPage
     || pathname === "/worldline-test"
     || pathname.startsWith("/klantgegevens/")
+    || pathname.startsWith("/implementatie-volgen/")
     || pathname.startsWith("/offerte/");
   const mustSetPassword = Boolean(user?.user_metadata?.must_set_password);
 

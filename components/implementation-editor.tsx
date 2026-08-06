@@ -9,14 +9,21 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
+  Clock3,
+  Copy,
   Database,
   ExternalLink,
   FileText,
   Globe2,
+  Link2,
   LoaderCircle,
   Mail,
+  MapPin,
+  Monitor,
   Package,
+  Plus,
   RefreshCw,
+  Trash2,
   UserRoundCheck,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
@@ -39,6 +46,11 @@ import {
   type ImplementationStatus,
 } from "@/lib/implementations";
 import type { ImplementationItem } from "@/lib/implementation-items";
+import type {
+  ImplementationAppointment,
+  ImplementationAppointmentType,
+  ImplementationPortalAccess,
+} from "@/lib/implementation-portal";
 import { getDealPriceSummary } from "@/lib/deal-price-summary";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { euro } from "@/lib/pricing";
@@ -85,6 +97,14 @@ function formatDateTime(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? "" : dateTimeFormatter.format(date);
 }
 
+function sortAppointments(appointments: ImplementationAppointment[]) {
+  return [...appointments].sort((left, right) => {
+    const leftKey = `${left.appointmentDate} ${left.startTime || "99:99"}`;
+    const rightKey = `${right.appointmentDate} ${right.startTime || "99:99"}`;
+    return leftKey.localeCompare(rightKey);
+  });
+}
+
 function getStatusTone(status: ImplementationStatus): "success" | "warning" | "neutral" {
   if (status === "completed") return "success";
   if (status === "new" || status === "waiting_customer") return "warning";
@@ -127,6 +147,24 @@ type ImplementationDnsCheck = {
     dkimSmartsoft: DnsCheckItem;
     dkimTroublefree: DnsCheckItem;
   };
+};
+
+type AppointmentDraft = {
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  appointmentType: ImplementationAppointmentType;
+  title: string;
+  customerNote: string;
+};
+
+const EMPTY_APPOINTMENT_DRAFT: AppointmentDraft = {
+  appointmentDate: "",
+  startTime: "09:00",
+  endTime: "17:00",
+  appointmentType: "on_site",
+  title: "Implementatieafspraak",
+  customerNote: "",
 };
 
 function DnsCheckRow({
@@ -272,6 +310,15 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [implementationItems, setImplementationItems] = useState<ImplementationItem[]>([]);
   const [implementationItemsLoaded, setImplementationItemsLoaded] = useState(false);
   const [implementationItemsError, setImplementationItemsError] = useState("");
+  const [portalAccess, setPortalAccess] = useState<ImplementationPortalAccess | null>(null);
+  const [portalLoaded, setPortalLoaded] = useState(false);
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState("");
+  const [appointments, setAppointments] = useState<ImplementationAppointment[]>([]);
+  const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
+  const [appointmentsBusy, setAppointmentsBusy] = useState(false);
+  const [appointmentsError, setAppointmentsError] = useState("");
+  const [appointmentDraft, setAppointmentDraft] = useState<AppointmentDraft>(EMPTY_APPOINTMENT_DRAFT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dnsOutlookBusy, setDnsOutlookBusy] = useState(false);
@@ -283,6 +330,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [detailSaveMessage, setDetailSaveMessage] = useState("Automatisch opgeslagen");
   const detailSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingDetailSavesRef = useRef(0);
+  const appointmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingAppointmentSavesRef = useRef(0);
   const [message, setMessage] = useState("");
 
   const canAssign = isProtectedAdminEmail(user?.email);
@@ -315,6 +364,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setCustomerIntakeLoadFailed(false);
     setImplementationItemsLoaded(false);
     setImplementationItemsError("");
+    setPortalLoaded(false);
+    setPortalError("");
+    setAppointmentsLoaded(false);
+    setAppointmentsError("");
     setLinkedDeal(null);
     setLinkedDealError("");
 
@@ -387,6 +440,52 @@ export default function ImplementationEditor({ implementationId }: { implementat
       setImplementationItemsError(error instanceof Error ? error.message : "Modules laden mislukt.");
     } finally {
       setImplementationItemsLoaded(true);
+    }
+
+    try {
+      if (data) {
+        const portalResponse = await fetch(
+          `/api/implementations/${encodeURIComponent(implementationId)}/portal`,
+          { cache: "no-store" },
+        );
+        const portalJson = await portalResponse.json().catch(() => ({})) as {
+          portalAccess?: ImplementationPortalAccess | null;
+          error?: string;
+        };
+        if (!portalResponse.ok) throw new Error(portalJson.error || "Klanttoegang laden mislukt.");
+        setPortalAccess(portalJson.portalAccess ?? null);
+      } else {
+        setPortalAccess(null);
+      }
+    } catch (error) {
+      setPortalAccess(null);
+      setPortalError(error instanceof Error ? error.message : "Klanttoegang laden mislukt.");
+    } finally {
+      setPortalLoaded(true);
+    }
+
+    try {
+      if (data) {
+        const appointmentsResponse = await fetch(
+          `/api/implementations/${encodeURIComponent(implementationId)}/appointments`,
+          { cache: "no-store" },
+        );
+        const appointmentsJson = await appointmentsResponse.json().catch(() => ({})) as {
+          appointments?: ImplementationAppointment[];
+          error?: string;
+        };
+        if (!appointmentsResponse.ok) {
+          throw new Error(appointmentsJson.error || "Afspraken laden mislukt.");
+        }
+        setAppointments(Array.isArray(appointmentsJson.appointments) ? appointmentsJson.appointments : []);
+      } else {
+        setAppointments([]);
+      }
+    } catch (error) {
+      setAppointments([]);
+      setAppointmentsError(error instanceof Error ? error.message : "Afspraken laden mislukt.");
+    } finally {
+      setAppointmentsLoaded(true);
     }
 
     if (canAssign) {
@@ -586,6 +685,178 @@ export default function ImplementationEditor({ implementationId }: { implementat
     };
 
     detailSaveQueueRef.current = detailSaveQueueRef.current.then(persist, persist);
+  }
+
+  async function createOrRefreshPortal(regenerate: boolean) {
+    if (!implementation || !canEdit || portalBusy) return;
+
+    setPortalBusy(true);
+    setPortalError("");
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/portal`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ regenerate }),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        portalAccess?: ImplementationPortalAccess;
+        error?: string;
+      };
+      if (!response.ok || !json.portalAccess) {
+        throw new Error(json.error || "Klantlink maken mislukt.");
+      }
+      setPortalAccess(json.portalAccess);
+      setMessage(regenerate ? "Nieuwe klantlink gemaakt." : "Klantpagina geactiveerd.");
+    } catch (error) {
+      setPortalError(error instanceof Error ? error.message : "Klantlink maken mislukt.");
+    } finally {
+      setPortalBusy(false);
+    }
+  }
+
+  async function revokePortal() {
+    if (!implementation || !canEdit || portalBusy || !portalAccess?.active) return;
+    if (!window.confirm("Klantlink intrekken? De klant kan deze link daarna niet meer openen.")) return;
+
+    setPortalBusy(true);
+    setPortalError("");
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/portal`,
+        { method: "DELETE" },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        portalAccess?: ImplementationPortalAccess | null;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(json.error || "Klantlink intrekken mislukt.");
+      setPortalAccess(json.portalAccess ?? null);
+      setMessage("Klantlink is ingetrokken.");
+    } catch (error) {
+      setPortalError(error instanceof Error ? error.message : "Klantlink intrekken mislukt.");
+    } finally {
+      setPortalBusy(false);
+    }
+  }
+
+  async function copyPortalUrl() {
+    if (!portalAccess?.publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(portalAccess.publicUrl);
+      setMessage("Klantlink gekopieerd.");
+    } catch {
+      setPortalError("Kopiëren is niet gelukt. Selecteer de link en kopieer deze handmatig.");
+    }
+  }
+
+  function updateAppointmentLocal(
+    appointmentId: string,
+    patch: Partial<ImplementationAppointment>,
+  ) {
+    setAppointments((current) => current.map((appointment) => (
+      appointment.id === appointmentId ? { ...appointment, ...patch } : appointment
+    )));
+  }
+
+  async function saveAppointment(appointment: ImplementationAppointment) {
+    if (!implementation || !canEdit) return;
+
+    const implementationIdToSave = implementation.id;
+    pendingAppointmentSavesRef.current += 1;
+    setAppointmentsBusy(true);
+    setAppointmentsError("");
+
+    const persist = async () => {
+      try {
+        const response = await fetch(
+          `/api/implementations/${encodeURIComponent(implementationIdToSave)}/appointments/${encodeURIComponent(appointment.id)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(appointment),
+          },
+        );
+        const json = await response.json().catch(() => ({})) as {
+          appointment?: ImplementationAppointment;
+          error?: string;
+        };
+        if (!response.ok || !json.appointment) {
+          throw new Error(json.error || "Afspraak opslaan mislukt.");
+        }
+        const savedAppointment = json.appointment;
+        setAppointments((current) => sortAppointments(current.map((item) => (
+          item.id === savedAppointment.id ? savedAppointment : item
+        ))));
+        setMessage("Afspraak automatisch opgeslagen.");
+      } catch (error) {
+        setAppointmentsError(error instanceof Error ? error.message : "Afspraak opslaan mislukt.");
+      } finally {
+        pendingAppointmentSavesRef.current -= 1;
+        if (pendingAppointmentSavesRef.current === 0) setAppointmentsBusy(false);
+      }
+    };
+
+    appointmentSaveQueueRef.current = appointmentSaveQueueRef.current.then(persist, persist);
+  }
+
+  async function addAppointment() {
+    if (!implementation || !canEdit || appointmentsBusy) return;
+    if (!appointmentDraft.appointmentDate) {
+      setAppointmentsError("Kies eerst een datum voor de afspraak.");
+      return;
+    }
+
+    setAppointmentsBusy(true);
+    setAppointmentsError("");
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/appointments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(appointmentDraft),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        appointment?: ImplementationAppointment;
+        error?: string;
+      };
+      if (!response.ok || !json.appointment) {
+        throw new Error(json.error || "Afspraak toevoegen mislukt.");
+      }
+      setAppointments((current) => sortAppointments([...current, json.appointment as ImplementationAppointment]));
+      setAppointmentDraft(EMPTY_APPOINTMENT_DRAFT);
+      setMessage("Afspraak toegevoegd en zichtbaar voor de klant.");
+    } catch (error) {
+      setAppointmentsError(error instanceof Error ? error.message : "Afspraak toevoegen mislukt.");
+    } finally {
+      setAppointmentsBusy(false);
+    }
+  }
+
+  async function deleteAppointment(appointment: ImplementationAppointment) {
+    if (!implementation || !canEdit || appointmentsBusy) return;
+    if (!window.confirm(`Afspraak op ${formatDate(appointment.appointmentDate)} verwijderen?`)) return;
+
+    setAppointmentsBusy(true);
+    setAppointmentsError("");
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/appointments/${encodeURIComponent(appointment.id)}`,
+        { method: "DELETE" },
+      );
+      const json = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(json.error || "Afspraak verwijderen mislukt.");
+      setAppointments((current) => current.filter((item) => item.id !== appointment.id));
+      setMessage("Afspraak verwijderd.");
+    } catch (error) {
+      setAppointmentsError(error instanceof Error ? error.message : "Afspraak verwijderen mislukt.");
+    } finally {
+      setAppointmentsBusy(false);
+    }
   }
 
   async function handleDnsOutlookDraft() {
@@ -818,6 +1089,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const completedImplementationItems = implementationItems.filter(
     (item) => implementationItemProgress[item.key],
   ).length;
+  const expectedOnSiteAppointments = dealPriceSummary?.onSiteAppointments ?? 0;
+  const scheduledOnSiteAppointments = appointments.filter(
+    (appointment) => appointment.appointmentType === "on_site",
+  ).length;
 
   return (
     <div className="page-shell">
@@ -1034,6 +1309,362 @@ export default function ImplementationEditor({ implementationId }: { implementat
           <div className={`implementation-data-save-state ${detailSaveState}`} aria-live="polite">
             {detailSaveMessage}
           </div>
+        </section>
+
+        <section className="card panel implementation-customer-access-panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Klanttoegang</div>
+              <h2 className="headline">Voortgang delen</h2>
+              <p className="subtext">
+                Deel een beveiligde pagina met alleen de voortgang, onderdelen en afspraken van deze implementatie.
+              </p>
+            </div>
+            <Link2 size={28} aria-hidden="true" />
+          </div>
+
+          {!portalLoaded ? (
+            <div className="implementation-items-state">
+              <LoaderCircle className="implementation-dns-spinner" size={17} /> Klanttoegang wordt geladen...
+            </div>
+          ) : portalAccess?.active ? (
+            <div className="implementation-portal-active">
+              <label className="input-wrap implementation-portal-url">
+                <span className="input-label">Beveiligde klantlink</span>
+                <input className="input" type="text" readOnly value={portalAccess.publicUrl} />
+              </label>
+              <div className="implementation-portal-actions">
+                <button type="button" className="secondary-button" onClick={() => void copyPortalUrl()}>
+                  <Copy size={16} /> Kopiëren
+                </button>
+                <a
+                  className="primary-button"
+                  href={portalAccess.publicUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink size={16} /> Open klantpagina
+                </a>
+                {canEdit ? (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={portalBusy}
+                      onClick={() => void createOrRefreshPortal(true)}
+                    >
+                      <RefreshCw size={16} /> Nieuwe link
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button danger"
+                      disabled={portalBusy}
+                      onClick={() => void revokePortal()}
+                    >
+                      <Trash2 size={16} /> Intrekken
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              <span className="implementation-portal-meta">
+                Geldig tot {formatDate(portalAccess.expiresAt)}
+                {portalAccess.lastViewedAt
+                  ? ` · laatst bekeken ${formatDateTime(portalAccess.lastViewedAt)}`
+                  : " · nog niet door de klant bekeken"}
+              </span>
+            </div>
+          ) : (
+            <div className="implementation-portal-empty">
+              <div>
+                <strong>{portalAccess?.revokedAt ? "Klantlink ingetrokken" : "Nog geen klantpagina actief"}</strong>
+                <span>Maak een unieke link die op ieder moment weer kan worden ingetrokken.</span>
+              </div>
+              {canEdit ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={portalBusy}
+                  onClick={() => void createOrRefreshPortal(Boolean(portalAccess))}
+                >
+                  <Link2 size={16} /> {portalBusy ? "Link maken..." : "Klantlink maken"}
+                </button>
+              ) : null}
+            </div>
+          )}
+          {portalError ? <div className="implementation-inline-error">{portalError}</div> : null}
+        </section>
+
+        <section className="card panel implementation-appointments-panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Planning</div>
+              <h2 className="headline">Afspraken</h2>
+              <p className="subtext">Iedere afspraak wordt direct zichtbaar op de beveiligde klantpagina.</p>
+            </div>
+            <CalendarDays size={28} aria-hidden="true" />
+          </div>
+
+          <div className="implementation-appointment-stats">
+            <span>
+              <strong>{expectedOnSiteAppointments}</strong>
+              Afspraken op locatie volgens offerte
+            </span>
+            <span>
+              <strong>{scheduledOnSiteAppointments}</strong>
+              Op locatie ingepland
+            </span>
+            <span>
+              <strong>{appointments.length}</strong>
+              Totaal in agenda
+            </span>
+          </div>
+
+          {canEdit ? (
+            <div className="implementation-appointment-create">
+              <label className="input-wrap">
+                <span className="input-label">Datum</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={appointmentDraft.appointmentDate}
+                  onChange={(event) => setAppointmentDraft({
+                    ...appointmentDraft,
+                    appointmentDate: event.target.value,
+                  })}
+                />
+              </label>
+              <label className="input-wrap">
+                <span className="input-label">Van</span>
+                <input
+                  className="input"
+                  type="time"
+                  value={appointmentDraft.startTime}
+                  onChange={(event) => setAppointmentDraft({
+                    ...appointmentDraft,
+                    startTime: event.target.value,
+                  })}
+                />
+              </label>
+              <label className="input-wrap">
+                <span className="input-label">Tot</span>
+                <input
+                  className="input"
+                  type="time"
+                  value={appointmentDraft.endTime}
+                  onChange={(event) => setAppointmentDraft({
+                    ...appointmentDraft,
+                    endTime: event.target.value,
+                  })}
+                />
+              </label>
+              <label className="input-wrap">
+                <span className="input-label">Soort afspraak</span>
+                <select
+                  className="input implementation-dark-select"
+                  value={appointmentDraft.appointmentType}
+                  onChange={(event) => setAppointmentDraft({
+                    ...appointmentDraft,
+                    appointmentType: event.target.value as ImplementationAppointmentType,
+                  })}
+                >
+                  <option value="on_site">Op locatie</option>
+                  <option value="remote">Online / op afstand</option>
+                </select>
+              </label>
+              <label className="input-wrap implementation-appointment-title-field">
+                <span className="input-label">Onderwerp</span>
+                <input
+                  className="input"
+                  type="text"
+                  maxLength={180}
+                  value={appointmentDraft.title}
+                  onChange={(event) => setAppointmentDraft({
+                    ...appointmentDraft,
+                    title: event.target.value,
+                  })}
+                />
+              </label>
+              <label className="input-wrap implementation-appointment-note-field">
+                <span className="input-label">Toelichting voor de klant</span>
+                <input
+                  className="input"
+                  type="text"
+                  maxLength={1000}
+                  placeholder="Bijv. ontvangst om 09:00 uur"
+                  value={appointmentDraft.customerNote}
+                  onChange={(event) => setAppointmentDraft({
+                    ...appointmentDraft,
+                    customerNote: event.target.value,
+                  })}
+                />
+              </label>
+              <button
+                type="button"
+                className="primary-button implementation-appointment-add"
+                disabled={appointmentsBusy}
+                onClick={() => void addAppointment()}
+              >
+                <Plus size={17} /> {appointmentsBusy ? "Toevoegen..." : "Afspraak toevoegen"}
+              </button>
+            </div>
+          ) : null}
+
+          {!appointmentsLoaded ? (
+            <div className="implementation-items-state">
+              <LoaderCircle className="implementation-dns-spinner" size={17} /> Afspraken worden geladen...
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="implementation-appointments-empty">
+              <Clock3 size={22} /> Nog geen afspraken ingepland.
+            </div>
+          ) : (
+            <div className="implementation-appointment-list">
+              {appointments.map((appointment) => (
+                <article key={appointment.id} className="implementation-appointment-row">
+                  <label className="input-wrap">
+                    <span className="input-label">Datum</span>
+                    <input
+                      className="input"
+                      type="date"
+                      disabled={!canEdit}
+                      value={appointment.appointmentDate}
+                      onChange={(event) => updateAppointmentLocal(appointment.id, {
+                        appointmentDate: event.target.value,
+                      })}
+                      onBlur={(event) => void saveAppointment({
+                        ...appointment,
+                        appointmentDate: event.currentTarget.value,
+                      })}
+                    />
+                  </label>
+                  <label className="input-wrap">
+                    <span className="input-label">Van</span>
+                    <input
+                      className="input"
+                      type="time"
+                      disabled={!canEdit}
+                      value={appointment.startTime}
+                      onChange={(event) => updateAppointmentLocal(appointment.id, {
+                        startTime: event.target.value,
+                      })}
+                      onBlur={(event) => void saveAppointment({
+                        ...appointment,
+                        startTime: event.currentTarget.value,
+                      })}
+                    />
+                  </label>
+                  <label className="input-wrap">
+                    <span className="input-label">Tot</span>
+                    <input
+                      className="input"
+                      type="time"
+                      disabled={!canEdit}
+                      value={appointment.endTime}
+                      onChange={(event) => updateAppointmentLocal(appointment.id, {
+                        endTime: event.target.value,
+                      })}
+                      onBlur={(event) => void saveAppointment({
+                        ...appointment,
+                        endTime: event.currentTarget.value,
+                      })}
+                    />
+                  </label>
+                  <label className="input-wrap">
+                    <span className="input-label">Soort</span>
+                    <select
+                      className="input implementation-dark-select"
+                      disabled={!canEdit}
+                      value={appointment.appointmentType}
+                      onChange={(event) => {
+                        const nextAppointment = {
+                          ...appointment,
+                          appointmentType: event.target.value as ImplementationAppointmentType,
+                        };
+                        updateAppointmentLocal(appointment.id, nextAppointment);
+                        void saveAppointment(nextAppointment);
+                      }}
+                    >
+                      <option value="on_site">Op locatie</option>
+                      <option value="remote">Online / op afstand</option>
+                    </select>
+                  </label>
+                  <label className="input-wrap implementation-appointment-row-title">
+                    <span className="input-label">Onderwerp</span>
+                    <input
+                      className="input"
+                      type="text"
+                      maxLength={180}
+                      disabled={!canEdit}
+                      value={appointment.title}
+                      onChange={(event) => updateAppointmentLocal(appointment.id, {
+                        title: event.target.value,
+                      })}
+                      onBlur={(event) => void saveAppointment({
+                        ...appointment,
+                        title: event.currentTarget.value,
+                      })}
+                    />
+                  </label>
+                  <label className="input-wrap implementation-appointment-row-note">
+                    <span className="input-label">Toelichting klant</span>
+                    <input
+                      className="input"
+                      type="text"
+                      maxLength={1000}
+                      disabled={!canEdit}
+                      value={appointment.customerNote}
+                      onChange={(event) => updateAppointmentLocal(appointment.id, {
+                        customerNote: event.target.value,
+                      })}
+                      onBlur={(event) => void saveAppointment({
+                        ...appointment,
+                        customerNote: event.currentTarget.value,
+                      })}
+                    />
+                  </label>
+                  <label className="input-wrap">
+                    <span className="input-label">Status</span>
+                    <select
+                      className="input implementation-dark-select"
+                      disabled={!canEdit}
+                      value={appointment.status}
+                      onChange={(event) => {
+                        const nextAppointment = {
+                          ...appointment,
+                          status: event.target.value as ImplementationAppointment["status"],
+                        };
+                        updateAppointmentLocal(appointment.id, nextAppointment);
+                        void saveAppointment(nextAppointment);
+                      }}
+                    >
+                      <option value="planned">Gepland</option>
+                      <option value="completed">Afgerond</option>
+                    </select>
+                  </label>
+                  <div className="implementation-appointment-kind" aria-hidden="true">
+                    {appointment.appointmentType === "on_site"
+                      ? <><MapPin size={17} /> Op locatie</>
+                      : <><Monitor size={17} /> Online</>}
+                  </div>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      className="icon-button implementation-appointment-delete"
+                      title="Afspraak verwijderen"
+                      aria-label="Afspraak verwijderen"
+                      disabled={appointmentsBusy}
+                      onClick={() => void deleteAppointment(appointment)}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          )}
+          {appointmentsError ? (
+            <div className="implementation-inline-error">{appointmentsError}</div>
+          ) : null}
         </section>
 
         <section className="card panel">

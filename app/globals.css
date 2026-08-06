@@ -860,6 +860,210 @@ select option {
   color: #fca5a5;
 }
 
+.implementation-customer-access-panel,
+.implementation-appointments-panel {
+  margin-top: 18px;
+}
+
+.implementation-appointments-panel + .card {
+  margin-top: 18px;
+}
+
+.implementation-portal-active {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px 16px;
+}
+
+.implementation-portal-url {
+  min-width: 0;
+}
+
+.implementation-portal-url .input {
+  overflow: hidden;
+  color: #bfdbfe;
+  text-overflow: ellipsis;
+}
+
+.implementation-portal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.implementation-portal-actions .primary-button,
+.implementation-portal-actions .secondary-button {
+  min-height: 50px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.implementation-portal-meta {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.implementation-portal-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border: 1px dashed rgba(96,165,250,0.3);
+  border-radius: 8px;
+  background: rgba(10,20,36,0.62);
+}
+
+.implementation-portal-empty > div {
+  display: grid;
+  gap: 5px;
+}
+
+.implementation-portal-empty strong {
+  color: var(--text);
+}
+
+.implementation-portal-empty span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.implementation-inline-error {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(248,113,113,0.28);
+  border-radius: 8px;
+  background: rgba(127,29,29,0.15);
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.implementation-appointment-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(10,20,36,0.62);
+}
+
+.implementation-appointment-stats span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 15px 18px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.implementation-appointment-stats span:first-child {
+  border-left: 0;
+}
+
+.implementation-appointment-stats strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.implementation-appointment-create {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.8fr) repeat(2, minmax(115px, 0.55fr)) minmax(180px, 0.9fr) minmax(220px, 1.3fr);
+  align-items: end;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid rgba(96,165,250,0.24);
+  border-radius: 8px;
+  background: rgba(37,99,235,0.08);
+}
+
+.implementation-appointment-create .input-wrap,
+.implementation-appointment-row .input-wrap {
+  margin: 0;
+}
+
+.implementation-appointment-note-field {
+  grid-column: 1 / -2;
+}
+
+.implementation-appointment-add {
+  min-height: 50px;
+  border-radius: 8px;
+}
+
+.implementation-appointment-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.implementation-appointment-row {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.8fr) repeat(2, minmax(105px, 0.55fr)) minmax(160px, 0.85fr) minmax(220px, 1.25fr) minmax(150px, 0.8fr) 44px;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(10,20,36,0.7);
+}
+
+.implementation-appointment-row-title {
+  grid-column: span 2;
+}
+
+.implementation-appointment-row-note {
+  grid-column: 1 / span 5;
+}
+
+.implementation-appointment-kind {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  color: #bfdbfe;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.implementation-appointment-delete {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(248,113,113,0.28);
+  border-radius: 8px;
+  background: rgba(127,29,29,0.14);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+.implementation-appointment-delete:hover {
+  background: rgba(127,29,29,0.26);
+}
+
+.implementation-appointment-delete:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.implementation-appointments-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 68px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
 .implementation-progress-block {
   overflow: hidden;
   margin-top: 22px;
@@ -1223,6 +1427,27 @@ select option {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .implementation-portal-active,
+  .implementation-appointment-create,
+  .implementation-appointment-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .implementation-portal-actions,
+  .implementation-portal-meta,
+  .implementation-appointment-note-field,
+  .implementation-appointment-row-note {
+    grid-column: 1 / -1;
+  }
+
+  .implementation-portal-actions {
+    justify-content: flex-start;
+  }
+
+  .implementation-appointment-row-title {
+    grid-column: auto;
+  }
+
   .implementation-dns-results {
     grid-template-columns: 1fr;
   }
@@ -1316,6 +1541,46 @@ select option {
 
   .implementation-data-grid {
     grid-template-columns: 1fr;
+  }
+
+  .implementation-portal-active,
+  .implementation-appointment-stats,
+  .implementation-appointment-create,
+  .implementation-appointment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .implementation-portal-empty {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .implementation-portal-actions,
+  .implementation-portal-actions .primary-button,
+  .implementation-portal-actions .secondary-button,
+  .implementation-portal-empty .primary-button,
+  .implementation-appointment-add {
+    width: 100%;
+  }
+
+  .implementation-appointment-stats span,
+  .implementation-appointment-stats span:first-child {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .implementation-appointment-stats span:first-child {
+    border-top: 0;
+  }
+
+  .implementation-appointment-note-field,
+  .implementation-appointment-row-title,
+  .implementation-appointment-row-note {
+    grid-column: auto;
+  }
+
+  .implementation-appointment-kind {
+    min-height: 0;
   }
 }
 

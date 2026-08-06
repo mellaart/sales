@@ -1,6 +1,12 @@
 import { euro } from "@/lib/pricing";
 import type { DealPriceSummary } from "@/lib/deal-price-summary";
 
+function travelLabel(appointments: number) {
+  return appointments === 1
+    ? "Reiskosten (1 afspraak op locatie)"
+    : `Reiskosten (${appointments} afspraken op locatie)`;
+}
+
 export default function PriceBreakdown({ summary }: { summary: DealPriceSummary }) {
   return (
     <>
@@ -15,8 +21,8 @@ export default function PriceBreakdown({ summary }: { summary: DealPriceSummary 
       <div className="total-row"><span>Maandprijs</span><strong>{euro.format(summary.monthlyTotal)}</strong></div>
       <div><span>Implementatie</span><strong>{euro.format(summary.implementationBase)}</strong></div>
       <div><span>Correctie implementatie</span><strong>{euro.format(summary.implementationAdjustment)}</strong></div>
-      {summary.travelCosts > 0 ? (
-        <div><span>Reiskosten</span><strong>{euro.format(summary.travelCosts)}</strong></div>
+      {summary.onSiteAppointments > 0 || summary.travelCosts > 0 ? (
+        <div><span>{travelLabel(summary.onSiteAppointments)}</span><strong>{euro.format(summary.travelCosts)}</strong></div>
       ) : null}
       <div className="total-row"><span>Implementatie totaal</span><strong>{euro.format(summary.implementationTotal)}</strong></div>
     </>

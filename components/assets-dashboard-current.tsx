@@ -1666,7 +1666,11 @@ export default function AssetsDashboardCurrent() {
                       <strong>{euro.format(travelCostQuote?.pricePerDay ?? 0)}</strong>
                     </div>
                     <div className="total-row">
-                      <span>Reiskosten</span>
+                      <span>
+                        {effectiveIncludeTravelCosts && travelCostQuote
+                          ? `Reiskosten (${Math.ceil(travelImplementationDays)} ${Math.ceil(travelImplementationDays) === 1 ? "afspraak" : "afspraken"} op locatie)`
+                          : "Reiskosten"}
+                      </span>
                       <strong>{euro.format(travelCostTotal)}</strong>
                     </div>
                   </div>

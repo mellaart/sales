@@ -35,6 +35,7 @@ export function AppShellHeader() {
   const isAuthPage = pathname === "/login" || pathname === "/reset-password";
   const isPublicUtilityPage = pathname === "/worldline-test"
     || pathname.startsWith("/klantgegevens/")
+    || pathname.startsWith("/implementatie-volgen/")
     || pathname.startsWith("/offerte/");
   const isFocusedDealPage = pathname.startsWith("/dealmail/");
 

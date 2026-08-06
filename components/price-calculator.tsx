@@ -756,8 +756,13 @@ export default function PriceCalculator() {
                   <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
                   <div><span>Implementatie</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
                   <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>
-                  {travelCostTotal > 0 ? (
-                    <div><span>Reiskosten</span><strong>{euro.format(travelCostTotal)}</strong></div>
+                  {includeTravelCosts && travelCostQuote && travelImplementationDays > 0 ? (
+                    <div>
+                      <span>
+                        Reiskosten ({Math.ceil(travelImplementationDays)} {Math.ceil(travelImplementationDays) === 1 ? "afspraak" : "afspraken"} op locatie)
+                      </span>
+                      <strong>{euro.format(travelCostTotal)}</strong>
+                    </div>
                   ) : null}
                   <div className="total-row"><span>Implementatie totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
                 </div>

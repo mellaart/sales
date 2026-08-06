@@ -299,6 +299,41 @@ export async function ensureLocalSchema() {
         create index if not exists implementations_status_updated_at_idx
           on public.implementations(status, updated_at desc);
 
+        create table if not exists public.implementation_customer_access (
+          id uuid primary key default gen_random_uuid(),
+          implementation_id uuid not null unique references public.implementations(id) on delete cascade,
+          created_by uuid references public.profiles(id) on delete set null,
+          token_version integer not null default 1,
+          expires_at timestamptz not null default (now() + interval '365 days'),
+          revoked_at timestamptz,
+          last_viewed_at timestamptz,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        create index if not exists implementation_customer_access_status_idx
+          on public.implementation_customer_access(implementation_id, expires_at, revoked_at);
+
+        create table if not exists public.implementation_appointments (
+          id uuid primary key default gen_random_uuid(),
+          implementation_id uuid not null references public.implementations(id) on delete cascade,
+          appointment_date date not null,
+          start_time time,
+          end_time time,
+          appointment_type text not null default 'on_site'
+            check (appointment_type in ('on_site', 'remote')),
+          title text not null default 'Implementatieafspraak',
+          customer_note text,
+          status text not null default 'planned'
+            check (status in ('planned', 'completed')),
+          created_by uuid references public.profiles(id) on delete set null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        create index if not exists implementation_appointments_implementation_date_idx
+          on public.implementation_appointments(implementation_id, appointment_date, start_time);
+
         create table if not exists public.customer_intakes (
           id uuid primary key default gen_random_uuid(),
           deal_id uuid not null unique references public.deals(id) on delete cascade,

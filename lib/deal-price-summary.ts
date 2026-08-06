@@ -16,6 +16,7 @@ export type DealPriceSummary = {
   implementationBase: number;
   implementationAdjustment: number;
   travelCosts: number;
+  onSiteAppointments: number;
   implementationTotal: number;
 };
 
@@ -137,6 +138,9 @@ export function getDealPriceSummary(
     implementationBase: activeResult.implementationBase,
     implementationAdjustment,
     travelCosts,
+    onSiteAppointments: includeTravelCosts && travelQuote
+      ? Math.ceil(travelImplementationDays)
+      : 0,
     implementationTotal: activeResult.implementationAfterAdjustment + travelCosts,
   };
 }

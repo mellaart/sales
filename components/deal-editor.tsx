@@ -845,6 +845,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       quoteLayout,
       assetsExpansion,
       expansionWorkItems: pricingConfig.expansionWorkItems,
+      moduleWorkItems: pricingConfig.modules,
     };
   }
 

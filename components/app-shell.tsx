@@ -14,7 +14,7 @@ import {
 } from "@/lib/role-tabs";
 import { useAuth } from "@/components/auth-provider";
 
-const ADMIN_MENU_TAB_KEYS = ["postcode", "testen", "worldlineMcc"] as const;
+const ADMIN_MENU_TAB_KEYS = ["postcode", "testen", "worldlineMcc", "workActivities"] as const;
 const ADMIN_MENU_TAB_KEY_SET = new Set<string>(ADMIN_MENU_TAB_KEYS);
 const SALES_MENU_TAB_KEYS = ["calculator", "deals", "assets", "implementation", "prices"] as const;
 const SALES_MENU_TAB_KEY_SET = new Set<string>(SALES_MENU_TAB_KEYS);

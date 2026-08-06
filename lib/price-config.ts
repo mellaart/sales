@@ -6,6 +6,7 @@ import {
   type PackageConfig,
   type PricingCatalog,
 } from "@/lib/pricing";
+import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/base-functionalities";
 
 export type CustomerPortalPriceOption = {
   key: string;
@@ -39,7 +40,12 @@ export type PostcodeRegion = {
   kilometers: number;
 };
 
-export type ExpansionWorkItemKey = "customerPortal" | "smartConnect";
+export type BaseFunctionalityWorkItemConfig = {
+  key: string;
+  workItems: string[];
+};
+
+export type ExpansionWorkItemKey = "customerPortal" | "smartConnect" | "planningApp";
 
 export type ExpansionWorkItemConfig = {
   key: ExpansionWorkItemKey;
@@ -56,6 +62,7 @@ export type EditablePricingConfig = PricingCatalog & {
   serviceCostOptions: ServiceCostPriceOption[];
   travelCostRegions: TravelCostRegion[];
   postcodeRegions: PostcodeRegion[];
+  baseFunctionalityWorkItems: BaseFunctionalityWorkItemConfig[];
   expansionWorkItems: ExpansionWorkItemConfig[];
   updatedAt?: string | null;
 };
@@ -152,6 +159,10 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { key: "ccv", name: "CCV", annualPrice: 175.8 },
     { key: "worldline", name: "Worldline", annualPrice: 175.8 },
   ],
+  baseFunctionalityWorkItems: IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => ({
+    key: item.key,
+    workItems: [],
+  })),
   expansionWorkItems: [
     {
       key: "customerPortal",
@@ -168,6 +179,11 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
         "Smart Connect configureren",
         "Koppeling maken met de Smart Trade administratie",
       ],
+    },
+    {
+      key: "planningApp",
+      name: "Planningsapp",
+      workItems: [],
     },
   ],
   travelCostRegions: [
@@ -478,6 +494,19 @@ function normalizeExpansionWorkItems(input: unknown, fallback: ExpansionWorkItem
   };
 }
 
+function normalizeBaseFunctionalityWorkItems(
+  input: unknown,
+  fallback: BaseFunctionalityWorkItemConfig,
+): BaseFunctionalityWorkItemConfig {
+  const source = input && typeof input === "object" ? (input as Partial<BaseFunctionalityWorkItemConfig>) : {};
+  const workItems = cleanWorkItems(source.workItems);
+
+  return {
+    key: fallback.key,
+    workItems: workItems ?? fallback.workItems,
+  };
+}
+
 function mapByKey(values: unknown) {
   const rows = Array.isArray(values) ? values : [];
   return new Map(rows.flatMap((row) => {
@@ -495,6 +524,7 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
   const moduleByKey = mapByKey(source.modules);
   const customerPortalByKey = mapByKey(source.customerPortalOptions);
   const serviceCostByKey = mapByKey(source.serviceCostOptions);
+  const baseFunctionalityWorkItemsByKey = mapByKey(source.baseFunctionalityWorkItems);
   const expansionWorkItemsByKey = mapByKey(source.expansionWorkItems);
   const smartConnectRows = Array.isArray(source.smartConnectTiers) ? source.smartConnectTiers : [];
   const travelCostRows = migrateTravelCostRows(Array.isArray(source.travelCostRegions) ? source.travelCostRegions : []);
@@ -524,6 +554,9 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
     ),
     serviceCostOptions: DEFAULT_PRICE_CONFIG.serviceCostOptions.map((fallback) =>
       normalizeServiceCostOption(serviceCostByKey.get(fallback.key), fallback),
+    ),
+    baseFunctionalityWorkItems: DEFAULT_PRICE_CONFIG.baseFunctionalityWorkItems.map((fallback) =>
+      normalizeBaseFunctionalityWorkItems(baseFunctionalityWorkItemsByKey.get(fallback.key), fallback),
     ),
     expansionWorkItems: DEFAULT_PRICE_CONFIG.expansionWorkItems.map((fallback) =>
       normalizeExpansionWorkItems(expansionWorkItemsByKey.get(fallback.key), fallback),

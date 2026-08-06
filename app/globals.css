@@ -1143,6 +1143,30 @@ select option {
   line-height: 1.45;
 }
 
+.implementation-work-items {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.implementation-work-items li {
+  position: relative;
+  padding-left: 14px;
+  color: #aebed4;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.implementation-work-items li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: #60a5fa;
+  content: "•";
+}
+
 .implementation-progress-number {
   display: grid;
   place-items: center;
@@ -1177,6 +1201,11 @@ select option {
 }
 
 .implementation-progress-row.completed .implementation-item-copy small {
+  color: #86efac;
+}
+
+.implementation-progress-row.completed .implementation-work-items li,
+.implementation-progress-row.completed .implementation-work-items li::before {
   color: #86efac;
 }
 
@@ -3515,6 +3544,197 @@ td {
   gap: 22px;
 }
 
+.work-activities-page {
+  display: grid;
+  gap: 22px;
+}
+
+.work-activities-summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 18px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #bfdbfe;
+}
+
+.work-activities-summary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.work-activities-summary strong {
+  color: #ffffff;
+}
+
+.work-activities-summary span {
+  color: #9fb1ca;
+  font-size: 13px;
+}
+
+.work-activities-section {
+  overflow: hidden;
+  padding: 0;
+}
+
+.work-activities-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(37, 99, 235, 0.09);
+}
+
+.work-activities-heading > div:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.work-activities-heading span {
+  color: #8ca1bf;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.work-activities-heading h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.work-activity-groups {
+  display: grid;
+}
+
+.work-activity-group {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.62fr) minmax(420px, 1.38fr);
+  gap: 24px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.work-activity-group:last-child {
+  border-bottom: 0;
+}
+
+.work-activity-label {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.work-activity-label strong {
+  color: #f8fbff;
+  font-size: 16px;
+}
+
+.work-activity-label span {
+  color: #91a3bd;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.work-lines-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.work-lines-list {
+  display: grid;
+  gap: 8px;
+}
+
+.work-line {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-line-number {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.12);
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.work-line input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  outline: none;
+}
+
+.work-line input:focus {
+  border-color: rgba(96, 165, 250, 0.68);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.work-line input::placeholder {
+  color: rgba(203, 213, 225, 0.45);
+}
+
+.work-line-delete {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.12);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+.work-line-delete:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.22);
+}
+
+.work-line-delete:disabled,
+.work-line input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.work-line-add {
+  width: fit-content;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.work-lines-empty {
+  margin: 3px 0;
+  color: #8295b0;
+  font-size: 13px;
+}
+
+.work-activities-status {
+  margin: 0;
+}
+
+@media (max-width: 820px) {
+  .work-activity-group {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
 .prices-card {
   overflow: hidden;
 }
@@ -3543,10 +3763,6 @@ td {
 
 .price-table.travel-cost-table {
   min-width: 720px;
-}
-
-.price-table.work-items-table {
-  min-width: 760px;
 }
 
 .price-table.postcode-table {
@@ -3670,14 +3886,6 @@ td {
 
 .price-table-input.text {
   min-width: 180px;
-}
-
-.price-work-items-input {
-  min-width: 420px;
-  min-height: 82px;
-  resize: vertical;
-  line-height: 1.45;
-  white-space: pre-wrap;
 }
 
 .postcode-table td:first-child,

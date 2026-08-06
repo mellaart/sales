@@ -1,4 +1,4 @@
-import type { PricingResult } from "@/lib/pricing";
+import type { ModuleConfig, PricingResult } from "@/lib/pricing";
 import { euro, IMPLEMENTATION_DAY_RATE } from "@/lib/pricing";
 import type { ExpansionWorkItemConfig } from "@/lib/price-config";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
@@ -50,6 +50,7 @@ export type OfferTemplateInput = {
   quoteLayout?: QuoteLayoutKey;
   assetsExpansion?: AssetExpansionSummary | null;
   expansionWorkItems?: ExpansionWorkItemConfig[];
+  moduleWorkItems?: Array<Pick<ModuleConfig, "key" | "name" | "workItems">>;
 };
 
 export function getGreeting(contactName?: string) {

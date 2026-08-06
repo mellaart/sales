@@ -45,10 +45,11 @@ import {
   type ImplementationProgressKey,
   type ImplementationStatus,
 } from "@/lib/implementations";
+import type { ImplementationItem } from "@/lib/implementation-items";
 import {
-  IMPLEMENTATION_BASE_FUNCTIONALITIES,
-  type ImplementationItem,
-} from "@/lib/implementation-items";
+  getConfiguredBaseFunctionalities,
+  withConfiguredWorkItems,
+} from "@/lib/work-activities";
 import type { DnsCheckItem, ImplementationDnsCheck } from "@/lib/implementation-dns";
 import type {
   ImplementationAppointment,
@@ -326,6 +327,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const dealPriceSummary = useMemo(
     () => linkedDeal ? getDealPriceSummary(linkedDeal, pricingConfig) : null,
     [linkedDeal, pricingConfig],
+  );
+  const configuredBaseFunctionalities = useMemo(
+    () => getConfiguredBaseFunctionalities(pricingConfig),
+    [pricingConfig],
+  );
+  const configuredImplementationItems = useMemo(
+    () => implementationItems.map((item) => withConfiguredWorkItems(item, pricingConfig)),
+    [implementationItems, pricingConfig],
   );
 
   const loadRoleAccess = useCallback(async () => {
@@ -1072,10 +1081,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const implementationItemProgress = normalizeImplementationItemProgress(
     implementation.implementation_item_progress,
   );
-  const completedImplementationItems = implementationItems.filter(
+  const completedImplementationItems = configuredImplementationItems.filter(
     (item) => implementationItemProgress[item.key],
   ).length;
-  const completedBaseFunctionalities = IMPLEMENTATION_BASE_FUNCTIONALITIES.filter(
+  const completedBaseFunctionalities = configuredBaseFunctionalities.filter(
     (item) => implementationItemProgress[item.key],
   ).length;
   const expectedOnSiteAppointments = dealPriceSummary?.onSiteAppointments ?? 0;
@@ -1877,11 +1886,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <strong>Basisfunctionaliteiten</strong>
               </div>
               <span>
-                {completedBaseFunctionalities}/{IMPLEMENTATION_BASE_FUNCTIONALITIES.length} afgerond
+                {completedBaseFunctionalities}/{configuredBaseFunctionalities.length} afgerond
               </span>
             </div>
             <div className="implementation-progress-list">
-              {IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => (
+              {configuredBaseFunctionalities.map((item) => (
                 <label
                   key={item.key}
                   className={`implementation-progress-row implementation-progress-check ${
@@ -1892,6 +1901,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   <span className="implementation-item-copy">
                     <strong>{item.label}</strong>
                     <small>{item.description}</small>
+                    {item.workItems && item.workItems.length > 0 ? (
+                      <ul className="implementation-work-items">
+                        {item.workItems.map((workItem, index) => (
+                          <li key={`${item.key}-work-${index}`}>{workItem}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </span>
                   <input
                     type="checkbox"
@@ -1913,7 +1929,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               </div>
               <span>
                 {implementationItemsLoaded && !implementationItemsError
-                  ? `${completedImplementationItems}/${implementationItems.length} afgerond`
+                  ? `${completedImplementationItems}/${configuredImplementationItems.length} afgerond`
                   : "Wordt geladen..."}
               </span>
             </div>
@@ -1926,9 +1942,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <div className="implementation-items-state error">
                   <AlertTriangle size={17} /> {implementationItemsError}
                 </div>
-              ) : implementationItems.length === 0 ? (
+              ) : configuredImplementationItems.length === 0 ? (
                 <div className="implementation-items-state">Geen modules gevonden in de calculator-deal.</div>
-              ) : implementationItems.map((item) => (
+              ) : configuredImplementationItems.map((item) => (
                 <label
                   key={item.key}
                   className={`implementation-progress-row implementation-progress-check ${
@@ -1936,7 +1952,16 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   }`}
                 >
                   <span className="implementation-progress-number"><Package size={15} /></span>
-                  <strong>{item.label}</strong>
+                  <span className="implementation-item-copy">
+                    <strong>{item.label}</strong>
+                    {item.workItems && item.workItems.length > 0 ? (
+                      <ul className="implementation-work-items">
+                        {item.workItems.map((workItem, index) => (
+                          <li key={`${item.key}-work-${index}`}>{workItem}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </span>
                   <input
                     type="checkbox"
                     checked={Boolean(implementationItemProgress[item.key])}

@@ -36,6 +36,7 @@ export type PublicImplementationItem = {
   key: string;
   label: string;
   description?: string;
+  workItems?: string[];
   completed: boolean;
 };
 

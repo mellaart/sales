@@ -7,7 +7,6 @@ import {
   DEFAULT_PRICE_CONFIG,
   normalizePricingConfig,
   type EditablePricingConfig,
-  type ExpansionWorkItemConfig,
   type TravelCostRegion,
 } from "@/lib/price-config";
 import { euro, getVisitsForUsers, type ModuleConfig, type PackageConfig } from "@/lib/pricing";
@@ -154,29 +153,6 @@ function TextPriceInput({
   );
 }
 
-function WorkItemsInput({
-  label,
-  value,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  value: string[];
-  onChange: (value: string[]) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <textarea
-      aria-label={label}
-      className="price-table-input price-work-items-input"
-      disabled={disabled}
-      rows={Math.max(2, value.length)}
-      value={value.join("\n")}
-      onChange={(event) => onChange(event.target.value.split(/\r?\n/))}
-    />
-  );
-}
-
 export default function PricesDashboard() {
   const { role } = useAuth();
   const router = useRouter();
@@ -276,15 +252,6 @@ export default function PricesDashboard() {
     }));
   }
 
-  function updateModuleWorkItems(moduleKey: string, workItems: string[]) {
-    setDraftConfig((currentConfig) => ({
-      ...currentConfig,
-      modules: currentConfig.modules.map((moduleConfig) =>
-        moduleConfig.key === moduleKey ? { ...moduleConfig, workItems } : moduleConfig,
-      ),
-    }));
-  }
-
   function updateCustomerPortalOption(optionKey: string, monthlyPrice: number) {
     updateDraft((currentConfig) => ({
       ...currentConfig,
@@ -308,15 +275,6 @@ export default function PricesDashboard() {
       ...currentConfig,
       serviceCostOptions: currentConfig.serviceCostOptions.map((option) =>
         option.key === optionKey ? { ...option, annualPrice } : option,
-      ),
-    }));
-  }
-
-  function updateExpansionWorkItems(workItemKey: ExpansionWorkItemConfig["key"], workItems: string[]) {
-    setDraftConfig((currentConfig) => ({
-      ...currentConfig,
-      expansionWorkItems: currentConfig.expansionWorkItems.map((item) =>
-        item.key === workItemKey ? { ...item, workItems } : item,
       ),
     }));
   }
@@ -784,45 +742,6 @@ export default function PricesDashboard() {
                   </tr>
                 ))}
 
-              </tbody>
-            </table>
-
-            <table className="price-table work-items-table">
-              <thead>
-                <tr className="price-section-row"><th colSpan={2}>Werkzaamheden offerte</th></tr>
-                <tr>
-                  <th>Onderdeel</th>
-                  <th>Werkzaamheden</th>
-                </tr>
-              </thead>
-              <tbody>
-                {draftConfig.expansionWorkItems.map((item) => (
-                  <tr key={item.key}>
-                    <td>{item.name}</td>
-                    <td>
-                      <WorkItemsInput
-                        label={`${item.name} werkzaamheden offerte`}
-                        value={item.workItems}
-                        disabled={!canEditPrices}
-                        onChange={(value) => updateExpansionWorkItems(item.key, value)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-                <tr className="price-section-row"><td colSpan={2}>Modules</td></tr>
-                {draftConfig.modules.map((moduleConfig) => (
-                  <tr key={`work-items-${moduleConfig.key}`}>
-                    <td>{moduleConfig.name}</td>
-                    <td>
-                      <WorkItemsInput
-                        label={`${moduleConfig.name} werkzaamheden offerte`}
-                        value={moduleConfig.workItems ?? []}
-                        disabled={!canEditPrices}
-                        onChange={(value) => updateModuleWorkItems(moduleConfig.key, value)}
-                      />
-                    </td>
-                  </tr>
-                ))}
               </tbody>
             </table>
 

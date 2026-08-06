@@ -9,10 +9,7 @@ import {
   implementationWebsiteDomain,
   type ImplementationDnsCheck,
 } from "@/lib/implementation-dns";
-import {
-  getImplementationItems,
-  IMPLEMENTATION_BASE_FUNCTIONALITIES,
-} from "@/lib/implementation-items";
+import { getImplementationItems } from "@/lib/implementation-items";
 import {
   isImplementationAppointmentStatus,
   isImplementationAppointmentType,
@@ -29,6 +26,12 @@ import {
   type ImplementationStatus,
 } from "@/lib/implementations";
 import { createId, query } from "@/lib/local-db";
+import { getServiceClient } from "@/lib/admin-api";
+import { readStoredPricingConfig } from "@/lib/price-settings-storage";
+import {
+  getConfiguredBaseFunctionalities,
+  withConfiguredWorkItems,
+} from "@/lib/work-activities";
 
 const IMPLEMENTATION_PORTAL_TTL_DAYS = 365;
 
@@ -456,7 +459,7 @@ export async function getPublicImplementationPortal(
     return { ok: false as const, error: "Deze implementatie is niet meer beschikbaar." };
   }
 
-  const [{ rows: dealRows }, { rows: intakeRows }, appointments] = await Promise.all([
+  const [{ rows: dealRows }, { rows: intakeRows }, appointments, { pricingConfig }] = await Promise.all([
     query<{ modules: unknown; calculator_inputs: unknown }>(
       "select modules, calculator_inputs from public.deals where id = $1 limit 1",
       [implementation.deal_id],
@@ -466,6 +469,7 @@ export async function getPublicImplementationPortal(
       [implementation.deal_id],
     ),
     publicAppointments(access.implementation_id),
+    readStoredPricingConfig(getServiceClient()),
   ]);
 
   const progress = normalizeImplementationProgress(implementation.progress);
@@ -504,11 +508,11 @@ export async function getPublicImplementationPortal(
   const itemProgress = normalizeImplementationItemProgress(implementation.implementation_item_progress);
   const items = deal
     ? getImplementationItems(deal).map((item) => ({
-      ...item,
+      ...withConfiguredWorkItems(item, pricingConfig),
       completed: Boolean(itemProgress[item.key]),
     }))
     : [];
-  const baseFunctionalitySteps = IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => ({
+  const baseFunctionalitySteps = getConfiguredBaseFunctionalities(pricingConfig).map((item) => ({
     ...item,
     completed: Boolean(itemProgress[item.key]),
   }));

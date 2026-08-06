@@ -304,6 +304,13 @@ export default async function ImplementationProgressPage({
                   <strong>{feature.label}</strong>
                 </div>
                 <p>{feature.description}</p>
+                {feature.workItems && feature.workItems.length > 0 ? (
+                  <ul className={styles.activityList}>
+                    {feature.workItems.map((workItem, index) => (
+                      <li key={`${feature.key}-work-${index}`}>{workItem}</li>
+                    ))}
+                  </ul>
+                ) : null}
                 <small>{feature.completed ? "Afgerond" : "In voorbereiding"}</small>
               </article>
             ))}
@@ -322,7 +329,16 @@ export default async function ImplementationProgressPage({
               {portal.items.map((item) => (
                 <div key={item.key} className={item.completed ? styles.done : ""}>
                   <span>{item.completed ? <Check size={17} /> : <PackageCheck size={17} />}</span>
-                  <strong>{item.label}</strong>
+                  <div className={styles.itemCopy}>
+                    <strong>{item.label}</strong>
+                    {item.workItems && item.workItems.length > 0 ? (
+                      <ul className={styles.activityList}>
+                        {item.workItems.map((workItem, index) => (
+                          <li key={`${item.key}-work-${index}`}>{workItem}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                   <small>{item.completed ? "Afgerond" : "In voorbereiding"}</small>
                 </div>
               ))}

@@ -156,6 +156,19 @@ function addBullets(doc: jsPDF, bullets: string[], y: number) {
   return y + 2;
 }
 
+function addWorkGroups(doc: jsPDF, groups: Array<{ label: string; workItems: string[] }>, y: number) {
+  for (const group of groups) {
+    y = ensurePage(doc, y, 16);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(17, 58, 86);
+    doc.text(group.label, 16, y);
+    y = addBullets(doc, group.workItems, y + 6);
+  }
+
+  return y;
+}
+
 function addQuoteHeader(
   doc: jsPDF,
   input: OfferTemplateInput,
@@ -332,27 +345,41 @@ function uniqueWorkItems(items: string[]) {
   });
 }
 
-function getExpansionWorkItems(input: OfferTemplateInput) {
+function getExpansionWorkGroups(input: OfferTemplateInput) {
   const lines = input.assetsExpansion?.lines ?? [];
   const groups = new Set(lines.map((line) => line.group));
-  const workItems: string[] = [];
+  const workGroups: Array<{ label: string; workItems: string[] }> = [];
 
   if (groups.has("Klantenportaal")) {
-    workItems.push(...getConfiguredExpansionWorkItems("customerPortal", input.expansionWorkItems));
+    workGroups.push({
+      label: "Klantportaal",
+      workItems: getConfiguredExpansionWorkItems("customerPortal", input.expansionWorkItems),
+    });
   }
 
   if (groups.has("Smart Connect")) {
-    workItems.push(...getConfiguredExpansionWorkItems("smartConnect", input.expansionWorkItems));
+    workGroups.push({
+      label: "Smart Connect",
+      workItems: getConfiguredExpansionWorkItems("smartConnect", input.expansionWorkItems),
+    });
   }
 
   if (groups.has("Modules") || groups.has("Pakket") || groups.has("Implementatie")) {
     input.selectedModules.forEach((module) => {
-      const moduleWorkItems = Array.isArray(module.workItems) ? module.workItems : getDefaultModuleWorkItems(module.name);
-      workItems.push(...moduleWorkItems);
+      const configuredModule = input.moduleWorkItems?.find((item) => item.key === module.key);
+      const moduleWorkItems = configuredModule
+        ? configuredModule.workItems ?? []
+        : Array.isArray(module.workItems)
+          ? module.workItems
+          : getDefaultModuleWorkItems(module.name);
+      workGroups.push({
+        label: configuredModule?.name || module.name,
+        workItems: uniqueWorkItems(moduleWorkItems),
+      });
     });
   }
 
-  return uniqueWorkItems(workItems);
+  return workGroups.filter((group) => group.workItems.length > 0);
 }
 
 function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansionLine[], y: number, travelCostTotal = 0) {
@@ -594,10 +621,10 @@ async function buildQuotePdf(input: OfferTemplateInput) {
     const expansionTravelCostTotal = input.includeTravelCosts ? input.travelCostTotal ?? 0 : 0;
     y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2, expansionTravelCostTotal);
 
-    const expansionWorkItems = getExpansionWorkItems(input);
-    if (expansionWorkItems.length > 0) {
+    const expansionWorkGroups = getExpansionWorkGroups(input);
+    if (expansionWorkGroups.length > 0) {
       y = addSectionTitle(doc, "Werkzaamheden", y + 2);
-      y = addBullets(doc, expansionWorkItems, y);
+      y = addWorkGroups(doc, expansionWorkGroups, y);
     }
 
     const guidanceText = input.assetsExpansion?.guidanceText?.trim();

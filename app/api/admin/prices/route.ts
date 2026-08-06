@@ -19,10 +19,17 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-type PriceSettingsTabKey = Extract<AppTabKey, "prices" | "postcode">;
+type PriceSettingsTabKey = Extract<AppTabKey, "prices" | "postcode" | "workActivities">;
 
 function normalizePriceSettingsTabKey(value: unknown): PriceSettingsTabKey {
-  return value === "postcode" ? "postcode" : "prices";
+  if (value === "postcode" || value === "workActivities") return value;
+  return "prices";
+}
+
+function settingsLabel(tabKey: PriceSettingsTabKey) {
+  if (tabKey === "postcode") return "Postcode";
+  if (tabKey === "workActivities") return "Werkzaamheden";
+  return "Prijzen";
 }
 
 async function verifyCanWritePriceSettings(request: Request, service: ServiceClient, tabKey: PriceSettingsTabKey) {
@@ -55,7 +62,7 @@ async function verifyCanWritePriceSettings(request: Request, service: ServiceCli
   const roleTabAccess = await readRoleTabAccess(service);
 
   if (!canWriteTab(role, tabKey, roleTabAccess)) {
-    return { ok: false as const, message: `Geen schrijfrechten voor ${tabKey === "postcode" ? "Postcode" : "Prijzen"}.` };
+    return { ok: false as const, message: `Geen schrijfrechten voor ${settingsLabel(tabKey)}.` };
   }
 
   return { ok: true as const };

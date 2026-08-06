@@ -937,7 +937,7 @@ export default function AdminDashboard() {
 
           <div className="save-status">
             {roleTabStatus ||
-              "Wijzig een selectie om de rechten voor Calculator, Deals, Assets, Implementatie, Testen, Prijzen en Admin per rol te beheren."}
+              "Wijzig een selectie om de rechten voor Calculator, Deals, Assets, Implementatie, Testen, Prijzen, Werkzaamheden en Admin per rol te beheren."}
           </div>
         </section>
 

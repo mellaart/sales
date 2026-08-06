@@ -392,6 +392,7 @@ export default function PriceCalculator() {
         quoteLayout: "standard",
         assetsExpansion: null,
         expansionWorkItems: pricingConfig.expansionWorkItems,
+        moduleWorkItems: pricingConfig.modules,
       });
       setStatus("PDF is gemaakt.");
     } catch (error) {

@@ -149,7 +149,6 @@ export default async function ImplementationProgressPage({
           <div className={styles.heroCopy}>
             <span className={styles.eyebrow}>Implementatie voor {portal.customerName}</span>
             <h1>Uw voortgang bij Smart Trade</h1>
-            <p>{portal.quoteTitle}</p>
           </div>
           <div className={styles.statusBlock}>
             <span>Huidige status</span>

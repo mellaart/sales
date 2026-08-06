@@ -42,6 +42,13 @@ type WorkLinesEditorProps = {
   onChange: (value: string[]) => void;
 };
 
+type DescriptionEditorProps = {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+};
+
 function clonePricingConfig(config: EditablePricingConfig) {
   return normalizePricingConfig(JSON.parse(JSON.stringify(config)) as unknown);
 }
@@ -94,6 +101,21 @@ function WorkLinesEditor({ label, value, disabled, onChange }: WorkLinesEditorPr
         <Plus size={16} /> Regel toevoegen
       </button>
     </div>
+  );
+}
+
+function DescriptionEditor({ label, value, disabled, onChange }: DescriptionEditorProps) {
+  return (
+    <label className="work-description-editor">
+      <span>{label}</span>
+      <textarea
+        rows={2}
+        value={value}
+        disabled={disabled}
+        placeholder="Vul de omschrijving voor de klantpagina in"
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 
@@ -161,10 +183,26 @@ export default function WorkActivitiesDashboard() {
     }));
   }
 
+  function updateBaseDescription(key: string, description: string) {
+    setDraftConfig((current) => ({
+      ...current,
+      baseFunctionalityWorkItems: current.baseFunctionalityWorkItems.map((item) => (
+        item.key === key ? { ...item, description } : item
+      )),
+    }));
+  }
+
   function updateModuleWorkItems(key: string, workItems: string[]) {
     setDraftConfig((current) => ({
       ...current,
       modules: current.modules.map((item) => item.key === key ? { ...item, workItems } : item),
+    }));
+  }
+
+  function updateModuleDescription(key: string, description: string) {
+    setDraftConfig((current) => ({
+      ...current,
+      modules: current.modules.map((item) => item.key === key ? { ...item, description } : item),
     }));
   }
 
@@ -173,6 +211,24 @@ export default function WorkActivitiesDashboard() {
       ...current,
       expansionWorkItems: current.expansionWorkItems.map((item) => (
         item.key === key ? { ...item, workItems } : item
+      )),
+    }));
+  }
+
+  function updateExpansionDescription(key: string, description: string) {
+    setDraftConfig((current) => ({
+      ...current,
+      expansionWorkItems: current.expansionWorkItems.map((item) => (
+        item.key === key ? { ...item, description } : item
+      )),
+    }));
+  }
+
+  function updateCustomerPortalDescription(key: string, description: string) {
+    setDraftConfig((current) => ({
+      ...current,
+      customerPortalOptions: current.customerPortalOptions.map((item) => (
+        item.key === key ? { ...item, description } : item
       )),
     }));
   }
@@ -252,7 +308,7 @@ export default function WorkActivitiesDashboard() {
           <div>
             <div className="brand-mark">Admin</div>
             <h1>Werkzaamheden</h1>
-            <p>Beheer per basisfunctionaliteit en module welke werkzaamheden in offertes en implementaties worden getoond.</p>
+            <p>Beheer per onderdeel de klantomschrijving en werkzaamheden voor offertes en implementaties.</p>
           </div>
           <div className="brand-actions">
             <StatusPill tone={loading ? "warning" : "success"}>{loading ? "Laden" : canEdit ? "Schrijven" : "Lezen"}</StatusPill>
@@ -267,7 +323,7 @@ export default function WorkActivitiesDashboard() {
 
         <section className="work-activities-summary">
           <ClipboardList size={20} />
-          <div><strong>{configuredLineCount} werkzaamheden ingesteld</strong><span>Iedere niet-lege regel wordt afzonderlijk getoond.</span></div>
+          <div><strong>{configuredLineCount} werkzaamheden ingesteld</strong><span>Omschrijvingen worden op de klantpagina getoond; iedere niet-lege werkzaamheid wordt afzonderlijk verwerkt.</span></div>
         </section>
 
         <section className="card work-activities-section">
@@ -280,13 +336,21 @@ export default function WorkActivitiesDashboard() {
               const config = draftConfig.baseFunctionalityWorkItems.find((row) => row.key === item.key);
               return (
                 <article className="work-activity-group" key={item.key}>
-                  <div className="work-activity-label"><strong>{item.label}</strong><span>{item.description}</span></div>
-                  <WorkLinesEditor
-                    label={item.label}
-                    value={config?.workItems ?? []}
-                    disabled={!canEdit || saving}
-                    onChange={(workItems) => updateBaseWorkItems(item.key, workItems)}
-                  />
+                  <div className="work-activity-label"><strong>{item.label}</strong><span>Standaard pakketonderdeel</span></div>
+                  <div className="work-activity-content">
+                    <DescriptionEditor
+                      label="Omschrijving klantpagina"
+                      value={config?.description ?? item.description}
+                      disabled={!canEdit || saving}
+                      onChange={(description) => updateBaseDescription(item.key, description)}
+                    />
+                    <WorkLinesEditor
+                      label={item.label}
+                      value={config?.workItems ?? []}
+                      disabled={!canEdit || saving}
+                      onChange={(workItems) => updateBaseWorkItems(item.key, workItems)}
+                    />
+                  </div>
                 </article>
               );
             })}
@@ -302,23 +366,53 @@ export default function WorkActivitiesDashboard() {
             {draftConfig.expansionWorkItems.map((item) => (
               <article className="work-activity-group" key={item.key}>
                 <div className="work-activity-label"><strong>{item.name}</strong><span>Koppeling of uitbreiding</span></div>
-                <WorkLinesEditor
-                  label={item.name}
-                  value={item.workItems}
-                  disabled={!canEdit || saving}
-                  onChange={(workItems) => updateExpansionWorkItems(item.key, workItems)}
-                />
+                <div className="work-activity-content">
+                  {item.key === "customerPortal" ? (
+                    <div className="work-description-list">
+                      {draftConfig.customerPortalOptions.map((option) => (
+                        <DescriptionEditor
+                          key={option.key}
+                          label={`Klantportaal - ${option.name}`}
+                          value={option.description ?? item.description}
+                          disabled={!canEdit || saving}
+                          onChange={(description) => updateCustomerPortalDescription(option.key, description)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <DescriptionEditor
+                      label="Omschrijving klantpagina"
+                      value={item.description}
+                      disabled={!canEdit || saving}
+                      onChange={(description) => updateExpansionDescription(item.key, description)}
+                    />
+                  )}
+                  <WorkLinesEditor
+                    label={item.name}
+                    value={item.workItems}
+                    disabled={!canEdit || saving}
+                    onChange={(workItems) => updateExpansionWorkItems(item.key, workItems)}
+                  />
+                </div>
               </article>
             ))}
             {draftConfig.modules.map((item) => (
               <article className="work-activity-group" key={item.key}>
                 <div className="work-activity-label"><strong>{item.name}</strong><span>Smart Trade-module</span></div>
-                <WorkLinesEditor
-                  label={item.name}
-                  value={item.workItems ?? []}
-                  disabled={!canEdit || saving}
-                  onChange={(workItems) => updateModuleWorkItems(item.key, workItems)}
-                />
+                <div className="work-activity-content">
+                  <DescriptionEditor
+                    label="Omschrijving klantpagina"
+                    value={item.description ?? ""}
+                    disabled={!canEdit || saving}
+                    onChange={(description) => updateModuleDescription(item.key, description)}
+                  />
+                  <WorkLinesEditor
+                    label={item.name}
+                    value={item.workItems ?? []}
+                    disabled={!canEdit || saving}
+                    onChange={(workItems) => updateModuleWorkItems(item.key, workItems)}
+                  />
+                </div>
               </article>
             ))}
           </div>

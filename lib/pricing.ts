@@ -12,12 +12,36 @@ export type PackageConfig = {
 export type ModuleConfig = {
   key: string;
   name: string;
+  description?: string;
   monthlyPrice: number;
   setupCost?: number;
   dependencyNote?: string | null;
   noPackageSwitch?: boolean;
   requiresTravel?: boolean;
   workItems?: string[];
+};
+
+export const MODULE_DESCRIPTIONS: Record<string, string> = {
+  mailchimp: "Maak gerichte mailings op basis van actuele klantgroepen en relatiegegevens uit Smart Trade.",
+  rapportage: "Genereer overzichtelijke rapporten en krijg meer inzicht in bedrijfsprocessen en resultaten.",
+  scanHerken: "Digitaliseer documenten en vereenvoudig de verwerking binnen het in- en verkoopproces.",
+  statistiekenPlus: "Analyseer aanvullende bedrijfsgegevens en stuur gericht bij op basis van actuele inzichten.",
+  digitaleOndertekening: "Laat documenten digitaal ondertekenen en bewaar ze direct zonder papieren archief.",
+  leverschema: "Leg leverafspraken overzichtelijk vast en houd geplande leveringen centraal inzichtelijk.",
+  postnl: "Maak en verwerk PostNL-zendingen vanuit Smart Trade en voorkom dubbele invoer.",
+  suiteMkb: "Wissel administratieve gegevens efficiënt uit tussen Smart Trade en Suite MKB.",
+  powerbi: "Gebruik Smart Trade-gegevens in Power BI voor interactieve dashboards en verdiepende analyses.",
+  kassa: "Reken snel en foutloos af met een gebruiksvriendelijke kassa die direct is gekoppeld aan de backoffice.",
+  terrein: "Geef orderpickers op het terrein actuele digitale informatie voor een snellere orderafhandeling.",
+  voorraad: "Beheer voorraad centraal, werk met slim besteladvies en houd grip op meerdere magazijnen.",
+  partijregistratie: "Leg batches, inkoopgroepen en serienummers vast voor volledige herleidbaarheid van artikelen.",
+  chauffeurs: "Laat chauffeurs leveringen onderweg digitaal afhandelen en houd de transportstatus actueel.",
+  assets: "Registreer en beheer apparaten, objecten en andere assets inclusief status, onderhoud en historie.",
+  ticketing: "Werk taakgestuurd en houd vragen, acties en communicatie per klant overzichtelijk bij elkaar.",
+  contracten: "Registreer en bewaak contracten, abonnementen en serviceafspraken vanuit één centraal overzicht.",
+  verhuur: "Beheer verhuurafspraken, looptijden en gekoppelde objecten vanuit Smart Trade.",
+  prijsstaffels: "Leg uitgebreide prijsafspraken en staffels vast, zodat automatisch de juiste prijs wordt toegepast.",
+  hoveniersapp: "Laat hoveniers opdrachten en werkzaamheden op locatie ontvangen, uitvoeren en terugmelden.",
 };
 
 export const IMPLEMENTATION_DAY_RATE = 720;
@@ -127,26 +151,26 @@ export const PACKAGES: PackageConfig[] = [
 ];
 
 export const MODULES: ModuleConfig[] = [
-  { key: "mailchimp", name: "Mailchimp", monthlyPrice: 27.5 },
-  { key: "rapportage", name: "Rapportage", monthlyPrice: 27.5 },
-  { key: "scanHerken", name: "Scan & Herken", monthlyPrice: 55 },
-  { key: "statistiekenPlus", name: "Statistieken plus", monthlyPrice: 27.5 },
-  { key: "digitaleOndertekening", name: "Digitale ondertekening", monthlyPrice: 27.5 },
-  { key: "leverschema", name: "Leverschema", monthlyPrice: 27.5 },
-  { key: "postnl", name: "PostNL", monthlyPrice: 0 },
-  { key: "suiteMkb", name: "Suite MKB koppeling", monthlyPrice: 30.15 },
-  { key: "powerbi", name: "Power BI", monthlyPrice: 55 },
-  { key: "kassa", name: "Kassa", monthlyPrice: 55 },
-  { key: "terrein", name: "Terrein automatisering", monthlyPrice: 55 },
-  { key: "voorraad", name: "Voorraad", monthlyPrice: 55 },
-  { key: "partijregistratie", name: "Partijregistratie", monthlyPrice: 55 },
-  { key: "chauffeurs", name: "Chauffeurs automatisering", monthlyPrice: 55 },
-  { key: "assets", name: "Assets", monthlyPrice: 55 },
-  { key: "ticketing", name: "Ticketing", monthlyPrice: 55 },
-  { key: "contracten", name: "Contracten", monthlyPrice: 55 },
-  { key: "verhuur", name: "Verhuur", monthlyPrice: 55 },
-  { key: "prijsstaffels", name: "Uitgebreide prijsstaffels", monthlyPrice: 55 },
-  { key: "hoveniersapp", name: "Hoveniersapp", monthlyPrice: 55 },
+  { key: "mailchimp", name: "Mailchimp", description: MODULE_DESCRIPTIONS.mailchimp, monthlyPrice: 27.5 },
+  { key: "rapportage", name: "Rapportage", description: MODULE_DESCRIPTIONS.rapportage, monthlyPrice: 27.5 },
+  { key: "scanHerken", name: "Scan & Herken", description: MODULE_DESCRIPTIONS.scanHerken, monthlyPrice: 55 },
+  { key: "statistiekenPlus", name: "Statistieken plus", description: MODULE_DESCRIPTIONS.statistiekenPlus, monthlyPrice: 27.5 },
+  { key: "digitaleOndertekening", name: "Digitale ondertekening", description: MODULE_DESCRIPTIONS.digitaleOndertekening, monthlyPrice: 27.5 },
+  { key: "leverschema", name: "Leverschema", description: MODULE_DESCRIPTIONS.leverschema, monthlyPrice: 27.5 },
+  { key: "postnl", name: "PostNL", description: MODULE_DESCRIPTIONS.postnl, monthlyPrice: 0 },
+  { key: "suiteMkb", name: "Suite MKB koppeling", description: MODULE_DESCRIPTIONS.suiteMkb, monthlyPrice: 30.15 },
+  { key: "powerbi", name: "Power BI", description: MODULE_DESCRIPTIONS.powerbi, monthlyPrice: 55 },
+  { key: "kassa", name: "Kassa", description: MODULE_DESCRIPTIONS.kassa, monthlyPrice: 55 },
+  { key: "terrein", name: "Terrein automatisering", description: MODULE_DESCRIPTIONS.terrein, monthlyPrice: 55 },
+  { key: "voorraad", name: "Voorraad", description: MODULE_DESCRIPTIONS.voorraad, monthlyPrice: 55 },
+  { key: "partijregistratie", name: "Partijregistratie", description: MODULE_DESCRIPTIONS.partijregistratie, monthlyPrice: 55 },
+  { key: "chauffeurs", name: "Chauffeurs automatisering", description: MODULE_DESCRIPTIONS.chauffeurs, monthlyPrice: 55 },
+  { key: "assets", name: "Assets", description: MODULE_DESCRIPTIONS.assets, monthlyPrice: 55 },
+  { key: "ticketing", name: "Ticketing", description: MODULE_DESCRIPTIONS.ticketing, monthlyPrice: 55 },
+  { key: "contracten", name: "Contracten", description: MODULE_DESCRIPTIONS.contracten, monthlyPrice: 55 },
+  { key: "verhuur", name: "Verhuur", description: MODULE_DESCRIPTIONS.verhuur, monthlyPrice: 55 },
+  { key: "prijsstaffels", name: "Uitgebreide prijsstaffels", description: MODULE_DESCRIPTIONS.prijsstaffels, monthlyPrice: 55 },
+  { key: "hoveniersapp", name: "Hoveniersapp", description: MODULE_DESCRIPTIONS.hoveniersapp, monthlyPrice: 55 },
 ];
 
 export type PricingInput = {

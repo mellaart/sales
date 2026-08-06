@@ -340,6 +340,9 @@ export default async function ImplementationProgressPage({
                   <span>{item.completed ? <Check size={17} /> : <PackageCheck size={17} />}</span>
                   <div className={styles.itemCopy}>
                     <strong>{item.label}</strong>
+                    {item.description ? (
+                      <p className={styles.itemDescription}>{item.description}</p>
+                    ) : null}
                     {item.workItems.length > 0 ? (
                       <ul className={styles.activityList}>
                         {item.workItems.map((workItem) => (

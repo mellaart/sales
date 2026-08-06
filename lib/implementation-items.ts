@@ -57,12 +57,24 @@ export function getImplementationItems(deal: DealImplementationSource): Implemen
   const moduleNames = new Map(
     DEFAULT_PRICE_CONFIG.modules.map((module) => [module.key, module.name]),
   );
+  const moduleDescriptions = new Map(
+    DEFAULT_PRICE_CONFIG.modules.map((module) => [module.key, module.description]),
+  );
+  const moduleDescriptionsByName = new Map(
+    DEFAULT_PRICE_CONFIG.modules.map((module) => [
+      keyPart(module.name),
+      module.description,
+    ]),
+  );
   const customerPortalNames = new Map(
     DEFAULT_PRICE_CONFIG.customerPortalOptions.map((option) => [option.key, option.name]),
   );
+  const customerPortalDescriptions = new Map(
+    DEFAULT_PRICE_CONFIG.customerPortalOptions.map((option) => [option.key, option.description]),
+  );
   const items = new Map<string, ImplementationItem>();
-  const addItem = (key: string, label: string) => {
-    if (!items.has(key)) items.set(key, { key, label });
+  const addItem = (key: string, label: string, description?: string) => {
+    if (!items.has(key)) items.set(key, { key, label, description });
   };
 
   for (const value of asArray(deal.modules)) {
@@ -77,6 +89,7 @@ export function getImplementationItems(deal: DealImplementationSource): Implemen
     addItem(
       `module:${moduleKey || keyPart(moduleName)}`,
       quantity > 1 ? `${quantity}x ${moduleName}` : moduleName,
+      moduleDescriptions.get(moduleKey) || moduleDescriptionsByName.get(keyPart(moduleName)),
     );
   }
 
@@ -91,6 +104,7 @@ export function getImplementationItems(deal: DealImplementationSource): Implemen
       addItem(
         `customer-portal:${optionKey || keyPart(optionName)}`,
         `Klantportaal - ${optionName}`,
+        customerPortalDescriptions.get(optionKey),
       );
     }
   } else {
@@ -98,7 +112,11 @@ export function getImplementationItems(deal: DealImplementationSource): Implemen
       const optionKey = textValue(value);
       const optionName = customerPortalNames.get(optionKey) || optionKey;
       if (!optionName) continue;
-      addItem(`customer-portal:${optionKey}`, `Klantportaal - ${optionName}`);
+      addItem(
+        `customer-portal:${optionKey}`,
+        `Klantportaal - ${optionName}`,
+        customerPortalDescriptions.get(optionKey),
+      );
     }
   }
 
@@ -110,6 +128,7 @@ export function getImplementationItems(deal: DealImplementationSource): Implemen
     addItem(
       "smart-connect",
       `Smart Connect - ${smartConnectConnections} ${smartConnectConnections === 1 ? "connectie" : "connecties"}`,
+      "Koppel Smart Trade met externe toepassingen en wissel gegevens automatisch uit.",
     );
   }
 
@@ -120,6 +139,7 @@ export function getImplementationItems(deal: DealImplementationSource): Implemen
     addItem(
       "planning-app",
       `Planningsapp - ${planningAppUsers} ${planningAppUsers === 1 ? "gebruiker" : "gebruikers"}`,
+      "Zet vanuit de planning opdrachten overzichtelijk uit en houd de uitvoering centraal bij.",
     );
   }
 

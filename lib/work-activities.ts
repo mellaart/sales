@@ -91,8 +91,30 @@ export function withConfiguredWorkItems(
   item: ImplementationItem,
   pricingConfig: EditablePricingConfig,
 ): ImplementationItem {
+  let description = item.description;
+
+  if (item.key.startsWith("base:")) {
+    description = pricingConfig.baseFunctionalityWorkItems.find((row) => row.key === item.key)?.description
+      ?? description;
+  } else if (item.key.startsWith("module:")) {
+    const moduleKey = item.key.slice("module:".length);
+    description = pricingConfig.modules.find((row) => row.key === moduleKey)?.description ?? description;
+  } else if (item.key.startsWith("customer-portal:")) {
+    const optionKey = item.key.slice("customer-portal:".length);
+    description = pricingConfig.customerPortalOptions.find((row) => row.key === optionKey)?.description
+      ?? pricingConfig.expansionWorkItems.find((row) => row.key === "customerPortal")?.description
+      ?? description;
+  } else {
+    const expansionKey = expansionKeyForImplementationItem(item.key);
+    if (expansionKey) {
+      description = pricingConfig.expansionWorkItems.find((row) => row.key === expansionKey)?.description
+        ?? description;
+    }
+  }
+
   return {
     ...item,
+    description,
     workItems: getImplementationWorkItems(pricingConfig, item.key),
   };
 }

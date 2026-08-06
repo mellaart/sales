@@ -3683,6 +3683,55 @@ td {
   min-width: 0;
 }
 
+.work-activity-content,
+.work-description-list {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.work-description-list {
+  gap: 12px;
+}
+
+.work-description-editor {
+  display: grid;
+  gap: 7px;
+  color: #aebed4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.work-description-editor textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 11px 12px;
+  resize: vertical;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  outline: none;
+}
+
+.work-description-editor textarea:focus {
+  border-color: rgba(96, 165, 250, 0.68);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.work-description-editor textarea::placeholder {
+  color: rgba(203, 213, 225, 0.45);
+}
+
+.work-description-editor textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .work-lines-list {
   display: grid;
   gap: 8px;

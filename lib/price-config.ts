@@ -11,6 +11,7 @@ import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/base-functionalities"
 export type CustomerPortalPriceOption = {
   key: string;
   name: string;
+  description?: string;
   monthlyPrice: number;
 };
 
@@ -42,6 +43,7 @@ export type PostcodeRegion = {
 
 export type BaseFunctionalityWorkItemConfig = {
   key: string;
+  description: string;
   workItems: string[];
 };
 
@@ -50,6 +52,7 @@ export type ExpansionWorkItemKey = "customerPortal" | "smartConnect" | "planning
 export type ExpansionWorkItemConfig = {
   key: ExpansionWorkItemKey;
   name: string;
+  description: string;
   workItems: string[];
 };
 
@@ -141,10 +144,10 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     workItems: getDefaultModuleWorkItems(module.name),
   })),
   customerPortalOptions: [
-    { key: "facturenBetalen", name: "Facturen betalen", monthlyPrice: 30.15 },
-    { key: "offertesOrdersMaken", name: "Offertes en orders maken", monthlyPrice: 60.3 },
-    { key: "offertesInzienGoedkeuren", name: "Offertes inzien en goedkeuren", monthlyPrice: 12.05 },
-    { key: "assortiment", name: "Assortiment", monthlyPrice: 36.15 },
+    { key: "facturenBetalen", name: "Facturen betalen", description: "Laat klanten openstaande facturen veilig en eenvoudig via het klantportaal betalen.", monthlyPrice: 30.15 },
+    { key: "offertesOrdersMaken", name: "Offertes en orders maken", description: "Laat klanten zelf offertes en orders maken binnen een veilige online omgeving.", monthlyPrice: 60.3 },
+    { key: "offertesInzienGoedkeuren", name: "Offertes inzien en goedkeuren", description: "Geef klanten online inzicht in offertes en laat ze deze digitaal goedkeuren.", monthlyPrice: 12.05 },
+    { key: "assortiment", name: "Assortiment", description: "Geef klanten toegang tot het assortiment en laat producten online selecteren en bestellen.", monthlyPrice: 36.15 },
   ],
   smartConnectTiers: [
     { connections: 1, monthlyPrice: 30.15 },
@@ -161,12 +164,14 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
   ],
   baseFunctionalityWorkItems: IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => ({
     key: item.key,
+    description: item.description,
     workItems: [],
   })),
   expansionWorkItems: [
     {
       key: "customerPortal",
       name: "Klantportaal",
+      description: "Geef klanten een veilige online omgeving die direct is gekoppeld aan Smart Trade.",
       workItems: [
         "Configuratie van het klantportaal en SSL-certificaat",
         "Klantportaal instellen en koppeling maken met Smart Trade administratie",
@@ -175,6 +180,7 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     {
       key: "smartConnect",
       name: "Smart Connect",
+      description: "Koppel Smart Trade met externe toepassingen en wissel gegevens automatisch uit.",
       workItems: [
         "Smart Connect configureren",
         "Koppeling maken met de Smart Trade administratie",
@@ -183,6 +189,7 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     {
       key: "planningApp",
       name: "Planningsapp",
+      description: "Zet vanuit de planning opdrachten overzichtelijk uit en houd de uitvoering centraal bij.",
       workItems: [],
     },
   ],
@@ -341,6 +348,9 @@ function normalizeModule(input: unknown, fallback: ModuleConfig): ModuleConfig {
   return {
     key: fallback.key,
     name: typeof source.name === "string" ? source.name : fallback.name,
+    description: typeof source.description === "string"
+      ? source.description.trim()
+      : fallback.description,
     monthlyPrice: safeNumber(source.monthlyPrice, fallback.monthlyPrice),
     setupCost: safeNumber(source.setupCost, fallback.setupCost ?? 0),
     dependencyNote: typeof source.dependencyNote === "string" && source.dependencyNote.trim()
@@ -361,6 +371,9 @@ function normalizeCustomerPortalOption(
   return {
     key: fallback.key,
     name: typeof source.name === "string" ? source.name : fallback.name,
+    description: typeof source.description === "string"
+      ? source.description.trim()
+      : fallback.description,
     monthlyPrice: safeNumber(source.monthlyPrice, fallback.monthlyPrice),
   };
 }
@@ -490,6 +503,9 @@ function normalizeExpansionWorkItems(input: unknown, fallback: ExpansionWorkItem
   return {
     key: fallback.key,
     name: typeof source.name === "string" && source.name.trim() ? source.name.trim() : fallback.name,
+    description: typeof source.description === "string"
+      ? source.description.trim()
+      : fallback.description,
     workItems: workItems ?? fallback.workItems,
   };
 }
@@ -503,6 +519,9 @@ function normalizeBaseFunctionalityWorkItems(
 
   return {
     key: fallback.key,
+    description: typeof source.description === "string"
+      ? source.description.trim()
+      : fallback.description,
     workItems: workItems ?? fallback.workItems,
   };
 }

@@ -1126,6 +1126,23 @@ select option {
   font-size: 14px;
 }
 
+.implementation-item-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.implementation-item-copy strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.implementation-item-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .implementation-progress-number {
   display: grid;
   place-items: center;
@@ -1153,6 +1170,14 @@ select option {
 
 .implementation-progress-row.completed > strong {
   color: #bbf7d0;
+}
+
+.implementation-progress-row.completed .implementation-item-copy strong {
+  color: #bbf7d0;
+}
+
+.implementation-progress-row.completed .implementation-item-copy small {
+  color: #86efac;
 }
 
 .implementation-progress-row.requires-action {

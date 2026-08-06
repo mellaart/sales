@@ -9,7 +9,10 @@ import {
   implementationWebsiteDomain,
   type ImplementationDnsCheck,
 } from "@/lib/implementation-dns";
-import { getImplementationItems } from "@/lib/implementation-items";
+import {
+  getImplementationItems,
+  IMPLEMENTATION_BASE_FUNCTIONALITIES,
+} from "@/lib/implementation-items";
 import {
   isImplementationAppointmentStatus,
   isImplementationAppointmentType,
@@ -505,7 +508,11 @@ export async function getPublicImplementationPortal(
       completed: Boolean(itemProgress[item.key]),
     }))
     : [];
-  const allSteps = [...milestones, ...items];
+  const baseFunctionalitySteps = IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => ({
+    ...item,
+    completed: Boolean(itemProgress[item.key]),
+  }));
+  const allSteps = [...milestones, ...baseFunctionalitySteps, ...items];
   const completedSteps = allSteps.filter((step) => step.completed).length;
   const dnsDomain = intake?.submitted_at
     ? implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website)

@@ -18,6 +18,7 @@ import {
   IMPLEMENTATION_DNS_RECORDS,
   type DnsCheckItem,
 } from "@/lib/implementation-dns";
+import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/implementation-items";
 import { getPublicImplementationPortal } from "@/lib/implementation-portal-server";
 import styles from "./implementation-progress.module.css";
 
@@ -42,53 +43,6 @@ const dateTimeFormatter = new Intl.DateTimeFormat("nl-NL", {
   hour: "2-digit",
   minute: "2-digit",
 });
-
-const BASE_FUNCTIONALITIES = [
-  {
-    name: "Relatiebeheer",
-    description: "Beheer interacties met klanten en leveranciers voor duurzame relaties.",
-  },
-  {
-    name: "Offertes",
-    description: "Maak en beheer gepersonaliseerde offertes met klantspecifieke afspraken.",
-  },
-  {
-    name: "Orders",
-    description: "Registreer en volg klantorders van plaatsing tot aflevering efficiënt.",
-  },
-  {
-    name: "Facturen",
-    description: "Genereer en verstuur facturen automatisch op basis van orders.",
-  },
-  {
-    name: "Artikelbeheer",
-    description: "Beheer productinformatie, prijzen en voorraadniveaus.",
-  },
-  {
-    name: "Gebruikersbeheer",
-    description: "Beheer toegangsrechten en rollen van gebruikers voor veiligheid.",
-  },
-  {
-    name: "Inkopen",
-    description: "Beheer voorraden nauwkeurig om overstock en stockouts te voorkomen.",
-  },
-  {
-    name: "Statistieken",
-    description: "Analyseer bedrijfsgegevens voor betere besluitvorming.",
-  },
-  {
-    name: "Sjablonen",
-    description: "Pas e-mail, offerte, order- en factuursjablonen aan naar wens.",
-  },
-  {
-    name: "API",
-    description: "Integreer externe applicaties met het ERP via een flexibele API.",
-  },
-  {
-    name: "Smart Login",
-    description: "Veilig en eenvoudig inloggen voor al je administraties.",
-  },
-] as const;
 
 function formatDate(value: string | null) {
   if (!value) return "Nog niet gepland";
@@ -337,9 +291,9 @@ export default async function ImplementationProgressPage({
             <p>Standaard inbegrepen in {portal.packageName}.</p>
           </div>
           <div className={styles.baseFeatureGrid}>
-            {BASE_FUNCTIONALITIES.map((feature) => (
-              <article key={feature.name} className={styles.baseFeatureCard}>
-                <div><Check size={20} aria-hidden="true" /><strong>{feature.name}</strong></div>
+            {IMPLEMENTATION_BASE_FUNCTIONALITIES.map((feature) => (
+              <article key={feature.key} className={styles.baseFeatureCard}>
+                <div><Check size={20} aria-hidden="true" /><strong>{feature.label}</strong></div>
                 <p>{feature.description}</p>
               </article>
             ))}

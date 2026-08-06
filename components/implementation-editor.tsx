@@ -45,7 +45,10 @@ import {
   type ImplementationProgressKey,
   type ImplementationStatus,
 } from "@/lib/implementations";
-import type { ImplementationItem } from "@/lib/implementation-items";
+import {
+  IMPLEMENTATION_BASE_FUNCTIONALITIES,
+  type ImplementationItem,
+} from "@/lib/implementation-items";
 import type { DnsCheckItem, ImplementationDnsCheck } from "@/lib/implementation-dns";
 import type {
   ImplementationAppointment,
@@ -1072,6 +1075,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const completedImplementationItems = implementationItems.filter(
     (item) => implementationItemProgress[item.key],
   ).length;
+  const completedBaseFunctionalities = IMPLEMENTATION_BASE_FUNCTIONALITIES.filter(
+    (item) => implementationItemProgress[item.key],
+  ).length;
   const expectedOnSiteAppointments = dealPriceSummary?.onSiteAppointments ?? 0;
   const scheduledOnSiteAppointments = appointments.filter(
     (appointment) => appointment.appointmentType === "on_site",
@@ -1867,8 +1873,43 @@ export default function ImplementationEditor({ implementationId }: { implementat
           <div className="implementation-progress-block implementation-items-progress">
             <div className="implementation-progress-heading">
               <div>
-                <span>Modules</span>
-                <strong>Voortgang implementatie</strong>
+                <span>Pakket</span>
+                <strong>Basisfunctionaliteiten</strong>
+              </div>
+              <span>
+                {completedBaseFunctionalities}/{IMPLEMENTATION_BASE_FUNCTIONALITIES.length} afgerond
+              </span>
+            </div>
+            <div className="implementation-progress-list">
+              {IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => (
+                <label
+                  key={item.key}
+                  className={`implementation-progress-row implementation-progress-check ${
+                    implementationItemProgress[item.key] ? "completed" : ""
+                  }`}
+                >
+                  <span className="implementation-progress-number"><ClipboardCheck size={15} /></span>
+                  <span className="implementation-item-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.description}</small>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(implementationItemProgress[item.key])}
+                    disabled={!canEdit || saving}
+                    aria-label={`${item.label} afgerond`}
+                    onChange={(event) => updateImplementationItem(item, event.target.checked)}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="implementation-progress-block implementation-items-progress">
+            <div className="implementation-progress-heading">
+              <div>
+                <span>Uitbreidingen</span>
+                <strong>Modules en koppelingen</strong>
               </div>
               <span>
                 {implementationItemsLoaded && !implementationItemsError

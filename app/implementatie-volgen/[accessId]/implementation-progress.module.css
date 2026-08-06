@@ -501,7 +501,7 @@
 
 .activityList {
   display: grid;
-  gap: 6px;
+  gap: 9px;
   margin: 12px 0 0;
   padding: 12px 0 0;
   border-top: 1px solid #e1e9f2;
@@ -509,19 +509,42 @@
 }
 
 .activityList li {
-  position: relative;
-  padding-left: 15px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 2px 8px;
   color: #46617f;
   font-size: 14px;
   line-height: 1.45;
 }
 
-.activityList li::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  color: #2f7ad7;
-  content: "•";
+.activityStatus {
+  display: grid;
+  grid-row: 1 / 3;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid #b9cbe0;
+  border-radius: 50%;
+  color: #55708e;
+}
+
+.activityList li > small {
+  grid-column: 2;
+  color: #6a7d94;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.activityList .activityDone,
+.activityList .activityDone > small {
+  color: #166c46;
+}
+
+.activityDone .activityStatus {
+  border-color: #2aa66a;
+  background: #2aa66a;
+  color: #ffffff;
 }
 
 .baseFeatureCard > small {
@@ -552,7 +575,7 @@
 }
 
 .baseFeatureDone .activityList li,
-.baseFeatureDone .activityList li::before {
+.baseFeatureDone .activityList li > small {
   color: #166c46;
 }
 
@@ -645,7 +668,7 @@
 }
 
 .itemGrid > .done .activityList li,
-.itemGrid > .done .activityList li::before {
+.itemGrid > .done .activityList li > small {
   color: #166c46;
 }
 

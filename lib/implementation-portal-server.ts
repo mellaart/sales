@@ -30,6 +30,8 @@ import { getServiceClient } from "@/lib/admin-api";
 import { readStoredPricingConfig } from "@/lib/price-settings-storage";
 import {
   getConfiguredBaseFunctionalities,
+  getImplementationWorkItemStatuses,
+  isImplementationItemCompleted,
   withConfiguredWorkItems,
 } from "@/lib/work-activities";
 
@@ -507,16 +509,24 @@ export async function getPublicImplementationPortal(
   const deal = dealRows[0];
   const itemProgress = normalizeImplementationItemProgress(implementation.implementation_item_progress);
   const items = deal
-    ? getImplementationItems(deal).map((item) => ({
-      ...withConfiguredWorkItems(item, pricingConfig),
-      completed: Boolean(itemProgress[item.key]),
-    }))
+    ? getImplementationItems(deal).map((item) => {
+      const configuredItem = withConfiguredWorkItems(item, pricingConfig);
+      return {
+        ...configuredItem,
+        workItems: getImplementationWorkItemStatuses(configuredItem, itemProgress),
+        completed: isImplementationItemCompleted(configuredItem, itemProgress),
+      };
+    })
     : [];
   const baseFunctionalitySteps = getConfiguredBaseFunctionalities(pricingConfig).map((item) => ({
     ...item,
-    completed: Boolean(itemProgress[item.key]),
+    workItems: getImplementationWorkItemStatuses(item, itemProgress),
+    completed: isImplementationItemCompleted(item, itemProgress),
   }));
-  const allSteps = [...milestones, ...baseFunctionalitySteps, ...items];
+  const implementationSteps = [...baseFunctionalitySteps, ...items].flatMap((item) => (
+    item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
+  ));
+  const allSteps = [...milestones, ...implementationSteps];
   const completedSteps = allSteps.filter((step) => step.completed).length;
   const dnsDomain = intake?.submitted_at
     ? implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website)

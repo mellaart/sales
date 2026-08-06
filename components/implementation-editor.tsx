@@ -48,6 +48,9 @@ import {
 import type { ImplementationItem } from "@/lib/implementation-items";
 import {
   getConfiguredBaseFunctionalities,
+  getImplementationWorkItemProgressKey,
+  getImplementationWorkItemStatuses,
+  isImplementationItemCompleted,
   withConfiguredWorkItems,
 } from "@/lib/work-activities";
 import type { DnsCheckItem, ImplementationDnsCheck } from "@/lib/implementation-dns";
@@ -593,16 +596,37 @@ export default function ImplementationEditor({ implementationId }: { implementat
     void saveImplementation({ progress }, `${IMPLEMENTATION_PROGRESS_ITEMS.find((item) => item.key === key)?.label ?? "Stap"} bijgewerkt.`, true);
   }
 
-  function updateImplementationItem(item: ImplementationItem, checked: boolean) {
+  function updateImplementationItem(
+    item: ImplementationItem,
+    checked: boolean,
+    workItem?: string,
+  ) {
     if (!implementation || !canEdit || saving) return;
 
     const implementationItemProgress = {
       ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
-      [item.key]: checked,
     };
+    const existingWorkItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
+    for (const existingWorkItem of existingWorkItems) {
+      if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
+        implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+      }
+    }
+    const progressKey = workItem
+      ? getImplementationWorkItemProgressKey(item.key, workItem)
+      : item.key;
+    implementationItemProgress[progressKey] = checked;
+
+    if (workItem) {
+      implementationItemProgress[item.key] = (item.workItems ?? []).every((candidate) => {
+        const candidateKey = getImplementationWorkItemProgressKey(item.key, candidate);
+        return implementationItemProgress[candidateKey] === true;
+      });
+    }
+
     void saveImplementation(
       { implementation_item_progress: implementationItemProgress },
-      `${item.label} bijgewerkt.`,
+      `${workItem || item.label} bijgewerkt.`,
       true,
     );
   }
@@ -1082,10 +1106,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
     implementation.implementation_item_progress,
   );
   const completedImplementationItems = configuredImplementationItems.filter(
-    (item) => implementationItemProgress[item.key],
+    (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
   const completedBaseFunctionalities = configuredBaseFunctionalities.filter(
-    (item) => implementationItemProgress[item.key],
+    (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
   const expectedOnSiteAppointments = dealPriceSummary?.onSiteAppointments ?? 0;
   const scheduledOnSiteAppointments = appointments.filter(
@@ -1890,34 +1914,61 @@ export default function ImplementationEditor({ implementationId }: { implementat
               </span>
             </div>
             <div className="implementation-progress-list">
-              {configuredBaseFunctionalities.map((item) => (
-                <label
-                  key={item.key}
-                  className={`implementation-progress-row implementation-progress-check ${
-                    implementationItemProgress[item.key] ? "completed" : ""
-                  }`}
-                >
-                  <span className="implementation-progress-number"><ClipboardCheck size={15} /></span>
-                  <span className="implementation-item-copy">
-                    <strong>{item.label}</strong>
-                    <small>{item.description}</small>
-                    {item.workItems && item.workItems.length > 0 ? (
-                      <ul className="implementation-work-items">
-                        {item.workItems.map((workItem, index) => (
-                          <li key={`${item.key}-work-${index}`}>{workItem}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(implementationItemProgress[item.key])}
-                    disabled={!canEdit || saving}
-                    aria-label={`${item.label} afgerond`}
-                    onChange={(event) => updateImplementationItem(item, event.target.checked)}
-                  />
-                </label>
-              ))}
+              {configuredBaseFunctionalities.map((item) => {
+                const workItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
+                const completed = isImplementationItemCompleted(item, implementationItemProgress);
+
+                return (
+                  <div
+                    key={item.key}
+                    className={`implementation-progress-row ${completed ? "completed" : ""}`}
+                  >
+                    <span className="implementation-progress-number"><ClipboardCheck size={15} /></span>
+                    <span className="implementation-item-copy">
+                      <strong>{item.label}</strong>
+                      <small>{item.description}</small>
+                      {workItems.length > 0 ? (
+                        <span className="implementation-work-items">
+                          {workItems.map((workItem) => (
+                            <label
+                              key={workItem.key}
+                              className={`implementation-work-item-check ${workItem.completed ? "completed" : ""}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={workItem.completed}
+                                disabled={!canEdit || saving}
+                                aria-label={`${workItem.label} afgerond`}
+                                onChange={(event) => updateImplementationItem(
+                                  item,
+                                  event.target.checked,
+                                  workItem.label,
+                                )}
+                              />
+                              <span>{workItem.label}</span>
+                            </label>
+                          ))}
+                        </span>
+                      ) : null}
+                    </span>
+                    {workItems.length > 0 ? (
+                      <span className="implementation-work-progress-summary">
+                        {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}
+                      </span>
+                    ) : (
+                      <label className="implementation-item-toggle">
+                        <input
+                          type="checkbox"
+                          checked={completed}
+                          disabled={!canEdit || saving}
+                          aria-label={`${item.label} afgerond`}
+                          onChange={(event) => updateImplementationItem(item, event.target.checked)}
+                        />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -1944,33 +1995,60 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 </div>
               ) : configuredImplementationItems.length === 0 ? (
                 <div className="implementation-items-state">Geen modules gevonden in de calculator-deal.</div>
-              ) : configuredImplementationItems.map((item) => (
-                <label
-                  key={item.key}
-                  className={`implementation-progress-row implementation-progress-check ${
-                    implementationItemProgress[item.key] ? "completed" : ""
-                  }`}
-                >
-                  <span className="implementation-progress-number"><Package size={15} /></span>
-                  <span className="implementation-item-copy">
-                    <strong>{item.label}</strong>
-                    {item.workItems && item.workItems.length > 0 ? (
-                      <ul className="implementation-work-items">
-                        {item.workItems.map((workItem, index) => (
-                          <li key={`${item.key}-work-${index}`}>{workItem}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(implementationItemProgress[item.key])}
-                    disabled={!canEdit || saving}
-                    aria-label={`${item.label} afgerond`}
-                    onChange={(event) => updateImplementationItem(item, event.target.checked)}
-                  />
-                </label>
-              ))}
+              ) : configuredImplementationItems.map((item) => {
+                const workItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
+                const completed = isImplementationItemCompleted(item, implementationItemProgress);
+
+                return (
+                  <div
+                    key={item.key}
+                    className={`implementation-progress-row ${completed ? "completed" : ""}`}
+                  >
+                    <span className="implementation-progress-number"><Package size={15} /></span>
+                    <span className="implementation-item-copy">
+                      <strong>{item.label}</strong>
+                      {workItems.length > 0 ? (
+                        <span className="implementation-work-items">
+                          {workItems.map((workItem) => (
+                            <label
+                              key={workItem.key}
+                              className={`implementation-work-item-check ${workItem.completed ? "completed" : ""}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={workItem.completed}
+                                disabled={!canEdit || saving}
+                                aria-label={`${workItem.label} afgerond`}
+                                onChange={(event) => updateImplementationItem(
+                                  item,
+                                  event.target.checked,
+                                  workItem.label,
+                                )}
+                              />
+                              <span>{workItem.label}</span>
+                            </label>
+                          ))}
+                        </span>
+                      ) : null}
+                    </span>
+                    {workItems.length > 0 ? (
+                      <span className="implementation-work-progress-summary">
+                        {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}
+                      </span>
+                    ) : (
+                      <label className="implementation-item-toggle">
+                        <input
+                          type="checkbox"
+                          checked={completed}
+                          disabled={!canEdit || saving}
+                          aria-label={`${item.label} afgerond`}
+                          onChange={(event) => updateImplementationItem(item, event.target.checked)}
+                        />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

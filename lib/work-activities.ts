@@ -6,6 +6,55 @@ function normalizedWorkItems(items: string[] | undefined) {
   return (items ?? []).map((item) => item.trim()).filter(Boolean);
 }
 
+function normalizedProgressText(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
+}
+
+function progressHash(value: string) {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+export function getImplementationWorkItemProgressKey(itemKey: string, workItem: string) {
+  return `work:${itemKey}:${progressHash(`${itemKey}\u0000${normalizedProgressText(workItem)}`)}`;
+}
+
+export function getImplementationWorkItemStatuses(
+  item: ImplementationItem,
+  progress: Record<string, boolean>,
+) {
+  const workItems = normalizedWorkItems(item.workItems).map((workItem) => ({
+    key: getImplementationWorkItemProgressKey(item.key, workItem),
+    label: workItem,
+  }));
+  const hasIndividualProgress = workItems.some((workItem) => (
+    Object.prototype.hasOwnProperty.call(progress, workItem.key)
+  ));
+
+  return workItems.map((workItem) => ({
+    ...workItem,
+    completed: hasIndividualProgress
+      ? progress[workItem.key] === true
+      : progress[item.key] === true,
+  }));
+}
+
+export function isImplementationItemCompleted(
+  item: ImplementationItem,
+  progress: Record<string, boolean>,
+) {
+  const workItems = getImplementationWorkItemStatuses(item, progress);
+  if (workItems.length === 0) return Boolean(progress[item.key]);
+
+  return workItems.every((workItem) => workItem.completed);
+}
+
 function expansionKeyForImplementationItem(itemKey: string): ExpansionWorkItemKey | null {
   if (itemKey.startsWith("customer-portal:")) return "customerPortal";
   if (itemKey === "smart-connect") return "smartConnect";

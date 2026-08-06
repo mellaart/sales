@@ -36,7 +36,11 @@ export type PublicImplementationItem = {
   key: string;
   label: string;
   description?: string;
-  workItems?: string[];
+  workItems: Array<{
+    key: string;
+    label: string;
+    completed: boolean;
+  }>;
   completed: boolean;
 };
 

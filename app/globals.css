@@ -1145,26 +1145,60 @@ select option {
 
 .implementation-work-items {
   display: grid;
-  gap: 4px;
-  margin: 4px 0 0;
+  gap: 7px;
+  margin: 8px 0 0;
   padding: 0;
-  list-style: none;
 }
 
-.implementation-work-items li {
-  position: relative;
-  padding-left: 14px;
+.implementation-work-item-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
   color: #aebed4;
   font-size: 12px;
   line-height: 1.45;
+  cursor: pointer;
 }
 
-.implementation-work-items li::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  color: #60a5fa;
-  content: "•";
+.implementation-work-item-check input,
+.implementation-item-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #34d399;
+  cursor: pointer;
+}
+
+.implementation-work-item-check input:disabled,
+.implementation-item-toggle input:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.implementation-work-item-check.completed {
+  color: #86efac;
+}
+
+.implementation-work-item-check.completed > span {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.implementation-work-progress-summary {
+  min-width: 46px;
+  padding: 5px 8px;
+  border: 1px solid rgba(96,165,250,0.28);
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.implementation-item-toggle {
+  display: grid;
+  place-items: center;
 }
 
 .implementation-progress-number {
@@ -1204,9 +1238,14 @@ select option {
   color: #86efac;
 }
 
-.implementation-progress-row.completed .implementation-work-items li,
-.implementation-progress-row.completed .implementation-work-items li::before {
+.implementation-progress-row.completed .implementation-work-item-check,
+.implementation-progress-row.completed .implementation-work-progress-summary {
   color: #86efac;
+}
+
+.implementation-progress-row.completed .implementation-work-progress-summary {
+  border-color: rgba(52,211,153,0.35);
+  background: rgba(6,78,59,0.22);
 }
 
 .implementation-progress-row.requires-action {

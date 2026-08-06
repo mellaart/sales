@@ -304,10 +304,19 @@ export default async function ImplementationProgressPage({
                   <strong>{feature.label}</strong>
                 </div>
                 <p>{feature.description}</p>
-                {feature.workItems && feature.workItems.length > 0 ? (
+                {feature.workItems.length > 0 ? (
                   <ul className={styles.activityList}>
-                    {feature.workItems.map((workItem, index) => (
-                      <li key={`${feature.key}-work-${index}`}>{workItem}</li>
+                    {feature.workItems.map((workItem) => (
+                      <li
+                        key={workItem.key}
+                        className={workItem.completed ? styles.activityDone : ""}
+                      >
+                        <span className={styles.activityStatus} aria-hidden="true">
+                          {workItem.completed ? <Check size={14} /> : <Clock3 size={14} />}
+                        </span>
+                        <span>{workItem.label}</span>
+                        <small>{workItem.completed ? "Afgerond" : "In voorbereiding"}</small>
+                      </li>
                     ))}
                   </ul>
                 ) : null}
@@ -331,10 +340,19 @@ export default async function ImplementationProgressPage({
                   <span>{item.completed ? <Check size={17} /> : <PackageCheck size={17} />}</span>
                   <div className={styles.itemCopy}>
                     <strong>{item.label}</strong>
-                    {item.workItems && item.workItems.length > 0 ? (
+                    {item.workItems.length > 0 ? (
                       <ul className={styles.activityList}>
-                        {item.workItems.map((workItem, index) => (
-                          <li key={`${item.key}-work-${index}`}>{workItem}</li>
+                        {item.workItems.map((workItem) => (
+                          <li
+                            key={workItem.key}
+                            className={workItem.completed ? styles.activityDone : ""}
+                          >
+                            <span className={styles.activityStatus} aria-hidden="true">
+                              {workItem.completed ? <Check size={14} /> : <Clock3 size={14} />}
+                            </span>
+                            <span>{workItem.label}</span>
+                            <small>{workItem.completed ? "Afgerond" : "In voorbereiding"}</small>
+                          </li>
                         ))}
                       </ul>
                     ) : null}

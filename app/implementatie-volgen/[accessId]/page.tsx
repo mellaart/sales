@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import {
+  AlertTriangle,
   CalendarDays,
   Check,
   CheckCircle2,
   Clock3,
+  Globe2,
   LockKeyhole,
   MapPin,
   Monitor,
   PackageCheck,
   UserRound,
 } from "lucide-react";
+import PublicDnsRefreshButton from "@/components/public-dns-refresh-button";
+import {
+  IMPLEMENTATION_DNS_RECORDS,
+  type DnsCheckItem,
+} from "@/lib/implementation-dns";
 import { getPublicImplementationPortal } from "@/lib/implementation-portal-server";
 import styles from "./implementation-progress.module.css";
 
@@ -98,6 +105,41 @@ function appointmentTime(startTime: string, endTime: string) {
   if (startTime && endTime) return `${startTime} - ${endTime}`;
   if (startTime) return `Vanaf ${startTime}`;
   return "Tijd volgt";
+}
+
+function DnsResultRow({
+  label,
+  value,
+  result,
+}: {
+  label?: string;
+  value: string;
+  result?: DnsCheckItem;
+}) {
+  const toneClass = result?.status === "pass"
+    ? styles.dnsRowPass
+    : result?.status === "fail"
+      ? styles.dnsRowFail
+      : result?.status === "error"
+        ? styles.dnsRowError
+        : styles.dnsRowPending;
+
+  return (
+    <div className={`${styles.dnsRow} ${toneClass}`}>
+      <span className={styles.dnsStatus} aria-hidden="true">
+        {result?.status === "pass" ? <CheckCircle2 size={18} /> : null}
+        {result?.status === "fail" || result?.status === "error"
+          ? <AlertTriangle size={18} />
+          : null}
+        {!result ? <Clock3 size={18} /> : null}
+      </span>
+      <div>
+        {label ? <span>{label}</span> : null}
+        <strong>{value}</strong>
+        {result?.message ? <small>{result.message}</small> : null}
+      </div>
+    </div>
+  );
 }
 
 export default async function ImplementationProgressPage({
@@ -233,6 +275,63 @@ export default async function ImplementationProgressPage({
 
       <section className={`${styles.section} ${styles.altSection}`}>
         <div className={styles.content}>
+          <article className={styles.dnsCard}>
+            <header className={styles.dnsHeader}>
+              <span className={styles.dnsIcon}><Globe2 size={24} /></span>
+              <div>
+                <span>DNS-instructies</span>
+                <h2>{portal.dnsDomain || "Website nog niet ontvangen"}</h2>
+                <p>Automatische controle van de verplichte SPF- en DKIM-records.</p>
+              </div>
+              <PublicDnsRefreshButton
+                className={styles.dnsRefreshButton}
+                disabled={!portal.dnsDomain}
+              />
+            </header>
+
+            <div className={styles.dnsResults}>
+              <div className={styles.dnsGroup}>
+                <h3>SPF-record</h3>
+                <DnsResultRow
+                  value={IMPLEMENTATION_DNS_RECORDS.spfSmartsoft}
+                  result={portal.dnsCheck?.checks.spfSmartsoft}
+                />
+                <DnsResultRow
+                  value={IMPLEMENTATION_DNS_RECORDS.spfTroublefree}
+                  result={portal.dnsCheck?.checks.spfTroublefree}
+                />
+              </div>
+
+              <div className={styles.dnsGroup}>
+                <h3>DKIM-record 1</h3>
+                <DnsResultRow
+                  label={`Naam: ${IMPLEMENTATION_DNS_RECORDS.dkimSmartsoftName}`}
+                  value={`Type: CNAME | Waarde: ${IMPLEMENTATION_DNS_RECORDS.dkimSmartsoftTarget}`}
+                  result={portal.dnsCheck?.checks.dkimSmartsoft}
+                />
+              </div>
+
+              <div className={styles.dnsGroup}>
+                <h3>DKIM-record 2</h3>
+                <DnsResultRow
+                  label={`Naam: ${IMPLEMENTATION_DNS_RECORDS.dkimTroublefreeName}`}
+                  value={`Type: CNAME | Waarde: ${IMPLEMENTATION_DNS_RECORDS.dkimTroublefreeTarget}`}
+                  result={portal.dnsCheck?.checks.dkimTroublefree}
+                />
+              </div>
+            </div>
+
+            <footer className={styles.dnsSummary}>
+              {portal.dnsCheck?.checkedAt
+                ? `Laatst gecontroleerd: ${formatDateTime(portal.dnsCheck.checkedAt)}`
+                : portal.dnsCheckMessage}
+            </footer>
+          </article>
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.content}>
           <div className={styles.sectionHeading}>
             <div><span>Uw pakket</span><h2>Basisfunctionaliteiten</h2></div>
             <p>Standaard inbegrepen in {portal.packageName}.</p>
@@ -248,7 +347,7 @@ export default async function ImplementationProgressPage({
         </div>
       </section>
 
-      <section className={styles.section}>
+      <section className={`${styles.section} ${styles.altSection}`}>
         <div className={styles.content}>
           <div className={styles.sectionHeading}>
             <div><span>Uitbreidingen</span><h2>Modules en koppelingen</h2></div>

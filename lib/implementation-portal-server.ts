@@ -3,6 +3,12 @@ import {
   requireImplementationAccess,
   type ImplementationActor,
 } from "@/lib/implementation-access";
+import { normalizeCustomerIntakeData } from "@/lib/customer-intake";
+import {
+  checkImplementationDns,
+  implementationWebsiteDomain,
+  type ImplementationDnsCheck,
+} from "@/lib/implementation-dns";
 import { getImplementationItems } from "@/lib/implementation-items";
 import {
   isImplementationAppointmentStatus,
@@ -452,8 +458,8 @@ export async function getPublicImplementationPortal(
       "select modules, calculator_inputs from public.deals where id = $1 limit 1",
       [implementation.deal_id],
     ),
-    query<{ status: string; submitted_at: string | null }>(
-      "select status, submitted_at from public.customer_intakes where deal_id = $1 limit 1",
+    query<{ status: string; submitted_at: string | null; form_data: unknown }>(
+      "select status, submitted_at, form_data from public.customer_intakes where deal_id = $1 limit 1",
       [implementation.deal_id],
     ),
     publicAppointments(access.implementation_id),
@@ -501,6 +507,22 @@ export async function getPublicImplementationPortal(
     : [];
   const allSteps = [...milestones, ...items];
   const completedSteps = allSteps.filter((step) => step.completed).length;
+  const dnsDomain = intake?.submitted_at
+    ? implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website)
+    : "";
+  let dnsCheck: ImplementationDnsCheck | null = null;
+  let dnsCheckMessage = "Beschikbaar zodra het klantformulier is ontvangen.";
+
+  if (intake?.submitted_at && !dnsDomain) {
+    dnsCheckMessage = "In het klantformulier ontbreekt een geldige website.";
+  } else if (dnsDomain) {
+    try {
+      dnsCheck = await checkImplementationDns(dnsDomain);
+      dnsCheckMessage = "";
+    } catch (error) {
+      dnsCheckMessage = error instanceof Error ? error.message : "DNS-controle mislukt.";
+    }
+  }
 
   await query(
     "update public.implementation_customer_access set last_viewed_at = now() where id = $1",
@@ -521,6 +543,9 @@ export async function getPublicImplementationPortal(
     progressPercentage: allSteps.length > 0
       ? Math.round((completedSteps / allSteps.length) * 100)
       : 0,
+    dnsDomain,
+    dnsCheck,
+    dnsCheckMessage,
     items,
     appointments,
   };

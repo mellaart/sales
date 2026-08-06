@@ -1,3 +1,5 @@
+import type { ImplementationDnsCheck } from "@/lib/implementation-dns";
+
 export const IMPLEMENTATION_APPOINTMENT_TYPES = ["on_site", "remote"] as const;
 export type ImplementationAppointmentType = typeof IMPLEMENTATION_APPOINTMENT_TYPES[number];
 
@@ -48,6 +50,9 @@ export type PublicImplementationPortal = {
   actualGoLiveDate: string | null;
   updatedAt: string;
   progressPercentage: number;
+  dnsDomain: string;
+  dnsCheck: ImplementationDnsCheck | null;
+  dnsCheckMessage: string;
   items: PublicImplementationItem[];
   appointments: ImplementationAppointment[];
 };

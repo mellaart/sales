@@ -294,6 +294,175 @@
   color: #13233a;
 }
 
+.dnsCard {
+  overflow: hidden;
+  border: 1px solid #cfdeed;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.dnsHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 22px;
+}
+
+.dnsIcon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid #a9c8eb;
+  border-radius: 8px;
+  background: #e9f3ff;
+  color: #1f67b8;
+}
+
+.dnsHeader > div {
+  min-width: 0;
+}
+
+.dnsHeader > div > span {
+  color: #60738c;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.dnsHeader h2 {
+  margin: 3px 0 4px;
+  color: #13233a;
+  font-size: 23px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.dnsHeader p {
+  margin: 0;
+  color: #60738c;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.dnsRefreshButton {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 17px;
+  border: 1px solid #a9bfd8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #193a61;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.dnsRefreshButton:hover:not(:disabled) {
+  border-color: #2f7ad7;
+  background: #eaf3ff;
+  color: #155da6;
+}
+
+.dnsRefreshButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dnsResults {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid #d6e1ee;
+  border-bottom: 1px solid #d6e1ee;
+  background: #ffffff;
+}
+
+.dnsGroup {
+  min-width: 0;
+  padding: 20px 22px;
+  border-left: 1px solid #d6e1ee;
+}
+
+.dnsGroup:first-child {
+  border-left: 0;
+}
+
+.dnsGroup h3 {
+  margin: 0 0 14px;
+  color: #13233a;
+  font-size: 16px;
+}
+
+.dnsRow {
+  --dns-tone: #60738c;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  color: var(--dns-tone);
+}
+
+.dnsRow + .dnsRow {
+  margin-top: 16px;
+}
+
+.dnsRowPass {
+  --dns-tone: #168653;
+}
+
+.dnsRowFail {
+  --dns-tone: #bd3f47;
+}
+
+.dnsRowError {
+  --dns-tone: #a86609;
+}
+
+.dnsRowPending {
+  --dns-tone: #60738c;
+}
+
+.dnsStatus {
+  display: grid;
+  height: 23px;
+  place-items: center;
+}
+
+.dnsRow > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.dnsRow span,
+.dnsRow small {
+  color: #60738c;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.dnsRow strong {
+  color: #193a61;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dnsRow small {
+  color: var(--dns-tone);
+  font-weight: 700;
+}
+
+.dnsSummary {
+  padding: 14px 22px;
+  color: #60738c;
+  font-size: 13px;
+}
+
 .baseFeatureGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -486,6 +655,20 @@
     grid-column: 1 / -1;
     justify-self: start;
   }
+
+  .dnsResults {
+    grid-template-columns: 1fr;
+  }
+
+  .dnsGroup,
+  .dnsGroup:first-child {
+    border-top: 1px solid #d6e1ee;
+    border-left: 0;
+  }
+
+  .dnsGroup:first-child {
+    border-top: 0;
+  }
 }
 
 @media (max-width: 620px) {
@@ -557,6 +740,15 @@
 
   .appointmentStatus {
     grid-column: auto;
+  }
+
+  .dnsHeader {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dnsRefreshButton {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .milestoneList > div {

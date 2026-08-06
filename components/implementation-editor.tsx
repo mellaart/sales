@@ -46,6 +46,7 @@ import {
   type ImplementationStatus,
 } from "@/lib/implementations";
 import type { ImplementationItem } from "@/lib/implementation-items";
+import type { DnsCheckItem, ImplementationDnsCheck } from "@/lib/implementation-dns";
 import type {
   ImplementationAppointment,
   ImplementationAppointmentType,
@@ -130,24 +131,6 @@ type ImplementationDetailField =
   | "actual_go_live_date"
   | "financial_package"
   | "website_webshop";
-
-type DnsCheckStatus = "pass" | "fail" | "error";
-
-type DnsCheckItem = {
-  status: DnsCheckStatus;
-  message: string;
-};
-
-type ImplementationDnsCheck = {
-  domain: string;
-  checkedAt: string;
-  checks: {
-    spfSmartsoft: DnsCheckItem;
-    spfTroublefree: DnsCheckItem;
-    dkimSmartsoft: DnsCheckItem;
-    dkimTroublefree: DnsCheckItem;
-  };
-};
 
 type AppointmentDraft = {
   appointmentDate: string;

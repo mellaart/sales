@@ -513,6 +513,7 @@ export async function getPublicImplementationPortal(
       const configuredItem = withConfiguredWorkItems(item, pricingConfig);
       return {
         ...configuredItem,
+        label: configuredItem.key === "planning-app" ? "Planningsapp" : configuredItem.label,
         workItems: getImplementationWorkItemStatuses(configuredItem, itemProgress),
         completed: isImplementationItemCompleted(configuredItem, itemProgress),
       };

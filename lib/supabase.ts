@@ -109,6 +109,11 @@ export type DealRecord = {
   created_at?: string | null;
   updated_at?: string | null;
   archived_at?: string | null;
+  approval_requested_at?: string | null;
+  approval_expires_at?: string | null;
+  accepted_at?: string | null;
+  accepted_by_name?: string | null;
+  accepted_by_email?: string | null;
 };
 
 let client: ReturnType<typeof createClient> | null = null;

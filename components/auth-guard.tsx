@@ -13,7 +13,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isResetPasswordPage = pathname === "/reset-password";
   const isPublicPage = isLoginPage
     || pathname === "/worldline-test"
-    || pathname.startsWith("/klantgegevens/");
+    || pathname.startsWith("/klantgegevens/")
+    || pathname.startsWith("/offerte/");
   const mustSetPassword = Boolean(user?.user_metadata?.must_set_password);
 
   useEffect(() => {

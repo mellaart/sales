@@ -52,17 +52,22 @@ function firstName(value: string) {
 function quoteEmail(input: {
   contactName: string;
   customerName: string;
+  approvalUrl: string;
 }) {
   const greetingName = firstName(input.contactName);
   const greeting = greetingName ? `Beste ${escapeHtml(greetingName)},` : "Beste,";
   const customerReference = input.customerName
     ? ` voor ${escapeHtml(input.customerName)}`
     : "";
+  const approvalUrl = escapeHtml(input.approvalUrl);
 
   return [
     `<p style="margin:0 0 12pt">${greeting}</p>`,
     `<p style="margin:0 0 12pt">Zoals besproken ontvangt u in de bijlage onze offerte${customerReference}.</p>`,
     '<p style="margin:0 0 12pt">In de offerte vindt u een helder overzicht van de gekozen Smart Trade-oplossing, de maandelijkse kosten en de implementatie.</p>',
+    '<p style="margin:0 0 12pt">Gaat u akkoord met de offerte? Bevestig dit dan via onderstaande beveiligde link.</p>',
+    `<p style="margin:0 0 12pt"><a href="${approvalUrl}" style="display:inline-block;padding:9pt 14pt;background:#1769bd;color:#ffffff;text-decoration:none;font-weight:700">Offerte akkoord geven</a></p>`,
+    `<p style="margin:0 0 12pt"><a href="${approvalUrl}" style="color:#0563c1;text-decoration:underline">${approvalUrl}</a></p>`,
     '<p style="margin:0">Mocht u vragen hebben of de offerte samen willen doornemen, dan hoor ik dat graag.</p>',
   ].join("");
 }
@@ -315,6 +320,10 @@ export async function POST(request: Request) {
     }
 
     const attachment = formData.get("attachment");
+    const approvalUrl = textValue(formData, "approvalUrl", 2_000);
+    if (!validHttpUrl(approvalUrl)) {
+      return NextResponse.json({ error: "De beveiligde akkoordlink is ongeldig." }, { status: 400 });
+    }
     if (!(attachment instanceof File) || attachment.type !== "application/pdf") {
       return NextResponse.json({ error: "De offerte-PDF ontbreekt." }, { status: 400 });
     }
@@ -329,7 +338,7 @@ export async function POST(request: Request) {
     const webLink = await createOutlookDraft(request, verified.user.id, {
       recipientEmail,
       subject,
-      htmlBody: quoteEmail({ contactName, customerName }),
+      htmlBody: quoteEmail({ contactName, customerName, approvalUrl }),
       signature,
       fileName: attachment.name.slice(0, 180) || "offerte-smart-trade.pdf",
       fileContent: Buffer.from(await attachment.arrayBuffer()),

@@ -32,6 +32,7 @@ import {
   splitCustomerContactName,
   type CustomerIntakeSummary,
 } from "@/lib/customer-intake";
+import type { DealApprovalStatus, DealApprovalSummary } from "@/lib/deal-approval";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import type { ImplementationRecord } from "@/lib/implementations";
 import { calculatePricing, euro, getMinimumPackageForPaidModules, getPaidSelectedModuleCount, MODULES, type ModuleConfig } from "@/lib/pricing";
@@ -107,6 +108,16 @@ function formatDays(days: number) {
   const roundedDays = Math.round(days * 100) / 100;
   const label = roundedDays === 1 ? "dag" : "dagen";
   return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
+}
+
+function formatApprovalDate(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("nl-NL", {
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function getSmartConnectPricing(
@@ -236,6 +247,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [customerOutlookBusy, setCustomerOutlookBusy] = useState(false);
   const [quoteOutlookBusy, setQuoteOutlookBusy] = useState(false);
   const [quoteOutlookLink, setQuoteOutlookLink] = useState("");
+  const [approvalStatus, setApprovalStatus] = useState<DealApprovalStatus | null>(null);
+  const [approvalRequestedAt, setApprovalRequestedAt] = useState<string | null>(null);
+  const [approvalExpiresAt, setApprovalExpiresAt] = useState<string | null>(null);
+  const [acceptedAt, setAcceptedAt] = useState<string | null>(null);
+  const [acceptedByName, setAcceptedByName] = useState("");
+  const [acceptedByEmail, setAcceptedByEmail] = useState("");
 
   const [customerName, setCustomerName] = useState("");
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
@@ -319,6 +336,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
       setDealOwnerId(deal.user_id || user.id);
       setArchivedAt(deal.archived_at ?? null);
+      setApprovalStatus(deal.accepted_at ? "accepted" : deal.approval_requested_at ? "open" : null);
+      setApprovalRequestedAt(deal.approval_requested_at ?? null);
+      setApprovalExpiresAt(deal.approval_expires_at ?? null);
+      setAcceptedAt(deal.accepted_at ?? null);
+      setAcceptedByName(deal.accepted_by_name ?? "");
+      setAcceptedByEmail(deal.accepted_by_email ?? "");
       setCustomerName(deal.customer_name || "");
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
       setContactName(deal.contact_name || "");
@@ -643,6 +666,40 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  function applyDealApproval(approval: DealApprovalSummary | null) {
+    if (!approval) {
+      setApprovalStatus(null);
+      setApprovalRequestedAt(null);
+      setApprovalExpiresAt(null);
+      setAcceptedAt(null);
+      setAcceptedByName("");
+      setAcceptedByEmail("");
+      return;
+    }
+
+    setApprovalStatus(approval.status);
+    setApprovalRequestedAt(approval.status === "revoked" ? null : approval.draftedAt);
+    setApprovalExpiresAt(approval.status === "revoked" ? null : approval.expiresAt);
+    setAcceptedAt(approval.status === "accepted" ? approval.acceptedAt : null);
+    setAcceptedByName(approval.status === "accepted" ? approval.acceptedByName : "");
+    setAcceptedByEmail(approval.status === "accepted" ? approval.acceptedByEmail : "");
+  }
+
+  async function refreshDealApproval() {
+    try {
+      const response = await fetch(
+        `/api/deal-approvals?dealId=${encodeURIComponent(dealId)}`,
+        { cache: "no-store" },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        approval?: DealApprovalSummary | null;
+      };
+      if (response.ok) applyDealApproval(json.approval ?? null);
+    } catch {
+      // De deal blijft bruikbaar; de status wordt bij de volgende actie opnieuw geladen.
+    }
+  }
+
   async function handleSave(): Promise<boolean> {
     if (!user) {
       setStatus("Je moet ingelogd zijn om deze deal op te slaan.");
@@ -740,7 +797,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setStatus(`Opslaan mislukt: ${result.error}`);
       return false;
     }
-    setStatus(result.warning ?? "Deal opnieuw berekend en opgeslagen.");
+    const saveMessage = result.warning ?? "Deal opnieuw berekend en opgeslagen.";
+    if (approvalStatus) await refreshDealApproval();
+    setStatus(saveMessage);
     return true;
   }
 
@@ -832,6 +891,30 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         return;
       }
 
+      setStatus("Deal wordt opgeslagen voor de akkoordlink...");
+      const saved = await handleSave();
+      if (!saved) throw new Error("De deal kon niet worden opgeslagen. Het Outlook-concept is niet gemaakt.");
+
+      setStatus("Beveiligde akkoordlink wordt gemaakt...");
+      const approvalResponse = await fetch("/api/deal-approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dealId,
+          recipientEmail,
+          contactName,
+        }),
+      });
+      const approvalJson = await approvalResponse.json().catch(() => ({})) as {
+        approval?: DealApprovalSummary;
+        error?: string;
+      };
+      if (!approvalResponse.ok || !approvalJson.approval?.publicUrl) {
+        throw new Error(approvalJson.error || "De beveiligde akkoordlink kon niet worden gemaakt.");
+      }
+      const approval = approvalJson.approval;
+      applyDealApproval(approval);
+
       setStatus("Offerte-PDF en Outlook-concept worden gemaakt...");
       const attachment = await createQuotePdfFile(getQuotePdfInput());
       showOutlookPopupStatus(
@@ -843,6 +926,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       formData.set("recipientEmail", recipientEmail);
       formData.set("customerName", customerName);
       formData.set("contactName", contactName);
+      formData.set("approvalUrl", approval.publicUrl);
       formData.set("attachment", attachment);
 
       const response = await fetch(
@@ -869,11 +953,35 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         throw new Error(message);
       }
 
+      let trackingWarning = "";
+      try {
+        const trackingResponse = await fetch("/api/deal-approvals", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dealId, approvalId: approval.id }),
+        });
+        const trackingJson = await trackingResponse.json().catch(() => ({})) as {
+          approval?: DealApprovalSummary;
+          error?: string;
+        };
+        if (trackingResponse.ok && trackingJson.approval) {
+          applyDealApproval(trackingJson.approval);
+        } else {
+          trackingWarning = trackingJson.error || "De akkoordstatus kon niet worden bijgewerkt.";
+        }
+      } catch {
+        trackingWarning = "De akkoordstatus kon niet worden bijgewerkt.";
+      }
+
       if (!navigateOutlookPopup(outlookWindow, json.webLink)) {
         window.location.assign(json.webLink);
       }
       setQuoteOutlookLink(json.webLink);
-      setStatus("Outlook-concept met offerte-PDF is aangemaakt.");
+      setStatus(
+        trackingWarning
+          ? `Outlook-concept is aangemaakt. ${trackingWarning}`
+          : "Outlook-concept met offerte-PDF en akkoordlink is aangemaakt.",
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Outlook-concept maken mislukt.";
       showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
@@ -1173,6 +1281,11 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       dealOwnerId === user.id
     ),
   );
+  const approvalExpired = Boolean(
+    approvalStatus === "open" &&
+    approvalExpiresAt &&
+    new Date(approvalExpiresAt).getTime() <= Date.now(),
+  );
 
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;
@@ -1231,6 +1344,15 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             <StatusPill tone={implementation ? "success" : archivedAt ? "neutral" : "success"}>
               {implementation ? "Implementatie gestart" : archivedAt ? "Gearchiveerd" : "Versie 8"}
             </StatusPill>
+            {acceptedAt ? (
+              <StatusPill tone="success">Klant akkoord</StatusPill>
+            ) : approvalRequestedAt ? (
+              <StatusPill tone={approvalExpired ? "danger" : "warning"}>
+                {approvalExpired ? "Akkoordlink verlopen" : "Wacht op akkoord"}
+              </StatusPill>
+            ) : approvalStatus === "revoked" ? (
+              <StatusPill tone="warning">Nieuwe akkoordlink nodig</StatusPill>
+            ) : null}
             {!canEditDeal ? <StatusPill tone="neutral">Alleen lezen</StatusPill> : null}
           </div>
         </header>
@@ -1711,6 +1833,40 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     </a>
                   </div>
                 ) : null}
+                <div className={`deal-approval-summary ${acceptedAt ? "accepted" : approvalRequestedAt ? "pending" : "idle"}`}>
+                  <div>
+                    <span>Akkoord klant</span>
+                    <strong>
+                      {acceptedAt
+                        ? "Offerte geaccepteerd"
+                        : approvalRequestedAt
+                          ? approvalExpired
+                            ? "Akkoordlink is verlopen"
+                            : "Wachten op akkoord"
+                          : approvalStatus === "revoked"
+                            ? "Offerte gewijzigd"
+                            : "Nog niet verstuurd"}
+                    </strong>
+                  </div>
+                  <p>
+                    {acceptedAt
+                      ? `${acceptedByName || "Klant"}${acceptedByEmail ? ` · ${acceptedByEmail}` : ""} · ${formatApprovalDate(acceptedAt)}`
+                      : approvalRequestedAt
+                        ? `Klaargezet op ${formatApprovalDate(approvalRequestedAt)}${approvalExpiresAt ? ` · geldig tot ${formatApprovalDate(approvalExpiresAt)}` : ""}`
+                        : approvalStatus === "revoked"
+                          ? "De offertegegevens zijn gewijzigd. Maak via Outlook een nieuw concept met een nieuwe akkoordlink."
+                          : "Bij het klaarzetten in Outlook wordt automatisch een beveiligde akkoordlink toegevoegd."}
+                  </p>
+                  {approvalStatus ? (
+                    <button
+                      type="button"
+                      className="secondary-button deal-approval-refresh"
+                      onClick={() => void refreshDealApproval()}
+                    >
+                      <RefreshCw size={15} /> Status vernieuwen
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               {!isAssetsExpansionDeal && assetsExpansion?.lines?.length ? (

@@ -177,6 +177,11 @@ async function ensureLocalSchema(client) {
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       archived_at timestamptz,
+      approval_requested_at timestamptz,
+      approval_expires_at timestamptz,
+      accepted_at timestamptz,
+      accepted_by_name text,
+      accepted_by_email text,
       customer_name text,
       quote_title text,
       contact_name text,
@@ -206,6 +211,36 @@ async function ensureLocalSchema(client) {
     );
 
     alter table public.deals add column if not exists archived_at timestamptz;
+    alter table public.deals add column if not exists approval_requested_at timestamptz;
+    alter table public.deals add column if not exists approval_expires_at timestamptz;
+    alter table public.deals add column if not exists accepted_at timestamptz;
+    alter table public.deals add column if not exists accepted_by_name text;
+    alter table public.deals add column if not exists accepted_by_email text;
+
+    create table if not exists public.deal_approvals (
+      id uuid primary key default gen_random_uuid(),
+      deal_id uuid not null unique references public.deals(id) on delete cascade,
+      created_by uuid references public.profiles(id) on delete set null,
+      status text not null default 'open'
+        check (status in ('open', 'accepted', 'revoked')),
+      token_version integer not null default 1,
+      recipient_email text not null,
+      contact_name text,
+      quote_snapshot jsonb not null default '{}'::jsonb,
+      snapshot_hash text not null,
+      expires_at timestamptz not null default (now() + interval '30 days'),
+      drafted_at timestamptz,
+      accepted_at timestamptz,
+      accepted_by_name text,
+      accepted_by_email text,
+      accepted_ip text,
+      accepted_user_agent text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create index if not exists deal_approvals_status_expires_at_idx
+      on public.deal_approvals(status, expires_at);
 
     create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
     create index if not exists deals_archived_at_created_at_idx on public.deals(archived_at, created_at desc);

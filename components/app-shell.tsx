@@ -33,7 +33,9 @@ export function AppShellHeader() {
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isAuthPage = pathname === "/login" || pathname === "/reset-password";
-  const isPublicUtilityPage = pathname === "/worldline-test" || pathname.startsWith("/klantgegevens/");
+  const isPublicUtilityPage = pathname === "/worldline-test"
+    || pathname.startsWith("/klantgegevens/")
+    || pathname.startsWith("/offerte/");
   const isFocusedDealPage = pathname.startsWith("/dealmail/");
 
   useEffect(() => {

@@ -68,6 +68,17 @@ function getArchivedDateLabel(deal: DealRecord) {
   return `Gearchiveerd ${dealDateFormatter.format(date)}`;
 }
 
+function dealApprovalLabel(deal: DealRecord) {
+  if (deal.accepted_at) return { label: "Klant akkoord", tone: "success" as const };
+  if (!deal.approval_requested_at) return null;
+
+  const expiresAt = deal.approval_expires_at ? new Date(deal.approval_expires_at).getTime() : 0;
+  if (expiresAt > 0 && expiresAt <= Date.now()) {
+    return { label: "Akkoordlink verlopen", tone: "danger" as const };
+  }
+  return { label: "Wacht op akkoord", tone: "warning" as const };
+}
+
 function getDealSearchValues(deal: DealRecord, salesName: string) {
   return [
     deal.customer_name,
@@ -335,6 +346,7 @@ export default function DealsDashboard() {
             {filteredDeals.map((deal) => {
               const canDelete = role === "admin" || deal.user_id === user?.id;
               const canRestore = role === "admin" || deal.user_id === user?.id;
+              const approval = dealApprovalLabel(deal);
 
               return (
                 <article key={deal.id} className="deal-card-row">
@@ -342,6 +354,7 @@ export default function DealsDashboard() {
                     <div className="deal-card-top">
                       <StatusPill tone={isExpansionDeal(deal) ? "success" : "warning"}>{getDealTypeLabel(deal)}</StatusPill>
                       {deal.archived_at ? <StatusPill tone="neutral">Gearchiveerd</StatusPill> : null}
+                      {approval ? <StatusPill tone={approval.tone}>{approval.label}</StatusPill> : null}
                       <span className="deal-date">
                         {deal.archived_at ? getArchivedDateLabel(deal) : getDealDateLabel(deal)}
                       </span>

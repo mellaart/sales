@@ -2236,6 +2236,60 @@ td {
   margin-top: 10px;
 }
 
+.deal-approval-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr) max-content;
+  gap: 18px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 15px 17px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.035);
+}
+
+.deal-approval-summary.accepted {
+  border-color: rgba(52,211,153,0.38);
+  background: rgba(16,185,129,0.08);
+}
+
+.deal-approval-summary.pending {
+  border-color: rgba(245,158,11,0.35);
+  background: rgba(245,158,11,0.07);
+}
+
+.deal-approval-summary span,
+.deal-approval-summary strong {
+  display: block;
+}
+
+.deal-approval-summary span {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.deal-approval-summary strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.deal-approval-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.deal-approval-refresh {
+  min-height: 38px;
+  padding: 8px 11px;
+  white-space: nowrap;
+}
+
 .comparison-grid {
   display: grid;
   grid-template-columns: repeat(4,1fr);
@@ -2281,6 +2335,11 @@ td {
 
   .quote-outlook-controls .primary-button {
     width: 100%;
+  }
+
+  .deal-approval-summary {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .travel-postcode-field .input {

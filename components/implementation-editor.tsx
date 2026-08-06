@@ -336,7 +336,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
     [pricingConfig],
   );
   const configuredImplementationItems = useMemo(
-    () => implementationItems.map((item) => withConfiguredWorkItems(item, pricingConfig)),
+    () => implementationItems.map((item) => {
+      const configuredItem = withConfiguredWorkItems(item, pricingConfig);
+      return configuredItem.key === "planning-app"
+        ? { ...configuredItem, label: "Planningsapp" }
+        : configuredItem;
+    }),
     [implementationItems, pricingConfig],
   );
 

@@ -254,6 +254,25 @@ function safeReturnTo(value: string | null) {
   return value.slice(0, 500);
 }
 
+function outlookDraftComposeLink(webLink: string) {
+  try {
+    const url = new URL(webLink);
+    const composePath = url.pathname.replace(
+      /\/mail\/deeplink\/read(?=\/|$)/i,
+      "/mail/deeplink/compose",
+    );
+
+    if (composePath === url.pathname) return webLink;
+
+    url.pathname = composePath;
+    url.searchParams.delete("viewmodel");
+    url.searchParams.delete("viewModel");
+    return url.toString();
+  } catch {
+    return webLink;
+  }
+}
+
 function stateHash(state: string) {
   return createHash("sha256").update(state).digest("hex");
 }
@@ -606,6 +625,7 @@ export async function createOutlookDraft(
   if (!draftResponse.ok || !draft.id || !draft.webLink) {
     throw new Error(draft.error?.message || "Outlook kon het concept niet aanmaken.");
   }
+  const composeLink = outlookDraftComposeLink(draft.webLink);
 
   const attachments = [...(input.attachments ?? []), ...signature.attachments];
   if (input.fileName && input.fileContent) {
@@ -617,7 +637,7 @@ export async function createOutlookDraft(
   }
 
   if (attachments.length === 0) {
-    return draft.webLink;
+    return composeLink;
   }
 
   for (const attachment of attachments) {
@@ -637,7 +657,7 @@ export async function createOutlookDraft(
     }
   }
 
-  return draft.webLink;
+  return composeLink;
 }
 
 export function outlookRequestOrigin(request: Request) {

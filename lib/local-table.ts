@@ -109,6 +109,7 @@ const TABLES = {
     "progress",
     "implementation_item_progress",
     "implementation_custom_work_items",
+    "implementation_customer_work_approvals",
     "administration_name",
     "implementation_start_date",
     "planned_go_live_date",

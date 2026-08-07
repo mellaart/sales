@@ -9,7 +9,7 @@ import {
   implementationWebsiteDomain,
   type ImplementationDnsCheck,
 } from "@/lib/implementation-dns";
-import { getImplementationItems } from "@/lib/implementation-items";
+import { getImplementationItems, type ImplementationItem } from "@/lib/implementation-items";
 import {
   isImplementationAppointmentStatus,
   isImplementationAppointmentType,
@@ -18,17 +18,21 @@ import {
   type ImplementationAppointmentType,
   type ImplementationAppointmentWorkItem,
   type ImplementationPortalAccess,
+  type PublicImplementationItem,
   type PublicImplementationPortal,
 } from "@/lib/implementation-portal";
 import {
   IMPLEMENTATION_STATUS_LABELS,
   normalizeImplementationCustomWorkItems,
+  normalizeImplementationCustomerWorkApprovals,
   normalizeImplementationItemProgress,
   normalizeImplementationProgress,
+  type ImplementationCustomerWorkApproval,
   type ImplementationStatus,
 } from "@/lib/implementations";
 import { createId, query } from "@/lib/local-db";
 import { getServiceClient } from "@/lib/admin-api";
+import type { EditablePricingConfig } from "@/lib/price-config";
 import { readStoredPricingConfig } from "@/lib/price-settings-storage";
 import {
   getConfiguredBaseFunctionalities,
@@ -84,7 +88,13 @@ type PortalImplementationRow = {
   progress: unknown;
   implementation_item_progress: unknown;
   implementation_custom_work_items: unknown;
+  implementation_customer_work_approvals: unknown;
   updated_at: string;
+};
+
+type PortalDealRow = {
+  modules: unknown;
+  calculator_inputs: unknown;
 };
 
 type AppointmentInput = {
@@ -152,6 +162,83 @@ function publicUrl(request: Request, row: Pick<PortalAccessRow, "id" | "token_ve
 
 function accessIsActive(row: PortalAccessRow) {
   return !row.revoked_at && new Date(row.expires_at).getTime() > Date.now();
+}
+
+async function verifiedPortalAccess(
+  accessId: string,
+  tokenVersion: number,
+  token: string,
+) {
+  const { rows } = await query<PortalAccessRow>(
+    `select *
+     from public.implementation_customer_access
+     where id = $1 and token_version = $2
+     limit 1`,
+    [accessId, tokenVersion],
+  );
+  const access = rows[0];
+  if (
+    !access ||
+    !accessIsActive(access) ||
+    !verifyImplementationPortalToken(accessId, tokenVersion, token)
+  ) {
+    return null;
+  }
+  return access;
+}
+
+function publicImplementationItem(
+  item: ImplementationItem,
+  itemProgress: Record<string, boolean>,
+  approvals: ReturnType<typeof normalizeImplementationCustomerWorkApprovals>,
+): PublicImplementationItem {
+  const workItems = getImplementationWorkItemStatuses(item, itemProgress).map((workItem) => ({
+    ...workItem,
+    customerApprovedAt: approvals[workItem.key]?.approvedAt ?? null,
+  }));
+
+  return {
+    ...item,
+    customerApprovedAt: workItems.length === 0 ? approvals[item.key]?.approvedAt ?? null : null,
+    workItems,
+    completed: isImplementationItemCompleted(item, itemProgress),
+  };
+}
+
+function publicImplementationItems(
+  deal: PortalDealRow | undefined,
+  pricingConfig: EditablePricingConfig,
+  itemProgressValue: unknown,
+  customWorkItemsValue: unknown,
+  approvalsValue: unknown,
+) {
+  const itemProgress = normalizeImplementationItemProgress(itemProgressValue);
+  const customWorkItems = normalizeImplementationCustomWorkItems(customWorkItemsValue);
+  const approvals = normalizeImplementationCustomerWorkApprovals(approvalsValue);
+  const items = deal
+    ? getImplementationItems(deal).map((item) => {
+      const configuredItem = withImplementationCustomWorkItems(
+        withConfiguredWorkItems(item, pricingConfig),
+        customWorkItems,
+      );
+      return publicImplementationItem(
+        configuredItem.key === "planning-app"
+          ? { ...configuredItem, label: "Planningsapp" }
+          : configuredItem,
+        itemProgress,
+        approvals,
+      );
+    })
+    : [];
+  const baseItems = getConfiguredBaseFunctionalities(pricingConfig).map((baseItem) => (
+    publicImplementationItem(
+      withImplementationCustomWorkItems(baseItem, customWorkItems),
+      itemProgress,
+      approvals,
+    )
+  ));
+
+  return { baseItems, items };
 }
 
 function toAccess(request: Request, row: PortalAccessRow): ImplementationPortalAccess {
@@ -470,20 +557,8 @@ export async function getPublicImplementationPortal(
   tokenVersion: number,
   token: string,
 ) {
-  const { rows: accessRows } = await query<PortalAccessRow>(
-    `select *
-     from public.implementation_customer_access
-     where id = $1 and token_version = $2
-     limit 1`,
-    [accessId, tokenVersion],
-  );
-  const access = accessRows[0];
-
-  if (
-    !access ||
-    !accessIsActive(access) ||
-    !verifyImplementationPortalToken(accessId, tokenVersion, token)
-  ) {
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  if (!access) {
     return { ok: false as const, error: "Deze klantlink is ongeldig, verlopen of ingetrokken." };
   }
 
@@ -491,7 +566,8 @@ export async function getPublicImplementationPortal(
     `select deal_id, customer_name, quote_title, package_name, status,
             assigned_consultant_name, assigned_consultant_email,
             implementation_start_date, planned_go_live_date, actual_go_live_date,
-            progress, implementation_item_progress, implementation_custom_work_items, updated_at
+            progress, implementation_item_progress, implementation_custom_work_items,
+            implementation_customer_work_approvals, updated_at
      from public.implementations
      where id = $1
      limit 1`,
@@ -503,7 +579,7 @@ export async function getPublicImplementationPortal(
   }
 
   const [{ rows: dealRows }, { rows: intakeRows }, appointments, { pricingConfig }] = await Promise.all([
-    query<{ modules: unknown; calculator_inputs: unknown }>(
+    query<PortalDealRow>(
       "select modules, calculator_inputs from public.deals where id = $1 limit 1",
       [implementation.deal_id],
     ),
@@ -547,33 +623,13 @@ export async function getPublicImplementationPortal(
     },
   ];
 
-  const deal = dealRows[0];
-  const itemProgress = normalizeImplementationItemProgress(implementation.implementation_item_progress);
-  const customWorkItems = normalizeImplementationCustomWorkItems(
+  const { baseItems: baseFunctionalitySteps, items } = publicImplementationItems(
+    dealRows[0],
+    pricingConfig,
+    implementation.implementation_item_progress,
     implementation.implementation_custom_work_items,
+    implementation.implementation_customer_work_approvals,
   );
-  const items = deal
-    ? getImplementationItems(deal).map((item) => {
-      const configuredItem = withImplementationCustomWorkItems(
-        withConfiguredWorkItems(item, pricingConfig),
-        customWorkItems,
-      );
-      return {
-        ...configuredItem,
-        label: configuredItem.key === "planning-app" ? "Planningsapp" : configuredItem.label,
-        workItems: getImplementationWorkItemStatuses(configuredItem, itemProgress),
-        completed: isImplementationItemCompleted(configuredItem, itemProgress),
-      };
-    })
-    : [];
-  const baseFunctionalitySteps = getConfiguredBaseFunctionalities(pricingConfig).map((baseItem) => {
-    const item = withImplementationCustomWorkItems(baseItem, customWorkItems);
-    return {
-      ...item,
-      workItems: getImplementationWorkItemStatuses(item, itemProgress),
-      completed: isImplementationItemCompleted(item, itemProgress),
-    };
-  });
   const implementationSteps = [...baseFunctionalitySteps, ...items].flatMap((item) => (
     item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
   ));
@@ -623,4 +679,132 @@ export async function getPublicImplementationPortal(
     appointments,
   };
   return { ok: true as const, portal };
+}
+
+export async function approvePublicImplementationWorkItem(
+  accessId: string,
+  tokenVersion: number,
+  token: string,
+  requestedWorkItemKey: string,
+) {
+  const workItemKey = requestedWorkItemKey.trim().slice(0, 240);
+  if (!workItemKey) {
+    return { ok: false as const, status: 400, error: "Kies een geldige werkzaamheid." };
+  }
+
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  if (!access) {
+    return {
+      ok: false as const,
+      status: 404,
+      error: "Deze klantlink is ongeldig, verlopen of ingetrokken.",
+    };
+  }
+
+  const { rows } = await query<Pick<PortalImplementationRow,
+    "deal_id" |
+    "implementation_item_progress" |
+    "implementation_custom_work_items" |
+    "implementation_customer_work_approvals"
+  >>(
+    `select deal_id, implementation_item_progress, implementation_custom_work_items,
+            implementation_customer_work_approvals
+     from public.implementations
+     where id = $1
+     limit 1`,
+    [access.implementation_id],
+  );
+  const implementation = rows[0];
+  if (!implementation) {
+    return { ok: false as const, status: 404, error: "Deze implementatie is niet meer beschikbaar." };
+  }
+
+  const [{ rows: dealRows }, { pricingConfig }] = await Promise.all([
+    query<PortalDealRow>(
+      "select modules, calculator_inputs from public.deals where id = $1 limit 1",
+      [implementation.deal_id],
+    ),
+    readStoredPricingConfig(getServiceClient()),
+  ]);
+  const { baseItems, items } = publicImplementationItems(
+    dealRows[0],
+    pricingConfig,
+    implementation.implementation_item_progress,
+    implementation.implementation_custom_work_items,
+    implementation.implementation_customer_work_approvals,
+  );
+  const candidate = [...baseItems, ...items].flatMap((item) => (
+    item.workItems.length > 0
+      ? item.workItems.map((workItem) => ({
+        key: workItem.key,
+        itemKey: item.key,
+        itemLabel: item.label,
+        label: workItem.label,
+        completed: workItem.completed,
+      }))
+      : [{
+        key: item.key,
+        itemKey: item.key,
+        itemLabel: item.label,
+        label: item.label,
+        completed: item.completed,
+      }]
+  )).find((workItem) => workItem.key === workItemKey);
+
+  if (!candidate) {
+    return { ok: false as const, status: 404, error: "Deze werkzaamheid is niet meer beschikbaar." };
+  }
+  if (!candidate.completed) {
+    return {
+      ok: false as const,
+      status: 409,
+      error: "De consultant heeft deze werkzaamheid nog niet als afgerond gemarkeerd.",
+    };
+  }
+
+  const existingApprovals = normalizeImplementationCustomerWorkApprovals(
+    implementation.implementation_customer_work_approvals,
+  );
+  if (existingApprovals[workItemKey]) {
+    return { ok: true as const, approval: existingApprovals[workItemKey] };
+  }
+
+  const approval: ImplementationCustomerWorkApproval = {
+    workItemKey,
+    itemKey: candidate.itemKey,
+    itemLabel: candidate.itemLabel,
+    workItemLabel: candidate.label,
+    approvedAt: new Date().toISOString(),
+    accessId,
+  };
+  const { rows: updatedRows } = await query<{ implementation_customer_work_approvals: unknown }>(
+    `update public.implementations
+     set implementation_customer_work_approvals = case
+           when coalesce(implementation_customer_work_approvals, '{}'::jsonb) ? ($2::text)
+             then coalesce(implementation_customer_work_approvals, '{}'::jsonb)
+           else jsonb_set(
+             coalesce(implementation_customer_work_approvals, '{}'::jsonb),
+             array[$2]::text[],
+             $3::jsonb,
+             true
+           )
+         end,
+         updated_at = case
+           when coalesce(implementation_customer_work_approvals, '{}'::jsonb) ? ($2::text)
+             then updated_at
+           else now()
+         end
+     where id = $1
+     returning implementation_customer_work_approvals`,
+    [access.implementation_id, workItemKey, JSON.stringify(approval)],
+  );
+  const savedApprovals = normalizeImplementationCustomerWorkApprovals(
+    updatedRows[0]?.implementation_customer_work_approvals,
+  );
+  const savedApproval = savedApprovals[workItemKey];
+  if (!savedApproval) {
+    return { ok: false as const, status: 500, error: "Het akkoord kon niet worden vastgelegd." };
+  }
+
+  return { ok: true as const, approval: savedApproval };
 }

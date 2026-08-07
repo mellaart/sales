@@ -35,6 +35,18 @@ export type ImplementationProgressKey = typeof IMPLEMENTATION_PROGRESS_ITEMS[num
 export type ImplementationProgress = Partial<Record<ImplementationProgressKey, boolean>>;
 export type ImplementationItemProgress = Record<string, boolean>;
 export type ImplementationCustomWorkItems = Record<string, string[]>;
+export type ImplementationCustomerWorkApproval = {
+  workItemKey: string;
+  itemKey: string;
+  itemLabel: string;
+  workItemLabel: string;
+  approvedAt: string;
+  accessId: string;
+};
+export type ImplementationCustomerWorkApprovals = Record<
+  string,
+  ImplementationCustomerWorkApproval
+>;
 
 export function normalizeImplementationProgress(value: unknown): ImplementationProgress {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -94,6 +106,53 @@ export function normalizeImplementationCustomWorkItems(
   );
 }
 
+export function normalizeImplementationCustomerWorkApprovals(
+  value: unknown,
+): ImplementationCustomerWorkApprovals {
+  let source = value;
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch {
+      return {};
+    }
+  }
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  return Object.entries(source as Record<string, unknown>).reduce<ImplementationCustomerWorkApprovals>(
+    (result, [rawKey, rawApproval]) => {
+      if (!rawApproval || typeof rawApproval !== "object" || Array.isArray(rawApproval)) return result;
+      const approval = rawApproval as Record<string, unknown>;
+      const workItemKey = (typeof approval.workItemKey === "string" ? approval.workItemKey : rawKey)
+        .trim()
+        .slice(0, 240);
+      const itemKey = typeof approval.itemKey === "string" ? approval.itemKey.trim().slice(0, 180) : "";
+      const itemLabel = typeof approval.itemLabel === "string"
+        ? approval.itemLabel.trim().slice(0, 300)
+        : "";
+      const workItemLabel = typeof approval.workItemLabel === "string"
+        ? approval.workItemLabel.trim().slice(0, 300)
+        : "";
+      const approvedAt = typeof approval.approvedAt === "string" ? approval.approvedAt.trim() : "";
+      const accessId = typeof approval.accessId === "string" ? approval.accessId.trim().slice(0, 80) : "";
+
+      if (!workItemKey || !itemKey || !workItemLabel || Number.isNaN(new Date(approvedAt).getTime())) {
+        return result;
+      }
+      result[workItemKey] = {
+        workItemKey,
+        itemKey,
+        itemLabel,
+        workItemLabel,
+        approvedAt,
+        accessId,
+      };
+      return result;
+    },
+    {},
+  );
+}
+
 export type ImplementationRecord = {
   id: string;
   deal_id: string;
@@ -114,6 +173,7 @@ export type ImplementationRecord = {
   progress?: ImplementationProgress | null;
   implementation_item_progress?: ImplementationItemProgress | null;
   implementation_custom_work_items?: ImplementationCustomWorkItems | null;
+  implementation_customer_work_approvals?: ImplementationCustomerWorkApprovals | null;
   administration_name?: string | null;
   implementation_start_date?: string | null;
   planned_go_live_date?: string | null;

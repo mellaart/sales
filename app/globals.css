@@ -1326,9 +1326,41 @@ select option {
   color: #86efac;
 }
 
-.implementation-work-item-check.completed > span {
+.implementation-work-item-check.completed .implementation-work-item-label {
   text-decoration: line-through;
   text-decoration-thickness: 1px;
+}
+
+.implementation-work-item-details {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.implementation-customer-approval-status {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 5px;
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.implementation-customer-approval-status.approved {
+  color: #6ee7b7;
+}
+
+.implementation-item-customer-approval {
+  margin-top: 7px;
+}
+
+.implementation-customer-approval-log time {
+  color: #86efac;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .implementation-custom-work-delete,
@@ -1828,6 +1860,15 @@ select option {
   .implementation-progress-row .status-pill {
     min-width: 0;
     white-space: nowrap;
+  }
+
+  .implementation-customer-approval-log .implementation-progress-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .implementation-customer-approval-log time {
+    grid-column: 2;
+    white-space: normal;
   }
 
   .implementation-communication-card {

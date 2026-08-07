@@ -43,10 +43,12 @@ export type PublicImplementationItem = {
   key: string;
   label: string;
   description?: string;
+  customerApprovedAt: string | null;
   workItems: Array<{
     key: string;
     label: string;
     completed: boolean;
+    customerApprovedAt: string | null;
   }>;
   completed: boolean;
 };

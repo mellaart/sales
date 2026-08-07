@@ -41,6 +41,7 @@ import {
   IMPLEMENTATION_STATUSES,
   IMPLEMENTATION_STATUS_LABELS,
   normalizeImplementationCustomWorkItems,
+  normalizeImplementationCustomerWorkApprovals,
   normalizeImplementationItemProgress,
   normalizeImplementationProgress,
   type ImplementationRecord,
@@ -425,6 +426,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const implementationCustomWorkItems = useMemo(
     () => normalizeImplementationCustomWorkItems(implementation?.implementation_custom_work_items),
     [implementation?.implementation_custom_work_items],
+  );
+  const implementationCustomerWorkApprovals = useMemo(
+    () => normalizeImplementationCustomerWorkApprovals(
+      implementation?.implementation_customer_work_approvals,
+    ),
+    [implementation?.implementation_customer_work_approvals],
   );
   const configuredBaseFunctionalities = useMemo(
     () => getConfiguredBaseFunctionalities(pricingConfig).map((item) => (
@@ -1401,6 +1408,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const completedBaseFunctionalities = configuredBaseFunctionalities.filter(
     (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
+  const customerWorkApprovalRows = Object.values(implementationCustomerWorkApprovals).sort((left, right) => (
+    new Date(right.approvedAt).getTime() - new Date(left.approvedAt).getTime()
+  ));
   const expectedOnSiteAppointments = dealPriceSummary?.onSiteAppointments ?? 0;
   const scheduledOnSiteAppointments = appointments.filter(
     (appointment) => appointment.appointmentType === "on_site",
@@ -1423,6 +1433,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
           <span className="implementation-work-items">
             {workItems.map((workItem) => {
               const custom = customLabels.has(normalizedImplementationWorkLabel(workItem.label));
+              const customerApproval = implementationCustomerWorkApprovals[workItem.key];
               return (
                 <span
                   key={workItem.key}
@@ -1442,15 +1453,29 @@ export default function ImplementationEditor({ implementationId }: { implementat
                         workItem.label,
                       )}
                     />
-                    <span>{workItem.label}</span>
+                    <span className="implementation-work-item-details">
+                      <span className="implementation-work-item-label">{workItem.label}</span>
+                      {customerApproval ? (
+                        <small className="implementation-customer-approval-status approved">
+                          <CheckCircle2 size={13} aria-hidden="true" />
+                          Klant akkoord op {formatDateTime(customerApproval.approvedAt)}
+                        </small>
+                      ) : workItem.completed ? (
+                        <small className="implementation-customer-approval-status">
+                          <Clock3 size={13} aria-hidden="true" /> Wacht op akkoord van de klant
+                        </small>
+                      ) : null}
+                    </span>
                   </label>
                   {custom && canEdit ? (
                     <button
                       type="button"
                       className="implementation-custom-work-delete"
-                      disabled={saving}
+                      disabled={saving || Boolean(customerApproval)}
                       aria-label={`${workItem.label} verwijderen`}
-                      title="Deze implementatiespecifieke werkzaamheid verwijderen"
+                      title={customerApproval
+                        ? "Deze werkzaamheid kan na klantakkoord niet meer worden verwijderd"
+                        : "Deze implementatiespecifieke werkzaamheid verwijderen"}
                       onClick={() => void removeImplementationCustomWorkItem(item, workItem.label)}
                     >
                       <Trash2 size={14} aria-hidden="true" />
@@ -1460,6 +1485,26 @@ export default function ImplementationEditor({ implementationId }: { implementat
               );
             })}
           </span>
+        ) : null}
+
+        {workItems.length === 0 && (
+          implementationCustomerWorkApprovals[item.key] ||
+          isImplementationItemCompleted(item, implementationItemProgress)
+        ) ? (
+          <small className={`implementation-customer-approval-status implementation-item-customer-approval ${
+            implementationCustomerWorkApprovals[item.key] ? "approved" : ""
+          }`}>
+            {implementationCustomerWorkApprovals[item.key] ? (
+              <>
+                <CheckCircle2 size={13} aria-hidden="true" />
+                Klant akkoord op {formatDateTime(
+                  implementationCustomerWorkApprovals[item.key].approvedAt,
+                )}
+              </>
+            ) : (
+              <><Clock3 size={13} aria-hidden="true" /> Wacht op akkoord van de klant</>
+            )}
+          </small>
         ) : null}
 
         {canEdit ? (
@@ -2459,6 +2504,32 @@ export default function ImplementationEditor({ implementationId }: { implementat
               })}
             </div>
           </div>
+
+          {customerWorkApprovalRows.length > 0 ? (
+            <div className="implementation-progress-block implementation-customer-approval-log">
+              <div className="implementation-progress-heading">
+                <div>
+                  <span>Vastgelegd</span>
+                  <strong>Klantakkoorden</strong>
+                </div>
+                <span>{customerWorkApprovalRows.length} bevestigd</span>
+              </div>
+              <div className="implementation-progress-list">
+                {customerWorkApprovalRows.map((approval) => (
+                  <div key={approval.workItemKey} className="implementation-progress-row completed">
+                    <span className="implementation-progress-number">
+                      <CheckCircle2 size={15} aria-hidden="true" />
+                    </span>
+                    <div className="implementation-item-copy">
+                      <strong>{approval.workItemLabel}</strong>
+                      <small>{approval.itemLabel}</small>
+                    </div>
+                    <time dateTime={approval.approvedAt}>{formatDateTime(approval.approvedAt)}</time>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {message ? (
             <div className="implementation-save-row">

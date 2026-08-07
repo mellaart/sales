@@ -507,6 +507,39 @@
   gap: 16px;
 }
 
+.approvalNotice {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border: 1px solid #b9d2ee;
+  border-radius: 8px;
+  background: #edf6ff;
+  color: #1f67b8;
+}
+
+.approvalNotice > svg {
+  justify-self: center;
+}
+
+.approvalNotice > div {
+  display: grid;
+  gap: 3px;
+}
+
+.approvalNotice strong {
+  color: #193a61;
+  font-size: 15px;
+}
+
+.approvalNotice span {
+  color: #526b88;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .baseFeatureCard {
   display: grid;
   align-content: start;
@@ -584,6 +617,113 @@
 .activityList .activityDone,
 .activityList .activityDone > small {
   color: #166c46;
+}
+
+.customerApproval {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 3px;
+  margin-top: 7px;
+  padding: 9px 10px;
+  border: 1px solid #c8d7e7;
+  border-radius: 6px;
+  background: #f7faff;
+}
+
+.customerApproval label {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: #1f4f84;
+  cursor: pointer;
+}
+
+.customerApproval label input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.customerApprovalMark {
+  display: grid;
+  grid-row: 1;
+  grid-column: 1;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid #7c9fc4;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #ffffff;
+}
+
+.customerApproval label strong {
+  grid-column: 2;
+  font-size: 13px;
+}
+
+.customerApproval label input:focus-visible + .customerApprovalMark {
+  outline: 3px solid rgba(47,122,215,0.24);
+  outline-offset: 2px;
+}
+
+.customerApproval > small {
+  margin-left: 28px;
+  color: #60738c;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.customerApproval > p {
+  margin: 3px 0 0 28px;
+  color: #b3363f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.customerApprovalConfirmed {
+  border-color: #9fd3b8;
+  background: #eaf8f1;
+}
+
+.customerApprovalConfirmed label {
+  color: #166c46;
+  cursor: default;
+}
+
+.customerApprovalConfirmed .customerApprovalMark {
+  border-color: #2aa66a;
+  background: #2aa66a;
+}
+
+.customerApprovalConfirmed > small {
+  color: #166c46;
+  font-weight: 700;
+}
+
+.customerApprovalUnavailable {
+  background: #f3f6fa;
+  opacity: 0.76;
+}
+
+.customerApprovalUnavailable label {
+  color: #60738c;
+  cursor: default;
+}
+
+.customerApproval svg {
+  animation: customer-approval-spin 850ms linear infinite;
+}
+
+.customerApprovalConfirmed svg {
+  animation: none;
+}
+
+@keyframes customer-approval-spin {
+  to { transform: rotate(360deg); }
 }
 
 .activityDone .activityStatus {

@@ -15,6 +15,7 @@ import {
   UserRound,
 } from "lucide-react";
 import PublicDnsRefreshButton from "@/components/public-dns-refresh-button";
+import WorkApprovalControl from "./work-approval-control";
 import {
   IMPLEMENTATION_DNS_RECORDS,
   type DnsCheckItem,
@@ -105,10 +106,12 @@ export default async function ImplementationProgressPage({
 }) {
   const { accessId } = await params;
   const query = await searchParams;
+  const tokenVersion = Number(query.v ?? 0);
+  const token = query.token ?? "";
   const result = await getPublicImplementationPortal(
     accessId,
-    Number(query.v ?? 0),
-    query.token ?? "",
+    tokenVersion,
+    token,
   );
 
   if (!result.ok) {
@@ -306,6 +309,16 @@ export default async function ImplementationProgressPage({
             <div><span>Uw pakket</span><h2>Basisfunctionaliteiten</h2></div>
             <p>{completedBaseItems}/{portal.baseItems.length} basisfunctionaliteiten afgerond</p>
           </div>
+          <div className={styles.approvalNotice}>
+            <ClipboardCheck size={22} aria-hidden="true" />
+            <div>
+              <strong>Bevestig afgeronde werkzaamheden</strong>
+              <span>
+                Zodra uw consultant een werkzaamheid afrondt, kunt u akkoord geven. Uw akkoord wordt
+                met datum vastgelegd en kan daarna niet worden verwijderd.
+              </span>
+            </div>
+          </div>
           <div className={styles.baseFeatureGrid}>
             {portal.baseItems.map((feature) => (
               <article
@@ -333,10 +346,25 @@ export default async function ImplementationProgressPage({
                         </span>
                         <span>{workItem.label}</span>
                         <small>{workItem.completed ? "Afgerond" : "In voorbereiding"}</small>
+                        <WorkApprovalControl
+                          accessId={accessId}
+                          workItemKey={workItem.key}
+                          workItemLabel={workItem.label}
+                          completed={workItem.completed}
+                          initialApprovedAt={workItem.customerApprovedAt}
+                        />
                       </li>
                     ))}
                   </ul>
-                ) : null}
+                ) : (
+                  <WorkApprovalControl
+                    accessId={accessId}
+                    workItemKey={feature.key}
+                    workItemLabel={feature.label}
+                    completed={feature.completed}
+                    initialApprovedAt={feature.customerApprovedAt}
+                  />
+                )}
                 <small>{feature.completed ? "Afgerond" : "In voorbereiding"}</small>
               </article>
             ))}
@@ -372,10 +400,25 @@ export default async function ImplementationProgressPage({
                             </span>
                             <span>{workItem.label}</span>
                             <small>{workItem.completed ? "Afgerond" : "In voorbereiding"}</small>
+                            <WorkApprovalControl
+                              accessId={accessId}
+                              workItemKey={workItem.key}
+                              workItemLabel={workItem.label}
+                              completed={workItem.completed}
+                              initialApprovedAt={workItem.customerApprovedAt}
+                            />
                           </li>
                         ))}
                       </ul>
-                    ) : null}
+                    ) : (
+                      <WorkApprovalControl
+                        accessId={accessId}
+                        workItemKey={item.key}
+                        workItemLabel={item.label}
+                        completed={item.completed}
+                        initialApprovedAt={item.customerApprovedAt}
+                      />
+                    )}
                   </div>
                   <small>{item.completed ? "Afgerond" : "In voorbereiding"}</small>
                 </div>

@@ -251,6 +251,7 @@ export async function ensureLocalSchema() {
           notes text,
           progress jsonb not null default '{}'::jsonb,
           implementation_item_progress jsonb not null default '{}'::jsonb,
+          implementation_custom_work_items jsonb not null default '{}'::jsonb,
           administration_name text,
           implementation_start_date date,
           planned_go_live_date date,
@@ -276,6 +277,7 @@ export async function ensureLocalSchema() {
         alter table public.implementations add column if not exists notes text;
         alter table public.implementations add column if not exists progress jsonb not null default '{}'::jsonb;
         alter table public.implementations add column if not exists implementation_item_progress jsonb not null default '{}'::jsonb;
+        alter table public.implementations add column if not exists implementation_custom_work_items jsonb not null default '{}'::jsonb;
         alter table public.implementations add column if not exists administration_name text;
         alter table public.implementations add column if not exists implementation_start_date date;
         alter table public.implementations add column if not exists planned_go_live_date date;

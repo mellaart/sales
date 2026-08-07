@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Trash2,
   UserRoundCheck,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import ImplementationNotesField from "@/components/implementation-notes-field";
@@ -39,6 +40,7 @@ import {
   IMPLEMENTATION_PROGRESS_ITEMS,
   IMPLEMENTATION_STATUSES,
   IMPLEMENTATION_STATUS_LABELS,
+  normalizeImplementationCustomWorkItems,
   normalizeImplementationItemProgress,
   normalizeImplementationProgress,
   type ImplementationRecord,
@@ -51,6 +53,7 @@ import {
   getImplementationWorkItemProgressKey,
   getImplementationWorkItemStatuses,
   isImplementationItemCompleted,
+  withImplementationCustomWorkItems,
   withConfiguredWorkItems,
 } from "@/lib/work-activities";
 import type { DnsCheckItem, ImplementationDnsCheck } from "@/lib/implementation-dns";
@@ -175,6 +178,10 @@ function toggleAppointmentWorkItem(
   if (!checked) return selected.filter((item) => item.key !== workItem.key);
   if (selected.some((item) => item.key === workItem.key)) return selected;
   return [...selected, workItem];
+}
+
+function normalizedImplementationWorkLabel(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
 }
 
 function AppointmentWorkSelector({
@@ -388,6 +395,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [appointmentsError, setAppointmentsError] = useState("");
   const [appointmentsWarning, setAppointmentsWarning] = useState("");
   const [appointmentDraft, setAppointmentDraft] = useState<AppointmentDraft>(EMPTY_APPOINTMENT_DRAFT);
+  const [customWorkEditorKey, setCustomWorkEditorKey] = useState<string | null>(null);
+  const [customWorkDraft, setCustomWorkDraft] = useState("");
   const [calendarStatusLoaded, setCalendarStatusLoaded] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarConnectUrl, setCalendarConnectUrl] = useState("");
@@ -413,18 +422,27 @@ export default function ImplementationEditor({ implementationId }: { implementat
     () => linkedDeal ? getDealPriceSummary(linkedDeal, pricingConfig) : null,
     [linkedDeal, pricingConfig],
   );
+  const implementationCustomWorkItems = useMemo(
+    () => normalizeImplementationCustomWorkItems(implementation?.implementation_custom_work_items),
+    [implementation?.implementation_custom_work_items],
+  );
   const configuredBaseFunctionalities = useMemo(
-    () => getConfiguredBaseFunctionalities(pricingConfig),
-    [pricingConfig],
+    () => getConfiguredBaseFunctionalities(pricingConfig).map((item) => (
+      withImplementationCustomWorkItems(item, implementationCustomWorkItems)
+    )),
+    [implementationCustomWorkItems, pricingConfig],
   );
   const configuredImplementationItems = useMemo(
     () => implementationItems.map((item) => {
-      const configuredItem = withConfiguredWorkItems(item, pricingConfig);
+      const configuredItem = withImplementationCustomWorkItems(
+        withConfiguredWorkItems(item, pricingConfig),
+        implementationCustomWorkItems,
+      );
       return configuredItem.key === "planning-app"
         ? { ...configuredItem, label: "Planningsapp" }
         : configuredItem;
     }),
-    [implementationItems, pricingConfig],
+    [implementationCustomWorkItems, implementationItems, pricingConfig],
   );
   const appointmentWorkOptions = useMemo(
     () => [...configuredBaseFunctionalities, ...configuredImplementationItems].flatMap((item) => {
@@ -695,7 +713,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     successMessage: string,
     optimistic = false,
   ) {
-    if (!implementation || !supabase || saving) return;
+    if (!implementation || !supabase || saving) return false;
 
     const previousImplementation = implementation;
     if (optimistic) setImplementation({ ...implementation, ...patch });
@@ -718,6 +736,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     }
 
     setSaving(false);
+    return !error;
   }
 
   function updateProgress(key: ImplementationProgressKey, checked: boolean) {
@@ -761,6 +780,93 @@ export default function ImplementationEditor({ implementationId }: { implementat
     void saveImplementation(
       { implementation_item_progress: implementationItemProgress },
       `${workItem || item.label} bijgewerkt.`,
+      true,
+    );
+  }
+
+  async function addImplementationCustomWorkItem(item: ImplementationItem) {
+    if (!implementation || !canEdit || saving) return;
+
+    const label = customWorkDraft.trim().replace(/\s+/g, " ").slice(0, 300);
+    if (!label) {
+      setMessage("Vul eerst een werkzaamheid in.");
+      return;
+    }
+
+    const normalizedLabel = normalizedImplementationWorkLabel(label);
+    if ((item.workItems ?? []).some((workItem) => (
+      normalizedImplementationWorkLabel(workItem) === normalizedLabel
+    ))) {
+      setMessage("Deze werkzaamheid staat al bij dit onderdeel.");
+      return;
+    }
+
+    const nextCustomWorkItems = {
+      ...implementationCustomWorkItems,
+      [item.key]: [...(implementationCustomWorkItems[item.key] ?? []), label],
+    };
+    const implementationItemProgress = {
+      ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
+    };
+
+    for (const existingWorkItem of getImplementationWorkItemStatuses(item, implementationItemProgress)) {
+      if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
+        implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+      }
+    }
+    implementationItemProgress[getImplementationWorkItemProgressKey(item.key, label)] = false;
+    implementationItemProgress[item.key] = false;
+
+    const saved = await saveImplementation(
+      {
+        implementation_custom_work_items: nextCustomWorkItems,
+        implementation_item_progress: implementationItemProgress,
+      },
+      `${label} toegevoegd aan ${item.label}.`,
+      true,
+    );
+    if (!saved) return;
+
+    setCustomWorkDraft("");
+    setCustomWorkEditorKey(null);
+  }
+
+  async function removeImplementationCustomWorkItem(item: ImplementationItem, label: string) {
+    if (!implementation || !canEdit || saving) return;
+
+    const normalizedLabel = normalizedImplementationWorkLabel(label);
+    const remainingCustomItems = (implementationCustomWorkItems[item.key] ?? []).filter((workItem) => (
+      normalizedImplementationWorkLabel(workItem) !== normalizedLabel
+    ));
+    const nextCustomWorkItems = { ...implementationCustomWorkItems };
+    if (remainingCustomItems.length > 0) nextCustomWorkItems[item.key] = remainingCustomItems;
+    else delete nextCustomWorkItems[item.key];
+
+    const implementationItemProgress = {
+      ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
+    };
+    for (const existingWorkItem of getImplementationWorkItemStatuses(item, implementationItemProgress)) {
+      if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
+        implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+      }
+    }
+    delete implementationItemProgress[getImplementationWorkItemProgressKey(item.key, label)];
+
+    const remainingWorkItems = (item.workItems ?? []).filter((workItem) => (
+      normalizedImplementationWorkLabel(workItem) !== normalizedLabel
+    ));
+    if (remainingWorkItems.length > 0) {
+      implementationItemProgress[item.key] = remainingWorkItems.every((workItem) => (
+        implementationItemProgress[getImplementationWorkItemProgressKey(item.key, workItem)] === true
+      ));
+    }
+
+    await saveImplementation(
+      {
+        implementation_custom_work_items: nextCustomWorkItems,
+        implementation_item_progress: implementationItemProgress,
+      },
+      `${label} verwijderd uit ${item.label}.`,
       true,
     );
   }
@@ -1299,6 +1405,120 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const scheduledOnSiteAppointments = appointments.filter(
     (appointment) => appointment.appointmentType === "on_site",
   ).length;
+
+  function renderImplementationWorkItems(
+    item: ImplementationItem,
+    workItems: ReturnType<typeof getImplementationWorkItemStatuses>,
+  ) {
+    const customLabels = new Set(
+      (implementationCustomWorkItems[item.key] ?? []).map((label) => (
+        normalizedImplementationWorkLabel(label)
+      )),
+    );
+    const editorOpen = customWorkEditorKey === item.key;
+
+    return (
+      <>
+        {workItems.length > 0 ? (
+          <span className="implementation-work-items">
+            {workItems.map((workItem) => {
+              const custom = customLabels.has(normalizedImplementationWorkLabel(workItem.label));
+              return (
+                <span
+                  key={workItem.key}
+                  className={`implementation-work-item-row ${custom ? "custom" : ""}`}
+                >
+                  <label
+                    className={`implementation-work-item-check ${workItem.completed ? "completed" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={workItem.completed}
+                      disabled={!canEdit || saving}
+                      aria-label={`${workItem.label} afgerond`}
+                      onChange={(event) => updateImplementationItem(
+                        item,
+                        event.target.checked,
+                        workItem.label,
+                      )}
+                    />
+                    <span>{workItem.label}</span>
+                  </label>
+                  {custom && canEdit ? (
+                    <button
+                      type="button"
+                      className="implementation-custom-work-delete"
+                      disabled={saving}
+                      aria-label={`${workItem.label} verwijderen`}
+                      title="Deze implementatiespecifieke werkzaamheid verwijderen"
+                      onClick={() => void removeImplementationCustomWorkItem(item, workItem.label)}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </span>
+              );
+            })}
+          </span>
+        ) : null}
+
+        {canEdit ? (
+          editorOpen ? (
+            <form
+              className="implementation-custom-work-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addImplementationCustomWorkItem(item);
+              }}
+            >
+              <input
+                autoFocus
+                type="text"
+                value={customWorkDraft}
+                maxLength={300}
+                disabled={saving}
+                placeholder="Bijv. extra inrichting controleren"
+                aria-label={`Werkzaamheid toevoegen aan ${item.label}`}
+                onChange={(event) => setCustomWorkDraft(event.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={saving || !customWorkDraft.trim()}
+                aria-label="Werkzaamheid toevoegen"
+                title="Werkzaamheid toevoegen"
+              >
+                <Plus size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                aria-label="Annuleren"
+                title="Annuleren"
+                onClick={() => {
+                  setCustomWorkDraft("");
+                  setCustomWorkEditorKey(null);
+                }}
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              className="implementation-custom-work-trigger"
+              disabled={saving}
+              onClick={() => {
+                setCustomWorkDraft("");
+                setCustomWorkEditorKey(item.key);
+              }}
+            >
+              <Plus size={14} aria-hidden="true" /> Werkzaamheid toevoegen
+            </button>
+          )
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <div className="page-shell">
@@ -2156,33 +2376,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     className={`implementation-progress-row ${completed ? "completed" : ""}`}
                   >
                     <span className="implementation-progress-number"><ClipboardCheck size={15} /></span>
-                    <span className="implementation-item-copy">
+                    <div className="implementation-item-copy">
                       <strong>{item.label}</strong>
                       <small>{item.description}</small>
-                      {workItems.length > 0 ? (
-                        <span className="implementation-work-items">
-                          {workItems.map((workItem) => (
-                            <label
-                              key={workItem.key}
-                              className={`implementation-work-item-check ${workItem.completed ? "completed" : ""}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={workItem.completed}
-                                disabled={!canEdit || saving}
-                                aria-label={`${workItem.label} afgerond`}
-                                onChange={(event) => updateImplementationItem(
-                                  item,
-                                  event.target.checked,
-                                  workItem.label,
-                                )}
-                              />
-                              <span>{workItem.label}</span>
-                            </label>
-                          ))}
-                        </span>
-                      ) : null}
-                    </span>
+                      {renderImplementationWorkItems(item, workItems)}
+                    </div>
                     {workItems.length > 0 ? (
                       <span className="implementation-work-progress-summary">
                         {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}
@@ -2237,32 +2435,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     className={`implementation-progress-row ${completed ? "completed" : ""}`}
                   >
                     <span className="implementation-progress-number"><Package size={15} /></span>
-                    <span className="implementation-item-copy">
+                    <div className="implementation-item-copy">
                       <strong>{item.label}</strong>
-                      {workItems.length > 0 ? (
-                        <span className="implementation-work-items">
-                          {workItems.map((workItem) => (
-                            <label
-                              key={workItem.key}
-                              className={`implementation-work-item-check ${workItem.completed ? "completed" : ""}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={workItem.completed}
-                                disabled={!canEdit || saving}
-                                aria-label={`${workItem.label} afgerond`}
-                                onChange={(event) => updateImplementationItem(
-                                  item,
-                                  event.target.checked,
-                                  workItem.label,
-                                )}
-                              />
-                              <span>{workItem.label}</span>
-                            </label>
-                          ))}
-                        </span>
-                      ) : null}
-                    </span>
+                      {renderImplementationWorkItems(item, workItems)}
+                    </div>
                     {workItems.length > 0 ? (
                       <span className="implementation-work-progress-summary">
                         {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}

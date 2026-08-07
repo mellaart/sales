@@ -1285,6 +1285,17 @@ select option {
   padding: 0;
 }
 
+.implementation-work-item-row {
+  display: block;
+}
+
+.implementation-work-item-row.custom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 8px;
+}
+
 .implementation-work-item-check {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
@@ -1318,6 +1329,83 @@ select option {
 .implementation-work-item-check.completed > span {
   text-decoration: line-through;
   text-decoration-thickness: 1px;
+}
+
+.implementation-custom-work-delete,
+.implementation-custom-work-form button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(148,163,184,0.25);
+  border-radius: 6px;
+  background: rgba(15,23,42,0.68);
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.implementation-custom-work-delete:hover,
+.implementation-custom-work-form button:hover {
+  border-color: rgba(96,165,250,0.52);
+  color: #dbeafe;
+}
+
+.implementation-custom-work-delete:disabled,
+.implementation-custom-work-form button:disabled,
+.implementation-custom-work-trigger:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.implementation-custom-work-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: #93c5fd;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.implementation-custom-work-trigger:hover {
+  color: #dbeafe;
+}
+
+.implementation-custom-work-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px 28px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.implementation-custom-work-form input {
+  min-width: 0;
+  height: 36px;
+  padding: 7px 10px;
+  border: 1px solid rgba(96,165,250,0.28);
+  border-radius: 6px;
+  outline: 0;
+  background: rgba(15,23,42,0.72);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.implementation-custom-work-form input::placeholder {
+  color: #64748b;
+}
+
+.implementation-custom-work-form input:focus {
+  border-color: rgba(96,165,250,0.72);
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.16);
 }
 
 .implementation-work-progress-summary {

@@ -22,6 +22,7 @@ import {
 } from "@/lib/implementation-portal";
 import {
   IMPLEMENTATION_STATUS_LABELS,
+  normalizeImplementationCustomWorkItems,
   normalizeImplementationItemProgress,
   normalizeImplementationProgress,
   type ImplementationStatus,
@@ -33,6 +34,7 @@ import {
   getConfiguredBaseFunctionalities,
   getImplementationWorkItemStatuses,
   isImplementationItemCompleted,
+  withImplementationCustomWorkItems,
   withConfiguredWorkItems,
 } from "@/lib/work-activities";
 
@@ -81,6 +83,7 @@ type PortalImplementationRow = {
   actual_go_live_date: string | null;
   progress: unknown;
   implementation_item_progress: unknown;
+  implementation_custom_work_items: unknown;
   updated_at: string;
 };
 
@@ -488,7 +491,7 @@ export async function getPublicImplementationPortal(
     `select deal_id, customer_name, quote_title, package_name, status,
             assigned_consultant_name, assigned_consultant_email,
             implementation_start_date, planned_go_live_date, actual_go_live_date,
-            progress, implementation_item_progress, updated_at
+            progress, implementation_item_progress, implementation_custom_work_items, updated_at
      from public.implementations
      where id = $1
      limit 1`,
@@ -546,9 +549,15 @@ export async function getPublicImplementationPortal(
 
   const deal = dealRows[0];
   const itemProgress = normalizeImplementationItemProgress(implementation.implementation_item_progress);
+  const customWorkItems = normalizeImplementationCustomWorkItems(
+    implementation.implementation_custom_work_items,
+  );
   const items = deal
     ? getImplementationItems(deal).map((item) => {
-      const configuredItem = withConfiguredWorkItems(item, pricingConfig);
+      const configuredItem = withImplementationCustomWorkItems(
+        withConfiguredWorkItems(item, pricingConfig),
+        customWorkItems,
+      );
       return {
         ...configuredItem,
         label: configuredItem.key === "planning-app" ? "Planningsapp" : configuredItem.label,
@@ -557,11 +566,14 @@ export async function getPublicImplementationPortal(
       };
     })
     : [];
-  const baseFunctionalitySteps = getConfiguredBaseFunctionalities(pricingConfig).map((item) => ({
-    ...item,
-    workItems: getImplementationWorkItemStatuses(item, itemProgress),
-    completed: isImplementationItemCompleted(item, itemProgress),
-  }));
+  const baseFunctionalitySteps = getConfiguredBaseFunctionalities(pricingConfig).map((baseItem) => {
+    const item = withImplementationCustomWorkItems(baseItem, customWorkItems);
+    return {
+      ...item,
+      workItems: getImplementationWorkItemStatuses(item, itemProgress),
+      completed: isImplementationItemCompleted(item, itemProgress),
+    };
+  });
   const implementationSteps = [...baseFunctionalitySteps, ...items].flatMap((item) => (
     item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
   ));

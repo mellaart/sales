@@ -34,6 +34,7 @@ export const IMPLEMENTATION_PROGRESS_ITEMS = [
 export type ImplementationProgressKey = typeof IMPLEMENTATION_PROGRESS_ITEMS[number]["key"];
 export type ImplementationProgress = Partial<Record<ImplementationProgressKey, boolean>>;
 export type ImplementationItemProgress = Record<string, boolean>;
+export type ImplementationCustomWorkItems = Record<string, string[]>;
 
 export function normalizeImplementationProgress(value: unknown): ImplementationProgress {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -52,6 +53,42 @@ export function normalizeImplementationItemProgress(value: unknown): Implementat
     (progress, [key, completed]) => {
       progress[key] = completed === true;
       return progress;
+    },
+    {},
+  );
+}
+
+export function normalizeImplementationCustomWorkItems(
+  value: unknown,
+): ImplementationCustomWorkItems {
+  let source = value;
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch {
+      return {};
+    }
+  }
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  return Object.entries(source as Record<string, unknown>).reduce<ImplementationCustomWorkItems>(
+    (result, [rawKey, rawItems]) => {
+      const key = rawKey.trim().slice(0, 180);
+      if (!key || !Array.isArray(rawItems)) return result;
+
+      const seen = new Set<string>();
+      const items = rawItems.reduce<string[]>((labels, rawItem) => {
+        if (typeof rawItem !== "string") return labels;
+        const label = rawItem.trim().replace(/\s+/g, " ").slice(0, 300);
+        const normalizedLabel = label.toLocaleLowerCase("nl-NL");
+        if (!label || seen.has(normalizedLabel) || labels.length >= 50) return labels;
+        seen.add(normalizedLabel);
+        labels.push(label);
+        return labels;
+      }, []);
+
+      if (items.length > 0) result[key] = items;
+      return result;
     },
     {},
   );
@@ -76,6 +113,7 @@ export type ImplementationRecord = {
   notes?: string | null;
   progress?: ImplementationProgress | null;
   implementation_item_progress?: ImplementationItemProgress | null;
+  implementation_custom_work_items?: ImplementationCustomWorkItems | null;
   administration_name?: string | null;
   implementation_start_date?: string | null;
   planned_go_live_date?: string | null;

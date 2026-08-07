@@ -1,5 +1,6 @@
 import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/base-functionalities";
 import type { ImplementationItem } from "@/lib/implementation-items";
+import type { ImplementationCustomWorkItems } from "@/lib/implementations";
 import type { EditablePricingConfig, ExpansionWorkItemKey } from "@/lib/price-config";
 
 function normalizedWorkItems(items: string[] | undefined) {
@@ -116,6 +117,25 @@ export function withConfiguredWorkItems(
     ...item,
     description,
     workItems: getImplementationWorkItems(pricingConfig, item.key),
+  };
+}
+
+export function withImplementationCustomWorkItems(
+  item: ImplementationItem,
+  customWorkItems: ImplementationCustomWorkItems,
+): ImplementationItem {
+  const configuredItems = normalizedWorkItems(item.workItems);
+  const seen = new Set(configuredItems.map((workItem) => normalizedProgressText(workItem)));
+  const implementationItems = normalizedWorkItems(customWorkItems[item.key]).filter((workItem) => {
+    const normalized = normalizedProgressText(workItem);
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+
+  return {
+    ...item,
+    workItems: [...configuredItems, ...implementationItems],
   };
 }
 

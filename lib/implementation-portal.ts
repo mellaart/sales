@@ -68,6 +68,7 @@ export type PublicImplementationPortal = {
   dnsDomain: string;
   dnsCheck: ImplementationDnsCheck | null;
   dnsCheckMessage: string;
+  tasks: PublicImplementationItem[];
   baseItems: PublicImplementationItem[];
   items: PublicImplementationItem[];
   appointments: ImplementationAppointment[];

@@ -93,13 +93,11 @@ export default function WorkApprovalControl({
         </span>
         <strong>{approved ? "Akkoord gegeven" : "Akkoord met uitvoering"}</strong>
       </label>
-      <small>
-        {approvedAt
-          ? `Bevestigd op ${formatApprovalDate(approvedAt)}`
-          : completed
-            ? "Na bevestigen kan dit akkoord niet worden verwijderd."
-            : "Beschikbaar zodra de consultant deze werkzaamheid heeft afgerond."}
-      </small>
+      {approvedAt ? (
+        <small>Bevestigd op {formatApprovalDate(approvedAt)}</small>
+      ) : !completed ? (
+        <small>Beschikbaar zodra de consultant deze werkzaamheid heeft afgerond.</small>
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
     </div>
   );

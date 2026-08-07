@@ -1456,6 +1456,22 @@ select option {
   place-items: center;
 }
 
+.implementation-task-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.implementation-task-add {
+  padding: 4px 16px 14px 64px;
+  border-top: 1px solid var(--line);
+}
+
+.implementation-task-add .implementation-custom-work-form {
+  max-width: 620px;
+}
+
 .implementation-progress-number {
   display: grid;
   place-items: center;
@@ -1869,6 +1885,11 @@ select option {
   .implementation-customer-approval-log time {
     grid-column: 2;
     white-space: normal;
+  }
+
+  .implementation-task-add {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   .implementation-communication-card {
@@ -3983,6 +4004,79 @@ td {
   gap: 12px;
 }
 
+.work-task-name {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  color: #aebed4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.work-task-name input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.work-task-name input:focus {
+  border-color: rgba(96, 165, 250, 0.68);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.work-task-name input::placeholder {
+  color: rgba(203, 213, 225, 0.45);
+}
+
+.work-task-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.work-task-delete {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.12);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+.work-task-delete:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.22);
+}
+
+.work-task-delete:disabled,
+.work-task-name input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.work-task-empty {
+  padding: 22px;
+  color: #8295b0;
+  font-size: 13px;
+}
+
+.work-task-footer {
+  padding: 0 22px 20px;
+}
+
 .work-description-editor {
   display: grid;
   gap: 7px;
@@ -4109,6 +4203,10 @@ td {
   .work-activity-group {
     grid-template-columns: 1fr;
     gap: 14px;
+  }
+
+  .work-task-content {
+    grid-template-columns: minmax(0, 1fr) 40px;
   }
 }
 

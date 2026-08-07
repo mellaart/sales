@@ -16,6 +16,7 @@ import {
   FileText,
   Globe2,
   Link2,
+  ListChecks,
   LoaderCircle,
   Mail,
   MapPin,
@@ -50,7 +51,10 @@ import {
 } from "@/lib/implementations";
 import type { ImplementationItem } from "@/lib/implementation-items";
 import {
+  IMPLEMENTATION_CUSTOM_TASKS_KEY,
   getConfiguredBaseFunctionalities,
+  getConfiguredImplementationTasks,
+  getImplementationCustomTaskKey,
   getImplementationWorkItemProgressKey,
   getImplementationWorkItemStatuses,
   isImplementationItemCompleted,
@@ -398,6 +402,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [appointmentDraft, setAppointmentDraft] = useState<AppointmentDraft>(EMPTY_APPOINTMENT_DRAFT);
   const [customWorkEditorKey, setCustomWorkEditorKey] = useState<string | null>(null);
   const [customWorkDraft, setCustomWorkDraft] = useState("");
+  const [customTaskEditorOpen, setCustomTaskEditorOpen] = useState(false);
+  const [customTaskDraft, setCustomTaskDraft] = useState("");
   const [calendarStatusLoaded, setCalendarStatusLoaded] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarConnectUrl, setCalendarConnectUrl] = useState("");
@@ -439,6 +445,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
     )),
     [implementationCustomWorkItems, pricingConfig],
   );
+  const configuredImplementationTasks = useMemo(
+    () => getConfiguredImplementationTasks(pricingConfig, implementationCustomWorkItems),
+    [implementationCustomWorkItems, pricingConfig],
+  );
   const configuredImplementationItems = useMemo(
     () => implementationItems.map((item) => {
       const configuredItem = withImplementationCustomWorkItems(
@@ -452,18 +462,25 @@ export default function ImplementationEditor({ implementationId }: { implementat
     [implementationCustomWorkItems, implementationItems, pricingConfig],
   );
   const appointmentWorkOptions = useMemo(
-    () => [...configuredBaseFunctionalities, ...configuredImplementationItems].flatMap((item) => {
-      const workItems = (item.workItems ?? []).map((workItem) => workItem.trim()).filter(Boolean);
-      if (workItems.length === 0) {
-        return [{ key: item.key, group: "", label: item.label }];
-      }
-      return workItems.map((workItem) => ({
-        key: getImplementationWorkItemProgressKey(item.key, workItem),
-        group: item.label,
-        label: workItem,
-      }));
-    }),
-    [configuredBaseFunctionalities, configuredImplementationItems],
+    () => [
+      ...configuredImplementationTasks.map((item) => ({
+        key: item.key,
+        group: "Taken",
+        label: item.label,
+      })),
+      ...[...configuredBaseFunctionalities, ...configuredImplementationItems].flatMap((item) => {
+        const workItems = (item.workItems ?? []).map((workItem) => workItem.trim()).filter(Boolean);
+        if (workItems.length === 0) {
+          return [{ key: item.key, group: "", label: item.label }];
+        }
+        return workItems.map((workItem) => ({
+          key: getImplementationWorkItemProgressKey(item.key, workItem),
+          group: item.label,
+          label: workItem,
+        }));
+      }),
+    ],
+    [configuredBaseFunctionalities, configuredImplementationItems, configuredImplementationTasks],
   );
 
   const loadRoleAccess = useCallback(async () => {
@@ -874,6 +891,75 @@ export default function ImplementationEditor({ implementationId }: { implementat
         implementation_item_progress: implementationItemProgress,
       },
       `${label} verwijderd uit ${item.label}.`,
+      true,
+    );
+  }
+
+  async function addImplementationCustomTask() {
+    if (!implementation || !canEdit || saving) return;
+
+    const label = customTaskDraft.trim().replace(/\s+/g, " ").slice(0, 300);
+    if (!label) {
+      setMessage("Vul eerst een taak in.");
+      return;
+    }
+    const normalizedLabel = normalizedImplementationWorkLabel(label);
+    if (configuredImplementationTasks.some((task) => (
+      normalizedImplementationWorkLabel(task.label) === normalizedLabel
+    ))) {
+      setMessage("Deze taak staat al bij deze implementatie.");
+      return;
+    }
+
+    const nextCustomWorkItems = {
+      ...implementationCustomWorkItems,
+      [IMPLEMENTATION_CUSTOM_TASKS_KEY]: [
+        ...(implementationCustomWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY] ?? []),
+        label,
+      ],
+    };
+    const implementationItemProgress = {
+      ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
+      [getImplementationCustomTaskKey(label)]: false,
+    };
+    const saved = await saveImplementation(
+      {
+        implementation_custom_work_items: nextCustomWorkItems,
+        implementation_item_progress: implementationItemProgress,
+      },
+      `${label} toegevoegd aan Taken.`,
+      true,
+    );
+    if (!saved) return;
+
+    setCustomTaskDraft("");
+    setCustomTaskEditorOpen(false);
+  }
+
+  async function removeImplementationCustomTask(item: ImplementationItem) {
+    if (!implementation || !canEdit || saving) return;
+
+    const normalizedLabel = normalizedImplementationWorkLabel(item.label);
+    const remainingTasks = (
+      implementationCustomWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY] ?? []
+    ).filter((label) => normalizedImplementationWorkLabel(label) !== normalizedLabel);
+    const nextCustomWorkItems = { ...implementationCustomWorkItems };
+    if (remainingTasks.length > 0) {
+      nextCustomWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY] = remainingTasks;
+    } else {
+      delete nextCustomWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY];
+    }
+    const implementationItemProgress = {
+      ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
+    };
+    delete implementationItemProgress[item.key];
+
+    await saveImplementation(
+      {
+        implementation_custom_work_items: nextCustomWorkItems,
+        implementation_item_progress: implementationItemProgress,
+      },
+      `${item.label} verwijderd uit Taken.`,
       true,
     );
   }
@@ -1402,6 +1488,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const implementationItemProgress = normalizeImplementationItemProgress(
     implementation.implementation_item_progress,
   );
+  const completedImplementationTasks = configuredImplementationTasks.filter(
+    (item) => isImplementationItemCompleted(item, implementationItemProgress),
+  ).length;
   const completedImplementationItems = configuredImplementationItems.filter(
     (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
@@ -1415,6 +1504,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const scheduledOnSiteAppointments = appointments.filter(
     (appointment) => appointment.appointmentType === "on_site",
   ).length;
+  const customImplementationTaskLabels = new Set(
+    (implementationCustomWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY] ?? []).map((label) => (
+      normalizedImplementationWorkLabel(label)
+    )),
+  );
 
   function renderImplementationWorkItems(
     item: ImplementationItem,
@@ -2398,6 +2492,133 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <Mail size={16} /> {newCustomerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
               </button>
             </article>
+          </div>
+
+          <div className="implementation-progress-block implementation-items-progress">
+            <div className="implementation-progress-heading">
+              <div>
+                <span>Planning</span>
+                <strong>Taken</strong>
+              </div>
+              <span>
+                {completedImplementationTasks}/{configuredImplementationTasks.length} afgerond
+              </span>
+            </div>
+            <div className="implementation-progress-list">
+              {configuredImplementationTasks.length === 0 ? (
+                <div className="implementation-items-state">Nog geen taken toegevoegd.</div>
+              ) : configuredImplementationTasks.map((item) => {
+                const completed = isImplementationItemCompleted(item, implementationItemProgress);
+                const customerApproval = implementationCustomerWorkApprovals[item.key];
+                const custom = customImplementationTaskLabels.has(
+                  normalizedImplementationWorkLabel(item.label),
+                );
+
+                return (
+                  <div
+                    key={item.key}
+                    className={`implementation-progress-row ${completed ? "completed" : ""}`}
+                  >
+                    <span className="implementation-progress-number"><ListChecks size={15} /></span>
+                    <div className="implementation-item-copy">
+                      <strong>{item.label}</strong>
+                      {item.description ? <small>{item.description}</small> : null}
+                      {customerApproval ? (
+                        <small className="implementation-customer-approval-status approved">
+                          <CheckCircle2 size={13} aria-hidden="true" />
+                          Klant akkoord op {formatDateTime(customerApproval.approvedAt)}
+                        </small>
+                      ) : completed ? (
+                        <small className="implementation-customer-approval-status">
+                          <Clock3 size={13} aria-hidden="true" /> Wacht op akkoord van de klant
+                        </small>
+                      ) : null}
+                    </div>
+                    <div className="implementation-task-actions">
+                      <label className="implementation-item-toggle">
+                        <input
+                          type="checkbox"
+                          checked={completed}
+                          disabled={!canEdit || saving}
+                          aria-label={`${item.label} afgerond`}
+                          onChange={(event) => updateImplementationItem(item, event.target.checked)}
+                        />
+                      </label>
+                      {custom && canEdit ? (
+                        <button
+                          type="button"
+                          className="implementation-custom-work-delete"
+                          disabled={saving || Boolean(customerApproval)}
+                          aria-label={`${item.label} verwijderen`}
+                          title={customerApproval
+                            ? "Deze taak kan na klantakkoord niet meer worden verwijderd"
+                            : "Deze implementatiespecifieke taak verwijderen"}
+                          onClick={() => void removeImplementationCustomTask(item)}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {canEdit ? (
+              <div className="implementation-task-add">
+                {customTaskEditorOpen ? (
+                  <form
+                    className="implementation-custom-work-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void addImplementationCustomTask();
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      type="text"
+                      value={customTaskDraft}
+                      maxLength={300}
+                      disabled={saving}
+                      placeholder="Vul een extra taak voor deze implementatie in"
+                      aria-label="Extra taak toevoegen"
+                      onChange={(event) => setCustomTaskDraft(event.target.value)}
+                    />
+                    <button
+                      type="submit"
+                      disabled={saving || !customTaskDraft.trim()}
+                      aria-label="Taak toevoegen"
+                      title="Taak toevoegen"
+                    >
+                      <Plus size={16} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      aria-label="Annuleren"
+                      title="Annuleren"
+                      onClick={() => {
+                        setCustomTaskDraft("");
+                        setCustomTaskEditorOpen(false);
+                      }}
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    className="implementation-custom-work-trigger"
+                    disabled={saving}
+                    onClick={() => {
+                      setCustomTaskDraft("");
+                      setCustomTaskEditorOpen(true);
+                    }}
+                  >
+                    <Plus size={14} aria-hidden="true" /> Extra taak toevoegen
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="implementation-progress-block implementation-items-progress">

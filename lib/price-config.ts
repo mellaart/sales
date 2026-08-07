@@ -47,6 +47,12 @@ export type BaseFunctionalityWorkItemConfig = {
   workItems: string[];
 };
 
+export type ImplementationTaskConfig = {
+  key: string;
+  name: string;
+  description: string;
+};
+
 export type ExpansionWorkItemKey = "customerPortal" | "smartConnect" | "planningApp";
 
 export type ExpansionWorkItemConfig = {
@@ -65,6 +71,7 @@ export type EditablePricingConfig = PricingCatalog & {
   serviceCostOptions: ServiceCostPriceOption[];
   travelCostRegions: TravelCostRegion[];
   postcodeRegions: PostcodeRegion[];
+  implementationTasks: ImplementationTaskConfig[];
   baseFunctionalityWorkItems: BaseFunctionalityWorkItemConfig[];
   expansionWorkItems: ExpansionWorkItemConfig[];
   updatedAt?: string | null;
@@ -162,6 +169,7 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { key: "ccv", name: "CCV", annualPrice: 175.8 },
     { key: "worldline", name: "Worldline", annualPrice: 175.8 },
   ],
+  implementationTasks: [],
   baseFunctionalityWorkItems: IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => ({
     key: item.key,
     description: item.description,
@@ -526,6 +534,44 @@ function normalizeBaseFunctionalityWorkItems(
   };
 }
 
+function normalizeImplementationTasks(value: unknown): ImplementationTaskConfig[] {
+  if (!Array.isArray(value)) return [];
+
+  const usedKeys = new Set<string>();
+  const usedNames = new Set<string>();
+
+  return value.reduce<ImplementationTaskConfig[]>((tasks, row, index) => {
+    if (!row || typeof row !== "object" || tasks.length >= 100) return tasks;
+    const source = row as Partial<ImplementationTaskConfig>;
+    const name = typeof source.name === "string"
+      ? source.name.trim().replace(/\s+/g, " ").slice(0, 200)
+      : "";
+    const normalizedName = name.toLocaleLowerCase("nl-NL");
+    if (!name || usedNames.has(normalizedName)) return tasks;
+
+    const baseKey = typeof source.key === "string"
+      ? source.key.trim().replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 120)
+      : "";
+    let key = baseKey || `task-${index + 1}`;
+    let suffix = 2;
+    while (usedKeys.has(key)) {
+      key = `${baseKey || `task-${index + 1}`}-${suffix}`;
+      suffix += 1;
+    }
+
+    usedKeys.add(key);
+    usedNames.add(normalizedName);
+    tasks.push({
+      key,
+      name,
+      description: typeof source.description === "string"
+        ? source.description.trim().slice(0, 1000)
+        : "",
+    });
+    return tasks;
+  }, []);
+}
+
 function mapByKey(values: unknown) {
   const rows = Array.isArray(values) ? values : [];
   return new Map(rows.flatMap((row) => {
@@ -574,6 +620,7 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
     serviceCostOptions: DEFAULT_PRICE_CONFIG.serviceCostOptions.map((fallback) =>
       normalizeServiceCostOption(serviceCostByKey.get(fallback.key), fallback),
     ),
+    implementationTasks: normalizeImplementationTasks(source.implementationTasks),
     baseFunctionalityWorkItems: DEFAULT_PRICE_CONFIG.baseFunctionalityWorkItems.map((fallback) =>
       normalizeBaseFunctionalityWorkItems(baseFunctionalityWorkItemsByKey.get(fallback.key), fallback),
     ),

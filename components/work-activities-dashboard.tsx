@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Boxes,
   ClipboardList,
+  ListChecks,
   PackageCheck,
   Plus,
   RefreshCw,
@@ -51,6 +52,10 @@ type DescriptionEditorProps = {
 
 function clonePricingConfig(config: EditablePricingConfig) {
   return normalizePricingConfig(JSON.parse(JSON.stringify(config)) as unknown);
+}
+
+function createImplementationTaskKey() {
+  return `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function WorkLinesEditor({ label, value, disabled, onChange }: WorkLinesEditorProps) {
@@ -134,7 +139,8 @@ export default function WorkActivitiesDashboard() {
   const canView = canAccessTab(role, "workActivities", roleTabAccess);
   const canEdit = canWriteTab(role, "workActivities", roleTabAccess);
   const configuredLineCount = useMemo(() => (
-    draftConfig.baseFunctionalityWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
+    draftConfig.implementationTasks.filter((task) => task.name.trim()).length
+      + draftConfig.baseFunctionalityWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
       + draftConfig.modules.reduce((count, item) => count + (item.workItems ?? []).filter((line) => line.trim()).length, 0)
       + draftConfig.expansionWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
   ), [draftConfig]);
@@ -180,6 +186,35 @@ export default function WorkActivitiesDashboard() {
       baseFunctionalityWorkItems: current.baseFunctionalityWorkItems.map((item) => (
         item.key === key ? { ...item, workItems } : item
       )),
+    }));
+  }
+
+  function addImplementationTask() {
+    setDraftConfig((current) => ({
+      ...current,
+      implementationTasks: [
+        ...current.implementationTasks,
+        { key: createImplementationTaskKey(), name: "", description: "" },
+      ],
+    }));
+  }
+
+  function updateImplementationTask(
+    key: string,
+    changes: Partial<{ name: string; description: string }>,
+  ) {
+    setDraftConfig((current) => ({
+      ...current,
+      implementationTasks: current.implementationTasks.map((task) => (
+        task.key === key ? { ...task, ...changes } : task
+      )),
+    }));
+  }
+
+  function removeImplementationTask(key: string) {
+    setDraftConfig((current) => ({
+      ...current,
+      implementationTasks: current.implementationTasks.filter((task) => task.key !== key),
     }));
   }
 
@@ -323,7 +358,60 @@ export default function WorkActivitiesDashboard() {
 
         <section className="work-activities-summary">
           <ClipboardList size={20} />
-          <div><strong>{configuredLineCount} werkzaamheden ingesteld</strong><span>Omschrijvingen worden op de klantpagina getoond; iedere niet-lege werkzaamheid wordt afzonderlijk verwerkt.</span></div>
+          <div><strong>{configuredLineCount} taken en werkzaamheden ingesteld</strong><span>Omschrijvingen worden op de klantpagina getoond; iedere niet-lege regel wordt afzonderlijk verwerkt.</span></div>
+        </section>
+
+        <section className="card work-activities-section">
+          <header className="work-activities-heading">
+            <div className="icon-badge"><ListChecks size={22} /></div>
+            <div><span>Planning</span><h2>Taken</h2></div>
+          </header>
+          <div className="work-activity-groups">
+            {draftConfig.implementationTasks.length > 0 ? draftConfig.implementationTasks.map((task, index) => (
+              <article className="work-activity-group work-task-group" key={task.key}>
+                <label className="work-task-name">
+                  <span>Taak {index + 1}</span>
+                  <input
+                    value={task.name}
+                    disabled={!canEdit || saving}
+                    maxLength={200}
+                    placeholder="Vul de naam van de taak in"
+                    onChange={(event) => updateImplementationTask(task.key, { name: event.target.value })}
+                  />
+                </label>
+                <div className="work-task-content">
+                  <DescriptionEditor
+                    label="Omschrijving klantpagina"
+                    value={task.description}
+                    disabled={!canEdit || saving}
+                    onChange={(description) => updateImplementationTask(task.key, { description })}
+                  />
+                  <button
+                    type="button"
+                    className="work-task-delete"
+                    disabled={!canEdit || saving}
+                    title="Taak verwijderen"
+                    aria-label={`Taak ${index + 1} verwijderen`}
+                    onClick={() => removeImplementationTask(task.key)}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              </article>
+            )) : (
+              <div className="work-task-empty">Nog geen algemene taken toegevoegd.</div>
+            )}
+          </div>
+          <div className="work-task-footer">
+            <button
+              type="button"
+              className="secondary-button work-line-add"
+              disabled={!canEdit || saving}
+              onClick={addImplementationTask}
+            >
+              <Plus size={16} /> Taak toevoegen
+            </button>
+          </div>
         </section>
 
         <section className="card work-activities-section">

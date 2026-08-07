@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Clock3,
   Globe2,
+  ListChecks,
   LockKeyhole,
   MapPin,
   Monitor,
@@ -129,6 +130,7 @@ export default async function ImplementationProgressPage({
   }
 
   const { portal } = result;
+  const completedTasks = portal.tasks.filter((item) => item.completed).length;
   const completedBaseItems = portal.baseItems.filter((item) => item.completed).length;
   const completedItems = portal.items.filter((item) => item.completed).length;
 
@@ -306,8 +308,8 @@ export default async function ImplementationProgressPage({
       <section className={styles.section}>
         <div className={styles.content}>
           <div className={styles.sectionHeading}>
-            <div><span>Uw pakket</span><h2>Basisfunctionaliteiten</h2></div>
-            <p>{completedBaseItems}/{portal.baseItems.length} basisfunctionaliteiten afgerond</p>
+            <div><span>Planning</span><h2>Taken</h2></div>
+            <p>{completedTasks}/{portal.tasks.length} taken afgerond</p>
           </div>
           <div className={styles.approvalNotice}>
             <ClipboardCheck size={22} aria-hidden="true" />
@@ -315,9 +317,43 @@ export default async function ImplementationProgressPage({
               <strong>Bevestig afgeronde werkzaamheden</strong>
               <span>
                 Zodra uw consultant een werkzaamheid afrondt, kunt u akkoord geven. Uw akkoord wordt
-                met datum vastgelegd en kan daarna niet worden verwijderd.
+                met datum vastgelegd.
               </span>
             </div>
+          </div>
+          {portal.tasks.length > 0 ? (
+            <div className={styles.itemGrid}>
+              {portal.tasks.map((task) => (
+                <div key={task.key} className={task.completed ? styles.done : ""}>
+                  <span>{task.completed ? <Check size={17} /> : <ListChecks size={17} />}</span>
+                  <div className={styles.itemCopy}>
+                    <strong>{task.label}</strong>
+                    {task.description ? (
+                      <p className={styles.itemDescription}>{task.description}</p>
+                    ) : null}
+                    <WorkApprovalControl
+                      accessId={accessId}
+                      workItemKey={task.key}
+                      workItemLabel={task.label}
+                      completed={task.completed}
+                      initialApprovedAt={task.customerApprovedAt}
+                    />
+                  </div>
+                  <small>{task.completed ? "Afgerond" : "In voorbereiding"}</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className={styles.noItems}>Er zijn nog geen taken voor deze implementatie toegevoegd.</p>
+          )}
+        </div>
+      </section>
+
+      <section className={`${styles.section} ${styles.altSection}`}>
+        <div className={styles.content}>
+          <div className={styles.sectionHeading}>
+            <div><span>Uw pakket</span><h2>Basisfunctionaliteiten</h2></div>
+            <p>{completedBaseItems}/{portal.baseItems.length} basisfunctionaliteiten afgerond</p>
           </div>
           <div className={styles.baseFeatureGrid}>
             {portal.baseItems.map((feature) => (
@@ -372,7 +408,7 @@ export default async function ImplementationProgressPage({
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.altSection}`}>
+      <section className={styles.section}>
         <div className={styles.content}>
           <div className={styles.sectionHeading}>
             <div><span>Uitbreidingen</span><h2>Modules en koppelingen</h2></div>

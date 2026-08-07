@@ -3,6 +3,8 @@ import type { ImplementationItem } from "@/lib/implementation-items";
 import type { ImplementationCustomWorkItems } from "@/lib/implementations";
 import type { EditablePricingConfig, ExpansionWorkItemKey } from "@/lib/price-config";
 
+export const IMPLEMENTATION_CUSTOM_TASKS_KEY = "__implementation_tasks__";
+
 function normalizedWorkItems(items: string[] | undefined) {
   return (items ?? []).map((item) => item.trim()).filter(Boolean);
 }
@@ -24,6 +26,10 @@ function progressHash(value: string) {
 
 export function getImplementationWorkItemProgressKey(itemKey: string, workItem: string) {
   return `work:${itemKey}:${progressHash(`${itemKey}\u0000${normalizedProgressText(workItem)}`)}`;
+}
+
+export function getImplementationCustomTaskKey(label: string) {
+  return `task:custom:${progressHash(normalizedProgressText(label))}`;
 }
 
 export function getImplementationWorkItemStatuses(
@@ -141,4 +147,29 @@ export function withImplementationCustomWorkItems(
 
 export function getConfiguredBaseFunctionalities(pricingConfig: EditablePricingConfig) {
   return IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => withConfiguredWorkItems(item, pricingConfig));
+}
+
+export function getConfiguredImplementationTasks(
+  pricingConfig: EditablePricingConfig,
+  customWorkItems: ImplementationCustomWorkItems = {},
+) {
+  const configuredTasks: ImplementationItem[] = pricingConfig.implementationTasks.map((task) => ({
+    key: `task:${task.key}`,
+    label: task.name,
+    description: task.description || undefined,
+  }));
+  const seen = new Set(configuredTasks.map((task) => normalizedProgressText(task.label)));
+  const customTasks = normalizedWorkItems(customWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY])
+    .filter((label) => {
+      const normalized = normalizedProgressText(label);
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    })
+    .map<ImplementationItem>((label) => ({
+      key: getImplementationCustomTaskKey(label),
+      label,
+    }));
+
+  return [...configuredTasks, ...customTasks];
 }

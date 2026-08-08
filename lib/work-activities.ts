@@ -1,6 +1,10 @@
 import type { ImplementationItem } from "@/lib/implementation-items";
 import type { ImplementationCustomWorkItems } from "@/lib/implementations";
-import type { EditablePricingConfig, ExpansionWorkItemKey } from "@/lib/price-config";
+import type {
+  EditablePricingConfig,
+  ExpansionWorkItemKey,
+  ImplementationTaskOwner,
+} from "@/lib/price-config";
 
 export const IMPLEMENTATION_CUSTOM_TASKS_KEY = "__implementation_tasks__";
 
@@ -42,13 +46,32 @@ export function getImplementationWorkItemStatuses(
   const hasIndividualProgress = workItems.some((workItem) => (
     Object.prototype.hasOwnProperty.call(progress, workItem.key)
   ));
+  const hasItemProgress = Object.prototype.hasOwnProperty.call(progress, item.key);
 
-  return workItems.map((workItem) => ({
-    ...workItem,
-    completed: hasIndividualProgress
-      ? progress[workItem.key] === true
-      : progress[item.key] === true,
-  }));
+  return workItems.map((workItem) => {
+    const hasWorkItemProgress = Object.prototype.hasOwnProperty.call(progress, workItem.key);
+    const selected = item.selectableWorkItems
+      ? hasWorkItemProgress || (!hasIndividualProgress && hasItemProgress)
+      : true;
+
+    return {
+      ...workItem,
+      owner: item.workItemOwners?.[workItem.key] ?? "consultant" as ImplementationTaskOwner,
+      selected,
+      completed: selected && (hasWorkItemProgress
+        ? progress[workItem.key] === true
+        : progress[item.key] === true),
+    };
+  });
+}
+
+export function isImplementationItemSelected(
+  item: ImplementationItem,
+  progress: Record<string, boolean>,
+) {
+  const workItems = getImplementationWorkItemStatuses(item, progress);
+  if (workItems.length === 0) return Object.prototype.hasOwnProperty.call(progress, item.key);
+  return item.selectableWorkItems ? workItems.some((workItem) => workItem.selected) : true;
 }
 
 export function isImplementationItemCompleted(
@@ -58,7 +81,10 @@ export function isImplementationItemCompleted(
   const workItems = getImplementationWorkItemStatuses(item, progress);
   if (workItems.length === 0) return Boolean(progress[item.key]);
 
-  return workItems.every((workItem) => workItem.completed);
+  const selectedWorkItems = item.selectableWorkItems
+    ? workItems.filter((workItem) => workItem.selected)
+    : workItems;
+  return selectedWorkItems.length > 0 && selectedWorkItems.every((workItem) => workItem.completed);
 }
 
 function expansionKeyForImplementationItem(itemKey: string): ExpansionWorkItemKey | null {
@@ -139,14 +165,27 @@ export function getConfiguredImplementationTasks(
   pricingConfig: EditablePricingConfig,
   customWorkItems: ImplementationCustomWorkItems = {},
 ) {
-  const configuredTasks: ImplementationItem[] = pricingConfig.implementationTasks.map((task) => (
-    withImplementationCustomWorkItems({
-      key: `task:${task.key}`,
+  const configuredTasks: ImplementationItem[] = pricingConfig.implementationTasks.map((task) => {
+    const itemKey = `task:${task.key}`;
+    const workItems = task.workItems.map((workItem) => workItem.label.trim()).filter(Boolean);
+    const workItemOwners = task.workItems.reduce<Record<string, ImplementationTaskOwner>>(
+      (owners, workItem) => {
+        if (!workItem.label.trim()) return owners;
+        owners[getImplementationWorkItemProgressKey(itemKey, workItem.label)] = workItem.owner;
+        return owners;
+      },
+      {},
+    );
+
+    return withImplementationCustomWorkItems({
+      key: itemKey,
       label: task.name,
       description: task.description || undefined,
-      workItems: normalizedWorkItems(task.workItems),
-    }, customWorkItems)
-  ));
+      workItems,
+      workItemOwners,
+      selectableWorkItems: true,
+    }, customWorkItems);
+  });
   const seen = new Set(configuredTasks.map((task) => normalizedProgressText(task.label)));
   const customTasks = normalizedWorkItems(customWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY])
     .filter((label) => {
@@ -159,6 +198,8 @@ export function getConfiguredImplementationTasks(
       const item = {
         key: getImplementationCustomTaskKey(label),
         label,
+        owner: "consultant" as const,
+        selectableWorkItems: true,
       };
       return withImplementationCustomWorkItems(item, customWorkItems);
     });

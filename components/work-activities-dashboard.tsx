@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Boxes,
+  ChevronDown,
+  ChevronUp,
   ClipboardList,
   ListChecks,
   Plus,
@@ -17,8 +19,12 @@ import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
 import {
   DEFAULT_PRICE_CONFIG,
+  IMPLEMENTATION_TASK_OWNER_LABELS,
+  IMPLEMENTATION_TASK_OWNERS,
   normalizePricingConfig,
   type EditablePricingConfig,
+  type ImplementationTaskConfig,
+  type ImplementationTaskWorkItemConfig,
 } from "@/lib/price-config";
 import {
   ROLE_TAB_ACCESS,
@@ -54,6 +60,18 @@ function clonePricingConfig(config: EditablePricingConfig) {
 
 function createImplementationTaskKey() {
   return `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createImplementationTaskActivityKey() {
+  return `activity-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function moveArrayItem<T>(items: T[], index: number, direction: -1 | 1) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= items.length) return items;
+  const next = [...items];
+  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+  return next;
 }
 
 function WorkLinesEditor({ label, value, disabled, onChange }: WorkLinesEditorProps) {
@@ -107,6 +125,107 @@ function WorkLinesEditor({ label, value, disabled, onChange }: WorkLinesEditorPr
   );
 }
 
+function TaskWorkItemsEditor({
+  groupName,
+  value,
+  disabled,
+  onChange,
+}: {
+  groupName: string;
+  value: ImplementationTaskWorkItemConfig[];
+  disabled: boolean;
+  onChange: (value: ImplementationTaskWorkItemConfig[]) => void;
+}) {
+  function updateItem(index: number, changes: Partial<ImplementationTaskWorkItemConfig>) {
+    onChange(value.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
+  }
+
+  function removeItem(index: number) {
+    onChange(value.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  return (
+    <div className="work-task-items-editor">
+      <div className="work-task-items-heading" aria-hidden="true">
+        <span>Volgorde</span><span>Activiteit</span><span>Wie</span><span>Acties</span>
+      </div>
+      {value.length > 0 ? (
+        <div className="work-task-items-list">
+          {value.map((item, index) => (
+            <div className="work-task-item" key={item.key}>
+              <span className="work-line-number">{index + 1}</span>
+              <input
+                aria-label={`${groupName}, activiteit ${index + 1}`}
+                value={item.label}
+                disabled={disabled}
+                placeholder="Vul een activiteit in"
+                onChange={(event) => updateItem(index, { label: event.target.value })}
+              />
+              <select
+                aria-label={`Wie voert activiteit ${index + 1} uit`}
+                value={item.owner}
+                disabled={disabled}
+                onChange={(event) => updateItem(index, {
+                  owner: event.target.value as ImplementationTaskWorkItemConfig["owner"],
+                })}
+              >
+                {IMPLEMENTATION_TASK_OWNERS.map((owner) => (
+                  <option key={owner} value={owner}>{IMPLEMENTATION_TASK_OWNER_LABELS[owner]}</option>
+                ))}
+              </select>
+              <span className="work-task-item-actions">
+                <button
+                  type="button"
+                  className="work-task-move"
+                  disabled={disabled || index === 0}
+                  aria-label={`Activiteit ${index + 1} omhoog verplaatsen`}
+                  title="Omhoog"
+                  onClick={() => onChange(moveArrayItem(value, index, -1))}
+                >
+                  <ChevronUp size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="work-task-move"
+                  disabled={disabled || index === value.length - 1}
+                  aria-label={`Activiteit ${index + 1} omlaag verplaatsen`}
+                  title="Omlaag"
+                  onClick={() => onChange(moveArrayItem(value, index, 1))}
+                >
+                  <ChevronDown size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="work-line-delete"
+                  aria-label={`Activiteit ${index + 1} verwijderen`}
+                  title="Activiteit verwijderen"
+                  disabled={disabled}
+                  onClick={() => removeItem(index)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="work-lines-empty">Nog geen activiteiten toegevoegd.</p>
+      )}
+      <button
+        type="button"
+        className="secondary-button work-line-add"
+        disabled={disabled}
+        onClick={() => onChange([
+          ...value,
+          { key: createImplementationTaskActivityKey(), label: "", owner: "consultant" },
+        ])}
+      >
+        <Plus size={16} /> Activiteit toevoegen
+      </button>
+    </div>
+  );
+}
+
 function DescriptionEditor({ label, value, disabled, onChange }: DescriptionEditorProps) {
   return (
     <label className="work-description-editor">
@@ -138,7 +257,7 @@ export default function WorkActivitiesDashboard() {
   const canEdit = canWriteTab(role, "workActivities", roleTabAccess);
   const configuredLineCount = useMemo(() => (
     draftConfig.implementationTasks.filter((task) => task.name.trim()).length
-      + draftConfig.implementationTasks.reduce((count, task) => count + task.workItems.filter((line) => line.trim()).length, 0)
+      + draftConfig.implementationTasks.reduce((count, task) => count + task.workItems.filter((line) => line.label.trim()).length, 0)
       + draftConfig.modules.reduce((count, item) => count + (item.workItems ?? []).filter((line) => line.trim()).length, 0)
       + draftConfig.expansionWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
   ), [draftConfig]);
@@ -190,13 +309,20 @@ export default function WorkActivitiesDashboard() {
 
   function updateImplementationTask(
     key: string,
-    changes: Partial<{ name: string; description: string; workItems: string[] }>,
+    changes: Partial<Pick<ImplementationTaskConfig, "name" | "description" | "workItems">>,
   ) {
     setDraftConfig((current) => ({
       ...current,
       implementationTasks: current.implementationTasks.map((task) => (
         task.key === key ? { ...task, ...changes } : task
       )),
+    }));
+  }
+
+  function moveImplementationTask(index: number, direction: -1 | 1) {
+    setDraftConfig((current) => ({
+      ...current,
+      implementationTasks: moveArrayItem(current.implementationTasks, index, direction),
     }));
   }
 
@@ -349,16 +475,40 @@ export default function WorkActivitiesDashboard() {
           <div className="work-activity-groups">
             {draftConfig.implementationTasks.length > 0 ? draftConfig.implementationTasks.map((task, index) => (
               <article className="work-activity-group work-task-group" key={task.key}>
-                <label className="work-task-name">
-                  <span>Taak {index + 1}</span>
-                  <input
-                    value={task.name}
-                    disabled={!canEdit || saving}
-                    maxLength={200}
-                    placeholder="Vul de naam van de taak in"
-                    onChange={(event) => updateImplementationTask(task.key, { name: event.target.value })}
-                  />
-                </label>
+                <div className="work-task-group-meta">
+                  <label className="work-task-name">
+                    <span>Groep {index + 1}</span>
+                    <input
+                      value={task.name}
+                      disabled={!canEdit || saving}
+                      maxLength={200}
+                      placeholder="Bijv. Voor het eerste bezoek"
+                      onChange={(event) => updateImplementationTask(task.key, { name: event.target.value })}
+                    />
+                  </label>
+                  <div className="work-task-group-order" aria-label={`Volgorde van ${task.name || `groep ${index + 1}`}`}>
+                    <button
+                      type="button"
+                      className="work-task-move"
+                      disabled={!canEdit || saving || index === 0}
+                      aria-label={`Groep ${index + 1} omhoog verplaatsen`}
+                      title="Groep omhoog"
+                      onClick={() => moveImplementationTask(index, -1)}
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="work-task-move"
+                      disabled={!canEdit || saving || index === draftConfig.implementationTasks.length - 1}
+                      aria-label={`Groep ${index + 1} omlaag verplaatsen`}
+                      title="Groep omlaag"
+                      onClick={() => moveImplementationTask(index, 1)}
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  </div>
+                </div>
                 <div className="work-task-content">
                   <div className="work-activity-content">
                     <DescriptionEditor
@@ -367,8 +517,8 @@ export default function WorkActivitiesDashboard() {
                       disabled={!canEdit || saving}
                       onChange={(description) => updateImplementationTask(task.key, { description })}
                     />
-                    <WorkLinesEditor
-                      label={task.name || `Taak ${index + 1}`}
+                    <TaskWorkItemsEditor
+                      groupName={task.name || `Groep ${index + 1}`}
                       value={task.workItems}
                       disabled={!canEdit || saving}
                       onChange={(workItems) => updateImplementationTask(task.key, { workItems })}
@@ -378,8 +528,8 @@ export default function WorkActivitiesDashboard() {
                     type="button"
                     className="work-task-delete"
                     disabled={!canEdit || saving}
-                    title="Taak verwijderen"
-                    aria-label={`Taak ${index + 1} verwijderen`}
+                    title="Groep verwijderen"
+                    aria-label={`Groep ${index + 1} verwijderen`}
                     onClick={() => removeImplementationTask(task.key)}
                   >
                     <Trash2 size={17} />
@@ -387,7 +537,7 @@ export default function WorkActivitiesDashboard() {
                 </div>
               </article>
             )) : (
-              <div className="work-task-empty">Nog geen algemene taken toegevoegd.</div>
+              <div className="work-task-empty">Nog geen taakgroepen toegevoegd.</div>
             )}
           </div>
           <div className="work-task-footer">
@@ -397,7 +547,7 @@ export default function WorkActivitiesDashboard() {
               disabled={!canEdit || saving}
               onClick={addImplementationTask}
             >
-              <Plus size={16} /> Taak toevoegen
+              <Plus size={16} /> Groep toevoegen
             </button>
           </div>
         </section>

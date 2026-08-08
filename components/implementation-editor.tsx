@@ -54,6 +54,7 @@ import {
   type ImplementationStatus,
 } from "@/lib/implementations";
 import type { ImplementationItem } from "@/lib/implementation-items";
+import { IMPLEMENTATION_TASK_OWNER_LABELS } from "@/lib/price-config";
 import {
   IMPLEMENTATION_CUSTOM_TASKS_KEY,
   getConfiguredImplementationTasks,
@@ -61,6 +62,7 @@ import {
   getImplementationWorkItemProgressKey,
   getImplementationWorkItemStatuses,
   isImplementationItemCompleted,
+  isImplementationItemSelected,
   withImplementationCustomWorkItems,
   withConfiguredWorkItems,
 } from "@/lib/work-activities";
@@ -182,6 +184,8 @@ type AppointmentWorkGroup = {
   label: string;
   items: AppointmentWorkOption[];
 };
+
+type ImplementationWorkStatus = "" | "todo" | "completed";
 
 const APPOINTMENT_WORK_CATEGORY_LABELS: Record<AppointmentWorkCategory, string> = {
   tasks: "Taken",
@@ -1115,9 +1119,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
       ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
     };
     const existingWorkItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
-    for (const existingWorkItem of existingWorkItems) {
-      if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
-        implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+    if (!item.selectableWorkItems) {
+      for (const existingWorkItem of existingWorkItems) {
+        if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
+          implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+        }
       }
     }
     const progressKey = workItem
@@ -1130,6 +1136,38 @@ export default function ImplementationEditor({ implementationId }: { implementat
         const candidateKey = getImplementationWorkItemProgressKey(item.key, candidate);
         return implementationItemProgress[candidateKey] === true;
       });
+    }
+
+    void saveImplementation(
+      { implementation_item_progress: implementationItemProgress },
+      `${workItem || item.label} bijgewerkt.`,
+      true,
+    );
+  }
+
+  function updateImplementationWorkStatus(
+    item: ImplementationItem,
+    workItem: string | undefined,
+    status: ImplementationWorkStatus,
+  ) {
+    if (!implementation || !canEdit || saving) return;
+
+    const implementationItemProgress = {
+      ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
+    };
+    const progressKey = workItem
+      ? getImplementationWorkItemProgressKey(item.key, workItem)
+      : item.key;
+
+    if (!status) delete implementationItemProgress[progressKey];
+    else implementationItemProgress[progressKey] = status === "completed";
+
+    if (workItem) {
+      delete implementationItemProgress[item.key];
+      const statuses = getImplementationWorkItemStatuses(item, implementationItemProgress);
+      const selectedStatuses = statuses.filter((candidate) => candidate.selected);
+      if (selectedStatuses.length === 0) delete implementationItemProgress[item.key];
+      else implementationItemProgress[item.key] = selectedStatuses.every((candidate) => candidate.completed);
     }
 
     void saveImplementation(
@@ -1164,9 +1202,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
       ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
     };
 
-    for (const existingWorkItem of getImplementationWorkItemStatuses(item, implementationItemProgress)) {
-      if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
-        implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+    if (!item.selectableWorkItems) {
+      for (const existingWorkItem of getImplementationWorkItemStatuses(item, implementationItemProgress)) {
+        if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
+          implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+        }
       }
     }
     implementationItemProgress[getImplementationWorkItemProgressKey(item.key, label)] = false;
@@ -1200,20 +1240,34 @@ export default function ImplementationEditor({ implementationId }: { implementat
     const implementationItemProgress = {
       ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
     };
-    for (const existingWorkItem of getImplementationWorkItemStatuses(item, implementationItemProgress)) {
-      if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
-        implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+    if (!item.selectableWorkItems) {
+      for (const existingWorkItem of getImplementationWorkItemStatuses(item, implementationItemProgress)) {
+        if (!Object.prototype.hasOwnProperty.call(implementationItemProgress, existingWorkItem.key)) {
+          implementationItemProgress[existingWorkItem.key] = existingWorkItem.completed;
+        }
       }
     }
     delete implementationItemProgress[getImplementationWorkItemProgressKey(item.key, label)];
+    if (item.selectableWorkItems) delete implementationItemProgress[item.key];
 
     const remainingWorkItems = (item.workItems ?? []).filter((workItem) => (
       normalizedImplementationWorkLabel(workItem) !== normalizedLabel
     ));
     if (remainingWorkItems.length > 0) {
-      implementationItemProgress[item.key] = remainingWorkItems.every((workItem) => (
-        implementationItemProgress[getImplementationWorkItemProgressKey(item.key, workItem)] === true
-      ));
+      const remainingStatuses = getImplementationWorkItemStatuses(
+        { ...item, workItems: remainingWorkItems },
+        implementationItemProgress,
+      );
+      const relevantStatuses = item.selectableWorkItems
+        ? remainingStatuses.filter((workItem) => workItem.selected)
+        : remainingStatuses;
+      if (relevantStatuses.length > 0) {
+        implementationItemProgress[item.key] = relevantStatuses.every((workItem) => workItem.completed);
+      } else {
+        delete implementationItemProgress[item.key];
+      }
+    } else {
+      delete implementationItemProgress[item.key];
     }
 
     await saveImplementation(
@@ -1847,6 +1901,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const completedImplementationTasks = configuredImplementationTasks.filter(
     (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
+  const selectedImplementationTasks = configuredImplementationTasks.filter(
+    (item) => isImplementationItemSelected(item, implementationItemProgress),
+  ).length;
   const completedImplementationItems = configuredImplementationItems.filter(
     (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
@@ -1881,39 +1938,71 @@ export default function ImplementationEditor({ implementationId }: { implementat
             {workItems.map((workItem) => {
               const custom = customLabels.has(normalizedImplementationWorkLabel(workItem.label));
               const customerApproval = implementationCustomerWorkApprovals[workItem.key];
+              const workStatus: ImplementationWorkStatus = !workItem.selected
+                ? ""
+                : workItem.completed ? "completed" : "todo";
+              const approvalStatus = customerApproval ? (
+                <small className="implementation-customer-approval-status approved">
+                  <CheckCircle2 size={13} aria-hidden="true" />
+                  Klant akkoord op {formatDateTime(customerApproval.approvedAt)}
+                </small>
+              ) : workItem.completed ? (
+                <small className="implementation-customer-approval-status">
+                  <Clock3 size={13} aria-hidden="true" /> Wacht op akkoord van de klant
+                </small>
+              ) : null;
               return (
                 <span
                   key={workItem.key}
-                  className={`implementation-work-item-row ${custom ? "custom" : ""}`}
+                  className={`implementation-work-item-row ${custom ? "custom" : ""} ${
+                    item.selectableWorkItems ? "selectable" : ""
+                  }`}
                 >
-                  <label
-                    className={`implementation-work-item-check ${workItem.completed ? "completed" : ""}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={workItem.completed}
-                      disabled={!canEdit || saving}
-                      aria-label={`${workItem.label} afgerond`}
-                      onChange={(event) => updateImplementationItem(
-                        item,
-                        event.target.checked,
-                        workItem.label,
-                      )}
-                    />
-                    <span className="implementation-work-item-details">
-                      <span className="implementation-work-item-label">{workItem.label}</span>
-                      {customerApproval ? (
-                        <small className="implementation-customer-approval-status approved">
-                          <CheckCircle2 size={13} aria-hidden="true" />
-                          Klant akkoord op {formatDateTime(customerApproval.approvedAt)}
-                        </small>
-                      ) : workItem.completed ? (
-                        <small className="implementation-customer-approval-status">
-                          <Clock3 size={13} aria-hidden="true" /> Wacht op akkoord van de klant
-                        </small>
-                      ) : null}
+                  {item.selectableWorkItems ? (
+                    <span className={`implementation-task-status-row ${workItem.completed ? "completed" : ""}`}>
+                      <span className="implementation-work-item-details">
+                        <span className="implementation-work-item-label">{workItem.label}</span>
+                        <span className="implementation-task-owner">
+                          {IMPLEMENTATION_TASK_OWNER_LABELS[workItem.owner]}
+                        </span>
+                        {approvalStatus}
+                      </span>
+                      <select
+                        value={workStatus}
+                        disabled={!canEdit || saving || Boolean(customerApproval)}
+                        aria-label={`Status van ${workItem.label}`}
+                        onChange={(event) => updateImplementationWorkStatus(
+                          item,
+                          workItem.label,
+                          event.target.value as ImplementationWorkStatus,
+                        )}
+                      >
+                        <option value="">Niet geselecteerd</option>
+                        <option value="todo">Te doen</option>
+                        <option value="completed">Afgerond</option>
+                      </select>
                     </span>
-                  </label>
+                  ) : (
+                    <label
+                      className={`implementation-work-item-check ${workItem.completed ? "completed" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={workItem.completed}
+                        disabled={!canEdit || saving}
+                        aria-label={`${workItem.label} afgerond`}
+                        onChange={(event) => updateImplementationItem(
+                          item,
+                          event.target.checked,
+                          workItem.label,
+                        )}
+                      />
+                      <span className="implementation-work-item-details">
+                        <span className="implementation-work-item-label">{workItem.label}</span>
+                        {approvalStatus}
+                      </span>
+                    </label>
+                  )}
                   {custom && canEdit ? (
                     <button
                       type="button"
@@ -2863,7 +2952,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <strong>Taken</strong>
               </div>
               <span>
-                {completedImplementationTasks}/{configuredImplementationTasks.length} afgerond
+                {completedImplementationTasks}/{selectedImplementationTasks} geselecteerde groepen afgerond
               </span>
             </div>
             <div className="implementation-progress-list">
@@ -2872,6 +2961,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
               ) : configuredImplementationTasks.map((item) => {
                 const workItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
                 const completed = isImplementationItemCompleted(item, implementationItemProgress);
+                const selected = isImplementationItemSelected(item, implementationItemProgress);
+                const selectedWorkItems = workItems.filter((workItem) => workItem.selected);
                 const customerApproval = implementationCustomerWorkApprovals[item.key];
                 const hasCustomerApproval = Boolean(customerApproval) || workItems.some((workItem) => (
                   Boolean(implementationCustomerWorkApprovals[workItem.key])
@@ -2883,7 +2974,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 return (
                   <div
                     key={item.key}
-                    className={`implementation-progress-row ${completed ? "completed" : ""}`}
+                    className={`implementation-progress-row ${completed ? "completed" : ""} ${selected ? "selected" : ""}`}
                   >
                     <span className="implementation-progress-number"><ListChecks size={15} /></span>
                     <div className="implementation-item-copy">
@@ -2894,8 +2985,26 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     <div className="implementation-task-actions">
                       {workItems.length > 0 ? (
                         <span className="implementation-work-progress-summary">
-                          {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}
+                          {selectedWorkItems.length > 0
+                            ? `${selectedWorkItems.filter((workItem) => workItem.completed).length}/${selectedWorkItems.length}`
+                            : "0 gekozen"}
                         </span>
+                      ) : item.selectableWorkItems ? (
+                        <select
+                          className="implementation-task-status-select"
+                          value={!selected ? "" : completed ? "completed" : "todo"}
+                          disabled={!canEdit || saving || Boolean(customerApproval)}
+                          aria-label={`Status van ${item.label}`}
+                          onChange={(event) => updateImplementationWorkStatus(
+                            item,
+                            undefined,
+                            event.target.value as ImplementationWorkStatus,
+                          )}
+                        >
+                          <option value="">Niet geselecteerd</option>
+                          <option value="todo">Te doen</option>
+                          <option value="completed">Afgerond</option>
+                        </select>
                       ) : (
                         <label className="implementation-item-toggle">
                           <input

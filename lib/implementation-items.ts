@@ -1,10 +1,14 @@
 import { DEFAULT_PRICE_CONFIG } from "@/lib/price-config";
+import type { ImplementationTaskOwner } from "@/lib/price-config";
 
 export type ImplementationItem = {
   key: string;
   label: string;
   description?: string;
   workItems?: string[];
+  selectableWorkItems?: boolean;
+  owner?: ImplementationTaskOwner;
+  workItemOwners?: Record<string, ImplementationTaskOwner>;
 };
 
 type DealImplementationSource = {

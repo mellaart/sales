@@ -40,11 +40,26 @@ export type PostcodeRegion = {
   kilometers: number;
 };
 
+export const IMPLEMENTATION_TASK_OWNERS = ["customer", "consultant", "together"] as const;
+export type ImplementationTaskOwner = typeof IMPLEMENTATION_TASK_OWNERS[number];
+
+export const IMPLEMENTATION_TASK_OWNER_LABELS: Record<ImplementationTaskOwner, string> = {
+  customer: "Klant",
+  consultant: "Consultant",
+  together: "Samen",
+};
+
+export type ImplementationTaskWorkItemConfig = {
+  key: string;
+  label: string;
+  owner: ImplementationTaskOwner;
+};
+
 export type ImplementationTaskConfig = {
   key: string;
   name: string;
   description: string;
-  workItems: string[];
+  workItems: ImplementationTaskWorkItemConfig[];
 };
 
 export type ExpansionWorkItemKey = "customerPortal" | "smartConnect" | "planningApp";
@@ -315,6 +330,46 @@ function cleanWorkItems(value: unknown) {
     : null;
 }
 
+function normalizeImplementationTaskOwner(value: unknown): ImplementationTaskOwner {
+  if (value === "customer" || value === "klant") return "customer";
+  if (value === "together" || value === "samen") return "together";
+  return "consultant";
+}
+
+function cleanImplementationTaskWorkItems(value: unknown, groupKey: string) {
+  if (!Array.isArray(value)) return [];
+
+  const usedKeys = new Set<string>();
+  return value.reduce<ImplementationTaskWorkItemConfig[]>((items, row, index) => {
+    if (items.length >= 300) return items;
+    const source = row && typeof row === "object"
+      ? row as Partial<ImplementationTaskWorkItemConfig>
+      : null;
+    const label = String(source ? source.label ?? "" : row ?? "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .slice(0, 500);
+    if (!label) return items;
+
+    const baseKey = typeof source?.key === "string"
+      ? source.key.trim().replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 120)
+      : "";
+    let key = baseKey || `${groupKey}-activity-${index + 1}`;
+    let suffix = 2;
+    while (usedKeys.has(key)) {
+      key = `${baseKey || `${groupKey}-activity-${index + 1}`}-${suffix}`;
+      suffix += 1;
+    }
+    usedKeys.add(key);
+    items.push({
+      key,
+      label,
+      owner: normalizeImplementationTaskOwner(source?.owner),
+    });
+    return items;
+  }, []);
+}
+
 function normalizePackage(input: unknown, fallback: PackageConfig): PackageConfig {
   const source = input && typeof input === "object" ? (input as Partial<PackageConfig>) : {};
 
@@ -539,7 +594,7 @@ function normalizeImplementationTasks(value: unknown): ImplementationTaskConfig[
       description: typeof source.description === "string"
         ? source.description.trim().slice(0, 1000)
         : "",
-      workItems: cleanWorkItems(source.workItems) ?? [],
+      workItems: cleanImplementationTaskWorkItems(source.workItems, key),
     });
     return tasks;
   }, []);

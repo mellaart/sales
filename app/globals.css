@@ -1916,6 +1916,57 @@ select option {
   gap: 3px;
 }
 
+.implementation-task-status-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+}
+
+.implementation-task-status-row.completed .implementation-work-item-label {
+  color: #86efac;
+}
+
+.implementation-task-owner {
+  justify-self: start;
+  padding: 3px 7px;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #bfdbfe;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.implementation-task-status-row select,
+.implementation-task-status-select {
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 28px 7px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 7px;
+  background: #172238;
+  color: #f8fbff;
+  color-scheme: dark;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  outline: none;
+}
+
+.implementation-task-status-row select:focus,
+.implementation-task-status-select:focus {
+  border-color: rgba(96, 165, 250, 0.68);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.implementation-task-status-row select:disabled,
+.implementation-task-status-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .implementation-customer-approval-status {
   display: inline-flex;
   align-items: center;
@@ -2040,6 +2091,10 @@ select option {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.implementation-task-actions .implementation-task-status-select {
+  width: 150px;
 }
 
 .implementation-task-add {
@@ -2555,6 +2610,18 @@ select option {
   .implementation-progress-row .status-pill {
     min-width: 0;
     white-space: nowrap;
+  }
+
+  .implementation-task-status-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .implementation-task-status-row select {
+    width: 100%;
+  }
+
+  .implementation-task-actions .implementation-task-status-select {
+    width: 132px;
   }
 
   .implementation-customer-approval-log .implementation-progress-row {
@@ -4715,10 +4782,46 @@ td {
   color: rgba(203, 213, 225, 0.45);
 }
 
+.work-task-group-meta {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.work-task-group-order,
+.work-task-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.work-task-move {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 7px;
+  background: rgba(30, 64, 175, 0.12);
+  color: #bfdbfe;
+  cursor: pointer;
+}
+
+.work-task-move:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(37, 99, 235, 0.22);
+}
+
+.work-task-move:disabled {
+  cursor: not-allowed;
+  opacity: 0.36;
+}
+
 .work-task-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 40px;
-  align-items: end;
+  align-items: start;
   gap: 10px;
   min-width: 0;
 }
@@ -4797,6 +4900,72 @@ td {
 .work-lines-list {
   display: grid;
   gap: 8px;
+}
+
+.work-task-items-editor,
+.work-task-items-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.work-task-items-heading,
+.work-task-item {
+  display: grid;
+  grid-template-columns: 30px minmax(220px, 1fr) minmax(130px, 0.32fr) 116px;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-task-items-heading {
+  color: #8295b0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.work-task-item > input,
+.work-task-item > select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: #172238;
+  color: #ffffff;
+  font: inherit;
+  outline: none;
+}
+
+.work-task-item > select {
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.work-task-item > input:focus,
+.work-task-item > select:focus {
+  border-color: rgba(96, 165, 250, 0.68);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.work-task-item > input::placeholder {
+  color: rgba(203, 213, 225, 0.45);
+}
+
+.work-task-item > input:disabled,
+.work-task-item > select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.work-task-item-actions {
+  justify-content: flex-end;
+}
+
+.work-task-item-actions .work-line-delete {
+  width: 32px;
+  height: 32px;
 }
 
 .work-line {
@@ -4886,6 +5055,29 @@ td {
 
   .work-task-content {
     grid-template-columns: minmax(0, 1fr) 40px;
+  }
+
+  .work-task-items-heading {
+    display: none;
+  }
+
+  .work-task-item {
+    grid-template-columns: 30px minmax(0, 1fr) 104px;
+    align-items: start;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+  }
+
+  .work-task-item > input {
+    grid-column: 2 / -1;
+  }
+
+  .work-task-item > select {
+    grid-column: 2;
+  }
+
+  .work-task-item-actions {
+    grid-column: 3;
   }
 }
 

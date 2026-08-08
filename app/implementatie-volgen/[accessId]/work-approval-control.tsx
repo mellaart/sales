@@ -39,7 +39,7 @@ export default function WorkApprovalControl({
   async function approve() {
     if (!completed || approved || busy) return;
     const confirmed = window.confirm(
-      `Bevestigt u dat "${workItemLabel}" door de consultant is uitgevoerd? Dit akkoord kan niet worden ingetrokken.`,
+      `Bevestigt u dat "${workItemLabel}" is uitgevoerd? Dit akkoord kan niet worden ingetrokken.`,
     );
     if (!confirmed) return;
 

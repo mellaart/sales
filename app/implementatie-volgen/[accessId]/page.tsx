@@ -23,6 +23,7 @@ import {
   type DnsCheckItem,
 } from "@/lib/implementation-dns";
 import { getPublicImplementationPortal } from "@/lib/implementation-portal-server";
+import { IMPLEMENTATION_TASK_OWNER_LABELS } from "@/lib/price-config";
 import styles from "./implementation-progress.module.css";
 
 export const dynamic = "force-dynamic";
@@ -349,7 +350,11 @@ export default async function ImplementationProgressPage({
                               {workItem.completed ? <Check size={14} /> : <Clock3 size={14} />}
                             </span>
                             <span>{workItem.label}</span>
-                            <small>{workItem.completed ? "Afgerond" : "In voorbereiding"}</small>
+                            <small>
+                              {IMPLEMENTATION_TASK_OWNER_LABELS[workItem.owner]} · {workItem.completed
+                                ? "Afgerond"
+                                : "Te doen"}
+                            </small>
                             <WorkApprovalControl
                               accessId={accessId}
                               workItemKey={workItem.key}

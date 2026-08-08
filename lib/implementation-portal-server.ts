@@ -39,6 +39,7 @@ import {
   getConfiguredImplementationTasks,
   getImplementationWorkItemStatuses,
   isImplementationItemCompleted,
+  isImplementationItemSelected,
   withImplementationCustomWorkItems,
   withConfiguredWorkItems,
 } from "@/lib/work-activities";
@@ -213,16 +214,11 @@ function publicImplementationItem(
 
   return {
     ...item,
+    selected: isImplementationItemSelected(item, itemProgress),
     customerApprovedAt: workItems.length === 0 ? approvals[item.key]?.approvedAt ?? null : null,
     workItems,
     completed: isImplementationItemCompleted(item, itemProgress),
   };
-}
-
-function scheduledWorkItemKeys(appointments: ImplementationAppointment[]) {
-  return new Set(appointments.flatMap((appointment) => (
-    appointment.workItems.map((workItem) => workItem.key)
-  )));
 }
 
 function publicImplementationItems(
@@ -231,7 +227,6 @@ function publicImplementationItems(
   itemProgressValue: unknown,
   customWorkItemsValue: unknown,
   approvalsValue: unknown,
-  scheduledTaskKeys: ReadonlySet<string>,
 ) {
   const itemProgress = normalizeImplementationItemProgress(itemProgressValue);
   const customWorkItems = normalizeImplementationCustomWorkItems(customWorkItemsValue);
@@ -256,7 +251,7 @@ function publicImplementationItems(
     if (publicTask.workItems.length > 0) {
       const selectedWorkItems = publicTask.workItems
         .filter((workItem) => (
-          scheduledTaskKeys.has(workItem.key) || Boolean(workItem.customerApprovedAt)
+          workItem.selected || Boolean(workItem.customerApprovedAt)
         ));
       if (selectedWorkItems.length === 0) return [];
 
@@ -267,7 +262,7 @@ function publicImplementationItems(
       }];
     }
 
-    if (!scheduledTaskKeys.has(publicTask.key) && !publicTask.customerApprovedAt) return [];
+    if (!publicTask.selected && !publicTask.customerApprovedAt) return [];
     return [publicTask];
   });
 
@@ -669,7 +664,6 @@ export async function getPublicImplementationPortal(
     implementation.implementation_item_progress,
     implementation.implementation_custom_work_items,
     implementation.implementation_customer_work_approvals,
-    scheduledWorkItemKeys(appointments),
   );
   const implementationSteps = [...tasks, ...items].flatMap((item) => (
     item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
@@ -761,13 +755,12 @@ export async function approvePublicImplementationWorkItem(
     return { ok: false as const, status: 404, error: "Deze implementatie is niet meer beschikbaar." };
   }
 
-  const [{ rows: dealRows }, { pricingConfig }, appointments] = await Promise.all([
+  const [{ rows: dealRows }, { pricingConfig }] = await Promise.all([
     query<PortalDealRow>(
       "select modules, calculator_inputs from public.deals where id = $1 limit 1",
       [implementation.deal_id],
     ),
     readStoredPricingConfig(getServiceClient()),
-    publicAppointments(access.implementation_id),
   ]);
   const { tasks, items } = publicImplementationItems(
     dealRows[0],
@@ -775,7 +768,6 @@ export async function approvePublicImplementationWorkItem(
     implementation.implementation_item_progress,
     implementation.implementation_custom_work_items,
     implementation.implementation_customer_work_approvals,
-    scheduledWorkItemKeys(appointments),
   );
   const candidate = [...tasks, ...items].flatMap((item) => (
     item.workItems.length > 0

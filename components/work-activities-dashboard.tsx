@@ -140,6 +140,7 @@ export default function WorkActivitiesDashboard() {
   const canEdit = canWriteTab(role, "workActivities", roleTabAccess);
   const configuredLineCount = useMemo(() => (
     draftConfig.implementationTasks.filter((task) => task.name.trim()).length
+      + draftConfig.implementationTasks.reduce((count, task) => count + task.workItems.filter((line) => line.trim()).length, 0)
       + draftConfig.baseFunctionalityWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
       + draftConfig.modules.reduce((count, item) => count + (item.workItems ?? []).filter((line) => line.trim()).length, 0)
       + draftConfig.expansionWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
@@ -194,14 +195,14 @@ export default function WorkActivitiesDashboard() {
       ...current,
       implementationTasks: [
         ...current.implementationTasks,
-        { key: createImplementationTaskKey(), name: "", description: "" },
+        { key: createImplementationTaskKey(), name: "", description: "", workItems: [] },
       ],
     }));
   }
 
   function updateImplementationTask(
     key: string,
-    changes: Partial<{ name: string; description: string }>,
+    changes: Partial<{ name: string; description: string; workItems: string[] }>,
   ) {
     setDraftConfig((current) => ({
       ...current,
@@ -380,12 +381,20 @@ export default function WorkActivitiesDashboard() {
                   />
                 </label>
                 <div className="work-task-content">
-                  <DescriptionEditor
-                    label="Omschrijving klantpagina"
-                    value={task.description}
-                    disabled={!canEdit || saving}
-                    onChange={(description) => updateImplementationTask(task.key, { description })}
-                  />
+                  <div className="work-activity-content">
+                    <DescriptionEditor
+                      label="Omschrijving klantpagina"
+                      value={task.description}
+                      disabled={!canEdit || saving}
+                      onChange={(description) => updateImplementationTask(task.key, { description })}
+                    />
+                    <WorkLinesEditor
+                      label={task.name || `Taak ${index + 1}`}
+                      value={task.workItems}
+                      disabled={!canEdit || saving}
+                      onChange={(workItems) => updateImplementationTask(task.key, { workItems })}
+                    />
+                  </div>
                   <button
                     type="button"
                     className="work-task-delete"

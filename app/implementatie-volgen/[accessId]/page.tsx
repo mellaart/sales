@@ -331,13 +331,37 @@ export default async function ImplementationProgressPage({
                     {task.description ? (
                       <p className={styles.itemDescription}>{task.description}</p>
                     ) : null}
-                    <WorkApprovalControl
-                      accessId={accessId}
-                      workItemKey={task.key}
-                      workItemLabel={task.label}
-                      completed={task.completed}
-                      initialApprovedAt={task.customerApprovedAt}
-                    />
+                    {task.workItems.length > 0 ? (
+                      <ul className={styles.activityList}>
+                        {task.workItems.map((workItem) => (
+                          <li
+                            key={workItem.key}
+                            className={workItem.completed ? styles.activityDone : ""}
+                          >
+                            <span className={styles.activityStatus} aria-hidden="true">
+                              {workItem.completed ? <Check size={14} /> : <Clock3 size={14} />}
+                            </span>
+                            <span>{workItem.label}</span>
+                            <small>{workItem.completed ? "Afgerond" : "In voorbereiding"}</small>
+                            <WorkApprovalControl
+                              accessId={accessId}
+                              workItemKey={workItem.key}
+                              workItemLabel={workItem.label}
+                              completed={workItem.completed}
+                              initialApprovedAt={workItem.customerApprovedAt}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <WorkApprovalControl
+                        accessId={accessId}
+                        workItemKey={task.key}
+                        workItemLabel={task.label}
+                        completed={task.completed}
+                        initialApprovedAt={task.customerApprovedAt}
+                      />
+                    )}
                   </div>
                   <small>{task.completed ? "Afgerond" : "In voorbereiding"}</small>
                 </div>

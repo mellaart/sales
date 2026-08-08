@@ -153,11 +153,14 @@ export function getConfiguredImplementationTasks(
   pricingConfig: EditablePricingConfig,
   customWorkItems: ImplementationCustomWorkItems = {},
 ) {
-  const configuredTasks: ImplementationItem[] = pricingConfig.implementationTasks.map((task) => ({
-    key: `task:${task.key}`,
-    label: task.name,
-    description: task.description || undefined,
-  }));
+  const configuredTasks: ImplementationItem[] = pricingConfig.implementationTasks.map((task) => (
+    withImplementationCustomWorkItems({
+      key: `task:${task.key}`,
+      label: task.name,
+      description: task.description || undefined,
+      workItems: normalizedWorkItems(task.workItems),
+    }, customWorkItems)
+  ));
   const seen = new Set(configuredTasks.map((task) => normalizedProgressText(task.label)));
   const customTasks = normalizedWorkItems(customWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY])
     .filter((label) => {
@@ -166,10 +169,13 @@ export function getConfiguredImplementationTasks(
       seen.add(normalized);
       return true;
     })
-    .map<ImplementationItem>((label) => ({
-      key: getImplementationCustomTaskKey(label),
-      label,
-    }));
+    .map<ImplementationItem>((label) => {
+      const item = {
+        key: getImplementationCustomTaskKey(label),
+        label,
+      };
+      return withImplementationCustomWorkItems(item, customWorkItems);
+    });
 
   return [...configuredTasks, ...customTasks];
 }

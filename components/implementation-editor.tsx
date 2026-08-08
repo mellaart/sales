@@ -463,11 +463,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
   );
   const appointmentWorkOptions = useMemo(
     () => [
-      ...configuredImplementationTasks.map((item) => ({
-        key: item.key,
-        group: "Taken",
-        label: item.label,
-      })),
+      ...configuredImplementationTasks.flatMap((item) => {
+        const workItems = (item.workItems ?? []).map((workItem) => workItem.trim()).filter(Boolean);
+        if (workItems.length === 0) {
+          return [{ key: item.key, group: "Taken", label: item.label }];
+        }
+        return workItems.map((workItem) => ({
+          key: getImplementationWorkItemProgressKey(item.key, workItem),
+          group: item.label,
+          label: workItem,
+        }));
+      }),
       ...[...configuredBaseFunctionalities, ...configuredImplementationItems].flatMap((item) => {
         const workItems = (item.workItems ?? []).map((workItem) => workItem.trim()).filter(Boolean);
         if (workItems.length === 0) {
@@ -949,9 +955,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
     } else {
       delete nextCustomWorkItems[IMPLEMENTATION_CUSTOM_TASKS_KEY];
     }
+    delete nextCustomWorkItems[item.key];
     const implementationItemProgress = {
       ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
     };
+    for (const workItem of getImplementationWorkItemStatuses(item, implementationItemProgress)) {
+      delete implementationItemProgress[workItem.key];
+    }
     delete implementationItemProgress[item.key];
 
     await saveImplementation(
@@ -2508,8 +2518,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
               {configuredImplementationTasks.length === 0 ? (
                 <div className="implementation-items-state">Nog geen taken toegevoegd.</div>
               ) : configuredImplementationTasks.map((item) => {
+                const workItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
                 const completed = isImplementationItemCompleted(item, implementationItemProgress);
                 const customerApproval = implementationCustomerWorkApprovals[item.key];
+                const hasCustomerApproval = Boolean(customerApproval) || workItems.some((workItem) => (
+                  Boolean(implementationCustomerWorkApprovals[workItem.key])
+                ));
                 const custom = customImplementationTaskLabels.has(
                   normalizedImplementationWorkLabel(item.label),
                 );
@@ -2523,34 +2537,31 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     <div className="implementation-item-copy">
                       <strong>{item.label}</strong>
                       {item.description ? <small>{item.description}</small> : null}
-                      {customerApproval ? (
-                        <small className="implementation-customer-approval-status approved">
-                          <CheckCircle2 size={13} aria-hidden="true" />
-                          Klant akkoord op {formatDateTime(customerApproval.approvedAt)}
-                        </small>
-                      ) : completed ? (
-                        <small className="implementation-customer-approval-status">
-                          <Clock3 size={13} aria-hidden="true" /> Wacht op akkoord van de klant
-                        </small>
-                      ) : null}
+                      {renderImplementationWorkItems(item, workItems)}
                     </div>
                     <div className="implementation-task-actions">
-                      <label className="implementation-item-toggle">
-                        <input
-                          type="checkbox"
-                          checked={completed}
-                          disabled={!canEdit || saving}
-                          aria-label={`${item.label} afgerond`}
-                          onChange={(event) => updateImplementationItem(item, event.target.checked)}
-                        />
-                      </label>
+                      {workItems.length > 0 ? (
+                        <span className="implementation-work-progress-summary">
+                          {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}
+                        </span>
+                      ) : (
+                        <label className="implementation-item-toggle">
+                          <input
+                            type="checkbox"
+                            checked={completed}
+                            disabled={!canEdit || saving}
+                            aria-label={`${item.label} afgerond`}
+                            onChange={(event) => updateImplementationItem(item, event.target.checked)}
+                          />
+                        </label>
+                      )}
                       {custom && canEdit ? (
                         <button
                           type="button"
                           className="implementation-custom-work-delete"
-                          disabled={saving || Boolean(customerApproval)}
+                          disabled={saving || hasCustomerApproval}
                           aria-label={`${item.label} verwijderen`}
-                          title={customerApproval
+                          title={hasCustomerApproval
                             ? "Deze taak kan na klantakkoord niet meer worden verwijderd"
                             : "Deze implementatiespecifieke taak verwijderen"}
                           onClick={() => void removeImplementationCustomTask(item)}

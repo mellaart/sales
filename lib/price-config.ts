@@ -51,6 +51,7 @@ export type ImplementationTaskConfig = {
   key: string;
   name: string;
   description: string;
+  workItems: string[];
 };
 
 export type ExpansionWorkItemKey = "customerPortal" | "smartConnect" | "planningApp";
@@ -567,6 +568,7 @@ function normalizeImplementationTasks(value: unknown): ImplementationTaskConfig[
       description: typeof source.description === "string"
         ? source.description.trim().slice(0, 1000)
         : "",
+      workItems: cleanWorkItems(source.workItems) ?? [],
     });
     return tasks;
   }, []);

@@ -139,6 +139,7 @@ export function withConfiguredWorkItems(
     ...item,
     description,
     workItems: getImplementationWorkItems(pricingConfig, item.key),
+    selectableWorkItems: true,
   };
 }
 

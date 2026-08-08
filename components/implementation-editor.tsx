@@ -1905,7 +1905,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
     (item) => isImplementationItemSelected(item, implementationItemProgress),
   ).length;
   const completedImplementationItems = configuredImplementationItems.filter(
-    (item) => isImplementationItemCompleted(item, implementationItemProgress),
+    (item) => (
+      isImplementationItemSelected(item, implementationItemProgress)
+      && isImplementationItemCompleted(item, implementationItemProgress)
+    ),
+  ).length;
+  const selectedImplementationItems = configuredImplementationItems.filter(
+    (item) => isImplementationItemSelected(item, implementationItemProgress),
   ).length;
   const customerWorkApprovalRows = Object.values(implementationCustomerWorkApprovals).sort((left, right) => (
     new Date(right.approvedAt).getTime() - new Date(left.approvedAt).getTime()
@@ -3101,7 +3107,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               </div>
               <span>
                 {implementationItemsLoaded && !implementationItemsError
-                  ? `${completedImplementationItems}/${configuredImplementationItems.length} afgerond`
+                  ? `${completedImplementationItems}/${selectedImplementationItems} geselecteerde modules afgerond`
                   : "Wordt geladen..."}
               </span>
             </div>
@@ -3119,11 +3125,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
               ) : configuredImplementationItems.map((item) => {
                 const workItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
                 const completed = isImplementationItemCompleted(item, implementationItemProgress);
+                const selected = isImplementationItemSelected(item, implementationItemProgress);
+                const selectedWorkItems = workItems.filter((workItem) => workItem.selected);
 
                 return (
                   <div
                     key={item.key}
-                    className={`implementation-progress-row ${completed ? "completed" : ""}`}
+                    className={`implementation-progress-row ${completed ? "completed" : ""} ${selected ? "selected" : ""}`}
                   >
                     <span className="implementation-progress-number"><Package size={15} /></span>
                     <div className="implementation-item-copy">
@@ -3132,8 +3140,26 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     </div>
                     {workItems.length > 0 ? (
                       <span className="implementation-work-progress-summary">
-                        {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}
+                        {selectedWorkItems.length > 0
+                          ? `${selectedWorkItems.filter((workItem) => workItem.completed).length}/${selectedWorkItems.length}`
+                          : "0 gekozen"}
                       </span>
+                    ) : item.selectableWorkItems ? (
+                      <select
+                        className="implementation-task-status-select"
+                        value={!selected ? "" : completed ? "completed" : "todo"}
+                        disabled={!canEdit || saving || Boolean(implementationCustomerWorkApprovals[item.key])}
+                        aria-label={`Status van ${item.label}`}
+                        onChange={(event) => updateImplementationWorkStatus(
+                          item,
+                          undefined,
+                          event.target.value as ImplementationWorkStatus,
+                        )}
+                      >
+                        <option value="">Niet geselecteerd</option>
+                        <option value="todo">Te doen</option>
+                        <option value="completed">Afgerond</option>
+                      </select>
                     ) : (
                       <label className="implementation-item-toggle">
                         <input

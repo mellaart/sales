@@ -206,19 +206,45 @@ function publicImplementationItem(
   item: ImplementationItem,
   itemProgress: Record<string, boolean>,
   approvals: ReturnType<typeof normalizeImplementationCustomerWorkApprovals>,
+  scheduledWorkItemKeys: ReadonlySet<string>,
 ): PublicImplementationItem {
   const workItems = getImplementationWorkItemStatuses(item, itemProgress).map((workItem) => ({
     ...workItem,
+    selected: workItem.selected || scheduledWorkItemKeys.has(workItem.key),
     customerApprovedAt: approvals[workItem.key]?.approvedAt ?? null,
   }));
+  const selectedWorkItems = workItems.filter((workItem) => workItem.selected);
 
   return {
     ...item,
-    selected: isImplementationItemSelected(item, itemProgress),
+    selected: workItems.length > 0
+      ? selectedWorkItems.length > 0
+      : isImplementationItemSelected(item, itemProgress) || scheduledWorkItemKeys.has(item.key),
     customerApprovedAt: workItems.length === 0 ? approvals[item.key]?.approvedAt ?? null : null,
     workItems,
-    completed: isImplementationItemCompleted(item, itemProgress),
+    completed: workItems.length > 0
+      ? selectedWorkItems.length > 0 && selectedWorkItems.every((workItem) => workItem.completed)
+      : isImplementationItemCompleted(item, itemProgress),
   };
+}
+
+function visiblePublicImplementationItem(item: PublicImplementationItem) {
+  if (item.workItems.length > 0) {
+    const visibleWorkItems = item.workItems.filter((workItem) => (
+      workItem.selected || Boolean(workItem.customerApprovedAt)
+    ));
+    if (visibleWorkItems.length === 0) return null;
+
+    return {
+      ...item,
+      selected: true,
+      workItems: visibleWorkItems,
+      completed: visibleWorkItems.every((workItem) => workItem.completed),
+    };
+  }
+
+  if (!item.selected && !item.customerApprovedAt) return null;
+  return item;
 }
 
 function publicImplementationItems(
@@ -227,6 +253,7 @@ function publicImplementationItems(
   itemProgressValue: unknown,
   customWorkItemsValue: unknown,
   approvalsValue: unknown,
+  scheduledWorkItemKeys: ReadonlySet<string> = new Set<string>(),
 ) {
   const itemProgress = normalizeImplementationItemProgress(itemProgressValue);
   const customWorkItems = normalizeImplementationCustomWorkItems(customWorkItemsValue);
@@ -243,27 +270,22 @@ function publicImplementationItems(
           : configuredItem,
         itemProgress,
         approvals,
+        scheduledWorkItemKeys,
       );
+    }).flatMap((item) => {
+      const visibleItem = visiblePublicImplementationItem(item);
+      return visibleItem ? [visibleItem] : [];
     })
     : [];
   const tasks = getConfiguredImplementationTasks(pricingConfig, customWorkItems).flatMap((task) => {
-    const publicTask = publicImplementationItem(task, itemProgress, approvals);
-    if (publicTask.workItems.length > 0) {
-      const selectedWorkItems = publicTask.workItems
-        .filter((workItem) => (
-          workItem.selected || Boolean(workItem.customerApprovedAt)
-        ));
-      if (selectedWorkItems.length === 0) return [];
-
-      return [{
-        ...publicTask,
-        workItems: selectedWorkItems,
-        completed: selectedWorkItems.every((workItem) => workItem.completed),
-      }];
-    }
-
-    if (!publicTask.selected && !publicTask.customerApprovedAt) return [];
-    return [publicTask];
+    const publicTask = publicImplementationItem(
+      task,
+      itemProgress,
+      approvals,
+      scheduledWorkItemKeys,
+    );
+    const visibleTask = visiblePublicImplementationItem(publicTask);
+    return visibleTask ? [visibleTask] : [];
   });
 
   return { tasks, items };
@@ -664,6 +686,9 @@ export async function getPublicImplementationPortal(
     implementation.implementation_item_progress,
     implementation.implementation_custom_work_items,
     implementation.implementation_customer_work_approvals,
+    new Set(appointments.flatMap((appointment) => (
+      appointment.workItems.map((workItem) => workItem.key)
+    ))),
   );
   const implementationSteps = [...tasks, ...items].flatMap((item) => (
     item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]

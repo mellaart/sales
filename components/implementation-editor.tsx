@@ -184,6 +184,7 @@ type AppointmentWorkGroup = {
   key: string;
   category: AppointmentWorkCategory;
   label: string;
+  description?: string;
   items: AppointmentWorkOption[];
 };
 
@@ -331,7 +332,9 @@ function AppointmentWorkSelector({
     onSelectionChange(toggleAppointmentWorkItem(selected, option, checked));
   }
 
-  function changeGroup(group: AppointmentWorkGroup) {
+  function changeGroup(groupKey: string) {
+    const group = groups.find((candidate) => candidate.key === groupKey);
+    if (!group) return;
     const selectableItems = group.items.filter((option) => (
       selectedKeys.has(option.key) || !otherAssignment(option.key)
     ));
@@ -423,26 +426,55 @@ function AppointmentWorkSelector({
                 <Search size={20} /> Geen werkzaamheden gevonden binnen dit filter.
               </div>
             ) : visibleGroups.map((group) => {
-              const selectableItems = group.items.filter((option) => (
+              const sourceGroup = groups.find((candidate) => candidate.key === group.key) ?? group;
+              const selectableItems = sourceGroup.items.filter((option) => (
                 selectedKeys.has(option.key) || !otherAssignment(option.key)
               ));
               const allSelected = selectableItems.length > 0 && selectableItems.every((option) => (
                 selectedKeys.has(option.key)
               ));
+              const selectedCount = sourceGroup.items.filter((option) => (
+                selectedKeys.has(option.key)
+              )).length;
+              const assignedElsewhereCount = sourceGroup.items.filter((option) => (
+                !selectedKeys.has(option.key) && Boolean(otherAssignment(option.key))
+              )).length;
+              const categoryGroups = groups.filter((candidate) => candidate.category === group.category);
+              const groupNumber = categoryGroups.findIndex((candidate) => candidate.key === group.key) + 1;
 
               return (
                 <fieldset key={group.key} className="implementation-work-picker-group">
                   <legend>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        disabled={disabled || selectableItems.length === 0}
-                        onChange={() => changeGroup(group)}
-                      />
-                      <span>{group.label}</span>
-                      <small>{group.items.length} regels</small>
-                    </label>
+                    <div className="implementation-work-picker-group-heading">
+                      <div>
+                        <small>{group.category === "tasks" ? `Taakgroep ${groupNumber}` : `Module ${groupNumber}`}</small>
+                        <strong>{group.label}</strong>
+                        {group.description ? <p>{group.description}</p> : null}
+                      </div>
+                      <label className="implementation-work-picker-group-toggle">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          disabled={disabled || selectableItems.length === 0}
+                          aria-label={`Volledige groep ${group.label} selecteren`}
+                          onChange={() => changeGroup(group.key)}
+                        />
+                        <span>{allSelected
+                          ? assignedElsewhereCount > 0
+                            ? "Alle beschikbare regels geselecteerd"
+                            : "Volledige groep geselecteerd"
+                          : "Volledige groep selecteren"}</span>
+                      </label>
+                      <small className="implementation-work-picker-group-count">
+                        {selectedCount}/{sourceGroup.items.length} geselecteerd
+                        {group.items.length !== sourceGroup.items.length
+                          ? ` · ${group.items.length} zichtbaar`
+                          : ""}
+                        {assignedElsewhereCount > 0
+                          ? ` · ${assignedElsewhereCount} al ingepland`
+                          : ""}
+                      </small>
+                    </div>
                   </legend>
                   <div>
                     {group.items.map((option) => {
@@ -795,6 +827,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
           key: `${category}:${item.key}`,
           category,
           label: item.label,
+          description: item.description,
           items: workItems.map((workItem) => ({
             key: workItem.key,
             group: item.label,

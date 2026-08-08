@@ -70,7 +70,6 @@ export type PublicImplementationPortal = {
   dnsCheck: ImplementationDnsCheck | null;
   dnsCheckMessage: string;
   tasks: PublicImplementationItem[];
-  baseItems: PublicImplementationItem[];
   items: PublicImplementationItem[];
   appointments: ImplementationAppointment[];
   files: ImplementationCustomerFile[];

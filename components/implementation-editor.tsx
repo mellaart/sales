@@ -56,7 +56,6 @@ import {
 import type { ImplementationItem } from "@/lib/implementation-items";
 import {
   IMPLEMENTATION_CUSTOM_TASKS_KEY,
-  getConfiguredBaseFunctionalities,
   getConfiguredImplementationTasks,
   getImplementationCustomTaskKey,
   getImplementationWorkItemProgressKey,
@@ -169,7 +168,7 @@ type AppointmentCalendarSync = {
   connectUrl?: string;
 };
 
-type AppointmentWorkCategory = "tasks" | "base" | "modules";
+type AppointmentWorkCategory = "tasks" | "modules";
 type AppointmentWorkFilter = "all" | "unplanned" | "scheduled" | "completed";
 
 type AppointmentWorkOption = ImplementationAppointmentWorkItem & {
@@ -186,7 +185,6 @@ type AppointmentWorkGroup = {
 
 const APPOINTMENT_WORK_CATEGORY_LABELS: Record<AppointmentWorkCategory, string> = {
   tasks: "Taken",
-  base: "Basisfunctionaliteiten",
   modules: "Modules",
 };
 
@@ -539,7 +537,7 @@ function AppointmentWorkSelector({
           <ClipboardCheck size={18} aria-hidden="true" />
           <span>
             <strong>Werkzaamheden kiezen</strong>
-            <small>Plan taken, basisfunctionaliteiten en modules</small>
+            <small>Plan taken en modules</small>
           </span>
         </span>
         <span>{selected.length} geselecteerd</span>
@@ -741,12 +739,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
     ),
     [implementation?.implementation_customer_work_approvals],
   );
-  const configuredBaseFunctionalities = useMemo(
-    () => getConfiguredBaseFunctionalities(pricingConfig).map((item) => (
-      withImplementationCustomWorkItems(item, implementationCustomWorkItems)
-    )),
-    [implementationCustomWorkItems, pricingConfig],
-  );
   const configuredImplementationTasks = useMemo(
     () => getConfiguredImplementationTasks(pricingConfig, implementationCustomWorkItems),
     [implementationCustomWorkItems, pricingConfig],
@@ -814,11 +806,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
     };
 
     appendGroups("tasks", configuredImplementationTasks);
-    appendGroups("base", configuredBaseFunctionalities);
     appendGroups("modules", configuredImplementationItems);
     return groups;
   }, [
-    configuredBaseFunctionalities,
     configuredImplementationItems,
     configuredImplementationTasks,
     implementationItemProgress,
@@ -1858,9 +1848,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
     (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
   const completedImplementationItems = configuredImplementationItems.filter(
-    (item) => isImplementationItemCompleted(item, implementationItemProgress),
-  ).length;
-  const completedBaseFunctionalities = configuredBaseFunctionalities.filter(
     (item) => isImplementationItemCompleted(item, implementationItemProgress),
   ).length;
   const customerWorkApprovalRows = Object.values(implementationCustomerWorkApprovals).sort((left, right) => (
@@ -2995,53 +2982,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 )}
               </div>
             ) : null}
-          </div>
-
-          <div className="implementation-progress-block implementation-items-progress">
-            <div className="implementation-progress-heading">
-              <div>
-                <span>Pakket</span>
-                <strong>Basisfunctionaliteiten</strong>
-              </div>
-              <span>
-                {completedBaseFunctionalities}/{configuredBaseFunctionalities.length} afgerond
-              </span>
-            </div>
-            <div className="implementation-progress-list">
-              {configuredBaseFunctionalities.map((item) => {
-                const workItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
-                const completed = isImplementationItemCompleted(item, implementationItemProgress);
-
-                return (
-                  <div
-                    key={item.key}
-                    className={`implementation-progress-row ${completed ? "completed" : ""}`}
-                  >
-                    <span className="implementation-progress-number"><ClipboardCheck size={15} /></span>
-                    <div className="implementation-item-copy">
-                      <strong>{item.label}</strong>
-                      <small>{item.description}</small>
-                      {renderImplementationWorkItems(item, workItems)}
-                    </div>
-                    {workItems.length > 0 ? (
-                      <span className="implementation-work-progress-summary">
-                        {workItems.filter((workItem) => workItem.completed).length}/{workItems.length}
-                      </span>
-                    ) : (
-                      <label className="implementation-item-toggle">
-                        <input
-                          type="checkbox"
-                          checked={completed}
-                          disabled={!canEdit || saving}
-                          aria-label={`${item.label} afgerond`}
-                          onChange={(event) => updateImplementationItem(item, event.target.checked)}
-                        />
-                      </label>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
           </div>
 
           <div className="implementation-progress-block implementation-items-progress">

@@ -6,7 +6,6 @@ import {
   Boxes,
   ClipboardList,
   ListChecks,
-  PackageCheck,
   Plus,
   RefreshCw,
   Save,
@@ -16,7 +15,6 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
-import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/base-functionalities";
 import {
   DEFAULT_PRICE_CONFIG,
   normalizePricingConfig,
@@ -141,7 +139,6 @@ export default function WorkActivitiesDashboard() {
   const configuredLineCount = useMemo(() => (
     draftConfig.implementationTasks.filter((task) => task.name.trim()).length
       + draftConfig.implementationTasks.reduce((count, task) => count + task.workItems.filter((line) => line.trim()).length, 0)
-      + draftConfig.baseFunctionalityWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
       + draftConfig.modules.reduce((count, item) => count + (item.workItems ?? []).filter((line) => line.trim()).length, 0)
       + draftConfig.expansionWorkItems.reduce((count, item) => count + item.workItems.filter((line) => line.trim()).length, 0)
   ), [draftConfig]);
@@ -181,15 +178,6 @@ export default function WorkActivitiesDashboard() {
     };
   }, [role]);
 
-  function updateBaseWorkItems(key: string, workItems: string[]) {
-    setDraftConfig((current) => ({
-      ...current,
-      baseFunctionalityWorkItems: current.baseFunctionalityWorkItems.map((item) => (
-        item.key === key ? { ...item, workItems } : item
-      )),
-    }));
-  }
-
   function addImplementationTask() {
     setDraftConfig((current) => ({
       ...current,
@@ -216,15 +204,6 @@ export default function WorkActivitiesDashboard() {
     setDraftConfig((current) => ({
       ...current,
       implementationTasks: current.implementationTasks.filter((task) => task.key !== key),
-    }));
-  }
-
-  function updateBaseDescription(key: string, description: string) {
-    setDraftConfig((current) => ({
-      ...current,
-      baseFunctionalityWorkItems: current.baseFunctionalityWorkItems.map((item) => (
-        item.key === key ? { ...item, description } : item
-      )),
     }));
   }
 
@@ -420,37 +399,6 @@ export default function WorkActivitiesDashboard() {
             >
               <Plus size={16} /> Taak toevoegen
             </button>
-          </div>
-        </section>
-
-        <section className="card work-activities-section">
-          <header className="work-activities-heading">
-            <div className="icon-badge"><PackageCheck size={22} /></div>
-            <div><span>Pakket</span><h2>Basisfunctionaliteiten</h2></div>
-          </header>
-          <div className="work-activity-groups">
-            {IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => {
-              const config = draftConfig.baseFunctionalityWorkItems.find((row) => row.key === item.key);
-              return (
-                <article className="work-activity-group" key={item.key}>
-                  <div className="work-activity-label"><strong>{item.label}</strong><span>Standaard pakketonderdeel</span></div>
-                  <div className="work-activity-content">
-                    <DescriptionEditor
-                      label="Omschrijving klantpagina"
-                      value={config?.description ?? item.description}
-                      disabled={!canEdit || saving}
-                      onChange={(description) => updateBaseDescription(item.key, description)}
-                    />
-                    <WorkLinesEditor
-                      label={item.label}
-                      value={config?.workItems ?? []}
-                      disabled={!canEdit || saving}
-                      onChange={(workItems) => updateBaseWorkItems(item.key, workItems)}
-                    />
-                  </div>
-                </article>
-              );
-            })}
           </div>
         </section>
 

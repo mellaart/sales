@@ -6,7 +6,6 @@ import {
   type PackageConfig,
   type PricingCatalog,
 } from "@/lib/pricing";
-import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/base-functionalities";
 
 export type CustomerPortalPriceOption = {
   key: string;
@@ -41,12 +40,6 @@ export type PostcodeRegion = {
   kilometers: number;
 };
 
-export type BaseFunctionalityWorkItemConfig = {
-  key: string;
-  description: string;
-  workItems: string[];
-};
-
 export type ImplementationTaskConfig = {
   key: string;
   name: string;
@@ -73,7 +66,6 @@ export type EditablePricingConfig = PricingCatalog & {
   travelCostRegions: TravelCostRegion[];
   postcodeRegions: PostcodeRegion[];
   implementationTasks: ImplementationTaskConfig[];
-  baseFunctionalityWorkItems: BaseFunctionalityWorkItemConfig[];
   expansionWorkItems: ExpansionWorkItemConfig[];
   updatedAt?: string | null;
 };
@@ -171,11 +163,6 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { key: "worldline", name: "Worldline", annualPrice: 175.8 },
   ],
   implementationTasks: [],
-  baseFunctionalityWorkItems: IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => ({
-    key: item.key,
-    description: item.description,
-    workItems: [],
-  })),
   expansionWorkItems: [
     {
       key: "customerPortal",
@@ -519,22 +506,6 @@ function normalizeExpansionWorkItems(input: unknown, fallback: ExpansionWorkItem
   };
 }
 
-function normalizeBaseFunctionalityWorkItems(
-  input: unknown,
-  fallback: BaseFunctionalityWorkItemConfig,
-): BaseFunctionalityWorkItemConfig {
-  const source = input && typeof input === "object" ? (input as Partial<BaseFunctionalityWorkItemConfig>) : {};
-  const workItems = cleanWorkItems(source.workItems);
-
-  return {
-    key: fallback.key,
-    description: typeof source.description === "string"
-      ? source.description.trim()
-      : fallback.description,
-    workItems: workItems ?? fallback.workItems,
-  };
-}
-
 function normalizeImplementationTasks(value: unknown): ImplementationTaskConfig[] {
   if (!Array.isArray(value)) return [];
 
@@ -591,7 +562,6 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
   const moduleByKey = mapByKey(source.modules);
   const customerPortalByKey = mapByKey(source.customerPortalOptions);
   const serviceCostByKey = mapByKey(source.serviceCostOptions);
-  const baseFunctionalityWorkItemsByKey = mapByKey(source.baseFunctionalityWorkItems);
   const expansionWorkItemsByKey = mapByKey(source.expansionWorkItems);
   const smartConnectRows = Array.isArray(source.smartConnectTiers) ? source.smartConnectTiers : [];
   const travelCostRows = migrateTravelCostRows(Array.isArray(source.travelCostRegions) ? source.travelCostRegions : []);
@@ -623,9 +593,6 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
       normalizeServiceCostOption(serviceCostByKey.get(fallback.key), fallback),
     ),
     implementationTasks: normalizeImplementationTasks(source.implementationTasks),
-    baseFunctionalityWorkItems: DEFAULT_PRICE_CONFIG.baseFunctionalityWorkItems.map((fallback) =>
-      normalizeBaseFunctionalityWorkItems(baseFunctionalityWorkItemsByKey.get(fallback.key), fallback),
-    ),
     expansionWorkItems: DEFAULT_PRICE_CONFIG.expansionWorkItems.map((fallback) =>
       normalizeExpansionWorkItems(expansionWorkItemsByKey.get(fallback.key), fallback),
     ),

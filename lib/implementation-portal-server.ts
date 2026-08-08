@@ -36,7 +36,6 @@ import { getServiceClient } from "@/lib/admin-api";
 import type { EditablePricingConfig } from "@/lib/price-config";
 import { readStoredPricingConfig } from "@/lib/price-settings-storage";
 import {
-  getConfiguredBaseFunctionalities,
   getConfiguredImplementationTasks,
   getImplementationWorkItemStatuses,
   isImplementationItemCompleted,
@@ -252,14 +251,6 @@ function publicImplementationItems(
       );
     })
     : [];
-  const baseItems = getConfiguredBaseFunctionalities(pricingConfig).map((baseItem) => (
-    publicImplementationItem(
-      withImplementationCustomWorkItems(baseItem, customWorkItems),
-      itemProgress,
-      approvals,
-    )
-  ));
-
   const tasks = getConfiguredImplementationTasks(pricingConfig, customWorkItems).flatMap((task) => {
     const publicTask = publicImplementationItem(task, itemProgress, approvals);
     if (publicTask.workItems.length > 0) {
@@ -280,7 +271,7 @@ function publicImplementationItems(
     return [publicTask];
   });
 
-  return { tasks, baseItems, items };
+  return { tasks, items };
 }
 
 function toAccess(request: Request, row: PortalAccessRow): ImplementationPortalAccess {
@@ -672,7 +663,7 @@ export async function getPublicImplementationPortal(
     },
   ];
 
-  const { tasks, baseItems: baseFunctionalitySteps, items } = publicImplementationItems(
+  const { tasks, items } = publicImplementationItems(
     dealRows[0],
     pricingConfig,
     implementation.implementation_item_progress,
@@ -680,7 +671,7 @@ export async function getPublicImplementationPortal(
     implementation.implementation_customer_work_approvals,
     scheduledWorkItemKeys(appointments),
   );
-  const implementationSteps = [...tasks, ...baseFunctionalitySteps, ...items].flatMap((item) => (
+  const implementationSteps = [...tasks, ...items].flatMap((item) => (
     item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
   ));
   const allSteps = [...milestones, ...implementationSteps];
@@ -725,7 +716,6 @@ export async function getPublicImplementationPortal(
     dnsCheck,
     dnsCheckMessage,
     tasks,
-    baseItems: baseFunctionalitySteps,
     items,
     appointments,
     files,
@@ -779,7 +769,7 @@ export async function approvePublicImplementationWorkItem(
     readStoredPricingConfig(getServiceClient()),
     publicAppointments(access.implementation_id),
   ]);
-  const { tasks, baseItems, items } = publicImplementationItems(
+  const { tasks, items } = publicImplementationItems(
     dealRows[0],
     pricingConfig,
     implementation.implementation_item_progress,
@@ -787,7 +777,7 @@ export async function approvePublicImplementationWorkItem(
     implementation.implementation_customer_work_approvals,
     scheduledWorkItemKeys(appointments),
   );
-  const candidate = [...tasks, ...baseItems, ...items].flatMap((item) => (
+  const candidate = [...tasks, ...items].flatMap((item) => (
     item.workItems.length > 0
       ? item.workItems.map((workItem) => ({
         key: workItem.key,

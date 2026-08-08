@@ -1,7 +1,5 @@
 import { DEFAULT_PRICE_CONFIG } from "@/lib/price-config";
 
-export { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/base-functionalities";
-
 export type ImplementationItem = {
   key: string;
   label: string;

@@ -132,7 +132,6 @@ export default async function ImplementationProgressPage({
 
   const { portal } = result;
   const completedTasks = portal.tasks.filter((item) => item.completed).length;
-  const completedBaseItems = portal.baseItems.filter((item) => item.completed).length;
   const completedItems = portal.items.filter((item) => item.completed).length;
 
   return (
@@ -382,65 +381,6 @@ export default async function ImplementationProgressPage({
       </section>
 
       <section className={`${styles.section} ${styles.altSection}`}>
-        <div className={styles.content}>
-          <div className={styles.sectionHeading}>
-            <div><span>Uw pakket</span><h2>Basisfunctionaliteiten</h2></div>
-            <p>{completedBaseItems}/{portal.baseItems.length} basisfunctionaliteiten afgerond</p>
-          </div>
-          <div className={styles.baseFeatureGrid}>
-            {portal.baseItems.map((feature) => (
-              <article
-                key={feature.key}
-                className={`${styles.baseFeatureCard} ${feature.completed ? styles.baseFeatureDone : ""}`}
-              >
-                <div>
-                  <span className={styles.baseFeatureStatus}>
-                    {feature.completed
-                      ? <Check size={18} aria-hidden="true" />
-                      : <PackageCheck size={18} aria-hidden="true" />}
-                  </span>
-                  <strong>{feature.label}</strong>
-                </div>
-                <p>{feature.description}</p>
-                {feature.workItems.length > 0 ? (
-                  <ul className={styles.activityList}>
-                    {feature.workItems.map((workItem) => (
-                      <li
-                        key={workItem.key}
-                        className={workItem.completed ? styles.activityDone : ""}
-                      >
-                        <span className={styles.activityStatus} aria-hidden="true">
-                          {workItem.completed ? <Check size={14} /> : <Clock3 size={14} />}
-                        </span>
-                        <span>{workItem.label}</span>
-                        <small>{workItem.completed ? "Afgerond" : "In voorbereiding"}</small>
-                        <WorkApprovalControl
-                          accessId={accessId}
-                          workItemKey={workItem.key}
-                          workItemLabel={workItem.label}
-                          completed={workItem.completed}
-                          initialApprovedAt={workItem.customerApprovedAt}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <WorkApprovalControl
-                    accessId={accessId}
-                    workItemKey={feature.key}
-                    workItemLabel={feature.label}
-                    completed={feature.completed}
-                    initialApprovedAt={feature.customerApprovedAt}
-                  />
-                )}
-                <small>{feature.completed ? "Afgerond" : "In voorbereiding"}</small>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.section}>
         <div className={styles.content}>
           <div className={styles.sectionHeading}>
             <div><span>Uitbreidingen</span><h2>Modules en koppelingen</h2></div>

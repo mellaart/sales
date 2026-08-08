@@ -1,4 +1,3 @@
-import { IMPLEMENTATION_BASE_FUNCTIONALITIES } from "@/lib/base-functionalities";
 import type { ImplementationItem } from "@/lib/implementation-items";
 import type { ImplementationCustomWorkItems } from "@/lib/implementations";
 import type { EditablePricingConfig, ExpansionWorkItemKey } from "@/lib/price-config";
@@ -73,12 +72,6 @@ export function getImplementationWorkItems(
   pricingConfig: EditablePricingConfig,
   itemKey: string,
 ) {
-  if (itemKey.startsWith("base:")) {
-    return normalizedWorkItems(
-      pricingConfig.baseFunctionalityWorkItems.find((item) => item.key === itemKey)?.workItems,
-    );
-  }
-
   if (itemKey.startsWith("module:")) {
     const moduleKey = itemKey.slice("module:".length);
     return normalizedWorkItems(
@@ -100,10 +93,7 @@ export function withConfiguredWorkItems(
 ): ImplementationItem {
   let description = item.description;
 
-  if (item.key.startsWith("base:")) {
-    description = pricingConfig.baseFunctionalityWorkItems.find((row) => row.key === item.key)?.description
-      ?? description;
-  } else if (item.key.startsWith("module:")) {
+  if (item.key.startsWith("module:")) {
     const moduleKey = item.key.slice("module:".length);
     description = pricingConfig.modules.find((row) => row.key === moduleKey)?.description ?? description;
   } else if (item.key.startsWith("customer-portal:")) {
@@ -143,10 +133,6 @@ export function withImplementationCustomWorkItems(
     ...item,
     workItems: [...configuredItems, ...implementationItems],
   };
-}
-
-export function getConfiguredBaseFunctionalities(pricingConfig: EditablePricingConfig) {
-  return IMPLEMENTATION_BASE_FUNCTIONALITIES.map((item) => withConfiguredWorkItems(item, pricingConfig));
 }
 
 export function getConfiguredImplementationTasks(

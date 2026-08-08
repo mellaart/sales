@@ -347,6 +347,110 @@ export async function ensureLocalSchema() {
         create index if not exists implementation_appointments_implementation_date_idx
           on public.implementation_appointments(implementation_id, appointment_date, start_time);
 
+        update public.implementations
+        set implementation_item_progress = (
+          select coalesce(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)
+          from jsonb_each(
+            case
+              when jsonb_typeof(implementation_item_progress) = 'object'
+                then implementation_item_progress
+              else '{}'::jsonb
+            end
+          ) as entry
+          where entry.key not like 'base:%'
+            and entry.key not like 'work:base:%'
+        )
+        where exists (
+          select 1
+          from jsonb_each(
+            case
+              when jsonb_typeof(implementation_item_progress) = 'object'
+                then implementation_item_progress
+              else '{}'::jsonb
+            end
+          ) as entry
+          where entry.key like 'base:%'
+             or entry.key like 'work:base:%'
+        );
+
+        update public.implementations
+        set implementation_custom_work_items = (
+          select coalesce(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)
+          from jsonb_each(
+            case
+              when jsonb_typeof(implementation_custom_work_items) = 'object'
+                then implementation_custom_work_items
+              else '{}'::jsonb
+            end
+          ) as entry
+          where entry.key not like 'base:%'
+            and entry.key not like 'work:base:%'
+        )
+        where exists (
+          select 1
+          from jsonb_each(
+            case
+              when jsonb_typeof(implementation_custom_work_items) = 'object'
+                then implementation_custom_work_items
+              else '{}'::jsonb
+            end
+          ) as entry
+          where entry.key like 'base:%'
+             or entry.key like 'work:base:%'
+        );
+
+        update public.implementations
+        set implementation_customer_work_approvals = (
+          select coalesce(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)
+          from jsonb_each(
+            case
+              when jsonb_typeof(implementation_customer_work_approvals) = 'object'
+                then implementation_customer_work_approvals
+              else '{}'::jsonb
+            end
+          ) as entry
+          where entry.key not like 'base:%'
+            and entry.key not like 'work:base:%'
+        )
+        where exists (
+          select 1
+          from jsonb_each(
+            case
+              when jsonb_typeof(implementation_customer_work_approvals) = 'object'
+                then implementation_customer_work_approvals
+              else '{}'::jsonb
+            end
+          ) as entry
+          where entry.key like 'base:%'
+             or entry.key like 'work:base:%'
+        );
+
+        update public.implementation_appointments
+        set work_items = (
+          select coalesce(jsonb_agg(entry.value order by entry.position), '[]'::jsonb)
+          from jsonb_array_elements(
+            case
+              when jsonb_typeof(work_items) = 'array' then work_items
+              else '[]'::jsonb
+            end
+          ) with ordinality as entry(value, position)
+          where coalesce(entry.value ->> 'key', '') not like 'base:%'
+            and coalesce(entry.value ->> 'key', '') not like 'work:base:%'
+            and lower(coalesce(entry.value ->> 'group', '')) <> 'basisfunctionaliteiten'
+        )
+        where exists (
+          select 1
+          from jsonb_array_elements(
+            case
+              when jsonb_typeof(work_items) = 'array' then work_items
+              else '[]'::jsonb
+            end
+          ) as entry
+          where coalesce(entry.value ->> 'key', '') like 'base:%'
+             or coalesce(entry.value ->> 'key', '') like 'work:base:%'
+             or lower(coalesce(entry.value ->> 'group', '')) = 'basisfunctionaliteiten'
+        );
+
         create table if not exists public.implementation_customer_files (
           id uuid primary key default gen_random_uuid(),
           implementation_id uuid not null references public.implementations(id) on delete cascade,

@@ -26,7 +26,24 @@ export async function readStoredPricingConfig(service: ServiceClient | null) {
       ? (parsed as { pricingConfig?: unknown }).pricingConfig
       : parsed;
 
-    return { pricingConfig: normalizePricingConfig(source), persisted: true, storageReady: true };
+    const pricingConfig = normalizePricingConfig(source);
+    const hasLegacyBaseFunctionalities = Boolean(
+      source
+      && typeof source === "object"
+      && !Array.isArray(source)
+      && "baseFunctionalityWorkItems" in source,
+    );
+
+    if (hasLegacyBaseFunctionalities) {
+      try {
+        const migrated = await writeStoredPricingConfig(service, pricingConfig);
+        return { pricingConfig: migrated.pricingConfig, persisted: true, storageReady: true };
+      } catch {
+        // Reading remains available if the one-time cleanup cannot be persisted yet.
+      }
+    }
+
+    return { pricingConfig, persisted: true, storageReady: true };
   } catch {
     return { pricingConfig: DEFAULT_PRICE_CONFIG, persisted: false, storageReady: true };
   }

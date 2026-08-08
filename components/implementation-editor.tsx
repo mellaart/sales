@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRightLeft,
   CalendarDays,
   CheckCircle2,
   CircleDollarSign,
@@ -24,6 +26,7 @@ import {
   Package,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   UserRoundCheck,
   X,
@@ -165,6 +168,34 @@ type AppointmentCalendarSync = {
   connectUrl?: string;
 };
 
+type AppointmentWorkCategory = "tasks" | "base" | "modules";
+type AppointmentWorkFilter = "all" | "unplanned" | "scheduled" | "completed";
+
+type AppointmentWorkOption = ImplementationAppointmentWorkItem & {
+  category: AppointmentWorkCategory;
+  completed: boolean;
+};
+
+type AppointmentWorkGroup = {
+  key: string;
+  category: AppointmentWorkCategory;
+  label: string;
+  items: AppointmentWorkOption[];
+};
+
+const APPOINTMENT_WORK_CATEGORY_LABELS: Record<AppointmentWorkCategory, string> = {
+  tasks: "Taken",
+  base: "Basisfunctionaliteiten",
+  modules: "Modules",
+};
+
+const APPOINTMENT_WORK_FILTER_LABELS: Record<AppointmentWorkFilter, string> = {
+  all: "Alles",
+  unplanned: "Nog te plannen",
+  scheduled: "Ingepland",
+  completed: "Afgerond",
+};
+
 const EMPTY_APPOINTMENT_DRAFT: AppointmentDraft = {
   appointmentDate: "",
   startTime: "09:00",
@@ -182,7 +213,11 @@ function toggleAppointmentWorkItem(
 ) {
   if (!checked) return selected.filter((item) => item.key !== workItem.key);
   if (selected.some((item) => item.key === workItem.key)) return selected;
-  return [...selected, workItem];
+  return [...selected, {
+    key: workItem.key,
+    group: workItem.group,
+    label: workItem.label,
+  }];
 }
 
 function normalizedImplementationWorkLabel(value: string) {
@@ -190,60 +225,326 @@ function normalizedImplementationWorkLabel(value: string) {
 }
 
 function AppointmentWorkSelector({
-  options,
+  groups,
   selected,
+  appointments,
+  currentAppointmentId,
   disabled,
-  onChange,
+  onSelectionChange,
+  onMove,
 }: {
-  options: ImplementationAppointmentWorkItem[];
+  groups: AppointmentWorkGroup[];
   selected: ImplementationAppointmentWorkItem[];
+  appointments: ImplementationAppointment[];
+  currentAppointmentId: string | null;
   disabled: boolean;
-  onChange: (workItem: ImplementationAppointmentWorkItem, checked: boolean) => void;
+  onSelectionChange: (workItems: ImplementationAppointmentWorkItem[]) => void;
+  onMove?: (
+    workItem: ImplementationAppointmentWorkItem,
+    sourceAppointmentId: string,
+  ) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState<AppointmentWorkCategory>("tasks");
+  const [filter, setFilter] = useState<AppointmentWorkFilter>("all");
+  const [search, setSearch] = useState("");
   const selectedKeys = new Set(selected.map((item) => item.key));
-  const availableOptions = [
-    ...options,
-    ...selected.filter((item) => !options.some((option) => option.key === item.key)),
-  ];
-  const groups = availableOptions.reduce<Array<{
+  const allOptions = groups.flatMap((group) => group.items);
+  const optionByKey = new Map(allOptions.map((option) => [option.key, option]));
+  const assignmentByKey = new Map<string, ImplementationAppointment[]>();
+
+  for (const appointment of appointments) {
+    for (const workItem of appointment.workItems) {
+      const assignedAppointments = assignmentByKey.get(workItem.key) ?? [];
+      assignedAppointments.push(appointment);
+      assignmentByKey.set(workItem.key, assignedAppointments);
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const otherAssignment = (workItemKey: string) => (
+    (assignmentByKey.get(workItemKey) ?? []).find((appointment) => (
+      appointment.id !== currentAppointmentId
+    ))
+  );
+  const isScheduled = (workItemKey: string) => (
+    selectedKeys.has(workItemKey) || (assignmentByKey.get(workItemKey)?.length ?? 0) > 0
+  );
+  const matchesFilter = (option: AppointmentWorkOption) => {
+    if (filter === "completed") return option.completed;
+    if (filter === "scheduled") return isScheduled(option.key);
+    if (filter === "unplanned") return !isScheduled(option.key) && !option.completed;
+    return true;
+  };
+  const normalizedSearch = search.trim().toLocaleLowerCase("nl-NL");
+  const visibleGroups = groups
+    .filter((group) => group.category === category)
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((option) => (
+        matchesFilter(option) && (
+          !normalizedSearch || `${group.label} ${option.label}`
+            .toLocaleLowerCase("nl-NL")
+            .includes(normalizedSearch)
+        )
+      )),
+    }))
+    .filter((group) => group.items.length > 0);
+  const selectedOptions = selected.map((workItem) => optionByKey.get(workItem.key) ?? {
+    ...workItem,
+    category: "tasks" as const,
+    completed: false,
+  });
+  const selectedGroups = selectedOptions.reduce<Array<{
     label: string;
-    items: ImplementationAppointmentWorkItem[];
-  }>>((result, item) => {
-    const label = item.group || "Overige werkzaamheden";
-    const group = result.find((candidate) => candidate.label === label);
-    if (group) group.items.push(item);
-    else result.push({ label, items: [item] });
+    items: AppointmentWorkOption[];
+  }>>((result, option) => {
+    const label = option.group || APPOINTMENT_WORK_CATEGORY_LABELS[option.category];
+    const existingGroup = result.find((group) => group.label === label);
+    if (existingGroup) existingGroup.items.push(option);
+    else result.push({ label, items: [option] });
     return result;
   }, []);
 
-  return (
-    <details className="implementation-appointment-work-selector">
-      <summary>
-        <span>
-          <ClipboardCheck size={17} aria-hidden="true" />
-          Werkzaamheden voor deze afspraak
-        </span>
-        <small>{selected.length} geselecteerd</small>
-      </summary>
-      <div className="implementation-appointment-work-groups">
-        {groups.map((group) => (
-          <fieldset key={group.label}>
-            <legend>{group.label}</legend>
-            {group.items.map((workItem) => (
-              <label key={workItem.key}>
-                <input
-                  type="checkbox"
-                  checked={selectedKeys.has(workItem.key)}
-                  disabled={disabled}
-                  onChange={(event) => onChange(workItem, event.target.checked)}
-                />
-                <span>{workItem.label}</span>
-              </label>
+  function changeOption(option: AppointmentWorkOption, checked: boolean) {
+    if (checked && otherAssignment(option.key)) return;
+    onSelectionChange(toggleAppointmentWorkItem(selected, option, checked));
+  }
+
+  function changeGroup(group: AppointmentWorkGroup) {
+    const selectableItems = group.items.filter((option) => (
+      selectedKeys.has(option.key) || !otherAssignment(option.key)
+    ));
+    const allSelected = selectableItems.length > 0 && selectableItems.every((option) => (
+      selectedKeys.has(option.key)
+    ));
+    let nextSelected = selected;
+    for (const option of selectableItems) {
+      nextSelected = toggleAppointmentWorkItem(nextSelected, option, !allSelected);
+    }
+    onSelectionChange(nextSelected);
+  }
+
+  const modal = open && typeof document !== "undefined" ? createPortal(
+    <div
+      className="implementation-work-picker-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setOpen(false);
+      }}
+    >
+      <section
+        className="implementation-work-picker-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="implementation-work-picker-title"
+      >
+        <header className="implementation-work-picker-header">
+          <div>
+            <span>Afspraak</span>
+            <h3 id="implementation-work-picker-title">Werkzaamheden plannen</h3>
+            <p>Kies precies wat tijdens deze afspraak wordt uitgevoerd.</p>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            title="Sluiten"
+            aria-label="Werkzaamheden sluiten"
+            onClick={() => setOpen(false)}
+          >
+            <X size={20} />
+          </button>
+        </header>
+
+        <div className="implementation-work-picker-controls">
+          <div className="implementation-work-picker-tabs" role="tablist" aria-label="Soort werkzaamheden">
+            {(Object.keys(APPOINTMENT_WORK_CATEGORY_LABELS) as AppointmentWorkCategory[]).map((key) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={category === key}
+                className={category === key ? "active" : ""}
+                key={key}
+                onClick={() => setCategory(key)}
+              >
+                {APPOINTMENT_WORK_CATEGORY_LABELS[key]}
+                <span>{groups.filter((group) => group.category === key).reduce((total, group) => (
+                  total + group.items.length
+                ), 0)}</span>
+              </button>
             ))}
-          </fieldset>
-        ))}
-      </div>
-    </details>
+          </div>
+          <label className="implementation-work-picker-search">
+            <Search size={17} aria-hidden="true" />
+            <input
+              type="search"
+              value={search}
+              placeholder="Zoek werkzaamheden"
+              aria-label="Zoek werkzaamheden"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <select
+            className="implementation-work-picker-filter"
+            value={filter}
+            aria-label="Filter werkzaamheden"
+            onChange={(event) => setFilter(event.target.value as AppointmentWorkFilter)}
+          >
+            {(Object.keys(APPOINTMENT_WORK_FILTER_LABELS) as AppointmentWorkFilter[]).map((key) => (
+              <option key={key} value={key}>{APPOINTMENT_WORK_FILTER_LABELS[key]}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="implementation-work-picker-content">
+          <div className="implementation-work-picker-catalog">
+            {visibleGroups.length === 0 ? (
+              <div className="implementation-work-picker-empty">
+                <Search size={20} /> Geen werkzaamheden gevonden binnen dit filter.
+              </div>
+            ) : visibleGroups.map((group) => {
+              const selectableItems = group.items.filter((option) => (
+                selectedKeys.has(option.key) || !otherAssignment(option.key)
+              ));
+              const allSelected = selectableItems.length > 0 && selectableItems.every((option) => (
+                selectedKeys.has(option.key)
+              ));
+
+              return (
+                <fieldset key={group.key} className="implementation-work-picker-group">
+                  <legend>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        disabled={disabled || selectableItems.length === 0}
+                        onChange={() => changeGroup(group)}
+                      />
+                      <span>{group.label}</span>
+                      <small>{group.items.length} regels</small>
+                    </label>
+                  </legend>
+                  <div>
+                    {group.items.map((option) => {
+                      const assignedElsewhere = otherAssignment(option.key);
+                      const selectedHere = selectedKeys.has(option.key);
+                      return (
+                        <div className="implementation-work-picker-row" key={option.key}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={selectedHere}
+                              disabled={disabled || Boolean(assignedElsewhere && !selectedHere)}
+                              onChange={(event) => changeOption(option, event.target.checked)}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                          <div className="implementation-work-picker-statuses">
+                            {option.completed ? (
+                              <span className="completed"><CheckCircle2 size={14} /> Afgerond</span>
+                            ) : null}
+                            {selectedHere ? <span>Deze afspraak</span> : null}
+                            {assignedElsewhere ? (
+                              <span>
+                                <CalendarDays size={14} /> {formatDate(assignedElsewhere.appointmentDate)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {assignedElsewhere && !selectedHere && currentAppointmentId && onMove ? (
+                            <button
+                              type="button"
+                              className="implementation-work-picker-move"
+                              disabled={disabled}
+                              onClick={() => onMove(option, assignedElsewhere.id)}
+                            >
+                              <ArrowRightLeft size={15} /> Verplaatsen
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              );
+            })}
+          </div>
+
+          <aside className="implementation-work-picker-summary" aria-label="Geselecteerde werkzaamheden">
+            <div>
+              <span>Deze afspraak</span>
+              <strong>{selected.length} geselecteerd</strong>
+            </div>
+            {selectedGroups.length === 0 ? (
+              <p>Nog geen werkzaamheden aan deze afspraak gekoppeld.</p>
+            ) : selectedGroups.map((group) => (
+              <section key={group.label}>
+                <h4>{group.label}</h4>
+                {group.items.map((option) => (
+                  <div key={option.key}>
+                    <span>{option.label}</span>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      title="Verwijderen uit afspraak"
+                      aria-label={`${option.label} verwijderen uit afspraak`}
+                      disabled={disabled}
+                      onClick={() => changeOption(option, false)}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </aside>
+        </div>
+
+        <footer className="implementation-work-picker-footer">
+          <span>{currentAppointmentId
+            ? "Wijzigingen worden direct opgeslagen."
+            : "De selectie wordt opgeslagen wanneer je de afspraak toevoegt."}</span>
+          <button type="button" className="primary-button" onClick={() => setOpen(false)}>
+            Gereed
+          </button>
+        </footer>
+      </section>
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="implementation-work-picker-trigger"
+        onClick={() => setOpen(true)}
+      >
+        <span>
+          <ClipboardCheck size={18} aria-hidden="true" />
+          <span>
+            <strong>Werkzaamheden kiezen</strong>
+            <small>Plan taken, basisfunctionaliteiten en modules</small>
+          </span>
+        </span>
+        <span>{selected.length} geselecteerd</span>
+      </button>
+      {modal}
+    </>
   );
 }
 
@@ -461,33 +762,66 @@ export default function ImplementationEditor({ implementationId }: { implementat
     }),
     [implementationCustomWorkItems, implementationItems, pricingConfig],
   );
-  const appointmentWorkOptions = useMemo(
-    () => [
-      ...configuredImplementationTasks.flatMap((item) => {
-        const workItems = (item.workItems ?? []).map((workItem) => workItem.trim()).filter(Boolean);
-        if (workItems.length === 0) {
-          return [{ key: item.key, group: "Taken", label: item.label }];
-        }
-        return workItems.map((workItem) => ({
-          key: getImplementationWorkItemProgressKey(item.key, workItem),
-          group: item.label,
-          label: workItem,
-        }));
-      }),
-      ...[...configuredBaseFunctionalities, ...configuredImplementationItems].flatMap((item) => {
-        const workItems = (item.workItems ?? []).map((workItem) => workItem.trim()).filter(Boolean);
-        if (workItems.length === 0) {
-          return [{ key: item.key, group: "", label: item.label }];
-        }
-        return workItems.map((workItem) => ({
-          key: getImplementationWorkItemProgressKey(item.key, workItem),
-          group: item.label,
-          label: workItem,
-        }));
-      }),
-    ],
-    [configuredBaseFunctionalities, configuredImplementationItems, configuredImplementationTasks],
+  const implementationItemProgress = useMemo(
+    () => normalizeImplementationItemProgress(implementation?.implementation_item_progress),
+    [implementation?.implementation_item_progress],
   );
+  const appointmentWorkGroups = useMemo(() => {
+    const groups: AppointmentWorkGroup[] = [];
+
+    const appendGroups = (
+      category: AppointmentWorkCategory,
+      items: ImplementationItem[],
+    ) => {
+      const standaloneItems: AppointmentWorkOption[] = [];
+
+      for (const item of items) {
+        const workItems = getImplementationWorkItemStatuses(item, implementationItemProgress);
+        if (workItems.length === 0) {
+          standaloneItems.push({
+            key: item.key,
+            group: APPOINTMENT_WORK_CATEGORY_LABELS[category],
+            label: item.label,
+            category,
+            completed: isImplementationItemCompleted(item, implementationItemProgress),
+          });
+          continue;
+        }
+
+        groups.push({
+          key: `${category}:${item.key}`,
+          category,
+          label: item.label,
+          items: workItems.map((workItem) => ({
+            key: workItem.key,
+            group: item.label,
+            label: workItem.label,
+            category,
+            completed: workItem.completed,
+          })),
+        });
+      }
+
+      if (standaloneItems.length > 0) {
+        groups.unshift({
+          key: `${category}:standalone`,
+          category,
+          label: APPOINTMENT_WORK_CATEGORY_LABELS[category],
+          items: standaloneItems,
+        });
+      }
+    };
+
+    appendGroups("tasks", configuredImplementationTasks);
+    appendGroups("base", configuredBaseFunctionalities);
+    appendGroups("modules", configuredImplementationItems);
+    return groups;
+  }, [
+    configuredBaseFunctionalities,
+    configuredImplementationItems,
+    configuredImplementationTasks,
+    implementationItemProgress,
+  ]);
 
   const loadRoleAccess = useCallback(async () => {
     try {
@@ -1231,15 +1565,39 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
   function updateAppointmentWorkSelection(
     appointment: ImplementationAppointment,
-    workItem: ImplementationAppointmentWorkItem,
-    checked: boolean,
+    workItems: ImplementationAppointmentWorkItem[],
   ) {
     const nextAppointment = {
       ...appointment,
-      workItems: toggleAppointmentWorkItem(appointment.workItems, workItem, checked),
+      workItems,
     };
     updateAppointmentLocal(appointment.id, nextAppointment);
     void saveAppointment(nextAppointment);
+  }
+
+  function moveAppointmentWorkItem(
+    targetAppointment: ImplementationAppointment,
+    workItem: ImplementationAppointmentWorkItem,
+    sourceAppointmentId: string,
+  ) {
+    const sourceAppointment = appointments.find((appointment) => (
+      appointment.id === sourceAppointmentId
+    ));
+    if (!sourceAppointment || sourceAppointment.id === targetAppointment.id) return;
+
+    const nextSourceAppointment = {
+      ...sourceAppointment,
+      workItems: sourceAppointment.workItems.filter((item) => item.key !== workItem.key),
+    };
+    const nextTargetAppointment = {
+      ...targetAppointment,
+      workItems: toggleAppointmentWorkItem(targetAppointment.workItems, workItem, true),
+    };
+
+    updateAppointmentLocal(sourceAppointment.id, nextSourceAppointment);
+    updateAppointmentLocal(targetAppointment.id, nextTargetAppointment);
+    void saveAppointment(nextSourceAppointment);
+    void saveAppointment(nextTargetAppointment);
   }
 
   async function deleteAppointment(appointment: ImplementationAppointment) {
@@ -1494,9 +1852,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
     key === "implementationStartInvoice" && Boolean(implementation.implementation_start_date)
   ) || (
     key === "implementationEndInvoice" && Boolean(implementation.actual_go_live_date)
-  );
-  const implementationItemProgress = normalizeImplementationItemProgress(
-    implementation.implementation_item_progress,
   );
   const completedImplementationTasks = configuredImplementationTasks.filter(
     (item) => isImplementationItemCompleted(item, implementationItemProgress),
@@ -2097,16 +2452,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <Plus size={17} /> {appointmentsBusy ? "Toevoegen..." : "Afspraak toevoegen"}
               </button>
               <AppointmentWorkSelector
-                options={appointmentWorkOptions}
+                groups={appointmentWorkGroups}
                 selected={appointmentDraft.workItems}
+                appointments={appointments}
+                currentAppointmentId={null}
                 disabled={appointmentsBusy}
-                onChange={(workItem, checked) => setAppointmentDraft({
+                onSelectionChange={(workItems) => setAppointmentDraft({
                   ...appointmentDraft,
-                  workItems: toggleAppointmentWorkItem(
-                    appointmentDraft.workItems,
-                    workItem,
-                    checked,
-                  ),
+                  workItems,
                 })}
               />
             </div>
@@ -2260,13 +2613,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     </button>
                   ) : null}
                   <AppointmentWorkSelector
-                    options={appointmentWorkOptions}
+                    groups={appointmentWorkGroups}
                     selected={appointment.workItems}
+                    appointments={appointments}
+                    currentAppointmentId={appointment.id}
                     disabled={!canEdit || appointmentsBusy}
-                    onChange={(workItem, checked) => updateAppointmentWorkSelection(
+                    onSelectionChange={(workItems) => updateAppointmentWorkSelection(
+                      appointment,
+                      workItems,
+                    )}
+                    onMove={(workItem, sourceAppointmentId) => moveAppointmentWorkItem(
                       appointment,
                       workItem,
-                      checked,
+                      sourceAppointmentId,
                     )}
                   />
                 </article>

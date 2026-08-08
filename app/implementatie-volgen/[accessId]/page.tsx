@@ -368,7 +368,7 @@ export default async function ImplementationProgressPage({
               ))}
             </div>
           ) : (
-            <p className={styles.noItems}>Er zijn nog geen taken voor deze implementatie toegevoegd.</p>
+            <p className={styles.noItems}>Er zijn nog geen taken door de consultant geselecteerd.</p>
           )}
         </div>
       </section>

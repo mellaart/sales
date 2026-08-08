@@ -239,9 +239,29 @@ function publicImplementationItems(
     )
   ));
 
-  const tasks = getConfiguredImplementationTasks(pricingConfig, customWorkItems).map((task) => (
-    publicImplementationItem(task, itemProgress, approvals)
-  ));
+  const tasks = getConfiguredImplementationTasks(pricingConfig, customWorkItems).flatMap((task) => {
+    const publicTask = publicImplementationItem(task, itemProgress, approvals);
+    if (publicTask.workItems.length > 0) {
+      const selectedWorkItems = publicTask.workItems
+        .filter((workItem) => workItem.completed || Boolean(workItem.customerApprovedAt))
+        .map((workItem) => workItem.customerApprovedAt
+          ? { ...workItem, completed: true }
+          : workItem);
+      if (selectedWorkItems.length === 0) return [];
+
+      return [{
+        ...publicTask,
+        workItems: selectedWorkItems,
+        completed: selectedWorkItems.every((workItem) => workItem.completed),
+      }];
+    }
+
+    if (!publicTask.completed && !publicTask.customerApprovedAt) return [];
+    return [{
+      ...publicTask,
+      completed: publicTask.completed || Boolean(publicTask.customerApprovedAt),
+    }];
+  });
 
   return { tasks, baseItems, items };
 }

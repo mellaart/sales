@@ -47,6 +47,16 @@ export type ImplementationCustomerWorkApprovals = Record<
   string,
   ImplementationCustomerWorkApproval
 >;
+export type ImplementationWorkItemNote = {
+  text: string;
+  updatedAt: string;
+  authorName: string;
+};
+export type ImplementationWorkItemNoteSet = {
+  consultant?: ImplementationWorkItemNote;
+  customer?: ImplementationWorkItemNote;
+};
+export type ImplementationWorkItemNotes = Record<string, ImplementationWorkItemNoteSet>;
 
 export function normalizeImplementationProgress(value: unknown): ImplementationProgress {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -153,6 +163,54 @@ export function normalizeImplementationCustomerWorkApprovals(
   );
 }
 
+export function normalizeImplementationWorkItemNotes(
+  value: unknown,
+): ImplementationWorkItemNotes {
+  let source = value;
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch {
+      return {};
+    }
+  }
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  return Object.entries(source as Record<string, unknown>).reduce<ImplementationWorkItemNotes>(
+    (result, [rawKey, rawNoteSet]) => {
+      const key = rawKey.trim().slice(0, 240);
+      if (!key || !rawNoteSet || typeof rawNoteSet !== "object" || Array.isArray(rawNoteSet)) {
+        return result;
+      }
+
+      const noteSet = rawNoteSet as Record<string, unknown>;
+      const normalized: ImplementationWorkItemNoteSet = {};
+      for (const role of ["consultant", "customer"] as const) {
+        const rawNote = noteSet[role];
+        if (!rawNote || typeof rawNote !== "object" || Array.isArray(rawNote)) continue;
+        const note = rawNote as Record<string, unknown>;
+        const text = typeof note.text === "string"
+          ? note.text.replace(/\r\n?/g, "\n").trim().slice(0, 2000)
+          : "";
+        const updatedAt = typeof note.updatedAt === "string" ? note.updatedAt.trim() : "";
+        const authorName = typeof note.authorName === "string"
+          ? note.authorName.trim().slice(0, 200)
+          : "";
+        if (!text || Number.isNaN(new Date(updatedAt).getTime())) continue;
+        normalized[role] = {
+          text,
+          updatedAt,
+          authorName: authorName || (role === "consultant" ? "Consultant" : "Klant"),
+        };
+      }
+
+      if (normalized.consultant || normalized.customer) result[key] = normalized;
+      return result;
+    },
+    {},
+  );
+}
+
 export type ImplementationRecord = {
   id: string;
   deal_id: string;
@@ -174,6 +232,7 @@ export type ImplementationRecord = {
   implementation_item_progress?: ImplementationItemProgress | null;
   implementation_custom_work_items?: ImplementationCustomWorkItems | null;
   implementation_customer_work_approvals?: ImplementationCustomerWorkApprovals | null;
+  implementation_work_item_notes?: ImplementationWorkItemNotes | null;
   administration_name?: string | null;
   implementation_start_date?: string | null;
   planned_go_live_date?: string | null;

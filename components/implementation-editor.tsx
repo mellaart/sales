@@ -34,6 +34,7 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import ImplementationCustomerFilesPanel from "@/components/implementation-customer-files-panel";
 import ImplementationNotesField from "@/components/implementation-notes-field";
+import ImplementationWorkNoteEditor from "@/components/implementation-work-note-editor";
 import PriceBreakdown from "@/components/price-breakdown";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatCard, StatusPill } from "@/components/ui";
@@ -49,6 +50,7 @@ import {
   normalizeImplementationCustomerWorkApprovals,
   normalizeImplementationItemProgress,
   normalizeImplementationProgress,
+  normalizeImplementationWorkItemNotes,
   type ImplementationRecord,
   type ImplementationProgressKey,
   type ImplementationStatus,
@@ -742,6 +744,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
       implementation?.implementation_customer_work_approvals,
     ),
     [implementation?.implementation_customer_work_approvals],
+  );
+  const implementationWorkItemNotes = useMemo(
+    () => normalizeImplementationWorkItemNotes(implementation?.implementation_work_item_notes),
+    [implementation?.implementation_work_item_notes],
   );
   const configuredImplementationTasks = useMemo(
     () => getConfiguredImplementationTasks(pricingConfig, implementationCustomWorkItems),
@@ -1872,6 +1878,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     );
   }
 
+  const loadedImplementationId = implementation.id;
   const progress = normalizeImplementationProgress(implementation.progress);
   const intakePresentation = getCustomerIntakePresentation(
     customerIntakeLoaded,
@@ -1940,7 +1947,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     return (
       <>
         {workItems.length > 0 ? (
-          <span className="implementation-work-items">
+          <div className="implementation-work-items">
             {workItems.map((workItem) => {
               const custom = customLabels.has(normalizedImplementationWorkLabel(workItem.label));
               const customerApproval = implementationCustomerWorkApprovals[workItem.key];
@@ -1958,7 +1965,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 </small>
               ) : null;
               return (
-                <span
+                <div
                   key={workItem.key}
                   className={`implementation-work-item-row ${custom ? "custom" : ""} ${
                     item.selectableWorkItems ? "selectable" : ""
@@ -2023,10 +2030,20 @@ export default function ImplementationEditor({ implementationId }: { implementat
                       <Trash2 size={14} aria-hidden="true" />
                     </button>
                   ) : null}
-                </span>
+                  <ImplementationWorkNoteEditor
+                    implementationId={loadedImplementationId}
+                    workItemKey={workItem.key}
+                    workItemLabel={workItem.label}
+                    initialNotes={implementationWorkItemNotes[workItem.key] ?? {}}
+                    canEdit={canEdit}
+                    onSaved={(notes) => setImplementation((current) => current
+                      ? { ...current, implementation_work_item_notes: notes }
+                      : current)}
+                  />
+                </div>
               );
             })}
-          </span>
+          </div>
         ) : null}
 
         {workItems.length === 0 && (
@@ -2047,6 +2064,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <><Clock3 size={13} aria-hidden="true" /> Wacht op akkoord van de klant</>
             )}
           </small>
+        ) : null}
+
+        {workItems.length === 0 ? (
+          <ImplementationWorkNoteEditor
+            implementationId={loadedImplementationId}
+            workItemKey={item.key}
+            workItemLabel={item.label}
+            initialNotes={implementationWorkItemNotes[item.key] ?? {}}
+            canEdit={canEdit}
+            onSaved={(notes) => setImplementation((current) => current
+              ? { ...current, implementation_work_item_notes: notes }
+              : current)}
+          />
         ) : null}
 
         {canEdit ? (

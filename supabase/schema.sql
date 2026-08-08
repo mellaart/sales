@@ -147,6 +147,7 @@ create table if not exists public.implementations (
   implementation_item_progress jsonb not null default '{}'::jsonb,
   implementation_custom_work_items jsonb not null default '{}'::jsonb,
   implementation_customer_work_approvals jsonb not null default '{}'::jsonb,
+  implementation_work_item_notes jsonb not null default '{}'::jsonb,
   administration_name text,
   implementation_start_date date,
   planned_go_live_date date,
@@ -165,6 +166,8 @@ alter table public.implementations
   add column if not exists implementation_custom_work_items jsonb not null default '{}'::jsonb;
 alter table public.implementations
   add column if not exists implementation_customer_work_approvals jsonb not null default '{}'::jsonb;
+alter table public.implementations
+  add column if not exists implementation_work_item_notes jsonb not null default '{}'::jsonb;
 alter table public.implementations add column if not exists administration_name text;
 alter table public.implementations add column if not exists implementation_start_date date;
 alter table public.implementations add column if not exists planned_go_live_date date;

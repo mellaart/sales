@@ -18,6 +18,7 @@ import {
 import PublicDnsRefreshButton from "@/components/public-dns-refresh-button";
 import ImplementationFileDelivery from "./implementation-file-delivery";
 import WorkApprovalControl from "./work-approval-control";
+import WorkNoteControl from "./work-note-control";
 import {
   IMPLEMENTATION_DNS_RECORDS,
   type DnsCheckItem,
@@ -362,17 +363,31 @@ export default async function ImplementationProgressPage({
                               completed={workItem.completed}
                               initialApprovedAt={workItem.customerApprovedAt}
                             />
+                            <WorkNoteControl
+                              accessId={accessId}
+                              workItemKey={workItem.key}
+                              workItemLabel={workItem.label}
+                              initialNotes={workItem.notes}
+                            />
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <WorkApprovalControl
-                        accessId={accessId}
-                        workItemKey={task.key}
-                        workItemLabel={task.label}
-                        completed={task.completed}
-                        initialApprovedAt={task.customerApprovedAt}
-                      />
+                      <>
+                        <WorkApprovalControl
+                          accessId={accessId}
+                          workItemKey={task.key}
+                          workItemLabel={task.label}
+                          completed={task.completed}
+                          initialApprovedAt={task.customerApprovedAt}
+                        />
+                        <WorkNoteControl
+                          accessId={accessId}
+                          workItemKey={task.key}
+                          workItemLabel={task.label}
+                          initialNotes={task.notes}
+                        />
+                      </>
                     )}
                   </div>
                   <small>{task.completed ? "Afgerond" : "In voorbereiding"}</small>
@@ -420,17 +435,31 @@ export default async function ImplementationProgressPage({
                               completed={workItem.completed}
                               initialApprovedAt={workItem.customerApprovedAt}
                             />
+                            <WorkNoteControl
+                              accessId={accessId}
+                              workItemKey={workItem.key}
+                              workItemLabel={workItem.label}
+                              initialNotes={workItem.notes}
+                            />
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <WorkApprovalControl
-                        accessId={accessId}
-                        workItemKey={item.key}
-                        workItemLabel={item.label}
-                        completed={item.completed}
-                        initialApprovedAt={item.customerApprovedAt}
-                      />
+                      <>
+                        <WorkApprovalControl
+                          accessId={accessId}
+                          workItemKey={item.key}
+                          workItemLabel={item.label}
+                          completed={item.completed}
+                          initialApprovedAt={item.customerApprovedAt}
+                        />
+                        <WorkNoteControl
+                          accessId={accessId}
+                          workItemKey={item.key}
+                          workItemLabel={item.label}
+                          initialNotes={item.notes}
+                        />
+                      </>
                     )}
                   </div>
                   <small>{item.completed ? "Afgerond" : "In voorbereiding"}</small>

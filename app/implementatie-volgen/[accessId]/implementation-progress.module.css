@@ -975,6 +975,158 @@
   animation: none;
 }
 
+.workNotes {
+  display: block;
+  grid-column: 1 / -1;
+  margin-top: 7px;
+}
+
+.workNotes summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #235b96;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.workNotes summary::-webkit-details-marker {
+  display: none;
+}
+
+.workNotes summary > span {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e4eefb;
+  color: #1f5d9f;
+  font-size: 11px;
+}
+
+.workNotesContent {
+  display: grid;
+  gap: 10px;
+  margin-top: 9px;
+  padding: 12px;
+  border: 1px solid #c8d7e7;
+  border-radius: 7px;
+  background: #f7faff;
+}
+
+.workNotesContent label {
+  display: grid;
+  gap: 6px;
+}
+
+.workNotesContent label > span,
+.consultantNote > strong {
+  color: #183f69;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.workNotesContent textarea {
+  width: 100%;
+  min-height: 82px;
+  resize: vertical;
+  padding: 10px 11px;
+  border: 1px solid #b9cbe0;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  color: #17324f;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.workNotesContent textarea:focus {
+  border-color: #2f7ad7;
+  box-shadow: 0 0 0 3px rgba(47, 122, 215, 0.14);
+}
+
+.workNotesContent textarea::placeholder {
+  color: #8091a6;
+}
+
+.consultantNote {
+  display: grid;
+  gap: 5px;
+  padding: 10px 11px;
+  border-left: 3px solid #2f7ad7;
+  border-radius: 5px;
+  background: #edf5ff;
+}
+
+.consultantNote p {
+  margin: 0;
+  color: #294f77;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.consultantNote small {
+  color: #60738c;
+  font-size: 11px;
+}
+
+.workNotesActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.workNotesActions button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid #2f7ad7;
+  border-radius: 6px;
+  background: #2f7ad7;
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workNotesActions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.workNotesActions button svg {
+  animation: none;
+}
+
+.workNotesSpinner {
+  animation: customer-approval-spin 850ms linear infinite;
+}
+
+.workNotesActions small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #52708f;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workNotesError {
+  margin: 0;
+  color: #b3363f;
+  font-size: 12px;
+}
+
 @keyframes customer-approval-spin {
   to { transform: rotate(360deg); }
 }

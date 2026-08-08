@@ -28,8 +28,11 @@ import {
   normalizeImplementationCustomerWorkApprovals,
   normalizeImplementationItemProgress,
   normalizeImplementationProgress,
+  normalizeImplementationWorkItemNotes,
   type ImplementationCustomerWorkApproval,
   type ImplementationStatus,
+  type ImplementationWorkItemNote,
+  type ImplementationWorkItemNotes,
 } from "@/lib/implementations";
 import { createId, query } from "@/lib/local-db";
 import { getServiceClient } from "@/lib/admin-api";
@@ -91,6 +94,7 @@ type PortalImplementationRow = {
   implementation_item_progress: unknown;
   implementation_custom_work_items: unknown;
   implementation_customer_work_approvals: unknown;
+  implementation_work_item_notes: unknown;
   updated_at: string;
 };
 
@@ -206,12 +210,14 @@ function publicImplementationItem(
   item: ImplementationItem,
   itemProgress: Record<string, boolean>,
   approvals: ReturnType<typeof normalizeImplementationCustomerWorkApprovals>,
+  notes: ImplementationWorkItemNotes,
   scheduledWorkItemKeys: ReadonlySet<string>,
 ): PublicImplementationItem {
   const workItems = getImplementationWorkItemStatuses(item, itemProgress).map((workItem) => ({
     ...workItem,
     selected: workItem.selected || scheduledWorkItemKeys.has(workItem.key),
     customerApprovedAt: approvals[workItem.key]?.approvedAt ?? null,
+    notes: notes[workItem.key] ?? {},
   }));
   const selectedWorkItems = workItems.filter((workItem) => workItem.selected);
 
@@ -221,6 +227,7 @@ function publicImplementationItem(
       ? selectedWorkItems.length > 0
       : isImplementationItemSelected(item, itemProgress) || scheduledWorkItemKeys.has(item.key),
     customerApprovedAt: workItems.length === 0 ? approvals[item.key]?.approvedAt ?? null : null,
+    notes: notes[item.key] ?? {},
     workItems,
     completed: workItems.length > 0
       ? selectedWorkItems.length > 0 && selectedWorkItems.every((workItem) => workItem.completed)
@@ -231,7 +238,8 @@ function publicImplementationItem(
 function visiblePublicImplementationItem(item: PublicImplementationItem) {
   if (item.workItems.length > 0) {
     const visibleWorkItems = item.workItems.filter((workItem) => (
-      workItem.selected || Boolean(workItem.customerApprovedAt)
+      workItem.selected || Boolean(workItem.customerApprovedAt) ||
+      Boolean(workItem.notes.consultant) || Boolean(workItem.notes.customer)
     ));
     if (visibleWorkItems.length === 0) return null;
 
@@ -243,7 +251,10 @@ function visiblePublicImplementationItem(item: PublicImplementationItem) {
     };
   }
 
-  if (!item.selected && !item.customerApprovedAt) return null;
+  if (
+    !item.selected && !item.customerApprovedAt &&
+    !item.notes.consultant && !item.notes.customer
+  ) return null;
   return item;
 }
 
@@ -253,11 +264,13 @@ function publicImplementationItems(
   itemProgressValue: unknown,
   customWorkItemsValue: unknown,
   approvalsValue: unknown,
+  notesValue: unknown,
   scheduledWorkItemKeys: ReadonlySet<string> = new Set<string>(),
 ) {
   const itemProgress = normalizeImplementationItemProgress(itemProgressValue);
   const customWorkItems = normalizeImplementationCustomWorkItems(customWorkItemsValue);
   const approvals = normalizeImplementationCustomerWorkApprovals(approvalsValue);
+  const notes = normalizeImplementationWorkItemNotes(notesValue);
   const items = deal
     ? getImplementationItems(deal).map((item) => {
       const configuredItem = withImplementationCustomWorkItems(
@@ -270,6 +283,7 @@ function publicImplementationItems(
           : configuredItem,
         itemProgress,
         approvals,
+        notes,
         scheduledWorkItemKeys,
       );
     }).flatMap((item) => {
@@ -282,6 +296,7 @@ function publicImplementationItems(
       task,
       itemProgress,
       approvals,
+      notes,
       scheduledWorkItemKeys,
     );
     const visibleTask = visiblePublicImplementationItem(publicTask);
@@ -289,6 +304,108 @@ function publicImplementationItems(
   });
 
   return { tasks, items };
+}
+
+function publicWorkItemCandidates(tasks: PublicImplementationItem[], items: PublicImplementationItem[]) {
+  return [...tasks, ...items].flatMap((item) => (
+    item.workItems.length > 0
+      ? item.workItems.map((workItem) => ({
+        key: workItem.key,
+        itemKey: item.key,
+        itemLabel: item.label,
+        label: workItem.label,
+        completed: workItem.completed,
+      }))
+      : [{
+        key: item.key,
+        itemKey: item.key,
+        itemLabel: item.label,
+        label: item.label,
+        completed: item.completed,
+      }]
+  ));
+}
+
+function normalizeWorkItemNoteInput(requestedWorkItemKey: string, requestedText: string) {
+  const workItemKey = requestedWorkItemKey.trim().slice(0, 240);
+  if (!workItemKey) throw new Error("Kies een geldige werkzaamheid.");
+  const text = requestedText.replace(/\r\n?/g, "\n").trim().slice(0, 2000);
+  return { workItemKey, text };
+}
+
+async function persistImplementationWorkItemNote(
+  implementationId: string,
+  workItemKey: string,
+  role: "consultant" | "customer",
+  text: string,
+  authorName: string,
+) {
+  const note: ImplementationWorkItemNote | null = text
+    ? {
+      text,
+      updatedAt: new Date().toISOString(),
+      authorName: authorName.trim().slice(0, 200) || (role === "consultant" ? "Consultant" : "Klant"),
+    }
+    : null;
+  const { rows } = await query<{ implementation_work_item_notes: unknown }>(
+    note
+      ? `update public.implementations
+         set implementation_work_item_notes = jsonb_set(
+               coalesce(implementation_work_item_notes, '{}'::jsonb),
+               array[$2]::text[],
+               coalesce(implementation_work_item_notes -> ($2::text), '{}'::jsonb) ||
+                 jsonb_build_object($3::text, $4::jsonb),
+               true
+             ),
+             updated_at = now()
+         where id = $1
+         returning implementation_work_item_notes`
+      : `update public.implementations
+         set implementation_work_item_notes =
+               coalesce(implementation_work_item_notes, '{}'::jsonb) #- array[$2, $3]::text[],
+             updated_at = now()
+         where id = $1
+         returning implementation_work_item_notes`,
+    note
+      ? [implementationId, workItemKey, role, JSON.stringify(note)]
+      : [implementationId, workItemKey, role],
+  );
+  if (!rows[0]) throw new Error("De opmerking kon niet worden opgeslagen.");
+  return normalizeImplementationWorkItemNotes(rows[0].implementation_work_item_notes);
+}
+
+export async function saveConsultantImplementationWorkItemNote(
+  implementationId: string,
+  actor: ImplementationActor,
+  requestedWorkItemKey: string,
+  requestedText: string,
+) {
+  const access = await requireImplementationAccess(implementationId, actor, "write");
+  if (!access.ok) return access;
+
+  let normalized: ReturnType<typeof normalizeWorkItemNoteInput>;
+  try {
+    normalized = normalizeWorkItemNoteInput(requestedWorkItemKey, requestedText);
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: error instanceof Error ? error.message : "Ongeldige opmerking.",
+    };
+  }
+
+  const notes = await persistImplementationWorkItemNote(
+    implementationId,
+    normalized.workItemKey,
+    "consultant",
+    normalized.text,
+    actor.profile.full_name || actor.user.email || "Consultant",
+  );
+  return {
+    ok: true as const,
+    notes,
+    noteSet: notes[normalized.workItemKey] ?? {},
+  };
 }
 
 function toAccess(request: Request, row: PortalAccessRow): ImplementationPortalAccess {
@@ -617,7 +734,7 @@ export async function getPublicImplementationPortal(
             assigned_consultant_name, assigned_consultant_email,
             implementation_start_date, planned_go_live_date, actual_go_live_date,
             progress, implementation_item_progress, implementation_custom_work_items,
-            implementation_customer_work_approvals, updated_at
+            implementation_customer_work_approvals, implementation_work_item_notes, updated_at
      from public.implementations
      where id = $1
      limit 1`,
@@ -686,6 +803,7 @@ export async function getPublicImplementationPortal(
     implementation.implementation_item_progress,
     implementation.implementation_custom_work_items,
     implementation.implementation_customer_work_approvals,
+    implementation.implementation_work_item_notes,
     new Set(appointments.flatMap((appointment) => (
       appointment.workItems.map((workItem) => workItem.key)
     ))),
@@ -766,10 +884,11 @@ export async function approvePublicImplementationWorkItem(
     "deal_id" |
     "implementation_item_progress" |
     "implementation_custom_work_items" |
-    "implementation_customer_work_approvals"
+    "implementation_customer_work_approvals" |
+    "implementation_work_item_notes"
   >>(
     `select deal_id, implementation_item_progress, implementation_custom_work_items,
-            implementation_customer_work_approvals
+            implementation_customer_work_approvals, implementation_work_item_notes
      from public.implementations
      where id = $1
      limit 1`,
@@ -780,12 +899,13 @@ export async function approvePublicImplementationWorkItem(
     return { ok: false as const, status: 404, error: "Deze implementatie is niet meer beschikbaar." };
   }
 
-  const [{ rows: dealRows }, { pricingConfig }] = await Promise.all([
+  const [{ rows: dealRows }, { pricingConfig }, appointments] = await Promise.all([
     query<PortalDealRow>(
       "select modules, calculator_inputs from public.deals where id = $1 limit 1",
       [implementation.deal_id],
     ),
     readStoredPricingConfig(getServiceClient()),
+    publicAppointments(access.implementation_id),
   ]);
   const { tasks, items } = publicImplementationItems(
     dealRows[0],
@@ -793,24 +913,13 @@ export async function approvePublicImplementationWorkItem(
     implementation.implementation_item_progress,
     implementation.implementation_custom_work_items,
     implementation.implementation_customer_work_approvals,
+    implementation.implementation_work_item_notes,
+    new Set(appointments.flatMap((appointment) => (
+      appointment.workItems.map((workItem) => workItem.key)
+    ))),
   );
-  const candidate = [...tasks, ...items].flatMap((item) => (
-    item.workItems.length > 0
-      ? item.workItems.map((workItem) => ({
-        key: workItem.key,
-        itemKey: item.key,
-        itemLabel: item.label,
-        label: workItem.label,
-        completed: workItem.completed,
-      }))
-      : [{
-        key: item.key,
-        itemKey: item.key,
-        itemLabel: item.label,
-        label: item.label,
-        completed: item.completed,
-      }]
-  )).find((workItem) => workItem.key === workItemKey);
+  const candidate = publicWorkItemCandidates(tasks, items)
+    .find((workItem) => workItem.key === workItemKey);
 
   if (!candidate) {
     return { ok: false as const, status: 404, error: "Deze werkzaamheid is niet meer beschikbaar." };
@@ -868,4 +977,91 @@ export async function approvePublicImplementationWorkItem(
   }
 
   return { ok: true as const, approval: savedApproval };
+}
+
+export async function savePublicImplementationWorkItemNote(
+  accessId: string,
+  tokenVersion: number,
+  token: string,
+  requestedWorkItemKey: string,
+  requestedText: string,
+) {
+  let normalized: ReturnType<typeof normalizeWorkItemNoteInput>;
+  try {
+    normalized = normalizeWorkItemNoteInput(requestedWorkItemKey, requestedText);
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: error instanceof Error ? error.message : "Ongeldige opmerking.",
+    };
+  }
+
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  if (!access) {
+    return {
+      ok: false as const,
+      status: 404,
+      error: "Deze klantlink is ongeldig, verlopen of ingetrokken.",
+    };
+  }
+
+  const { rows } = await query<Pick<PortalImplementationRow,
+    "deal_id" |
+    "customer_name" |
+    "implementation_item_progress" |
+    "implementation_custom_work_items" |
+    "implementation_customer_work_approvals" |
+    "implementation_work_item_notes"
+  >>(
+    `select deal_id, customer_name, implementation_item_progress,
+            implementation_custom_work_items, implementation_customer_work_approvals,
+            implementation_work_item_notes
+     from public.implementations
+     where id = $1
+     limit 1`,
+    [access.implementation_id],
+  );
+  const implementation = rows[0];
+  if (!implementation) {
+    return { ok: false as const, status: 404, error: "Deze implementatie is niet meer beschikbaar." };
+  }
+
+  const [{ rows: dealRows }, { pricingConfig }, appointments] = await Promise.all([
+    query<PortalDealRow>(
+      "select modules, calculator_inputs from public.deals where id = $1 limit 1",
+      [implementation.deal_id],
+    ),
+    readStoredPricingConfig(getServiceClient()),
+    publicAppointments(access.implementation_id),
+  ]);
+  const { tasks, items } = publicImplementationItems(
+    dealRows[0],
+    pricingConfig,
+    implementation.implementation_item_progress,
+    implementation.implementation_custom_work_items,
+    implementation.implementation_customer_work_approvals,
+    implementation.implementation_work_item_notes,
+    new Set(appointments.flatMap((appointment) => (
+      appointment.workItems.map((workItem) => workItem.key)
+    ))),
+  );
+  const candidate = publicWorkItemCandidates(tasks, items)
+    .find((workItem) => workItem.key === normalized.workItemKey);
+  if (!candidate) {
+    return { ok: false as const, status: 404, error: "Deze werkzaamheid is niet meer beschikbaar." };
+  }
+
+  const notes = await persistImplementationWorkItemNote(
+    access.implementation_id,
+    normalized.workItemKey,
+    "customer",
+    normalized.text,
+    implementation.customer_name || "Klant",
+  );
+  return {
+    ok: true as const,
+    notes,
+    noteSet: notes[normalized.workItemKey] ?? {},
+  };
 }

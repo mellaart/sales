@@ -1875,6 +1875,127 @@ select option {
   gap: 8px;
 }
 
+.implementation-work-note {
+  grid-column: 1 / -1;
+  margin-top: 7px;
+  color: #aebed4;
+}
+
+.implementation-work-note summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.implementation-work-note summary::-webkit-details-marker {
+  display: none;
+}
+
+.implementation-work-note summary > span {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(37, 99, 235, 0.2);
+  color: #bfdbfe;
+  font-size: 10px;
+}
+
+.implementation-work-note-content {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.implementation-work-note-content label {
+  display: grid;
+  gap: 6px;
+}
+
+.implementation-work-note-content label > span,
+.implementation-work-note-customer > strong {
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.implementation-work-note-content textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 7px;
+  outline: none;
+  background: #172238;
+  color: #f8fbff;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.implementation-work-note-content textarea:focus {
+  border-color: rgba(96, 165, 250, 0.68);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.implementation-work-note-content textarea::placeholder {
+  color: #64748b;
+}
+
+.implementation-work-note-content > small,
+.implementation-work-note-customer > small {
+  color: #7f93ae;
+  font-size: 10px;
+}
+
+.implementation-work-note-save-state {
+  display: flex;
+  min-height: 16px;
+  align-items: center;
+  gap: 5px;
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.implementation-work-note-save-state:empty {
+  display: none;
+}
+
+.implementation-work-note-save-state [role="alert"] {
+  color: #fca5a5;
+}
+
+.implementation-work-note-customer {
+  display: grid;
+  gap: 5px;
+  margin-top: 3px;
+  padding: 9px 10px;
+  border-left: 3px solid #34d399;
+  border-radius: 5px;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.implementation-work-note-customer p {
+  margin: 0;
+  color: #d9f8e8;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .implementation-work-item-check {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);

@@ -1,6 +1,7 @@
 import type { ImplementationDnsCheck } from "@/lib/implementation-dns";
 import type { ImplementationCustomerFile } from "@/lib/implementation-files";
 import type { ImplementationTaskOwner } from "@/lib/price-config";
+import type { ImplementationWorkItemNoteSet } from "@/lib/implementations";
 
 export const IMPLEMENTATION_APPOINTMENT_TYPES = ["on_site", "remote"] as const;
 export type ImplementationAppointmentType = typeof IMPLEMENTATION_APPOINTMENT_TYPES[number];
@@ -48,6 +49,7 @@ export type PublicImplementationItem = {
   owner?: ImplementationTaskOwner;
   selected: boolean;
   customerApprovedAt: string | null;
+  notes: ImplementationWorkItemNoteSet;
   workItems: Array<{
     key: string;
     label: string;
@@ -55,6 +57,7 @@ export type PublicImplementationItem = {
     selected: boolean;
     completed: boolean;
     customerApprovedAt: string | null;
+    notes: ImplementationWorkItemNoteSet;
   }>;
   completed: boolean;
 };

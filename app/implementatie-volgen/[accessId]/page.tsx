@@ -16,6 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import PublicDnsRefreshButton from "@/components/public-dns-refresh-button";
+import ImplementationFileDelivery from "./implementation-file-delivery";
 import WorkApprovalControl from "./work-approval-control";
 import {
   IMPLEMENTATION_DNS_RECORDS,
@@ -192,6 +193,13 @@ export default async function ImplementationProgressPage({
           </dl>
         </div>
       </section>
+
+      <ImplementationFileDelivery
+        accessId={accessId}
+        tokenVersion={tokenVersion}
+        token={token}
+        initialFiles={portal.files}
+      />
 
       <section className={styles.section}>
         <div className={styles.content}>

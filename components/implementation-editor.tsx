@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import ImplementationCustomerFilesPanel from "@/components/implementation-customer-files-panel";
 import ImplementationNotesField from "@/components/implementation-notes-field";
 import PriceBreakdown from "@/components/price-breakdown";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -2323,6 +2324,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
           )}
           {portalError ? <div className="implementation-inline-error">{portalError}</div> : null}
         </section>
+
+        <ImplementationCustomerFilesPanel
+          implementationId={implementation.id}
+          canEdit={canEdit}
+        />
 
         <section className="card panel implementation-appointments-panel">
           <div className="top-row">

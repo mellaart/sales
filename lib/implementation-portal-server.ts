@@ -10,6 +10,7 @@ import {
   type ImplementationDnsCheck,
 } from "@/lib/implementation-dns";
 import { getImplementationItems, type ImplementationItem } from "@/lib/implementation-items";
+import { listImplementationCustomerFiles } from "@/lib/implementation-files-server";
 import {
   isImplementationAppointmentStatus,
   isImplementationAppointmentType,
@@ -186,6 +187,19 @@ async function verifiedPortalAccess(
     return null;
   }
   return access;
+}
+
+export async function getVerifiedImplementationPortalAccess(
+  accessId: string,
+  tokenVersion: number,
+  token: string,
+) {
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  if (!access) return null;
+  return {
+    id: access.id,
+    implementationId: access.implementation_id,
+  };
 }
 
 function publicImplementationItem(
@@ -606,7 +620,13 @@ export async function getPublicImplementationPortal(
     return { ok: false as const, error: "Deze implementatie is niet meer beschikbaar." };
   }
 
-  const [{ rows: dealRows }, { rows: intakeRows }, appointments, { pricingConfig }] = await Promise.all([
+  const [
+    { rows: dealRows },
+    { rows: intakeRows },
+    appointments,
+    { pricingConfig },
+    files,
+  ] = await Promise.all([
     query<PortalDealRow>(
       "select modules, calculator_inputs from public.deals where id = $1 limit 1",
       [implementation.deal_id],
@@ -617,6 +637,7 @@ export async function getPublicImplementationPortal(
     ),
     publicAppointments(access.implementation_id),
     readStoredPricingConfig(getServiceClient()),
+    listImplementationCustomerFiles(access.implementation_id),
   ]);
 
   const progress = normalizeImplementationProgress(implementation.progress);
@@ -707,6 +728,7 @@ export async function getPublicImplementationPortal(
     baseItems: baseFunctionalitySteps,
     items,
     appointments,
+    files,
   };
   return { ok: true as const, portal };
 }

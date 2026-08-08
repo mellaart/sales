@@ -347,6 +347,44 @@ export async function ensureLocalSchema() {
         create index if not exists implementation_appointments_implementation_date_idx
           on public.implementation_appointments(implementation_id, appointment_date, start_time);
 
+        create table if not exists public.implementation_customer_files (
+          id uuid primary key default gen_random_uuid(),
+          implementation_id uuid not null references public.implementations(id) on delete cascade,
+          category text not null
+            check (category in ('branding', 'relations', 'articles')),
+          file_name text not null,
+          storage_path text not null unique,
+          mime_type text,
+          file_size bigint not null default 0,
+          status text not null default 'received'
+            check (status in ('received', 'checked')),
+          checked_at timestamptz,
+          checked_by uuid references public.profiles(id) on delete set null,
+          uploaded_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        create index if not exists implementation_customer_files_implementation_category_idx
+          on public.implementation_customer_files(implementation_id, category, uploaded_at desc);
+
+        create table if not exists public.implementation_customer_file_events (
+          id uuid primary key default gen_random_uuid(),
+          implementation_id uuid not null references public.implementations(id) on delete cascade,
+          file_id uuid references public.implementation_customer_files(id) on delete set null,
+          category text not null
+            check (category in ('branding', 'relations', 'articles')),
+          file_name text not null,
+          event_type text not null
+            check (event_type in ('uploaded', 'deleted', 'checked', 'reopened')),
+          actor_type text not null
+            check (actor_type in ('customer', 'user')),
+          actor_id uuid references public.profiles(id) on delete set null,
+          created_at timestamptz not null default now()
+        );
+
+        create index if not exists implementation_customer_file_events_implementation_idx
+          on public.implementation_customer_file_events(implementation_id, created_at desc);
+
         create table if not exists public.customer_intakes (
           id uuid primary key default gen_random_uuid(),
           deal_id uuid not null unique references public.deals(id) on delete cascade,

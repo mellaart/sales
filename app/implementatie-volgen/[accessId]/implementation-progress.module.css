@@ -205,6 +205,302 @@
   text-align: right;
 }
 
+.fileDeliverySection {
+  border-bottom: 1px solid #dbe5f1;
+  background: #f5f8fc;
+}
+
+.fileDeliveryProgress {
+  display: grid;
+  grid-template-columns: minmax(180px, 360px) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.fileDeliveryProgress > div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #dce7f3;
+}
+
+.fileDeliveryProgress > div > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2a9b66;
+  transition: width 180ms ease;
+}
+
+.fileDeliveryProgress > span {
+  color: #60738c;
+  font-size: 14px;
+}
+
+.fileDeliveryList {
+  overflow: hidden;
+  border: 1px solid #cbd9e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.fileDeliveryCategory {
+  padding: 24px;
+  border-top: 1px solid #dce6f0;
+}
+
+.fileDeliveryCategory:first-child {
+  border-top: 0;
+}
+
+.fileDeliveryCategory > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.fileDeliveryCategory > header > div {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 13px;
+}
+
+.fileDeliveryCategoryIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #b5cbe2;
+  border-radius: 8px;
+  background: #eef6ff;
+  color: #216bbd;
+}
+
+.fileDeliveryCategory h3,
+.fileDeliveryCategory p {
+  margin: 0;
+}
+
+.fileDeliveryCategory h3 {
+  color: #13233a;
+  font-size: 20px;
+}
+
+.fileDeliveryCategory header p {
+  margin-top: 5px;
+  color: #60738c;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.fileDeliveryCategory > header > span {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #edf1f6;
+  color: #60738c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.fileDeliveryCategory > header > .fileCategoryComplete {
+  background: #ddf4e8;
+  color: #167249;
+}
+
+.fileDropZone {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px dashed #a9bed5;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #60738c;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.fileDropZoneActive {
+  border-color: #2f7ad7;
+  background: #eaf4ff;
+}
+
+.fileDropZone > svg {
+  color: #2f7ad7;
+}
+
+.fileDropZone > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.fileDropZone strong {
+  color: #193a61;
+  font-size: 14px;
+}
+
+.fileDropZone span {
+  color: #6d8097;
+  font-size: 12px;
+}
+
+.fileDropZone button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid #8eacd0;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #1d568f;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.fileDropZone button:hover:not(:disabled) {
+  border-color: #2f7ad7;
+  background: #edf6ff;
+}
+
+.fileDropZone button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fileError {
+  margin: 10px 0 0;
+  color: #b3363f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.customerFileList {
+  margin-top: 14px;
+  border-top: 1px solid #e0e8f1;
+}
+
+.customerFileRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 11px 0;
+  border-top: 1px solid #e7edf4;
+}
+
+.customerFileRow:first-child {
+  border-top: 0;
+}
+
+.customerFileIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 7px;
+  background: #edf3fa;
+  color: #456787;
+}
+
+.customerFileName {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.customerFileName strong {
+  overflow: hidden;
+  color: #19324f;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customerFileName span {
+  color: #73849a;
+  font-size: 12px;
+}
+
+.customerFileStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: #edf2f7;
+  color: #5d7188;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customerFileChecked {
+  background: #ddf4e8;
+  color: #167249;
+}
+
+.customerFileActions {
+  display: flex;
+  gap: 6px;
+}
+
+.customerFileActions a,
+.customerFileActions button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid #b9c9da;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #365a7e;
+  cursor: pointer;
+}
+
+.customerFileActions a:hover,
+.customerFileActions button:hover:not(:disabled) {
+  border-color: #2f7ad7;
+  background: #edf6ff;
+  color: #1f67b8;
+}
+
+.customerFileActions .fileDeleteButton {
+  color: #a23a44;
+}
+
+.customerFileActions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.fileSpinner {
+  animation: file-spinner 800ms linear infinite;
+}
+
+@keyframes file-spinner {
+  to { transform: rotate(360deg); }
+}
+
 .appointmentList,
 .milestoneList {
   border: 1px solid #d6e1ee;
@@ -982,6 +1278,15 @@
   .dnsGroup:first-child {
     border-top: 0;
   }
+
+  .fileDropZone {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fileDropZone button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1079,5 +1384,46 @@
 
   .footer strong {
     margin-right: 0;
+  }
+
+  .fileDeliveryProgress {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .fileDeliveryCategory {
+    padding: 20px 16px;
+  }
+
+  .fileDeliveryCategory > header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .fileDeliveryCategory > header > span {
+    align-self: flex-start;
+  }
+
+  .fileDropZone {
+    grid-template-columns: 1fr;
+  }
+
+  .fileDropZone > svg {
+    display: none;
+  }
+
+  .customerFileRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .customerFileStatus {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .customerFileActions {
+    grid-row: 1 / 3;
+    grid-column: 3;
   }
 }

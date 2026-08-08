@@ -1,4 +1,5 @@
 import type { ImplementationDnsCheck } from "@/lib/implementation-dns";
+import type { ImplementationCustomerFile } from "@/lib/implementation-files";
 
 export const IMPLEMENTATION_APPOINTMENT_TYPES = ["on_site", "remote"] as const;
 export type ImplementationAppointmentType = typeof IMPLEMENTATION_APPOINTMENT_TYPES[number];
@@ -72,6 +73,7 @@ export type PublicImplementationPortal = {
   baseItems: PublicImplementationItem[];
   items: PublicImplementationItem[];
   appointments: ImplementationAppointment[];
+  files: ImplementationCustomerFile[];
 };
 
 export function isImplementationAppointmentType(

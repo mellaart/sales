@@ -147,7 +147,7 @@ function TaskWorkItemsEditor({
   return (
     <div className="work-task-items-editor">
       <div className="work-task-items-heading" aria-hidden="true">
-        <span>Volgorde</span><span>Activiteit</span><span>Wie</span><span>Acties</span>
+        <span>Nr.</span><span>Activiteit</span><span>Wie</span><span>Acties</span>
       </div>
       {value.length > 0 ? (
         <div className="work-task-items-list">

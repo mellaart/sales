@@ -27,7 +27,6 @@ import {
   normalizeImplementationCustomWorkItems,
   normalizeImplementationCustomerWorkApprovals,
   normalizeImplementationItemProgress,
-  normalizeImplementationProgress,
   normalizeImplementationWorkItemNotes,
   type ImplementationCustomerWorkApproval,
   type ImplementationStatus,
@@ -765,38 +764,7 @@ export async function getPublicImplementationPortal(
     listImplementationCustomerFiles(access.implementation_id),
   ]);
 
-  const progress = normalizeImplementationProgress(implementation.progress);
   const intake = intakeRows[0];
-  const customerFormComplete = Boolean(
-    intake?.submitted_at || intake?.status === "submitted" || intake?.status === "processed",
-  );
-  const preparationComplete = [
-    progress.implementationOrder,
-    progress.assets,
-    progress.adminDemoDisabled,
-    progress.adminModules,
-    progress.adminUserCount,
-  ].every(Boolean);
-  const statusStarted = ["in_progress", "waiting_customer", "completed"].includes(
-    implementation.status,
-  );
-  const milestones = [
-    { key: "confirmation", label: "Bevestiging", completed: Boolean(progress.confirmation) },
-    { key: "customer-form", label: "Klantformulier ontvangen", completed: customerFormComplete },
-    { key: "dns", label: "DNS-instructies verwerkt", completed: Boolean(progress.dnsInstructions) },
-    { key: "preparation", label: "Implementatie voorbereid", completed: preparationComplete },
-    {
-      key: "implementation-started",
-      label: "Implementatie gestart",
-      completed: Boolean(implementation.implementation_start_date) || statusStarted,
-    },
-    {
-      key: "go-live",
-      label: "Livegang afgerond",
-      completed: Boolean(implementation.actual_go_live_date) || implementation.status === "completed",
-    },
-  ];
-
   const { tasks, items } = publicImplementationItems(
     dealRows[0],
     pricingConfig,
@@ -811,8 +779,7 @@ export async function getPublicImplementationPortal(
   const implementationSteps = [...tasks, ...items].flatMap((item) => (
     item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
   ));
-  const allSteps = [...milestones, ...implementationSteps];
-  const completedSteps = allSteps.filter((step) => step.completed).length;
+  const completedSteps = implementationSteps.filter((step) => step.completed).length;
   const dnsDomain = intake?.submitted_at
     ? implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website)
     : "";
@@ -846,8 +813,8 @@ export async function getPublicImplementationPortal(
     plannedGoLiveDate: implementation.planned_go_live_date,
     actualGoLiveDate: implementation.actual_go_live_date,
     updatedAt: implementation.updated_at,
-    progressPercentage: allSteps.length > 0
-      ? Math.round((completedSteps / allSteps.length) * 100)
+    progressPercentage: implementationSteps.length > 0
+      ? Math.round((completedSteps / implementationSteps.length) * 100)
       : 0,
     dnsDomain,
     dnsCheck,

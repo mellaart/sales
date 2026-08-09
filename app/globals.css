@@ -2141,6 +2141,14 @@ select option {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+.implementation-task-status-row select option,
+.implementation-task-status-row select optgroup,
+.implementation-task-status-select option,
+.implementation-task-status-select optgroup {
+  background-color: #172238 !important;
+  color: #eef4ff !important;
+}
+
 .implementation-task-status-row select:disabled,
 .implementation-task-status-select:disabled {
   cursor: not-allowed;

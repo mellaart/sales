@@ -1501,6 +1501,7 @@ select option {
 
 .implementation-work-picker-catalog {
   display: grid;
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 12px;
   min-width: 0;
@@ -1509,6 +1510,7 @@ select option {
 }
 
 .implementation-work-picker-group {
+  align-self: start;
   min-width: 0;
   margin: 0;
   padding: 0 16px 6px;

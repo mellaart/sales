@@ -3200,11 +3200,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
                       {renderImplementationWorkItems(item, workItems)}
                     </div>
                     {workItems.length > 0 ? (
-                      <span className="implementation-work-progress-summary">
-                        {selectedWorkItems.length > 0
-                          ? `${selectedWorkItems.filter((workItem) => workItem.completed).length}/${selectedWorkItems.length}`
-                          : "0 gekozen"}
-                      </span>
+                      selectedWorkItems.length > 0 ? (
+                        <span className="implementation-work-progress-summary">
+                          {selectedWorkItems.filter((workItem) => workItem.completed).length}/{selectedWorkItems.length}
+                        </span>
+                      ) : null
                     ) : item.selectableWorkItems ? (
                       <select
                         className="implementation-task-status-select"

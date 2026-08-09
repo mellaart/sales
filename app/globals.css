@@ -2098,7 +2098,7 @@ select option {
 
 .implementation-task-status-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
+  grid-template-columns: minmax(0, 1fr) 180px;
   align-items: start;
   gap: 12px;
   width: 100%;
@@ -2282,7 +2282,7 @@ select option {
 }
 
 .implementation-task-actions .implementation-task-status-select {
-  width: 150px;
+  width: 180px;
 }
 
 .implementation-task-add {
@@ -2826,7 +2826,7 @@ select option {
   }
 
   .implementation-task-actions .implementation-task-status-select {
-    width: 132px;
+    width: 180px;
   }
 
   .implementation-customer-approval-log .implementation-progress-row {

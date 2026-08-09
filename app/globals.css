@@ -1522,13 +1522,9 @@ select option {
   border-bottom: 1px solid rgba(96, 165, 250, 0.24);
 }
 
-.implementation-work-picker-group legend {
+.implementation-work-picker-group-heading {
   width: calc(100% + 32px);
   margin: 0 -16px;
-  padding: 0;
-}
-
-.implementation-work-picker-group-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;

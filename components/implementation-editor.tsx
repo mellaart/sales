@@ -443,40 +443,38 @@ function AppointmentWorkSelector({
               const groupNumber = categoryGroups.findIndex((candidate) => candidate.key === group.key) + 1;
 
               return (
-                <fieldset key={group.key} className="implementation-work-picker-group">
-                  <legend>
-                    <div className="implementation-work-picker-group-heading">
-                      <div>
-                        <small>{group.category === "tasks" ? `Taakgroep ${groupNumber}` : `Module ${groupNumber}`}</small>
-                        <strong>{group.label}</strong>
-                        {group.description ? <p>{group.description}</p> : null}
-                      </div>
-                      <label className="implementation-work-picker-group-toggle">
-                        <input
-                          type="checkbox"
-                          checked={allSelected}
-                          disabled={disabled || selectableItems.length === 0}
-                          aria-label={`Volledige groep ${group.label} selecteren`}
-                          onChange={() => changeGroup(group.key)}
-                        />
-                        <span>{allSelected
-                          ? assignedElsewhereCount > 0
-                            ? "Alle beschikbare regels geselecteerd"
-                            : "Volledige groep geselecteerd"
-                          : "Volledige groep selecteren"}</span>
-                      </label>
-                      <small className="implementation-work-picker-group-count">
-                        {selectedCount}/{sourceGroup.items.length} geselecteerd
-                        {group.items.length !== sourceGroup.items.length
-                          ? ` · ${group.items.length} zichtbaar`
-                          : ""}
-                        {assignedElsewhereCount > 0
-                          ? ` · ${assignedElsewhereCount} al ingepland`
-                          : ""}
-                      </small>
+                <section key={group.key} className="implementation-work-picker-group">
+                  <div className="implementation-work-picker-group-heading">
+                    <div>
+                      <small>{group.category === "tasks" ? `Taakgroep ${groupNumber}` : `Module ${groupNumber}`}</small>
+                      <strong>{group.label}</strong>
+                      {group.description ? <p>{group.description}</p> : null}
                     </div>
-                  </legend>
-                  <div>
+                    <label className="implementation-work-picker-group-toggle">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        disabled={disabled || selectableItems.length === 0}
+                        aria-label={`Volledige groep ${group.label} selecteren`}
+                        onChange={() => changeGroup(group.key)}
+                      />
+                      <span>{allSelected
+                        ? assignedElsewhereCount > 0
+                          ? "Alle beschikbare regels geselecteerd"
+                          : "Volledige groep geselecteerd"
+                        : "Volledige groep selecteren"}</span>
+                    </label>
+                    <small className="implementation-work-picker-group-count">
+                      {selectedCount}/{sourceGroup.items.length} geselecteerd
+                      {group.items.length !== sourceGroup.items.length
+                        ? ` · ${group.items.length} zichtbaar`
+                        : ""}
+                      {assignedElsewhereCount > 0
+                        ? ` · ${assignedElsewhereCount} al ingepland`
+                        : ""}
+                    </small>
+                  </div>
+                  <div className="implementation-work-picker-group-items">
                     {group.items.map((option) => {
                       const assignedElsewhere = otherAssignment(option.key);
                       const selectedHere = selectedKeys.has(option.key);
@@ -516,7 +514,7 @@ function AppointmentWorkSelector({
                       );
                     })}
                   </div>
-                </fieldset>
+                </section>
               );
             })}
           </div>

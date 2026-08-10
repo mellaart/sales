@@ -294,9 +294,14 @@ input[type="number"]::-webkit-inner-spin-button {
   border-radius: 8px;
 }
 
-select option {
-  color: #0f172a;
-  background: #ffffff;
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  color: #eef4ff;
+  background-color: #172238;
 }
 
 .textarea {

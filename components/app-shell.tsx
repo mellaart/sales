@@ -36,7 +36,8 @@ export function AppShellHeader() {
   const isPublicUtilityPage = pathname === "/worldline-test"
     || pathname.startsWith("/klantgegevens/")
     || pathname.startsWith("/implementatie-volgen/")
-    || pathname.startsWith("/offerte/");
+    || pathname.startsWith("/offerte/")
+    || pathname.startsWith("/retourpinnen/");
   const isFocusedDealPage = pathname.startsWith("/dealmail/");
 
   useEffect(() => {

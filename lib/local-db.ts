@@ -595,6 +595,34 @@ export async function ensureLocalSchema() {
 
         alter table public.worldline_projects add column if not exists archived_at timestamptz;
 
+        create table if not exists public.worldline_return_pin_forms (
+          id uuid primary key default gen_random_uuid(),
+          project_id uuid not null references public.worldline_projects(id) on delete cascade,
+          version integer not null default 1,
+          status text not null default 'open'
+            check (status in ('open', 'accepted', 'revoked')),
+          token_version integer not null default 1,
+          form_data jsonb not null default '{}'::jsonb,
+          acceptance_version text not null,
+          expires_at timestamptz not null default (now() + interval '30 days'),
+          accepted_at timestamptz,
+          accepted_by_name text,
+          accepted_by_function text,
+          accepted_place text,
+          accepted_ip text,
+          accepted_user_agent text,
+          evidence_hash text,
+          created_by uuid not null references public.profiles(id) on delete cascade,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now(),
+          unique (project_id, version)
+        );
+
+        create index if not exists worldline_return_pin_forms_project_version_idx
+          on public.worldline_return_pin_forms(project_id, version desc);
+        create index if not exists worldline_return_pin_forms_status_expires_idx
+          on public.worldline_return_pin_forms(status, expires_at);
+
         create table if not exists public.worldline_documents (
           id uuid primary key default gen_random_uuid(),
           project_id uuid not null references public.worldline_projects(id) on delete cascade,

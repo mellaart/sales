@@ -15,7 +15,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     || pathname === "/worldline-test"
     || pathname.startsWith("/klantgegevens/")
     || pathname.startsWith("/implementatie-volgen/")
-    || pathname.startsWith("/offerte/");
+    || pathname.startsWith("/offerte/")
+    || pathname.startsWith("/retourpinnen/");
   const mustSetPassword = Boolean(user?.user_metadata?.must_set_password);
 
   useEffect(() => {

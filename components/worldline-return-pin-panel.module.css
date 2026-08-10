@@ -1,0 +1,258 @@
+.panel {
+  margin: 24px 0 28px;
+  padding: 24px 0;
+  border-top: 1px solid rgba(96, 165, 250, 0.22);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.22);
+  background: rgba(7, 17, 31, 0.24);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  align-items: flex-start;
+}
+
+.titleBlock {
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+
+.icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.14);
+  color: #93c5fd;
+}
+
+.eyebrow {
+  color: #7cb7ff;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.titleBlock h3 {
+  margin: 4px 0 6px;
+  color: #f8fafc;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.titleBlock p,
+.openNote {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.linkRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.linkRow > span {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.linkRow input {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #dbeafe;
+  font: inherit;
+  font-size: 13px;
+}
+
+.openNote {
+  margin-top: 12px;
+}
+
+.accepted {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.acceptedHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.acceptedHeading span,
+.acceptedHeading strong {
+  display: block;
+}
+
+.acceptedHeading span {
+  color: #6ee7b7;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.acceptedHeading strong {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 5px;
+  color: #d1fae5;
+  font-size: 18px;
+}
+
+.pinToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 5px;
+  background: rgba(30, 41, 59, 0.72);
+  color: #bfdbfe;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pinToggle:hover {
+  border-color: #60a5fa;
+  color: #ffffff;
+}
+
+.evidenceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 18px 0 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.17);
+}
+
+.evidenceGrid > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.3fr);
+  gap: 12px;
+  padding: 11px 14px 11px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+}
+
+.evidenceGrid > div:nth-child(even) {
+  padding-right: 0;
+  padding-left: 14px;
+  border-left: 1px solid rgba(148, 163, 184, 0.13);
+}
+
+.evidenceGrid dt,
+.evidenceGrid dd {
+  margin: 0;
+}
+
+.evidenceGrid dt {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.evidenceGrid dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #f8fafc;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.evidenceGrid .hashRow {
+  grid-column: 1 / -1;
+  padding-right: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.hashRow dd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+}
+
+.users {
+  margin-top: 18px;
+}
+
+.usersHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #bfdbfe;
+  font-size: 14px;
+}
+
+.userRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.userRow strong {
+  color: #dbeafe;
+  text-align: right;
+  letter-spacing: 0;
+}
+
+.message {
+  margin-top: 16px;
+  color: #93c5fd;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .header,
+  .acceptedHeading {
+    flex-direction: column;
+  }
+
+  .linkRow,
+  .evidenceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .evidenceGrid > div,
+  .evidenceGrid > div:nth-child(even) {
+    padding-right: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .linkRow {
+    gap: 6px;
+  }
+}

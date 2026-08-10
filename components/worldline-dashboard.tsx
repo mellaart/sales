@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { AlertTriangle, Archive, ArchiveRestore, Building2, CheckCircle2, ChevronRight, Copy, Download, FileText, FolderOpen, Hash, Inbox, Mail, RefreshCw, Search, Send, Trash2, UploadCloud, UsersRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { StatusPill } from "@/components/ui";
+import WorldlineReturnPinPanel from "@/components/worldline-return-pin-panel";
 import {
   ROLE_TAB_ACCESS,
   canAccessTab,
@@ -3098,6 +3099,11 @@ export default function WorldlineDashboard() {
                   {refundDownloadStatus}
                 </div>
               ) : null}
+
+              <WorldlineReturnPinPanel
+                projectId={activeProject.id}
+                canWrite={canWriteWorldline}
+              />
 
               <div className="worldline-field-list">
                 {Array.from(getAgreementSections()).map(([sectionTitle, definitions]) => (

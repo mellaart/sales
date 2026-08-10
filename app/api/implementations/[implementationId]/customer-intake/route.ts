@@ -67,6 +67,14 @@ export async function GET(
           website: intakeFormData.website,
           contactFirstName: intakeFormData.contactFirstName,
           contactEmail: intakeFormData.contactEmail,
+          deliveryStreet: intakeFormData.deliveryStreet,
+          deliveryNumber: intakeFormData.deliveryNumber,
+          deliveryPostcode: intakeFormData.deliveryPostcode,
+          deliveryCity: intakeFormData.deliveryCity,
+          postalStreet: intakeFormData.postalStreet,
+          postalNumber: intakeFormData.postalNumber,
+          postalPostcode: intakeFormData.postalPostcode,
+          postalCity: intakeFormData.postalCity,
         },
       }
       : null;

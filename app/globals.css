@@ -1122,6 +1122,19 @@ select optgroup {
   gap: 12px 16px;
 }
 
+.implementation-portal-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.implementation-portal-heading-actions .secondary-button {
+  min-height: 46px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
 .implementation-portal-url {
   min-width: 0;
 }
@@ -1834,6 +1847,17 @@ select optgroup {
 .implementation-appointment-delete:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+.implementation-appointment-outlook-action {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.implementation-appointment-outlook-action .secondary-button {
+  min-height: 46px;
+  border-radius: 8px;
 }
 
 .implementation-appointments-empty {
@@ -2641,6 +2665,10 @@ select optgroup {
     justify-content: flex-start;
   }
 
+  .implementation-portal-heading-actions {
+    flex-wrap: wrap;
+  }
+
   .implementation-appointment-row-title {
     grid-column: auto;
   }
@@ -2930,6 +2958,13 @@ select optgroup {
   .implementation-calendar-actions,
   .implementation-calendar-actions .secondary-button,
   .implementation-calendar-state {
+    width: 100%;
+  }
+
+  .implementation-portal-heading-actions,
+  .implementation-portal-heading-actions .secondary-button,
+  .implementation-appointment-outlook-action,
+  .implementation-appointment-outlook-action .secondary-button {
     width: 100%;
   }
 

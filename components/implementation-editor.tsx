@@ -144,6 +144,14 @@ type CustomerIntakeProgress = {
     website: string;
     contactFirstName: string;
     contactEmail: string;
+    deliveryStreet: string;
+    deliveryNumber: string;
+    deliveryPostcode: string;
+    deliveryCity: string;
+    postalStreet: string;
+    postalNumber: string;
+    postalPostcode: string;
+    postalCity: string;
   };
 };
 
@@ -228,6 +236,28 @@ function toggleAppointmentWorkItem(
 
 function normalizedImplementationWorkLabel(value: string) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
+}
+
+function getAppointmentLocation(
+  appointmentType: ImplementationAppointmentType,
+  intake: CustomerIntakeProgress | null,
+  customerName: string,
+) {
+  if (appointmentType === "remote") return "Online / op afstand";
+
+  const deliveryAddress = [
+    [intake?.formData.deliveryStreet, intake?.formData.deliveryNumber].filter(Boolean).join(" "),
+    [intake?.formData.deliveryPostcode, intake?.formData.deliveryCity].filter(Boolean).join(" "),
+  ].filter(Boolean).join(", ");
+  if (deliveryAddress) return deliveryAddress;
+
+  const postalAddress = [
+    [intake?.formData.postalStreet, intake?.formData.postalNumber].filter(Boolean).join(" "),
+    [intake?.formData.postalPostcode, intake?.formData.postalCity].filter(Boolean).join(" "),
+  ].filter(Boolean).join(", ");
+  if (postalAddress) return postalAddress;
+
+  return customerName ? `Op locatie bij ${customerName}` : "Op locatie bij de klant";
 }
 
 function AppointmentWorkSelector({
@@ -747,6 +777,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [saving, setSaving] = useState(false);
   const [dnsOutlookBusy, setDnsOutlookBusy] = useState(false);
   const [newCustomerOutlookBusy, setNewCustomerOutlookBusy] = useState(false);
+  const [customerOutlookBusyKey, setCustomerOutlookBusyKey] = useState<string | null>(null);
   const [dnsCheck, setDnsCheck] = useState<ImplementationDnsCheck | null>(null);
   const [dnsCheckLoading, setDnsCheckLoading] = useState(false);
   const [dnsCheckError, setDnsCheckError] = useState("");
@@ -1528,6 +1559,165 @@ export default function ImplementationEditor({ implementationId }: { implementat
     } catch {
       setPortalError("Kopiëren is niet gelukt. Selecteer de link en kopieer deze handmatig.");
     }
+  }
+
+  async function createCustomerOutlookDraft(input: {
+    busyKey: string;
+    popupTitle: string;
+    popupDescription: string;
+    successMessage: string;
+    payload: Record<string, unknown>;
+  }) {
+    if (
+      !implementation
+      || customerOutlookBusyKey
+      || portalBusy
+    ) return;
+
+    const recipientEmail = (
+      customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || ""
+    ).trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setMessage("In het klantformulier ontbreekt een geldig e-mailadres.");
+      return;
+    }
+
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    showOutlookPopupStatus(
+      outlookWindow,
+      input.popupTitle,
+      input.popupDescription,
+    );
+    setCustomerOutlookBusyKey(input.busyKey);
+    setMessage("Outlook-verbinding wordt gecontroleerd...");
+    const returnTo = `/implementatie/${encodeURIComponent(implementation.id)}`;
+
+    try {
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!statusResponse.ok) {
+        throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+      }
+      if (!statusJson.connected) {
+        const connectUrl = statusJson.connectUrl
+          || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
+        setMessage("Outlook wordt eenmalig verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, connectUrl)) window.location.assign(connectUrl);
+        return;
+      }
+
+      let activePortal = portalAccess;
+      if (!activePortal?.active || !activePortal.publicUrl) {
+        setPortalBusy(true);
+        setPortalError("");
+        const portalResponse = await fetch(
+          `/api/implementations/${encodeURIComponent(implementation.id)}/portal`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ regenerate: Boolean(activePortal) }),
+          },
+        );
+        const portalJson = await portalResponse.json().catch(() => ({})) as {
+          portalAccess?: ImplementationPortalAccess;
+          error?: string;
+        };
+        if (!portalResponse.ok || !portalJson.portalAccess?.publicUrl) {
+          throw new Error(portalJson.error || "Klantlink maken mislukt.");
+        }
+        activePortal = portalJson.portalAccess;
+        setPortalAccess(activePortal);
+      }
+
+      setMessage("Outlook-concept wordt gemaakt...");
+      const response = await fetch(
+        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...input.payload,
+            recipientEmail,
+            customerName: implementation.customer_name,
+            contactName:
+              customerIntake?.formData.contactFirstName
+              || implementation.contact_name
+              || "",
+            publicUrl: activePortal.publicUrl,
+          }),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (json.reconnectRequired && json.connectUrl) {
+        setMessage("Outlook moet opnieuw worden verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, json.connectUrl)) window.location.assign(json.connectUrl);
+        return;
+      }
+      if (!response.ok || !json.webLink) {
+        throw new Error(json.error || "Outlook-concept maken mislukt.");
+      }
+
+      if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
+      setMessage(input.successMessage);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Outlook-concept maken mislukt.";
+      showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", errorMessage, "error");
+      setMessage(errorMessage);
+    } finally {
+      setPortalBusy(false);
+      setCustomerOutlookBusyKey(null);
+    }
+  }
+
+  function handleAppointmentOutlookDraft(appointment: ImplementationAppointment) {
+    if (!implementation) return;
+
+    void createCustomerOutlookDraft({
+      busyKey: `appointment:${appointment.id}`,
+      popupTitle: "Implementatieafspraak voorbereiden",
+      popupDescription: "De klantmail en het agenda-bestand worden klaargezet in Outlook.",
+      successMessage: "Implementatieafspraak is met agenda-bestand in Outlook klaargezet.",
+      payload: {
+        template: "implementation-appointment",
+        appointmentId: appointment.id,
+        appointmentDate: appointment.appointmentDate,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        appointmentType: appointment.appointmentType,
+        title: appointment.title,
+        customerNote: appointment.customerNote,
+        location: getAppointmentLocation(
+          appointment.appointmentType,
+          customerIntake,
+          implementation.customer_name,
+        ),
+        workItems: appointment.workItems,
+      },
+    });
+  }
+
+  function handleProgressOutlookDraft() {
+    void createCustomerOutlookDraft({
+      busyKey: "implementation-progress",
+      popupTitle: "Klantpagina voorbereiden",
+      popupDescription: "De klantmail met de beveiligde voortgangslink wordt klaargezet in Outlook.",
+      successMessage: "Klantpagina is in Outlook klaargezet.",
+      payload: { template: "implementation-progress" },
+    });
   }
 
   function updateAppointmentLocal(
@@ -2394,7 +2584,23 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 Deel een beveiligde pagina met alleen de voortgang, onderdelen en afspraken van deze implementatie.
               </p>
             </div>
-            <Link2 size={28} aria-hidden="true" />
+            <div className="implementation-portal-heading-actions">
+              {canEdit ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={Boolean(customerOutlookBusyKey) || portalBusy}
+                  onClick={handleProgressOutlookDraft}
+                >
+                  {customerOutlookBusyKey === "implementation-progress"
+                    ? <LoaderCircle className="implementation-dns-spinner" size={16} />
+                    : <Mail size={16} />}
+                  {customerOutlookBusyKey === "implementation-progress"
+                    ? "Concept maken..."
+                    : "Klaarzetten in Outlook"}
+                </button>
+              ) : <Link2 size={28} aria-hidden="true" />}
+            </div>
           </div>
 
           {!portalLoaded ? (
@@ -2760,6 +2966,23 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     >
                       <Trash2 size={17} />
                     </button>
+                  ) : null}
+                  {canEdit ? (
+                    <div className="implementation-appointment-outlook-action">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={Boolean(customerOutlookBusyKey) || portalBusy}
+                        onClick={() => handleAppointmentOutlookDraft(appointment)}
+                      >
+                        {customerOutlookBusyKey === `appointment:${appointment.id}`
+                          ? <LoaderCircle className="implementation-dns-spinner" size={16} />
+                          : <Mail size={16} />}
+                        {customerOutlookBusyKey === `appointment:${appointment.id}`
+                          ? "Concept maken..."
+                          : "Klaarzetten in Outlook"}
+                      </button>
+                    </div>
                   ) : null}
                   <AppointmentWorkSelector
                     groups={appointmentWorkGroups}

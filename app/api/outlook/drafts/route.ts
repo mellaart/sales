@@ -16,7 +16,17 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const WORD_DOCUMENT_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-type OutlookDraftTemplate = "customer-intake" | "dns-instructions" | "worldline-contract";
+type OutlookDraftTemplate =
+  | "customer-intake"
+  | "dns-instructions"
+  | "implementation-appointment"
+  | "implementation-progress"
+  | "worldline-contract";
+
+type ImplementationAppointmentWorkItem = {
+  group: string;
+  label: string;
+};
 
 function textValue(formData: FormData, key: string, maxLength: number) {
   const value = formData.get(key);
@@ -85,6 +95,87 @@ function customerIntakeEmail(input: {
     '<p style="margin:0 0 12pt">Wilt u via onderstaande beveiligde link de gegevens voor de inrichting van Smart Trade invullen?</p>',
     `<p style="margin:0 0 12pt"><a href="${publicUrl}" style="color:#0563c1;text-decoration:underline">${publicUrl}</a></p>`,
     '<p style="margin:0">Na het opslaan ontvangen wij de gegevens automatisch.</p>',
+  ].join("");
+}
+
+function implementationPortalLink(publicUrl: string, label = "Open uw Smart Trade-klantpagina") {
+  const url = escapeHtml(publicUrl);
+  return [
+    `<p style="margin:0 0 10pt"><a href="${url}" style="display:inline-block;padding:9pt 14pt;background:#1769bd;color:#ffffff;text-decoration:none;font-weight:700">${escapeHtml(label)}</a></p>`,
+    `<p style="margin:0 0 12pt"><a href="${url}" style="color:#0563c1;text-decoration:underline">${url}</a></p>`,
+  ].join("");
+}
+
+function implementationProgressEmail(input: {
+  contactName: string;
+  customerName: string;
+  publicUrl: string;
+}) {
+  const greetingName = firstName(input.contactName);
+  const greeting = greetingName ? `Beste ${escapeHtml(greetingName)},` : "Beste,";
+  const customerReference = input.customerName
+    ? ` van ${escapeHtml(input.customerName)}`
+    : "";
+
+  return [
+    `<p style="margin:0 0 12pt">${greeting}</p>`,
+    `<p style="margin:0 0 12pt">Via onderstaande beveiligde klantpagina kunt u de voortgang van de Smart Trade-implementatie${customerReference} volgen.</p>`,
+    '<p style="margin:0 0 5pt"><strong>Op deze pagina kunt u:</strong></p>',
+    '<ul style="margin:0 0 12pt;padding-left:22px"><li>de geplande implementatieafspraken bekijken;</li><li>de werkzaamheden en de actuele voortgang volgen;</li><li>opmerkingen bij werkzaamheden toevoegen en afgeronde werkzaamheden bevestigen;</li><li>bestanden voor briefpapier en logo, relaties en artikelen veilig aanleveren.</li></ul>',
+    implementationPortalLink(input.publicUrl),
+    '<p style="margin:0">Deze link is persoonlijk voor uw implementatiedossier. Bewaar de link daarom zorgvuldig.</p>',
+  ].join("");
+}
+
+function implementationAppointmentEmail(input: {
+  contactName: string;
+  appointmentDateLabel: string;
+  startTime: string;
+  endTime: string;
+  appointmentType: "on_site" | "remote";
+  location: string;
+  title: string;
+  customerNote: string;
+  workItems: ImplementationAppointmentWorkItem[];
+  publicUrl: string;
+}) {
+  const greetingName = firstName(input.contactName);
+  const greeting = greetingName ? `Beste ${escapeHtml(greetingName)},` : "Beste,";
+  const appointmentType = input.appointmentType === "on_site" ? "Op locatie" : "Online / op afstand";
+  const groupedWork = input.workItems.reduce<Map<string, string[]>>((groups, item) => {
+    const current = groups.get(item.group) ?? [];
+    current.push(item.label);
+    groups.set(item.group, current);
+    return groups;
+  }, new Map());
+  const workHtml = groupedWork.size > 0
+    ? [
+      '<p style="margin:0 0 5pt"><strong>Geplande werkzaamheden</strong></p>',
+      ...Array.from(groupedWork.entries()).map(([group, labels]) => [
+        `<p style="margin:0 0 3pt"><strong>${escapeHtml(group)}</strong></p>`,
+        `<ul style="margin:0 0 10pt;padding-left:22px">${labels.map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>`,
+      ].join("")),
+    ].join("")
+    : '<p style="margin:0 0 12pt">De werkzaamheden voor deze afspraak stemmen we samen met u af.</p>';
+  const customerNote = input.customerNote
+    ? `<p style="margin:0 0 12pt"><strong>Toelichting</strong><br>${escapeHtml(input.customerNote).replace(/\r?\n/g, "<br>")}</p>`
+    : "";
+
+  return [
+    `<p style="margin:0 0 12pt">${greeting}</p>`,
+    `<p style="margin:0 0 12pt">Hierbij bevestigen wij de volgende afspraak voor de implementatie van Smart Trade.</p>`,
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14pt;border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937">',
+    `<tr><td style="padding:0 16px 4px 0;font-weight:700">Onderwerp</td><td style="padding:0 0 4px">${escapeHtml(input.title)}</td></tr>`,
+    `<tr><td style="padding:0 16px 4px 0;font-weight:700">Datum</td><td style="padding:0 0 4px">${escapeHtml(input.appointmentDateLabel)}</td></tr>`,
+    `<tr><td style="padding:0 16px 4px 0;font-weight:700">Tijd</td><td style="padding:0 0 4px">${escapeHtml(input.startTime)} - ${escapeHtml(input.endTime)}</td></tr>`,
+    `<tr><td style="padding:0 16px 4px 0;font-weight:700">Afspraak</td><td style="padding:0 0 4px">${appointmentType}</td></tr>`,
+    `<tr><td style="padding:0 16px 4px 0;font-weight:700">Locatie</td><td style="padding:0 0 4px">${escapeHtml(input.location)}</td></tr>`,
+    "</table>",
+    workHtml,
+    customerNote,
+    '<p style="margin:0 0 12pt">Via de beveiligde klantpagina kunt u de afspraak, werkzaamheden en actuele voortgang bekijken. U kunt daar ook opmerkingen plaatsen en benodigde bestanden veilig aanleveren.</p>',
+    implementationPortalLink(input.publicUrl),
+    '<p style="margin:0">Bij deze e-mail is een agenda-bestand (.ics) toegevoegd. Open het bestand om de afspraak aan uw eigen agenda toe te voegen.</p>',
   ].join("");
 }
 
@@ -176,6 +267,129 @@ function validHttpUrl(value: string) {
   }
 }
 
+function jsonAppointmentWorkItems(payload: Record<string, unknown>) {
+  const value = payload.workItems;
+  if (!Array.isArray(value)) return [];
+
+  return value.reduce<ImplementationAppointmentWorkItem[]>((items, rawItem) => {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem) || items.length >= 100) {
+      return items;
+    }
+    const item = rawItem as Record<string, unknown>;
+    const group = typeof item.group === "string"
+      ? item.group.trim().replace(/\s+/g, " ").slice(0, 200)
+      : "Werkzaamheden";
+    const label = typeof item.label === "string"
+      ? item.label.trim().replace(/\s+/g, " ").slice(0, 300)
+      : "";
+    if (label) items.push({ group: group || "Werkzaamheden", label });
+    return items;
+  }, []);
+}
+
+function validAppointmentDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function validAppointmentTime(value: string) {
+  return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function formatAppointmentDate(value: string) {
+  return new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/Amsterdam",
+  }).format(new Date(`${value}T12:00:00Z`));
+}
+
+function escapeIcs(value: string) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+function icsDateTime(date: string, time: string) {
+  return `${date.replace(/-/g, "")}T${time.replace(":", "")}00`;
+}
+
+function createImplementationAppointmentIcs(input: {
+  appointmentId: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  title: string;
+  location: string;
+  customerNote: string;
+  workItems: ImplementationAppointmentWorkItem[];
+  publicUrl: string;
+}) {
+  const workLines = input.workItems.map((item) => `${item.group}: ${item.label}`);
+  const description = [
+    input.customerNote,
+    workLines.length > 0 ? `Geplande werkzaamheden:\n${workLines.join("\n")}` : "",
+    `Klantpagina: ${input.publicUrl}`,
+  ].filter(Boolean).join("\n\n");
+  const uidPart = input.appointmentId.replace(/[^a-z0-9-]/gi, "").slice(0, 80) || "afspraak";
+  const dtStamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Smart Trade//Implementatieafspraak//NL",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-TIMEZONE:Europe/Amsterdam",
+    "BEGIN:VTIMEZONE",
+    "TZID:Europe/Amsterdam",
+    "X-LIC-LOCATION:Europe/Amsterdam",
+    "BEGIN:DAYLIGHT",
+    "TZOFFSETFROM:+0100",
+    "TZOFFSETTO:+0200",
+    "TZNAME:CEST",
+    "DTSTART:19700329T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+    "END:DAYLIGHT",
+    "BEGIN:STANDARD",
+    "TZOFFSETFROM:+0200",
+    "TZOFFSETTO:+0100",
+    "TZNAME:CET",
+    "DTSTART:19701025T030000",
+    "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+    "END:STANDARD",
+    "END:VTIMEZONE",
+    "BEGIN:VEVENT",
+    `UID:implementation-${uidPart}@sales.troublefree.nl`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART;TZID=Europe/Amsterdam:${icsDateTime(input.appointmentDate, input.startTime)}`,
+    `DTEND;TZID=Europe/Amsterdam:${icsDateTime(input.appointmentDate, input.endTime)}`,
+    `SUMMARY:${escapeIcs(input.title)}`,
+    `DESCRIPTION:${escapeIcs(description)}`,
+    `LOCATION:${escapeIcs(input.location)}`,
+    `URL:${escapeIcs(input.publicUrl)}`,
+    "STATUS:CONFIRMED",
+    "END:VEVENT",
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n");
+}
+
+function safeFileNamePart(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "smart-trade";
+}
+
 export async function POST(request: Request) {
   try {
     const verified = await requireLocalUser(request);
@@ -210,6 +424,11 @@ export async function POST(request: Request) {
 
       let subject = "";
       let htmlBody = "";
+      const attachments: Array<{
+        fileName: string;
+        contentType: string;
+        fileContent: Buffer;
+      }> = [];
 
       if (template === "customer-intake") {
         const publicUrl = jsonText(payload, "publicUrl", 2_000);
@@ -225,6 +444,73 @@ export async function POST(request: Request) {
         }
         subject = "SPF- en DKIM-aanpassingen";
         htmlBody = dnsInstructionsEmail({ contactName, domain });
+      } else if (template === "implementation-progress") {
+        const publicUrl = jsonText(payload, "publicUrl", 2_000);
+        if (!validHttpUrl(publicUrl)) {
+          return NextResponse.json({ error: "De beveiligde klantlink is ongeldig." }, { status: 400 });
+        }
+        subject = `Voortgang implementatie Smart Trade - ${customerName || "klant"}`;
+        htmlBody = implementationProgressEmail({ contactName, customerName, publicUrl });
+      } else if (template === "implementation-appointment") {
+        const publicUrl = jsonText(payload, "publicUrl", 2_000);
+        const appointmentId = jsonText(payload, "appointmentId", 100);
+        const appointmentDate = jsonText(payload, "appointmentDate", 10);
+        const startTime = jsonText(payload, "startTime", 5);
+        const endTime = jsonText(payload, "endTime", 5);
+        const appointmentType = jsonText(payload, "appointmentType", 20);
+        const title = jsonText(payload, "title", 180) || "Implementatieafspraak Smart Trade";
+        const location = jsonText(payload, "location", 500)
+          || (appointmentType === "remote" ? "Online / op afstand" : "Op locatie");
+        const customerNote = jsonText(payload, "customerNote", 1_000);
+        const workItems = jsonAppointmentWorkItems(payload);
+
+        if (!validHttpUrl(publicUrl)) {
+          return NextResponse.json({ error: "De beveiligde klantlink is ongeldig." }, { status: 400 });
+        }
+        if (!validAppointmentDate(appointmentDate)) {
+          return NextResponse.json({ error: "De datum van de implementatieafspraak is ongeldig." }, { status: 400 });
+        }
+        if (
+          !validAppointmentTime(startTime)
+          || !validAppointmentTime(endTime)
+          || endTime <= startTime
+        ) {
+          return NextResponse.json({ error: "De begin- en eindtijd van de afspraak zijn ongeldig." }, { status: 400 });
+        }
+        if (appointmentType !== "on_site" && appointmentType !== "remote") {
+          return NextResponse.json({ error: "Het soort implementatieafspraak is ongeldig." }, { status: 400 });
+        }
+
+        const appointmentDateLabel = formatAppointmentDate(appointmentDate);
+        subject = `Implementatieafspraak Smart Trade - ${customerName || "klant"} - ${appointmentDateLabel}`;
+        htmlBody = implementationAppointmentEmail({
+          contactName,
+          appointmentDateLabel,
+          startTime,
+          endTime,
+          appointmentType,
+          location,
+          title,
+          customerNote,
+          workItems,
+          publicUrl,
+        });
+        const ics = createImplementationAppointmentIcs({
+          appointmentId,
+          appointmentDate,
+          startTime,
+          endTime,
+          title,
+          location,
+          customerNote,
+          workItems,
+          publicUrl,
+        });
+        attachments.push({
+          fileName: `${safeFileNamePart(customerName)}-implementatieafspraak-${appointmentDate}.ics`,
+          contentType: "text/calendar; charset=utf-8; method=PUBLISH",
+          fileContent: Buffer.from(ics, "utf8"),
+        });
       } else {
         return NextResponse.json({ error: "Onbekend Outlook-mailsjabloon." }, { status: 400 });
       }
@@ -234,6 +520,7 @@ export async function POST(request: Request) {
         subject,
         htmlBody,
         signature,
+        attachments,
       });
 
       return NextResponse.json(

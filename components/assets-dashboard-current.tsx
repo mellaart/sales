@@ -423,33 +423,23 @@ function getPackageRelevantModules(moduleKeys: string[], modules: ModuleConfig[]
   );
 }
 
-function getStandaloneModules(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
-  return getModulesByKeys(moduleKeys, modules).filter(
-    (moduleConfig) => moduleConfig.monthlyPrice > 0 && (moduleConfig.noPackageSwitch || NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key)),
-  );
-}
-
 function getPackageRelevantModuleCount(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
   return getPackageRelevantModules(moduleKeys, modules).length;
 }
 
 function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: PackageConfig, modules: ModuleConfig[] = MODULES) {
-  const packageRelevantModules = getPackageRelevantModules(moduleKeys, modules);
-  const standaloneModuleMonthly = getStandaloneModules(moduleKeys, modules).reduce(
+  const paidModules = getModulesByKeys(moduleKeys, modules).filter((moduleConfig) => moduleConfig.monthlyPrice > 0);
+  const grossModuleMonthly = paidModules.reduce(
     (sum, moduleConfig) => sum + moduleConfig.monthlyPrice,
     0,
   );
-  const packageRelevantMonthly = packageRelevantModules.reduce(
-    (sum, moduleConfig) => sum + moduleConfig.monthlyPrice,
-    0,
-  );
-  const includedModuleDiscount = packageRelevantModules
+  const includedModuleDiscount = paidModules
     .slice()
     .sort((left, right) => right.monthlyPrice - left.monthlyPrice)
     .slice(0, packageConfig.includedModules)
     .reduce((sum, moduleConfig) => sum + moduleConfig.monthlyPrice, 0);
 
-  return standaloneModuleMonthly + Math.max(0, packageRelevantMonthly - includedModuleDiscount);
+  return Math.max(0, grossModuleMonthly - includedModuleDiscount);
 }
 
 function formatImplementationBasis(cost: number) {

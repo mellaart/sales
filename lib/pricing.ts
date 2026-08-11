@@ -277,11 +277,15 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
   return resolvedCatalog.packages.map((pkg) => {
     const licenseMonthly = pkg.licenseFirst + extraUsers * pkg.licenseExtra;
     const supportMonthly = pkg.supportFirst + extraUsers * pkg.supportExtra;
-    // Alleen modules met een prijs boven 0 en zonder "geen pakketwissel" tellen mee voor de inbegrepen pakketmodules.
-    // Gratis en losse modules mogen geen inbegrepen betaalde module "opmaken".
+    // "Geen pakketwissel" voorkomt alleen een automatische pakketverhoging. Zo'n module
+    // mag wel een nog vrije inbegrepen modulesleuf gebruiken; setupkosten blijven gelden.
     const freeModulesApplied = Math.min(pkg.includedModules, paidSelectedUnits);
     const packageRelevantUnits = selectedModuleUnits
       .filter((module) => module.monthlyPrice > 0 && !module.noPackageSwitch)
+      .slice()
+      .sort((a, b) => b.monthlyPrice - a.monthlyPrice);
+    const paidMonthlyUnits = selectedModuleUnits
+      .filter((module) => module.monthlyPrice > 0)
       .slice()
       .sort((a, b) => b.monthlyPrice - a.monthlyPrice);
     // Losse modules wisselen het pakket niet, maar hun setupkosten gelden altijd.
@@ -291,8 +295,8 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
       ...packageRelevantUnits.slice(freeModulesApplied),
       ...standaloneUnits,
     ];
-    const includedModuleDiscount = packageRelevantUnits
-      .slice(0, freeModulesApplied)
+    const includedModuleDiscount = paidMonthlyUnits
+      .slice(0, pkg.includedModules)
       .reduce((sum, module) => sum + module.monthlyPrice, 0);
 
     const moduleMonthly = Math.max(0, grossModuleMonthly - includedModuleDiscount);

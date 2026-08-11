@@ -13,7 +13,7 @@
 .assetSearchInput {
   min-height: 56px;
   border-radius: 18px;
-  background: rgba(2, 6, 23, 0.24);
+  background: var(--surface-deep);
 }
 
 .assetSearchButton {
@@ -33,13 +33,13 @@
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-size: 13px;
   font-weight: 750;
 }
 
 .relationResultsHeader span:last-child {
-  color: #93c5fd;
+  color: var(--accent-strong);
 }
 
 .relationResultList {
@@ -56,8 +56,8 @@
   padding: 16px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.045);
-  color: #f8fafc;
+  background: var(--surface-control);
+  color: var(--text);
   cursor: pointer;
   text-align: left;
   transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
@@ -86,7 +86,7 @@
   place-items: center;
   border-radius: 14px;
   background: rgba(37, 99, 235, 0.18);
-  color: #bfdbfe;
+  color: var(--accent-text);
 }
 
 .relationResultContent {
@@ -97,7 +97,7 @@
 
 .relationResultContent strong {
   overflow: hidden;
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 16px;
   font-weight: 820;
   line-height: 1.25;
@@ -110,7 +110,7 @@
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -128,7 +128,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  color: #bfdbfe;
+  color: var(--accent-text);
   font-size: 13px;
   font-weight: 750;
   white-space: nowrap;
@@ -155,7 +155,7 @@
 
 .dealContactHeading strong {
   overflow: hidden;
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 15px;
   line-height: 1.3;
   text-overflow: ellipsis;
@@ -163,12 +163,12 @@
 }
 
 .dealContactHeading span:last-child {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 13px;
 }
 
 .dealContactHint {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -181,7 +181,7 @@
   display: grid;
   gap: 14px;
   border-color: rgba(96, 165, 250, 0.24);
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--surface-deep);
 }
 
 .transferPanelTop {
@@ -207,17 +207,17 @@
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--surface-control);
 }
 
 .transferPreview span {
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-size: 13px;
   line-height: 1.45;
 }
 
 .transferPreview strong {
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 14px;
 }
 
@@ -233,7 +233,7 @@
   padding: 16px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--surface-control);
 }
 
 .assetCardHeader {
@@ -244,7 +244,7 @@
 }
 
 .assetTitle {
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 17px;
   font-weight: 820;
   line-height: 1.25;
@@ -252,7 +252,7 @@
 
 .assetMeta,
 .assetDescription {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -279,7 +279,7 @@
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 14px;
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-size: 13px;
 }
 
@@ -299,11 +299,11 @@
 }
 
 .assetModule strong {
-  color: #f8fafc;
+  color: var(--text);
 }
 
 .assetModule span {
-  color: #94a3b8;
+  color: var(--muted);
 }
 
 .upsellStack {
@@ -317,7 +317,7 @@
   padding: 16px;
   border: 1px solid rgba(96, 165, 250, 0.22);
   border-radius: 18px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--surface-deep);
 }
 
 .supportOfferPanel {
@@ -336,7 +336,7 @@
   display: grid;
   gap: 8px;
   max-width: 260px;
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-size: 13px;
   font-weight: 720;
 }
@@ -358,7 +358,7 @@
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 14px;
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-size: 13px;
 }
 
@@ -370,13 +370,13 @@
   min-height: 26px;
   border-radius: 999px;
   background: rgba(37, 99, 235, 0.18);
-  color: #bfdbfe;
+  color: var(--accent-text);
   font-weight: 780;
 }
 
 .quoteRow strong {
   min-width: 0;
-  color: #ffffff;
+  color: var(--text-strong);
   overflow-wrap: anywhere;
 }
 
@@ -388,7 +388,7 @@
   padding: 14px 16px;
   border-radius: 16px;
   background: rgba(37, 99, 235, 0.16);
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-size: 14px;
   font-weight: 760;
 }
@@ -398,7 +398,7 @@
 }
 
 .quoteTotal strong {
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 18px;
 }
 
@@ -421,7 +421,7 @@
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-subtle);
 }
 
 .moduleSteps span {
@@ -432,14 +432,14 @@
   height: 30px;
   border-radius: 999px;
   background: rgba(37, 99, 235, 0.18);
-  color: #bfdbfe;
+  color: var(--accent-text);
   font-size: 13px;
   font-weight: 820;
 }
 
 .moduleSteps strong {
   min-width: 0;
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -448,7 +448,7 @@
 
 .moduleSteps small {
   min-width: 0;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -470,8 +470,8 @@
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #f8fafc;
+  background: var(--surface-subtle);
+  color: var(--text);
   cursor: pointer;
   transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
 }
@@ -497,14 +497,14 @@
 
 .moduleOption strong {
   min-width: 0;
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 
 .moduleOption small,
 .moduleOption em {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   font-style: normal;
 }
@@ -524,7 +524,7 @@
   padding: 16px;
   border: 1px solid rgba(96, 165, 250, 0.22);
   border-radius: 18px;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--surface-deep);
 }
 
 .packageDowngradeOption {
@@ -535,8 +535,8 @@
   padding: 14px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #f8fafc;
+  background: var(--surface-subtle);
+  color: var(--text);
   cursor: pointer;
   transition: border-color 180ms ease, background 180ms ease;
 }
@@ -560,12 +560,12 @@
 }
 
 .packageDowngradeOption strong {
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 14px;
 }
 
 .packageDowngradeOption small {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -574,7 +574,7 @@
   padding: 5px 9px;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.12);
-  color: #cbd5e1;
+  color: var(--text-soft);
   font-size: 11px;
   font-style: normal;
   font-weight: 760;
@@ -606,8 +606,8 @@
   padding: 0 12px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #bfdbfe;
+  background: var(--surface-control);
+  color: var(--accent-text);
   cursor: pointer;
   font-size: 12px;
   font-weight: 760;
@@ -625,17 +625,17 @@
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-subtle);
 }
 
 .moduleSelectionSummary span {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 760;
 }
 
 .moduleSelectionSummary strong {
-  color: #ffffff;
+  color: var(--text-strong);
   font-size: 13px;
   line-height: 1.45;
 }

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, KeyRound, LogOut, UserRound, Users2 } from "lucide-react";
+import { Check, ChevronDown, KeyRound, LogOut, Settings, UserRound, Users2 } from "lucide-react";
 import {
   ROLE_LABELS,
   ROLE_TAB_ACCESS,
@@ -19,6 +19,32 @@ const ADMIN_MENU_TAB_KEY_SET = new Set<string>(ADMIN_MENU_TAB_KEYS);
 const SALES_MENU_TAB_KEYS = ["calculator", "deals", "assets", "implementation", "prices"] as const;
 const SALES_MENU_TAB_KEY_SET = new Set<string>(SALES_MENU_TAB_KEYS);
 
+const APPEARANCE_PROFILES = [
+  {
+    key: "standard",
+    name: "Standaard",
+    description: "De vertrouwde donkere Smart Trade-opmaak.",
+  },
+  {
+    key: "customer",
+    name: "Klantstijl",
+    description: "Licht, rustig en zakelijk zoals de klantpagina.",
+  },
+  {
+    key: "neon",
+    name: "Neon",
+    description: "Donker met heldere cyaan- en groene accenten.",
+  },
+] as const;
+
+type AppearanceProfile = (typeof APPEARANCE_PROFILES)[number]["key"];
+
+function normalizeAppearanceProfile(value: string | null): AppearanceProfile {
+  return APPEARANCE_PROFILES.some((profile) => profile.key === value)
+    ? (value as AppearanceProfile)
+    : "standard";
+}
+
 export function AppShellHeader() {
   const { user, role, signOut } = useAuth();
   const pathname = usePathname();
@@ -29,9 +55,12 @@ export function AppShellHeader() {
   const [salesMenuOpen, setSalesMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [appearanceMenuOpen, setAppearanceMenuOpen] = useState(false);
+  const [appearanceProfile, setAppearanceProfile] = useState<AppearanceProfile>("standard");
   const salesMenuRef = useRef<HTMLDivElement | null>(null);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const appearanceMenuRef = useRef<HTMLDivElement | null>(null);
   const isAuthPage = pathname === "/login" || pathname === "/reset-password";
   const isPublicUtilityPage = pathname === "/worldline-test"
     || pathname.startsWith("/klantgegevens/")
@@ -39,6 +68,21 @@ export function AppShellHeader() {
     || pathname.startsWith("/offerte/")
     || pathname.startsWith("/retourpinnen/");
   const isFocusedDealPage = pathname.startsWith("/dealmail/");
+  const userId = user?.id;
+
+  useEffect(() => {
+    const root = document.documentElement;
+
+    if (!userId || isAuthPage || isPublicUtilityPage || isFocusedDealPage) {
+      delete root.dataset.appTheme;
+      return;
+    }
+
+    const storageKey = `smart-trade-appearance:${userId}`;
+    const storedProfile = normalizeAppearanceProfile(window.localStorage.getItem(storageKey));
+    setAppearanceProfile(storedProfile);
+    root.dataset.appTheme = storedProfile;
+  }, [isAuthPage, isFocusedDealPage, isPublicUtilityPage, userId]);
 
   useEffect(() => {
     if (!user) return;
@@ -81,20 +125,23 @@ export function AppShellHeader() {
     setSalesMenuOpen(false);
     setAdminMenuOpen(false);
     setAccountMenuOpen(false);
+    setAppearanceMenuOpen(false);
   }, [pathname, user?.id]);
 
   useEffect(() => {
-    if (!salesMenuOpen && !adminMenuOpen && !accountMenuOpen) return;
+    if (!salesMenuOpen && !adminMenuOpen && !accountMenuOpen && !appearanceMenuOpen) return;
 
     function handleDocumentClick(event: MouseEvent) {
       const target = event.target as Node;
       const clickedSalesMenu = Boolean(salesMenuRef.current?.contains(target));
       const clickedAdminMenu = Boolean(adminMenuRef.current?.contains(target));
       const clickedAccountMenu = Boolean(accountMenuRef.current?.contains(target));
+      const clickedAppearanceMenu = Boolean(appearanceMenuRef.current?.contains(target));
 
       if (!clickedSalesMenu) setSalesMenuOpen(false);
       if (!clickedAdminMenu) setAdminMenuOpen(false);
       if (!clickedAccountMenu) setAccountMenuOpen(false);
+      if (!clickedAppearanceMenu) setAppearanceMenuOpen(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -102,6 +149,7 @@ export function AppShellHeader() {
         setSalesMenuOpen(false);
         setAdminMenuOpen(false);
         setAccountMenuOpen(false);
+        setAppearanceMenuOpen(false);
       }
     }
 
@@ -112,7 +160,7 @@ export function AppShellHeader() {
       document.removeEventListener("mousedown", handleDocumentClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [salesMenuOpen, adminMenuOpen, accountMenuOpen]);
+  }, [salesMenuOpen, adminMenuOpen, accountMenuOpen, appearanceMenuOpen]);
 
   if (!user || isAuthPage || isPublicUtilityPage || isFocusedDealPage) return null;
 
@@ -143,6 +191,13 @@ export function AppShellHeader() {
     await signOut();
     router.replace("/login");
     router.refresh();
+  };
+
+  const selectAppearanceProfile = (profile: AppearanceProfile) => {
+    setAppearanceProfile(profile);
+    document.documentElement.dataset.appTheme = profile;
+    window.localStorage.setItem(`smart-trade-appearance:${user.id}`, profile);
+    setAppearanceMenuOpen(false);
   };
 
   return (
@@ -282,6 +337,64 @@ export function AppShellHeader() {
             <LogOut size={15} />
             {loggingOut ? "Uitloggen..." : "Uitloggen"}
           </button>
+
+          <div className="appearance-menu" ref={appearanceMenuRef}>
+            <button
+              type="button"
+              className={`appearance-menu-trigger ${appearanceMenuOpen ? "active" : ""}`}
+              onClick={() => {
+                setSalesMenuOpen(false);
+                setAdminMenuOpen(false);
+                setAccountMenuOpen(false);
+                setAppearanceMenuOpen((open) => !open);
+              }}
+              aria-label="Opmaakprofiel kiezen"
+              aria-haspopup="menu"
+              aria-expanded={appearanceMenuOpen}
+              title="Opmaakprofiel kiezen"
+            >
+              <Settings size={17} aria-hidden="true" />
+            </button>
+
+            {appearanceMenuOpen ? (
+              <div className="appearance-menu-panel" role="menu" aria-label="Opmaakprofielen">
+                <div className="appearance-menu-heading">
+                  <strong>Opmaakprofiel</strong>
+                  <span>Kies uw gewenste uitstraling.</span>
+                </div>
+
+                <div className="appearance-profile-list">
+                  {APPEARANCE_PROFILES.map((profile) => {
+                    const active = profile.key === appearanceProfile;
+
+                    return (
+                      <button
+                        type="button"
+                        key={profile.key}
+                        className={`appearance-profile-option ${active ? "active" : ""}`}
+                        onClick={() => selectAppearanceProfile(profile.key)}
+                        role="menuitemradio"
+                        aria-checked={active}
+                      >
+                        <span className={`appearance-profile-preview ${profile.key}`} aria-hidden="true">
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                        <span className="appearance-profile-copy">
+                          <strong>{profile.name}</strong>
+                          <small>{profile.description}</small>
+                        </span>
+                        <span className="appearance-profile-check" aria-hidden="true">
+                          {active ? <Check size={16} /> : null}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </header>

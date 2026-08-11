@@ -535,6 +535,7 @@ export default function AssetsDashboardCurrent() {
   const [chauffeurExtraUsersToOffer, setChauffeurExtraUsersToOffer] = useState(0);
   const [includeMissingSupportOffer, setIncludeMissingSupportOffer] = useState(false);
   const [selectedModuleKeys, setSelectedModuleKeys] = useState<string[]>([]);
+  const [allowPackageDowngrade, setAllowPackageDowngrade] = useState(false);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [serviceCostQuantities, setServiceCostQuantities] = useState<Record<string, number>>(getInitialServiceCostQuantities);
@@ -588,7 +589,23 @@ export default function AssetsDashboardCurrent() {
     [currentModuleKeys, modules, selectedModuleKeys],
   );
   const selectedPackageModuleCount = useMemo(() => getPackageRelevantModuleCount(selectedModuleKeys, modules), [modules, selectedModuleKeys]);
-  const targetPackage = useMemo(() => getMinimumPackageForPaidModules(selectedPackageModuleCount, packages), [packages, selectedPackageModuleCount]);
+  const minimumPackage = useMemo(
+    () => getMinimumPackageForPaidModules(selectedPackageModuleCount, packages),
+    [packages, selectedPackageModuleCount],
+  );
+  const downgradeAvailable = Boolean(
+    selectedPackage &&
+    minimumPackage &&
+    getPackageIndex(minimumPackage, packages) < getPackageIndex(selectedPackage, packages),
+  );
+  const targetPackage = downgradeAvailable && !allowPackageDowngrade
+    ? selectedPackage
+    : minimumPackage;
+
+  useEffect(() => {
+    if (!downgradeAvailable && allowPackageDowngrade) setAllowPackageDowngrade(false);
+  }, [allowPackageDowngrade, downgradeAvailable]);
+
   const selectedCustomerPortalOptions = useMemo(
     () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
     [pricingConfig.customerPortalOptions, selectedCustomerPortalOptionKeys],
@@ -659,7 +676,7 @@ export default function AssetsDashboardCurrent() {
   const hasPackageChange = Boolean(selectedPackage && targetPackage && selectedPackage.key !== targetPackage.key);
   const packageChangeDirection = selectedPackage && targetPackage && getPackageIndex(targetPackage, packages) > getPackageIndex(selectedPackage, packages)
     ? "upgrade nodig"
-    : "downgrade mogelijk";
+    : "downgrade geselecteerd";
   const currentModuleMonthly = selectedPackage ? getModuleMonthlyForPackage(currentModuleKeys, selectedPackage, modules) : 0;
   const targetModuleMonthly = targetPackage ? getModuleMonthlyForPackage(selectedModuleKeys, targetPackage, modules) : 0;
   const moduleMonthlyDelta = targetModuleMonthly - currentModuleMonthly;
@@ -872,6 +889,7 @@ export default function AssetsDashboardCurrent() {
 
   function handleResetModules() {
     setSelectedModuleKeys(currentModuleKeys);
+    setAllowPackageDowngrade(false);
   }
 
   async function handleSendExpansionsToDeals() {
@@ -1019,6 +1037,7 @@ export default function AssetsDashboardCurrent() {
     setExtraUsersToOffer(0);
     setChauffeurExtraUsersToOffer(0);
     setSelectedModuleKeys([]);
+    setAllowPackageDowngrade(false);
     setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
     setSmartConnectConnections(0);
@@ -1057,6 +1076,7 @@ export default function AssetsDashboardCurrent() {
     setExtraUsersToOffer(0);
     setChauffeurExtraUsersToOffer(0);
     setSelectedModuleKeys([]);
+    setAllowPackageDowngrade(false);
     setIncludeMissingSupportOffer(false);
     setSelectedCustomerPortalOptionKeys([]);
     setSmartConnectConnections(0);
@@ -1449,7 +1469,7 @@ export default function AssetsDashboardCurrent() {
               <div className={styles.moduleSteps}>
                 <div><span>1</span><strong>Alle modules</strong><small>{modules.length} opties</small></div>
                 <div><span>2</span><strong>Selectie</strong><small>{selectedModules.length} geselecteerd</small></div>
-                <div><span>3</span><strong>Pakketadvies</strong><small>{hasPackageChange ? `${selectedPackage.name} naar ${targetPackage.name}` : selectedPackage.name}</small></div>
+                <div><span>3</span><strong>Pakketadvies</strong><small>{hasPackageChange ? `${selectedPackage.name} naar ${targetPackage.name}` : downgradeAvailable ? `${selectedPackage.name} behouden` : selectedPackage.name}</small></div>
                 <div><span>4</span><strong>Implementatie</strong><small>{euro.format(moduleImplementationTotal)}</small></div>
               </div>
 
@@ -1473,13 +1493,36 @@ export default function AssetsDashboardCurrent() {
               </div>
 
               <div className={styles.moduleAdvice}>
+                {downgradeAvailable && minimumPackage ? (
+                  <label className={`${styles.packageDowngradeOption} ${allowPackageDowngrade ? styles.packageDowngradeOptionSelected : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={allowPackageDowngrade}
+                      onChange={(event) => setAllowPackageDowngrade(event.target.checked)}
+                    />
+                    <span>
+                      <strong>Downgrade toestaan</strong>
+                      <small>
+                        Standaard blijft Smart Trade {selectedPackage.name} behouden. Selecteer dit alleen om Smart Trade {minimumPackage.name} voor te stellen.
+                      </small>
+                    </span>
+                    <em>{allowPackageDowngrade ? "geselecteerd" : "standaard uit"}</em>
+                  </label>
+                ) : null}
+
                 <div className={styles.moduleAdviceHeader}>
                   <div>
                     <div className={styles.assetTitle}>Module-offerte</div>
                     <div className={styles.assetMeta}>Huidig: Smart Trade {selectedPackage.name}. Advies: Smart Trade {targetPackage.name}.</div>
                   </div>
                   <div className={styles.moduleAdviceActions}>
-                    <StatusPill tone={hasPackageChange ? "warning" : "success"}>{hasPackageChange ? packageChangeDirection : "blijft binnen pakket"}</StatusPill>
+                    <StatusPill tone={hasPackageChange ? "warning" : "success"}>
+                      {hasPackageChange
+                        ? packageChangeDirection
+                        : downgradeAvailable
+                          ? "huidig pakket behouden"
+                          : "blijft binnen pakket"}
+                    </StatusPill>
                     {hasModuleSelectionChanges ? <button type="button" className={styles.resetModulesButton} onClick={handleResetModules}>Reset selectie</button> : null}
                   </div>
                 </div>

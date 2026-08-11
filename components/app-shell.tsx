@@ -35,6 +35,21 @@ const APPEARANCE_PROFILES = [
     name: "Neon",
     description: "Donker met heldere cyaan- en groene accenten.",
   },
+  {
+    key: "corporate-modern",
+    name: "Corporate Modern",
+    description: "Vertrouwd donkerblauw met een warm oranje accent.",
+  },
+  {
+    key: "modern-tech",
+    name: "Modern Tech",
+    description: "Strak antraciet met helder blauw en cyaan.",
+  },
+  {
+    key: "warm-b2b",
+    name: "Warm B2B",
+    description: "Zakelijk blauwgroen met een warme uitstraling.",
+  },
 ] as const;
 
 type AppearanceProfile = (typeof APPEARANCE_PROFILES)[number]["key"];

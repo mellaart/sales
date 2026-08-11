@@ -427,6 +427,20 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const isAssetsExpansionDeal = quoteLayout === "assets-expansion" && Boolean(assetsExpansion?.lines?.length);
   const quotedUserCount = isAssetsExpansionDeal ? smartTradeExtraUsers : totalUsers;
   const expansionTotals = useMemo(() => getAssetExpansionTotals(assetsExpansion?.lines ?? []), [assetsExpansion]);
+  const expansionPriceComparison = useMemo(() => {
+    const comparison = assetsExpansion?.priceComparison;
+    if (!comparison) return null;
+
+    return {
+      currentMonthly: Number(comparison.currentMonthly) || 0,
+      newMonthly: Number(comparison.newMonthly) || 0,
+      currentAnnual: Number(comparison.currentAnnual) || 0,
+      newAnnual: Number(comparison.newAnnual) || 0,
+      currentPackageMonthly: Number(comparison.currentPackageMonthly) || 0,
+      currentCustomerPortalMonthly: Number(comparison.currentCustomerPortalMonthly) || 0,
+      currentSmartConnectMonthly: Number(comparison.currentSmartConnectMonthly) || 0,
+    };
+  }, [assetsExpansion]);
   const selectedCustomerPortalOptions = useMemo(
     () => pricingConfig.customerPortalOptions.filter((option) => selectedCustomerPortalOptionKeys.includes(option.key)),
     [pricingConfig.customerPortalOptions, selectedCustomerPortalOptionKeys],
@@ -1361,11 +1375,19 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
         <div className="kpi-grid">
           {isAssetsExpansionDeal ? (
-            <>
-              <StatCard title="Regels" value={String(assetsExpansion?.lines.length ?? 0)} icon={FileText} sublabel="Geselecteerde uitbreidingen" />
-              <StatCard title="Maandbedrag" value={euro.format(expansionTotals.monthly)} icon={Users} sublabel="Alleen deze uitbreiding" />
-              <StatCard title="Setup" value={euro.format(implementationTotal)} icon={Package} sublabel={travelCostTotal > 0 ? "Incl. reiskosten" : "Eenmalige kosten"} />
-            </>
+            expansionPriceComparison ? (
+              <>
+                <StatCard title="Huidige maandprijs" value={euro.format(expansionPriceComparison.currentMonthly)} icon={FileText} sublabel="Voor deze uitbreiding" />
+                <StatCard title="Nieuwe maandprijs" value={euro.format(expansionPriceComparison.newMonthly)} icon={Users} sublabel={`Toename ${euro.format(expansionTotals.monthly)} p/m`} />
+                <StatCard title="Eenmalig" value={euro.format(implementationTotal)} icon={Package} sublabel={travelCostTotal > 0 ? "Incl. reiskosten" : "Implementatie en setup"} />
+              </>
+            ) : (
+              <>
+                <StatCard title="Regels" value={String(assetsExpansion?.lines.length ?? 0)} icon={FileText} sublabel="Geselecteerde uitbreidingen" />
+                <StatCard title="Maandbedrag" value={euro.format(expansionTotals.monthly)} icon={Users} sublabel="Alleen deze uitbreiding" />
+                <StatCard title="Setup" value={euro.format(implementationTotal)} icon={Package} sublabel={travelCostTotal > 0 ? "Incl. reiskosten" : "Eenmalige kosten"} />
+              </>
+            )
           ) : (
             <>
               <StatCard
@@ -1726,12 +1748,21 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
               <div className="stats-grid">
                 {isAssetsExpansionDeal ? (
-                  <>
-                    <div className="soft-card"><div className="kpi-title">Maand</div><div className="big-number">{euro.format(expansionTotals.monthly)}</div></div>
-                    <div className="soft-card"><div className="kpi-title">Jaar</div><div className="big-number">{euro.format(expansionTotals.annual)}</div></div>
-                    <div className="soft-card"><div className="kpi-title">Setup</div><div className="big-number">{euro.format(implementationTotal)}</div></div>
-                    <div className="soft-card"><div className="kpi-title">Regels</div><div className="big-number">{assetsExpansion?.lines.length ?? 0}</div></div>
-                  </>
+                  expansionPriceComparison ? (
+                    <>
+                      <div className="soft-card"><div className="kpi-title">Huidig p/m</div><div className="big-number">{euro.format(expansionPriceComparison.currentMonthly)}</div></div>
+                      <div className="soft-card"><div className="kpi-title">Uitbreiding p/m</div><div className="big-number">+ {euro.format(expansionTotals.monthly)}</div></div>
+                      <div className="soft-card"><div className="kpi-title">Nieuw p/m</div><div className="big-number">{euro.format(expansionPriceComparison.newMonthly)}</div></div>
+                      <div className="soft-card"><div className="kpi-title">Eenmalig</div><div className="big-number">{euro.format(implementationTotal)}</div></div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="soft-card"><div className="kpi-title">Maand</div><div className="big-number">{euro.format(expansionTotals.monthly)}</div></div>
+                      <div className="soft-card"><div className="kpi-title">Jaar</div><div className="big-number">{euro.format(expansionTotals.annual)}</div></div>
+                      <div className="soft-card"><div className="kpi-title">Setup</div><div className="big-number">{euro.format(implementationTotal)}</div></div>
+                      <div className="soft-card"><div className="kpi-title">Regels</div><div className="big-number">{assetsExpansion?.lines.length ?? 0}</div></div>
+                    </>
+                  )
                 ) : (
                   <>
                     <div className="soft-card"><div className="kpi-title">Licentie p/m</div><div className="big-number">{euro.format(licenseWithModulesMonthly)}</div></div>
@@ -1747,8 +1778,28 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <div className="summary-list">
                     {isAssetsExpansionDeal ? (
                       <>
-                        <div className="total-row"><span>Maandbedrag</span><strong>{euro.format(expansionTotals.monthly)}</strong></div>
-                        {expansionTotals.annual > 0 ? <div><span>Jaarbedrag</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
+                        {expansionPriceComparison ? (
+                          <>
+                            <div><span>Pakket, gebruikers, support en modules</span><strong>{euro.format(expansionPriceComparison.currentPackageMonthly)}</strong></div>
+                            <div><span>Klantportaal</span><strong>{euro.format(expansionPriceComparison.currentCustomerPortalMonthly)}</strong></div>
+                            <div><span>Smart Connect</span><strong>{euro.format(expansionPriceComparison.currentSmartConnectMonthly)}</strong></div>
+                            <div><span>Huidige maandprijs</span><strong>{euro.format(expansionPriceComparison.currentMonthly)}</strong></div>
+                            <div><span>Uitbreiding per maand</span><strong>+ {euro.format(expansionTotals.monthly)}</strong></div>
+                            <div className="total-row"><span>Nieuwe maandprijs</span><strong>{euro.format(expansionPriceComparison.newMonthly)}</strong></div>
+                            {(expansionPriceComparison.currentAnnual > 0 || expansionPriceComparison.newAnnual > 0) ? (
+                              <>
+                                <div><span>Huidige servicekosten per jaar</span><strong>{euro.format(expansionPriceComparison.currentAnnual)}</strong></div>
+                                <div><span>Uitbreiding servicekosten per jaar</span><strong>+ {euro.format(expansionTotals.annual)}</strong></div>
+                                <div className="total-row"><span>Nieuwe servicekosten per jaar</span><strong>{euro.format(expansionPriceComparison.newAnnual)}</strong></div>
+                              </>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <div className="total-row"><span>Maandbedrag</span><strong>{euro.format(expansionTotals.monthly)}</strong></div>
+                            {expansionTotals.annual > 0 ? <div><span>Jaarbedrag</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
+                          </>
+                        )}
                         {expansionTotals.once > 0 ? <div><span>Setup</span><strong>{euro.format(expansionTotals.once)}</strong></div> : null}
                         {effectiveIncludeTravelCosts && travelCostQuote ? (
                           <div>
@@ -1783,8 +1834,13 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <div className="proposal-brand">{isAssetsExpansionDeal ? "Offerte samenvatting" : quoteTitle || "Prijsvoorstel"}</div>
                   <div className="proposal-title">{isAssetsExpansionDeal ? quoteTitle || "Uitbreiding" : activeResult.name}</div>
                   <div className="proposal-meta">{customerName || "Nog niet ingevuld"} · {contactName || "Geen contactpersoon"}</div>
-                  <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionTotals.monthly : monthlyTotal)} p/m</div>
-                  {isAssetsExpansionDeal && implementationTotal === 0 ? (
+                  <div className="proposal-total">{euro.format(isAssetsExpansionDeal ? expansionPriceComparison?.newMonthly ?? expansionTotals.monthly : monthlyTotal)} p/m</div>
+                  {isAssetsExpansionDeal && expansionPriceComparison ? (
+                    <>
+                      <div className="proposal-sub">Huidig {euro.format(expansionPriceComparison.currentMonthly)} p/m · uitbreiding + {euro.format(expansionTotals.monthly)} p/m</div>
+                      {implementationTotal > 0 ? <div className="proposal-sub">Eenmalig: {euro.format(implementationTotal)}</div> : null}
+                    </>
+                  ) : isAssetsExpansionDeal && implementationTotal === 0 ? (
                     <div className="proposal-sub">{assetsExpansion?.lines.length ?? 0} uitbreidingsregel{assetsExpansion?.lines.length === 1 ? "" : "s"}</div>
                   ) : (
                     <div className="proposal-sub">Eenmalig: {euro.format(implementationTotal)}</div>

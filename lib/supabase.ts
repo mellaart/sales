@@ -43,6 +43,15 @@ export type AssetExpansionSummary = {
   relationName: string;
   currentPackageName?: string | null;
   targetPackageName?: string | null;
+  priceComparison?: {
+    currentMonthly: number;
+    newMonthly: number;
+    currentAnnual: number;
+    newAnnual: number;
+    currentPackageMonthly?: number;
+    currentCustomerPortalMonthly?: number;
+    currentSmartConnectMonthly?: number;
+  };
   guidanceText?: string;
   createdAt: string;
   lines: AssetExpansionLine[];

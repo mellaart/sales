@@ -402,6 +402,96 @@
   font-size: 18px;
 }
 
+.priceComparison {
+  display: grid;
+  gap: 14px;
+}
+
+.priceComparisonGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.priceComparisonItem {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px;
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.priceComparisonItem:last-child {
+  border-right: 0;
+}
+
+.priceComparisonItem span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.priceComparisonItem strong {
+  color: var(--text-strong);
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.priceComparisonItemHighlight {
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.priceComparisonItemHighlight span,
+.priceComparisonItemHighlight strong {
+  color: #a7f3d0;
+}
+
+.priceComparisonBreakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.priceComparisonBreakdown > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--surface-deep);
+}
+
+.priceComparisonBreakdown span,
+.priceComparisonRow span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.priceComparisonBreakdown strong,
+.priceComparisonRow strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.priceComparisonRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(145px, auto));
+  gap: 14px;
+  align-items: center;
+  padding: 13px 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.priceComparisonRow > :not(:first-child) {
+  text-align: right;
+}
+
 .modulePlanner {
   display: grid;
   gap: 16px;
@@ -686,6 +776,25 @@
 
   .moduleSelectionSummary {
     grid-template-columns: 1fr;
+  }
+
+  .priceComparisonGrid,
+  .priceComparisonBreakdown,
+  .priceComparisonRow {
+    grid-template-columns: 1fr;
+  }
+
+  .priceComparisonItem {
+    border-right: 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .priceComparisonItem:last-child {
+    border-bottom: 0;
+  }
+
+  .priceComparisonRow > :not(:first-child) {
+    text-align: left;
   }
 
   .packageDowngradeOption {

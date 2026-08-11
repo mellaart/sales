@@ -233,10 +233,6 @@ function getExtraUserLicenseCount(assets: AssetRecord[], packageName: string | n
   }, 0);
 }
 
-function formatUserCount(count: number) {
-  return count === 1 ? "1 bestaande gebruiker" : `${count} bestaande gebruikers`;
-}
-
 function formatAssetQuantity(quantity: number) {
   return quantity === 1 ? "1 asset" : `${quantity} assets`;
 }
@@ -442,6 +438,19 @@ function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: Package
   return Math.max(0, grossModuleMonthly - includedModuleDiscount);
 }
 
+function getIncludedModuleKeysForPackage(
+  moduleKeys: string[],
+  packageConfig: PackageConfig,
+  modules: ModuleConfig[] = MODULES,
+) {
+  return getModulesByKeys(moduleKeys, modules)
+    .filter((moduleConfig) => moduleConfig.monthlyPrice > 0)
+    .slice()
+    .sort((left, right) => right.monthlyPrice - left.monthlyPrice || left.name.localeCompare(right.name, "nl"))
+    .slice(0, packageConfig.includedModules)
+    .map((moduleConfig) => moduleConfig.key);
+}
+
 function formatImplementationBasis(cost: number) {
   if (cost === 360) return "halve dag";
   if (cost === 720) return "hele dag";
@@ -591,6 +600,11 @@ export default function AssetsDashboardCurrent() {
   const targetPackage = downgradeAvailable && !allowPackageDowngrade
     ? selectedPackage
     : minimumPackage;
+  const offerPackage = targetPackage ?? selectedPackage;
+  const targetIncludedModuleKeys = useMemo(
+    () => targetPackage ? getIncludedModuleKeysForPackage(selectedModuleKeys, targetPackage, modules) : [],
+    [modules, selectedModuleKeys, targetPackage],
+  );
 
   useEffect(() => {
     if (!downgradeAvailable && allowPackageDowngrade) setAllowPackageDowngrade(false);
@@ -644,23 +658,29 @@ export default function AssetsDashboardCurrent() {
   const existingUserCount = existingExtraUserCount + 1;
   const safeExtraUsersToOffer = Math.max(0, Math.floor(extraUsersToOffer));
   const safeChauffeurExtraUsersToOffer = Math.max(0, Math.floor(chauffeurExtraUsersToOffer));
-  const extraUserLicenseTotal = selectedPackage ? safeExtraUsersToOffer * selectedPackage.licenseExtra : 0;
-  const extraUserSupportTotal = selectedPackage && shouldIncludeSupport ? safeExtraUsersToOffer * selectedPackage.supportExtra : 0;
-  const chauffeurExtraUserLicenseTotal = selectedPackage
-    ? safeChauffeurExtraUsersToOffer * selectedPackage.licenseExtra
+  const extraUserLicenseTotal = offerPackage ? safeExtraUsersToOffer * offerPackage.licenseExtra : 0;
+  const extraUserSupportTotal = offerPackage && shouldIncludeSupport ? safeExtraUsersToOffer * offerPackage.supportExtra : 0;
+  const chauffeurExtraUserLicenseTotal = offerPackage
+    ? safeChauffeurExtraUsersToOffer * offerPackage.licenseExtra
     : 0;
-  const chauffeurExtraUserSupportTotal = selectedPackage && shouldIncludeSupport
-    ? safeChauffeurExtraUsersToOffer * selectedPackage.supportExtra
+  const chauffeurExtraUserSupportTotal = offerPackage && shouldIncludeSupport
+    ? safeChauffeurExtraUsersToOffer * offerPackage.supportExtra
     : 0;
   const upsellMonthlyTotal =
     extraUserLicenseTotal +
     extraUserSupportTotal +
     chauffeurExtraUserLicenseTotal +
     chauffeurExtraUserSupportTotal;
-  const missingSupportBaseTotal = selectedPackage && includeMissingSupportOffer ? selectedPackage.supportFirst : 0;
-  const missingSupportExtraTotal = selectedPackage && includeMissingSupportOffer ? existingExtraUserCount * selectedPackage.supportExtra : 0;
+  const missingSupportBaseTotal = offerPackage && includeMissingSupportOffer ? offerPackage.supportFirst : 0;
+  const targetExtraUserCount = existingExtraUserCount + safeExtraUsersToOffer + safeChauffeurExtraUsersToOffer;
+  const missingSupportExtraTotal = offerPackage && includeMissingSupportOffer
+    ? targetExtraUserCount * offerPackage.supportExtra
+    : 0;
   const missingSupportMonthlyTotal = missingSupportBaseTotal + missingSupportExtraTotal;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
+  const currentCustomerPortalMonthlyTotal = pricingConfig.customerPortalOptions
+    .filter((option) => currentCustomerPortalKeys.includes(option.key))
+    .reduce((sum, option) => sum + option.monthlyPrice, 0);
 
   const hasModuleSelectionChanges = !isSameModuleSelection(currentModuleKeys, selectedModuleKeys);
   const hasPackageChange = Boolean(selectedPackage && targetPackage && selectedPackage.key !== targetPackage.key);
@@ -684,6 +704,14 @@ export default function AssetsDashboardCurrent() {
   const recurringMonthlyDelta = targetRecurringMonthly - currentRecurringMonthly;
   const existingSmartConnectAssetTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.quantity, 0);
   const existingSmartConnectTotal = existingSmartConnectRows.reduce((sum, row) => sum + row.totalConnections, 0);
+  const existingSmartConnectMonthlyTotal = existingSmartConnectRows.reduce(
+    (sum, row) => sum + row.quantity * getSmartConnectPricing(
+      row.connections,
+      pricingConfig.smartConnectTiers,
+      pricingConfig.smartConnectExtraConnectionPrice,
+    ).monthlyTotal,
+    0,
+  );
   const customerPortalAddedOptions = useMemo(
     () => selectedCustomerPortalOptions.filter((option) => !currentCustomerPortalKeys.includes(option.key)),
     [currentCustomerPortalKeys, selectedCustomerPortalOptions],
@@ -691,10 +719,10 @@ export default function AssetsDashboardCurrent() {
   const assetDealLines = useMemo(() => {
     const lines: AssetExpansionLine[] = [];
 
-    if (selectedPackage && safeExtraUsersToOffer > 0) {
+    if (offerPackage && safeExtraUsersToOffer > 0) {
       lines.push({
         group: "Gebruikers",
-        label: `Smart Trade ${selectedPackage.name} Extra gebruiker`,
+        label: `Smart Trade ${offerPackage.name} Extra gebruiker`,
         quantity: safeExtraUsersToOffer,
         cadence: "monthly",
         amount: extraUserLicenseTotal,
@@ -703,7 +731,7 @@ export default function AssetsDashboardCurrent() {
       if (shouldIncludeSupport && extraUserSupportTotal > 0) {
         lines.push({
           group: "Gebruikers",
-          label: `Smart Trade ${selectedPackage.name} Supportcontract Extra gebruiker`,
+          label: `Smart Trade ${offerPackage.name} Supportcontract Extra gebruiker`,
           quantity: safeExtraUsersToOffer,
           cadence: "monthly",
           amount: extraUserSupportTotal,
@@ -711,7 +739,7 @@ export default function AssetsDashboardCurrent() {
       }
     }
 
-    if (selectedPackage && safeChauffeurExtraUsersToOffer > 0) {
+    if (offerPackage && safeChauffeurExtraUsersToOffer > 0) {
       lines.push({
         group: "Chauffeursmodule",
         label: "Licentie extra gebruiker (chauffeursmodule)",
@@ -731,11 +759,11 @@ export default function AssetsDashboardCurrent() {
       }
     }
 
-    if (selectedPackage && includeMissingSupportOffer && missingSupportMonthlyTotal > 0) {
+    if (offerPackage && includeMissingSupportOffer && missingSupportMonthlyTotal > 0) {
       lines.push({
         group: "Support",
-        label: `Supportcontract Smart Trade ${selectedPackage.name}`,
-        quantity: existingUserCount,
+        label: `Supportcontract Smart Trade ${offerPackage.name}`,
+        quantity: targetExtraUserCount + 1,
         cadence: "monthly",
         amount: missingSupportMonthlyTotal,
       });
@@ -752,7 +780,11 @@ export default function AssetsDashboardCurrent() {
         quantity: 1,
         cadence: "monthly",
         amount: Math.max(0, hasPackageChange ? recurringMonthlyDelta : moduleMonthlyDelta),
-        note: hasPackageChange ? `${packageChangeDirection}: ${formatModuleList(addedModules)}` : undefined,
+        note: hasPackageChange
+          ? `${packageChangeDirection}: ${formatModuleList(addedModules)}`
+          : addedModules.every((moduleConfig) => targetIncludedModuleKeys.includes(moduleConfig.key))
+            ? `Inbegrepen in Smart Trade ${targetPackage.name}`
+            : undefined,
       });
     }
 
@@ -816,7 +848,6 @@ export default function AssetsDashboardCurrent() {
     chauffeurExtraUserLicenseTotal,
     chauffeurExtraUserSupportTotal,
     customerPortalAddedOptions,
-    existingUserCount,
     extraUserLicenseTotal,
     extraUserSupportTotal,
     hasPackageChange,
@@ -824,6 +855,7 @@ export default function AssetsDashboardCurrent() {
     includeMissingSupportOffer,
     missingSupportMonthlyTotal,
     moduleMonthlyDelta,
+    offerPackage,
     packageChangeDirection,
     recurringMonthlyDelta,
     safeChauffeurExtraUsersToOffer,
@@ -833,6 +865,8 @@ export default function AssetsDashboardCurrent() {
     shouldIncludeSupport,
     smartConnectPricing,
     targetPackage,
+    targetExtraUserCount,
+    targetIncludedModuleKeys,
   ]);
   const assetExpansionTotals = useMemo(() => getAssetExpansionTotals(assetDealLines), [assetDealLines]);
   const travelImplementationTotal = addedModules
@@ -850,6 +884,12 @@ export default function AssetsDashboardCurrent() {
   const travelCostTotal = effectiveIncludeTravelCosts && travelCostQuote
     ? travelImplementationDays * travelCostQuote.pricePerDay
     : 0;
+  const currentCompleteMonthly = currentRecurringMonthly
+    + currentCustomerPortalMonthlyTotal
+    + existingSmartConnectMonthlyTotal;
+  const newCompleteMonthly = currentCompleteMonthly + assetExpansionTotals.monthly;
+  const currentCompleteAnnual = existingServiceCostAnnualTotal;
+  const newCompleteAnnual = currentCompleteAnnual + assetExpansionTotals.annual;
   const transferHint = !selectedRelation
     ? "Kies eerst een relatie. Daarna kun je geselecteerde uitbreidingen doorzetten naar Deals."
     : assetDealLines.length === 0
@@ -950,10 +990,14 @@ export default function AssetsDashboardCurrent() {
         modules: selectedModuleRows,
         notes,
         calculator_inputs: {
-          extraUsers: extraUsersForDeal,
+          extraUsers: safeExtraUsersToOffer,
+          chauffeurExtraUsers: safeChauffeurExtraUsersToOffer,
           selectedPackage: activeResult.key,
           manualImplementationAdjustment,
           includeVat: false,
+          includeSupport: shouldIncludeSupport || includeMissingSupportOffer,
+          customerPortalOptionKeys: customerPortalAddedOptions.map((option) => option.key),
+          smartConnectConnections,
           includeTravelCosts: effectiveIncludeTravelCosts,
           travelPostcodePrefix,
           travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
@@ -967,6 +1011,15 @@ export default function AssetsDashboardCurrent() {
             relationName: selectedRelation.name,
             currentPackageName: selectedPackageName,
             targetPackageName: activeResult.name,
+            priceComparison: {
+              currentMonthly: currentCompleteMonthly,
+              newMonthly: newCompleteMonthly,
+              currentAnnual: currentCompleteAnnual,
+              newAnnual: newCompleteAnnual,
+              currentPackageMonthly: currentRecurringMonthly,
+              currentCustomerPortalMonthly: currentCustomerPortalMonthlyTotal,
+              currentSmartConnectMonthly: existingSmartConnectMonthlyTotal,
+            },
             guidanceText: offerGuidance.trim() || undefined,
             createdAt: new Date().toISOString(),
             lines: assetDealLines,
@@ -1349,7 +1402,7 @@ export default function AssetsDashboardCurrent() {
                 <div className={styles.upsellSummary}>
                   <div>
                     <div className={styles.assetTitle}>Extra gebruiker offerte</div>
-                    <div className={styles.assetMeta}>Pakket: Smart Trade {selectedPackage.name}</div>
+                    <div className={styles.assetMeta}>Pakket: Smart Trade {offerPackage?.name ?? selectedPackage.name}</div>
                   </div>
                   <StatusPill tone={shouldIncludeSupport ? "success" : "warning"}>{shouldIncludeSupport ? "met support" : "zonder support"}</StatusPill>
                 </div>
@@ -1367,29 +1420,29 @@ export default function AssetsDashboardCurrent() {
                 <div className={styles.quoteRows}>
                   <div className={styles.quoteRow}>
                     <span>{safeExtraUsersToOffer}x</span>
-                    <strong>Smart Trade {selectedPackage.name} Extra gebruiker</strong>
-                    <span>{euro.format(selectedPackage.licenseExtra)} p/m</span>
+                    <strong>Smart Trade {offerPackage?.name ?? selectedPackage.name} Extra gebruiker</strong>
+                    <span>{euro.format(offerPackage?.licenseExtra ?? selectedPackage.licenseExtra)} p/m</span>
                     <strong>{euro.format(extraUserLicenseTotal)} p/m</strong>
                   </div>
                   {shouldIncludeSupport ? (
                     <div className={styles.quoteRow}>
                       <span>{safeExtraUsersToOffer}x</span>
-                      <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
-                      <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                      <strong>Smart Trade {offerPackage?.name ?? selectedPackage.name} Supportcontract Extra gebruiker</strong>
+                      <span>{euro.format(offerPackage?.supportExtra ?? selectedPackage.supportExtra)} p/m</span>
                       <strong>{euro.format(extraUserSupportTotal)} p/m</strong>
                     </div>
                   ) : null}
                   <div className={styles.quoteRow}>
                     <span>{safeChauffeurExtraUsersToOffer}x</span>
                     <strong>Licentie extra gebruiker (chauffeursmodule)</strong>
-                    <span>{euro.format(selectedPackage.licenseExtra)} p/m</span>
+                    <span>{euro.format(offerPackage?.licenseExtra ?? selectedPackage.licenseExtra)} p/m</span>
                     <strong>{euro.format(chauffeurExtraUserLicenseTotal)} p/m</strong>
                   </div>
                   {shouldIncludeSupport ? (
                     <div className={styles.quoteRow}>
                       <span>{safeChauffeurExtraUsersToOffer}x</span>
                       <strong>Supportcontract extra gebruiker (chauffeursmodule)</strong>
-                      <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                      <span>{euro.format(offerPackage?.supportExtra ?? selectedPackage.supportExtra)} p/m</span>
                       <strong>{euro.format(chauffeurExtraUserSupportTotal)} p/m</strong>
                     </div>
                   ) : null}
@@ -1402,7 +1455,7 @@ export default function AssetsDashboardCurrent() {
                   <div className={styles.upsellSummary}>
                     <div>
                       <div className={styles.assetTitle}>Supportcontract toevoegen</div>
-                      <div className={styles.assetMeta}>Gebaseerd op Smart Trade {selectedPackage.name} en {formatUserCount(existingUserCount)}.</div>
+                      <div className={styles.assetMeta}>Gebaseerd op Smart Trade {offerPackage?.name ?? selectedPackage.name} en de nieuwe gebruikersstand.</div>
                     </div>
                     <StatusPill tone={includeMissingSupportOffer ? "success" : "warning"}>{includeMissingSupportOffer ? "geselecteerd" : "niet geselecteerd"}</StatusPill>
                   </div>
@@ -1416,15 +1469,15 @@ export default function AssetsDashboardCurrent() {
                       <>
                         <div className={styles.quoteRow}>
                           <span>1x</span>
-                          <strong>Smart Trade {selectedPackage.name} Supportcontract</strong>
-                          <span>{euro.format(selectedPackage.supportFirst)} p/m</span>
+                          <strong>Smart Trade {offerPackage?.name ?? selectedPackage.name} Supportcontract</strong>
+                          <span>{euro.format(offerPackage?.supportFirst ?? selectedPackage.supportFirst)} p/m</span>
                           <strong>{euro.format(missingSupportBaseTotal)} p/m</strong>
                         </div>
-                        {existingExtraUserCount > 0 ? (
+                        {targetExtraUserCount > 0 ? (
                           <div className={styles.quoteRow}>
-                            <span>{existingExtraUserCount}x</span>
-                            <strong>Smart Trade {selectedPackage.name} Supportcontract Extra gebruiker</strong>
-                            <span>{euro.format(selectedPackage.supportExtra)} p/m</span>
+                            <span>{targetExtraUserCount}x</span>
+                            <strong>Smart Trade {offerPackage?.name ?? selectedPackage.name} Supportcontract Extra gebruiker</strong>
+                            <span>{euro.format(offerPackage?.supportExtra ?? selectedPackage.supportExtra)} p/m</span>
                             <strong>{euro.format(missingSupportExtraTotal)} p/m</strong>
                           </div>
                         ) : null}
@@ -1535,7 +1588,23 @@ export default function AssetsDashboardCurrent() {
                   </div>
                 ) : (
                   <div className={styles.quoteRows}>
-                    {addedModules.map((moduleConfig) => <div key={`add-${moduleConfig.key}`} className={styles.quoteRow}><span>+</span><strong>{moduleConfig.name}</strong><span>{moduleConfig.monthlyPrice > 0 ? `${euro.format(moduleConfig.monthlyPrice)} p/m` : "gratis"}</span><strong>{moduleConfig.monthlyPrice > 0 ? `${euro.format(moduleConfig.monthlyPrice)} p/m` : euro.format(0)}</strong></div>)}
+                    {addedModules.map((moduleConfig) => {
+                      const includedInPackage = targetIncludedModuleKeys.includes(moduleConfig.key);
+                      return (
+                        <div key={`add-${moduleConfig.key}`} className={styles.quoteRow}>
+                          <span>+</span>
+                          <strong>{moduleConfig.name}</strong>
+                          <span>
+                            {includedInPackage
+                              ? `inbegrepen in Smart Trade ${targetPackage.name}`
+                              : moduleConfig.monthlyPrice > 0
+                                ? `${euro.format(moduleConfig.monthlyPrice)} p/m`
+                                : "gratis"}
+                          </span>
+                          <strong>{includedInPackage ? `${euro.format(0)} p/m` : moduleConfig.monthlyPrice > 0 ? `${euro.format(moduleConfig.monthlyPrice)} p/m` : euro.format(0)}</strong>
+                        </div>
+                      );
+                    })}
                     {removedModules.map((moduleConfig) => <div key={`remove-${moduleConfig.key}`} className={styles.quoteRow}><span>-</span><strong>{moduleConfig.name}</strong><span>uit selectie</span><strong>{moduleConfig.monthlyPrice > 0 ? `-${euro.format(moduleConfig.monthlyPrice)} p/m` : euro.format(0)}</strong></div>)}
                     {!hasModuleSelectionChanges ? <div className="empty-state">Selecteer een extra module of ruil een bestaande module.</div> : null}
                     <div className={styles.quoteRow}><span>=</span><strong>Modulebedrag verschil binnen {selectedPackage.name}</strong><span>{selectedPackage.includedModules} pakketmodules inbegrepen</span><strong>{euro.format(moduleMonthlyDelta)} p/m</strong></div>
@@ -1627,6 +1696,60 @@ export default function AssetsDashboardCurrent() {
               <div className={styles.quoteTotal}><span>Bestaande servicekosten per jaar</span><strong>{euro.format(existingServiceCostAnnualTotal)} p/j</strong></div>
               <div className={styles.quoteRows}>{selectedServiceCostRows.length > 0 ? selectedServiceCostRows.map((option) => <div key={`service-${option.key}`} className={styles.quoteRow}><span>{option.offerQuantity}x</span><strong>{option.name}</strong><span>{euro.format(option.annualPrice)} p/j</span><strong>{euro.format(option.offerAnnualTotal)} p/j</strong></div>) : <div className="empty-state">Vul een extra aantal in voor CCV of Worldline.</div>}</div>
               <div className={styles.quoteTotal}><span>Servicekosten offerte per jaar</span><strong>{euro.format(serviceCostAnnualTotal)} p/j</strong></div>
+            </div>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Offerte</div>
+              <h2 className="headline">Complete prijsvergelijking</h2>
+              <p className="subtext">Alle huidige bedragen en gekozen uitbreidingen zijn samengevoegd. Je hoeft niets meer handmatig op te tellen.</p>
+            </div>
+            <div className="icon-badge"><FileText size={26} /></div>
+          </div>
+
+          {!selectedRelation || !selectedPackage ? (
+            <div className="empty-state">Kies eerst een relatie met een Smart Trade pakket.</div>
+          ) : (
+            <div className={styles.priceComparison}>
+              <div className={styles.priceComparisonGrid}>
+                <div className={styles.priceComparisonItem}>
+                  <span>Huidige maandprijs</span>
+                  <strong>{euro.format(currentCompleteMonthly)} p/m</strong>
+                </div>
+                <div className={styles.priceComparisonItem}>
+                  <span>Uitbreiding per maand</span>
+                  <strong>+ {euro.format(assetExpansionTotals.monthly)} p/m</strong>
+                </div>
+                <div className={`${styles.priceComparisonItem} ${styles.priceComparisonItemHighlight}`}>
+                  <span>Nieuwe maandprijs</span>
+                  <strong>{euro.format(newCompleteMonthly)} p/m</strong>
+                </div>
+              </div>
+
+              <div className={styles.priceComparisonBreakdown}>
+                <div><span>Huidig pakket, gebruikers, support en modules</span><strong>{euro.format(currentRecurringMonthly)} p/m</strong></div>
+                <div><span>Huidig klantenportaal</span><strong>{euro.format(currentCustomerPortalMonthlyTotal)} p/m</strong></div>
+                <div><span>Huidig Smart Connect</span><strong>{euro.format(existingSmartConnectMonthlyTotal)} p/m</strong></div>
+              </div>
+
+              {(currentCompleteAnnual > 0 || newCompleteAnnual > 0) ? (
+                <div className={styles.priceComparisonRow}>
+                  <span>Servicekosten per jaar</span>
+                  <span>Huidig {euro.format(currentCompleteAnnual)}</span>
+                  <span>Uitbreiding + {euro.format(assetExpansionTotals.annual)}</span>
+                  <strong>Nieuw {euro.format(newCompleteAnnual)} p/j</strong>
+                </div>
+              ) : null}
+
+              <div className={styles.priceComparisonRow}>
+                <span>Eenmalige kosten</span>
+                <span>Implementatie/setup {euro.format(assetExpansionTotals.once)}</span>
+                <span>Reiskosten {euro.format(travelCostTotal)}</span>
+                <strong>Totaal {euro.format(assetExpansionTotals.once + travelCostTotal)}</strong>
+              </div>
             </div>
           )}
         </section>

@@ -14,7 +14,7 @@ import {
   getSupportRows,
   type OfferTemplateInput,
 } from "@/lib/offer-template";
-import type { AssetExpansionLine } from "@/lib/supabase";
+import type { AssetExpansionLine, AssetExpansionSummary } from "@/lib/supabase";
 
 type PdfTableRow = {
   amount: string;
@@ -452,6 +452,107 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
   return y + 13;
 }
 
+function addExpansionPriceComparison(
+  doc: jsPDF,
+  comparison: NonNullable<AssetExpansionSummary["priceComparison"]>,
+  lines: AssetExpansionLine[],
+  y: number,
+) {
+  const totals = getAssetExpansionTotals(lines);
+  const currentMonthly = Number(comparison.currentMonthly) || 0;
+  const newMonthly = Number(comparison.newMonthly) || 0;
+  const currentAnnual = Number(comparison.currentAnnual) || 0;
+  const newAnnual = Number(comparison.newAnnual) || 0;
+  const rows = [
+    {
+      label: "Per maand",
+      current: currentMonthly,
+      expansion: totals.monthly,
+      next: newMonthly,
+    },
+    ...(currentAnnual > 0 || newAnnual > 0 || totals.annual > 0 ? [{
+      label: "Servicekosten per jaar",
+      current: currentAnnual,
+      expansion: totals.annual,
+      next: newAnnual,
+    }] : []),
+  ];
+
+  y = ensurePage(doc, y, 18 + rows.length * 9);
+  y = addSectionTitle(doc, "Prijsvergelijking", y);
+
+  const x = 16;
+  const currentRight = 113;
+  const expansionRight = 152;
+  const newRight = 192;
+
+  doc.setFillColor(244, 247, 251);
+  doc.setDrawColor(219, 228, 238);
+  doc.rect(x, y - 5, 178, 8, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(64, 80, 100);
+  doc.text("Periode", x + 2, y);
+  doc.text("Huidig", currentRight, y, { align: "right" });
+  doc.text("Uitbreiding", expansionRight, y, { align: "right" });
+  doc.text("Nieuw", newRight, y, { align: "right" });
+  y += 8;
+
+  rows.forEach((row, index) => {
+    doc.setDrawColor(234, 239, 245);
+    doc.line(x, y + 2, x + 178, y + 2);
+    doc.setFont("helvetica", index === rows.length - 1 ? "bold" : "normal");
+    doc.setTextColor(25, 40, 55);
+    doc.text(row.label, x + 2, y);
+    doc.text(euro.format(row.current), currentRight, y, { align: "right" });
+    doc.text(`+ ${euro.format(row.expansion)}`, expansionRight, y, { align: "right" });
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(17, 58, 86);
+    doc.text(euro.format(row.next), newRight, y, { align: "right" });
+    y += 9;
+  });
+
+  return y + 3;
+}
+
+function addExpansionCurrentBreakdown(
+  doc: jsPDF,
+  comparison: NonNullable<AssetExpansionSummary["priceComparison"]>,
+  y: number,
+) {
+  const hasBreakdown = comparison.currentPackageMonthly !== undefined
+    || comparison.currentCustomerPortalMonthly !== undefined
+    || comparison.currentSmartConnectMonthly !== undefined;
+  if (!hasBreakdown) return y;
+
+  const rows = [
+    { label: "Pakket, gebruikers, support en modules", amount: Number(comparison.currentPackageMonthly) || 0 },
+    { label: "Klantportaal", amount: Number(comparison.currentCustomerPortalMonthly) || 0 },
+    { label: "Smart Connect", amount: Number(comparison.currentSmartConnectMonthly) || 0 },
+  ];
+
+  y = ensurePage(doc, y, 22 + rows.length * 8);
+  y = addSectionTitle(doc, "Huidige prijsopbouw", y);
+  doc.setFontSize(9);
+
+  rows.forEach((row) => {
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(25, 40, 55);
+    doc.text(row.label, 18, y);
+    doc.text(`${euro.format(row.amount)} p/m`, 192, y, { align: "right" });
+    doc.setDrawColor(234, 239, 245);
+    doc.line(16, y + 2, 194, y + 2);
+    y += 8;
+  });
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(17, 58, 86);
+  doc.text("Huidige maandprijs", 18, y);
+  doc.text(`${euro.format(Number(comparison.currentMonthly) || 0)} p/m`, 192, y, { align: "right" });
+
+  return y + 8;
+}
+
 function getSignatureDetails(input: OfferTemplateInput) {
   const preset = input.salesEmail ? SALES_SIGNATURE_PRESETS[input.salesEmail.toLowerCase()] : undefined;
 
@@ -620,6 +721,10 @@ async function buildQuotePdf(input: OfferTemplateInput) {
   if (isAssetsExpansionLayout && expansionLines.length > 0) {
     const expansionTravelCostTotal = input.includeTravelCosts ? input.travelCostTotal ?? 0 : 0;
     y = addExpansionPriceTable(doc, getExpansionSectionTitle(expansionLines), expansionLines, y + 2, expansionTravelCostTotal);
+    if (input.assetsExpansion?.priceComparison) {
+      y = addExpansionCurrentBreakdown(doc, input.assetsExpansion.priceComparison, y + 1);
+      y = addExpansionPriceComparison(doc, input.assetsExpansion.priceComparison, expansionLines, y + 1);
+    }
 
     const expansionWorkGroups = getExpansionWorkGroups(input);
     if (expansionWorkGroups.length > 0) {

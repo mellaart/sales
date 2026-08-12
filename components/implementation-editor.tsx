@@ -161,7 +161,8 @@ type ImplementationDetailField =
   | "planned_go_live_date"
   | "actual_go_live_date"
   | "financial_package"
-  | "website_webshop";
+  | "website_webshop"
+  | "dns_domain";
 
 type AppointmentDraft = {
   appointmentDate: string;
@@ -648,14 +649,20 @@ function getWebsiteDomain(website: string) {
 
   try {
     const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`);
-    return url.hostname.toLowerCase().replace(/^www\./, "");
+    const domain = url.hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
+    const labels = domain.split(".");
+    if (
+      domain.length > 253
+      || labels.length < 2
+      || labels.some((label) => (
+        !label
+        || label.length > 63
+        || !/^[a-z\d](?:[a-z\d-]*[a-z\d])?$/i.test(label)
+      ))
+    ) return "";
+    return domain;
   } catch {
-    return value
-      .replace(/^[a-z][a-z\d+.-]*:\/\//i, "")
-      .split("/")[0]
-      .split(":")[0]
-      .toLowerCase()
-      .replace(/^www\./, "");
+    return "";
   }
 }
 
@@ -781,6 +788,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [dnsCheck, setDnsCheck] = useState<ImplementationDnsCheck | null>(null);
   const [dnsCheckLoading, setDnsCheckLoading] = useState(false);
   const [dnsCheckError, setDnsCheckError] = useState("");
+  const [dnsDomainInput, setDnsDomainInput] = useState("");
+  const dnsDomainInputRef = useRef("");
   const [detailSaveState, setDetailSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [detailSaveMessage, setDetailSaveMessage] = useState("Automatisch opgeslagen");
   const detailSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -941,6 +950,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setAppointmentsWarning("");
     setLinkedDeal(null);
     setLinkedDealError("");
+    setDnsDomainInput("");
+    dnsDomainInputRef.current = "";
 
     const { data, error } = await supabase
       .from("implementations")
@@ -948,11 +959,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
       .eq("id", implementationId)
       .maybeSingle();
     const loadedImplementation = data as ImplementationRecord | null;
+    const storedDnsDomain = getWebsiteDomain(loadedImplementation?.dns_domain ?? "");
 
     if (error) {
       setMessage(`Implementatie laden mislukt: ${error.message}`);
     } else {
       setImplementation(loadedImplementation);
+      setDnsDomainInput(storedDnsDomain);
+      dnsDomainInputRef.current = storedDnsDomain;
     }
 
     if (loadedImplementation?.deal_id) {
@@ -979,7 +993,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
         const intakeJson = await intakeResponse.json().catch(() => ({})) as {
           intake?: CustomerIntakeProgress | null;
         };
-        setCustomerIntake(intakeResponse.ok ? intakeJson.intake ?? null : null);
+        const loadedIntake = intakeResponse.ok ? intakeJson.intake ?? null : null;
+        setCustomerIntake(loadedIntake);
+        if (!storedDnsDomain && loadedIntake?.submittedAt) {
+          const intakeDomain = getWebsiteDomain(loadedIntake.formData.website);
+          setDnsDomainInput(intakeDomain);
+          dnsDomainInputRef.current = intakeDomain;
+        }
         setCustomerIntakeLoadFailed(!intakeResponse.ok);
       } else {
         setCustomerIntake(null);
@@ -1075,10 +1095,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setLoading(false);
   }, [canAssign, implementationId, supabase, user]);
 
-  const loadDnsCheck = useCallback(async () => {
-    if (!customerIntake?.submittedAt || !customerIntake.formData.website) {
+  const loadDnsCheck = useCallback(async (domainOverride?: string) => {
+    const rawDomain = domainOverride ?? dnsDomainInputRef.current;
+    const domain = getWebsiteDomain(rawDomain);
+    if (!domain) {
       setDnsCheck(null);
-      setDnsCheckError("");
+      setDnsCheckError(rawDomain.trim() ? "Vul een geldige domeinnaam in." : "");
       return;
     }
 
@@ -1087,7 +1109,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
     try {
       const response = await fetch(
-        `/api/implementations/${encodeURIComponent(implementationId)}/dns-check`,
+        `/api/implementations/${encodeURIComponent(implementationId)}/dns-check?domain=${encodeURIComponent(domain)}`,
         { cache: "no-store" },
       );
       const json = await response.json().catch(() => ({})) as ImplementationDnsCheck & { error?: string };
@@ -1099,7 +1121,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     } finally {
       setDnsCheckLoading(false);
     }
-  }, [customerIntake, implementationId]);
+  }, [implementationId]);
 
   useEffect(() => {
     void loadRoleAccess();
@@ -1494,6 +1516,32 @@ export default function ImplementationEditor({ implementationId }: { implementat
     };
 
     detailSaveQueueRef.current = detailSaveQueueRef.current.then(persist, persist);
+  }
+
+  function updateDnsDomainInput(value: string) {
+    setDnsDomainInput(value);
+    dnsDomainInputRef.current = value;
+    if (dnsCheck?.domain !== getWebsiteDomain(value)) setDnsCheck(null);
+    setDnsCheckError("");
+  }
+
+  function saveDnsDomain() {
+    if (!implementation || !canEdit) return;
+
+    const rawDomain = dnsDomainInputRef.current.trim();
+    const domain = getWebsiteDomain(rawDomain);
+    if (rawDomain && !domain) {
+      setDnsCheck(null);
+      setDnsCheckError("Vul een geldige domeinnaam in, bijvoorbeeld klant.nl.");
+      return;
+    }
+
+    setDnsDomainInput(domain);
+    dnsDomainInputRef.current = domain;
+    if ((implementation.dns_domain ?? "") !== domain) {
+      saveImplementationDetail("dns_domain", domain, "Domeinnaam");
+    }
+    if (domain) void loadDnsCheck(domain);
   }
 
   async function createOrRefreshPortal(regenerate: boolean) {
@@ -1902,19 +1950,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function handleDnsOutlookDraft() {
-    if (!implementation || !customerIntake?.submittedAt || dnsOutlookBusy) return;
+    if (!implementation || dnsOutlookBusy) return;
 
     const recipientEmail = (
-      customerIntake.recipientEmail || customerIntake.formData.contactEmail
+      customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || ""
     ).trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
-      setMessage("In het klantformulier ontbreekt een geldig e-mailadres.");
+      setMessage("Er ontbreekt een geldig klant-e-mailadres voor het Outlook-concept.");
       return;
     }
 
-    const domain = getWebsiteDomain(customerIntake.formData.website);
+    const domain = getWebsiteDomain(dnsDomainInputRef.current);
     if (!domain) {
-      setMessage("In het klantformulier ontbreekt een geldige website.");
+      setMessage("Vul eerst een geldige domeinnaam in.");
       return;
     }
 
@@ -1961,7 +2009,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
             recipientEmail,
             customerName: implementation.customer_name,
             contactName:
-              customerIntake.formData.contactFirstName || implementation.contact_name || "",
+              customerIntake?.formData.contactFirstName || implementation.contact_name || "",
             domain,
           }),
         },
@@ -2107,8 +2155,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
     customerIntake,
   );
   const customerIntakeComplete = intakePresentation.tone === "success";
-  const customerDomain = getWebsiteDomain(customerIntake?.formData.website ?? "");
+  const customerDomain = getWebsiteDomain(dnsDomainInput);
   const customerEmail = customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || "";
+  const hasCustomerEmail = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
   const newCustomerMailMissingFields = [
     !customerIntake?.submittedAt ? "klantformulier" : "",
     !implementation.assigned_consultant_name?.trim() ? "consultant" : "",
@@ -3140,14 +3189,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <div className="implementation-communication-icon"><Globe2 size={22} /></div>
               <div className="implementation-communication-copy">
                 <span>DNS-instructies</span>
-                <strong>{customerDomain || "Website nog niet ontvangen"}</strong>
+                <strong>{customerDomain || "Domeinnaam nog niet ingevuld"}</strong>
                 <p>Automatische controle van de verplichte SPF- en DKIM-records.</p>
               </div>
               <div className="implementation-dns-actions">
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={!customerIntake?.submittedAt || !customerDomain || dnsCheckLoading}
+                  disabled={!customerDomain || dnsCheckLoading}
                   onClick={() => void loadDnsCheck()}
                 >
                   <RefreshCw className={dnsCheckLoading ? "implementation-dns-spinner" : ""} size={16} />
@@ -3156,12 +3205,34 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={!canEdit || !customerIntake?.submittedAt || !customerDomain || dnsOutlookBusy}
+                  disabled={!canEdit || !customerDomain || !hasCustomerEmail || dnsOutlookBusy}
+                  title={hasCustomerEmail
+                    ? "DNS-instructies in Outlook klaarzetten"
+                    : "Een klant-e-mailadres is nodig voor een Outlook-concept"}
                   onClick={() => void handleDnsOutlookDraft()}
                 >
                   <Mail size={16} /> {dnsOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
                 </button>
               </div>
+
+              <label className="input-wrap implementation-dns-domain-field">
+                <span className="input-label">Domeinnaam</span>
+                <input
+                  className="input"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  maxLength={253}
+                  value={dnsDomainInput}
+                  disabled={!canEdit}
+                  placeholder="bijv. klant.nl"
+                  onChange={(event) => updateDnsDomainInput(event.currentTarget.value)}
+                  onBlur={saveDnsDomain}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
+                />
+              </label>
 
               <div className="implementation-dns-results">
                 <div className="implementation-dns-group">
@@ -3204,9 +3275,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   ? dnsCheckError
                   : dnsCheck?.checkedAt
                     ? `Laatst gecontroleerd: ${formatDateTime(dnsCheck.checkedAt)}`
-                    : customerIntake?.submittedAt
+                    : customerDomain
                       ? "DNS-controle wordt voorbereid."
-                      : "Beschikbaar zodra het klantformulier is ontvangen."}
+                      : "Vul een domeinnaam in om de DNS-records te controleren."}
               </div>
             </article>
 

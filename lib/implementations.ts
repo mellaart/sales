@@ -239,6 +239,7 @@ export type ImplementationRecord = {
   actual_go_live_date?: string | null;
   financial_package?: string | null;
   website_webshop?: string | null;
+  dns_domain?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

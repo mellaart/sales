@@ -260,6 +260,7 @@ export async function ensureLocalSchema() {
           actual_go_live_date date,
           financial_package text,
           website_webshop text,
+          dns_domain text,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -288,6 +289,7 @@ export async function ensureLocalSchema() {
         alter table public.implementations add column if not exists actual_go_live_date date;
         alter table public.implementations add column if not exists financial_package text;
         alter table public.implementations add column if not exists website_webshop text;
+        alter table public.implementations add column if not exists dns_domain text;
         alter table public.implementations add column if not exists created_at timestamptz not null default now();
         alter table public.implementations add column if not exists updated_at timestamptz not null default now();
         alter table public.implementations drop constraint if exists implementations_deal_id_fkey;

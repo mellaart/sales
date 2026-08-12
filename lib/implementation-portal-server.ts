@@ -89,6 +89,7 @@ type PortalImplementationRow = {
   implementation_start_date: string | null;
   planned_go_live_date: string | null;
   actual_go_live_date: string | null;
+  dns_domain: string | null;
   progress: unknown;
   implementation_item_progress: unknown;
   implementation_custom_work_items: unknown;
@@ -732,6 +733,7 @@ export async function getPublicImplementationPortal(
     `select deal_id, customer_name, quote_title, package_name, status,
             assigned_consultant_name, assigned_consultant_email,
             implementation_start_date, planned_go_live_date, actual_go_live_date,
+            dns_domain,
             progress, implementation_item_progress, implementation_custom_work_items,
             implementation_customer_work_approvals, implementation_work_item_notes, updated_at
      from public.implementations
@@ -780,15 +782,15 @@ export async function getPublicImplementationPortal(
     item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
   ));
   const completedSteps = implementationSteps.filter((step) => step.completed).length;
-  const dnsDomain = intake?.submitted_at
-    ? implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website)
-    : "";
+  const dnsDomain = implementationWebsiteDomain(implementation.dns_domain ?? "") || (
+    intake?.submitted_at
+      ? implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website)
+      : ""
+  );
   let dnsCheck: ImplementationDnsCheck | null = null;
-  let dnsCheckMessage = "Beschikbaar zodra het klantformulier is ontvangen.";
+  let dnsCheckMessage = "Domeinnaam is nog niet ingesteld.";
 
-  if (intake?.submitted_at && !dnsDomain) {
-    dnsCheckMessage = "In het klantformulier ontbreekt een geldige website.";
-  } else if (dnsDomain) {
+  if (dnsDomain) {
     try {
       dnsCheck = await checkImplementationDns(dnsDomain);
       dnsCheckMessage = "";

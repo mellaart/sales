@@ -33,7 +33,18 @@ export function implementationWebsiteDomain(website: string) {
 
   try {
     const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`);
-    return url.hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
+    const domain = url.hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
+    const labels = domain.split(".");
+    if (
+      domain.length > 253
+      || labels.length < 2
+      || labels.some((label) => (
+        !label
+        || label.length > 63
+        || !/^[a-z\d](?:[a-z\d-]*[a-z\d])?$/i.test(label)
+      ))
+    ) return "";
+    return domain;
   } catch {
     return "";
   }

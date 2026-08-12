@@ -30,7 +30,7 @@ export async function GET(
     const access = await executeLocalTableQuery({
       table: "implementations",
       action: "select",
-      select: "id,deal_id",
+      select: "id,deal_id,dns_domain",
       filters: [{ column: "id", op: "eq", value: implementationId }],
       maybeSingle: true,
     }, {
@@ -38,7 +38,7 @@ export async function GET(
       profile: verified.profile,
     });
 
-    const implementation = access.data as { deal_id?: string } | null;
+    const implementation = access.data as { deal_id?: string; dns_domain?: string | null } | null;
     if (!implementation?.deal_id) {
       return jsonResponse({ error: "Implementatie niet gevonden of niet toegankelijk." }, 404);
     }
@@ -50,14 +50,16 @@ export async function GET(
        limit 1`,
       [implementation.deal_id],
     );
+    const requestedDomain = new URL(request.url).searchParams.get("domain") ?? "";
     const intake = rows[0];
-    if (!intake?.submitted_at) {
-      return jsonResponse({ error: "De klantgegevens moeten eerst ontvangen zijn." }, 409);
-    }
-
-    const domain = implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website);
+    const intakeDomain = intake?.submitted_at
+      ? normalizeCustomerIntakeData(intake.form_data).website
+      : "";
+    const domain = implementationWebsiteDomain(
+      requestedDomain || implementation.dns_domain || intakeDomain,
+    );
     if (!domain) {
-      return jsonResponse({ error: "In het klantformulier ontbreekt een geldige website." }, 409);
+      return jsonResponse({ error: "Vul eerst een geldige domeinnaam in." }, 409);
     }
 
     return jsonResponse(await checkImplementationDns(domain));

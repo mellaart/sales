@@ -100,6 +100,7 @@ export default function MailchimpDashboard() {
   const [loadingSeconds, setLoadingSeconds] = useState(0);
   const [refreshStatus, setRefreshStatus] = useState<MailchimpRefreshStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [confirmingSync, setConfirmingSync] = useState(false);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("");
@@ -229,6 +230,7 @@ export default function MailchimpDashboard() {
   }, [accessLoading, canView]);
 
   async function selectAudience(value: string) {
+    setConfirmingSync(false);
     setSelectedAudienceId(value);
     setLoading(true);
     setStatus("Mailchimp-publiek wordt geselecteerd...");
@@ -242,12 +244,39 @@ export default function MailchimpDashboard() {
     }
   }
 
-  async function synchronize() {
-    if (!selectedAudienceId || !preview?.audienceSelected) {
-      setStatus("Selecteer eerst een Mailchimp-publiek.");
+  function synchronizationBlockReason() {
+    if (!canWrite) return "Je hebt alleen leesrechten voor Mailchimp.";
+    if (loading) return "Wacht tot het vooroverzicht volledig is geladen.";
+    if (!preview) return "Laad eerst het Mailchimp-vooroverzicht.";
+    if (!preview.configured) return "De Mailchimp API-key is nog niet ingesteld.";
+    if (!selectedAudienceId || !preview.audienceSelected) return "Selecteer eerst een Mailchimp-publiek.";
+    if (refreshStatus?.state === "running") return "Wacht tot de Smart Trade-controle volledig klaar is.";
+    if (refreshStatus?.state === "error") return refreshStatus.error || "De Smart Trade-controle is mislukt.";
+    if (preview.source.contactPersonErrorCount > 0) {
+      return `Synchronisatie geblokkeerd: bij ${preview.source.contactPersonErrorCount} relaties konden de contactpersonen niet volledig worden opgehaald.`;
+    }
+    return null;
+  }
+
+  function prepareSynchronization() {
+    const blockedReason = synchronizationBlockReason();
+    if (blockedReason) {
+      setConfirmingSync(false);
+      setStatus(blockedReason);
       return;
     }
-    if (!window.confirm(`Synchroniseer ${preview.counts.total} contacten met ${preview.audience?.name ?? "Mailchimp"}?`)) return;
+    setStatus("");
+    setConfirmingSync(true);
+  }
+
+  async function synchronize() {
+    const blockedReason = synchronizationBlockReason();
+    if (blockedReason) {
+      setConfirmingSync(false);
+      setStatus(blockedReason);
+      return;
+    }
+    setConfirmingSync(false);
     setSyncing(true);
     setStatus("Mailchimp wordt gesynchroniseerd. Sluit deze pagina nog niet...");
     try {
@@ -330,21 +359,34 @@ export default function MailchimpDashboard() {
               <button
                 type="button"
                 className="primary-button"
-                onClick={() => void synchronize()}
-                disabled={
-                  !canWrite
-                  || loading
-                  || syncing
-                  || !preview?.configured
-                  || !preview.audienceSelected
-                  || preview.source.contactPersonErrorCount > 0
-                }
+                onClick={prepareSynchronization}
+                disabled={syncing}
               >
                 <MailCheck size={17} />
                 {syncing ? "Synchroniseren..." : "Synchroniseren met Mailchimp"}
               </button>
             </div>
           </div>
+          {confirmingSync && preview ? (
+            <div className="mailchimp-sync-confirmation" role="alertdialog" aria-labelledby="mailchimp-sync-confirmation-title">
+              <div className="mailchimp-sync-confirmation-copy">
+                <MailCheck size={22} />
+                <div>
+                  <strong id="mailchimp-sync-confirmation-title">Synchroniseren met Mailchimp?</strong>
+                  <span>
+                    {preview.counts.total} contacten worden gecontroleerd voor publiek {preview.audience?.name ?? "Mailchimp"}.
+                    Nieuwe contacten en gewijzigde bedrijfsnamen of tags worden bijgewerkt.
+                  </span>
+                </div>
+              </div>
+              <div className="mailchimp-sync-confirmation-actions">
+                <button type="button" className="secondary-button" onClick={() => setConfirmingSync(false)}>Annuleren</button>
+                <button type="button" className="primary-button" onClick={() => void synchronize()}>
+                  <MailCheck size={17} /> Bevestigen en synchroniseren
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="mailchimp-settings-grid">
             <label className="input-wrap"><span className="input-label">Mailchimp-publiek</span><select className="input" value={selectedAudienceId} onChange={(event) => void selectAudience(event.target.value)} disabled={loading || syncing || !canWrite}><option value="">Selecteer een publiek</option>{preview?.audiences.map((audience) => <option value={audience.id} key={audience.id}>{audience.name} ({audience.memberCount})</option>)}</select></label>

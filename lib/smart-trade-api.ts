@@ -14,13 +14,34 @@ export type SmartTradeRelation = {
   postcode?: string | null;
   city?: string | null;
   customFields?: SmartTradeRelationCustomField[] | null;
+  hidden?: boolean | number | string | null;
+  blocked?: boolean | number | string | null;
 };
 
 type SmartTradeRelationCustomField = {
-  name?: string | null;
-  type?: number | string | null;
-  typeId?: number | string | null;
+  name?: unknown;
+  type?: unknown;
+  typeId?: unknown;
   value?: unknown;
+};
+
+export type SmartTradeMailchimpContact = {
+  email: string;
+  company: string;
+  tags: string[];
+  relationIds: string[];
+  sources: Array<"relation" | "contact">;
+  conflict: boolean;
+};
+
+export type SmartTradeMailchimpSource = {
+  contacts: SmartTradeMailchimpContact[];
+  relationCount: number;
+  contactPersonCount: number;
+  contactPersonErrorCount: number;
+  invalidEmailCount: number;
+  conflictCount: number;
+  tags: string[];
 };
 
 export type SmartTradePrimaryContact = {
@@ -90,6 +111,10 @@ type SmartTradeRelationsApiResponse = {
       } | null;
     } | null;
     customFields?: SmartTradeRelationCustomField[] | null;
+    hidden?: boolean | number | string | null;
+    hide?: boolean | number | string | null;
+    blocked?: boolean | number | string | null;
+    geblokkeerd?: boolean | number | string | null;
   }>;
 };
 
@@ -150,6 +175,8 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
+const MAILCHIMP_RELATION_MAX_PAGES = 100;
+const MAILCHIMP_CONTACT_CONCURRENCY = 8;
 const RELATION_CACHE_TTL_MS = 30 * 60 * 1000;
 const ASSET_PAGE_SIZE = 500;
 const ASSET_CLASS_PAGE_SIZE = 1000;
@@ -219,7 +246,7 @@ function recordText(record: Record<string, unknown>, keys: string[]) {
 function booleanValue(value: unknown): boolean {
   if (value === true || value === 1) return true;
   if (typeof value === "string") {
-    return ["1", "true", "yes", "ja"].includes(value.trim().toLowerCase());
+    return ["1", "true", "yes", "ja", "on"].includes(value.trim().toLowerCase());
   }
 
   if (value && typeof value === "object") {
@@ -505,6 +532,8 @@ function mapRelationRow(row: NonNullable<SmartTradeRelationsApiResponse["data"]>
     postcode: row.contactAddress?.data?.postcode ?? null,
     city: row.contactAddress?.data?.city ?? null,
     customFields: Array.isArray(row.customFields) ? row.customFields : [],
+    hidden: row.hidden ?? row.hide ?? null,
+    blocked: row.blocked ?? row.geblokkeerd ?? null,
   } satisfies SmartTradeRelation;
 }
 
@@ -818,4 +847,165 @@ export async function getPrimaryContactPersonForRelation(
   ));
 
   return primaryRow ? mapPrimaryContact(primaryRow) : null;
+}
+
+function normalizeMailchimpEmail(value: unknown) {
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return /^\S+@\S+\.\S+$/.test(email) ? email : null;
+}
+
+function customFieldTag(field: SmartTradeRelationCustomField) {
+  if (!booleanValue(field.value)) return null;
+  const nestedTypeName = field.type && typeof field.type === "object" ? readableText(field.type) : null;
+  const name = (readableText(field.name) ?? nestedTypeName ?? "").replace(/\s*\(auto\)\s*$/i, "").trim();
+  if (name) return name;
+
+  const typeId = readableId(field.typeId)
+    ?? (field.type && typeof field.type === "object" ? readableId(field.type) : null)
+    ?? readableId(field.type);
+  return typeId ? `Vrij veld ${typeId}` : null;
+}
+
+function isActiveMailchimpRelation(relation: SmartTradeRelation) {
+  return !booleanValue(relation.hidden) && !booleanValue(relation.blocked);
+}
+
+function contactPersonIsOnMailingList(row: Record<string, unknown>) {
+  const keys = [
+    "onMailingList",
+    "onMailinglist",
+    "on_mailing_list",
+    "on_mailinglist",
+    "mailingList",
+    "mailinglist",
+    "isOnMailingList",
+  ];
+  return keys.some((key) => booleanValue(row[key]));
+}
+
+function contactPersonIsDeleted(row: Record<string, unknown>) {
+  return Boolean(
+    recordText(row, ["deletedAt", "deleted_at"]) ||
+    booleanValue(row.deleted) ||
+    booleanValue(row.isDeleted),
+  );
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
+  const output = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      output[index] = await mapper(items[index]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return output;
+}
+
+export async function getMailchimpContacts(): Promise<SmartTradeMailchimpSource> {
+  const config = getConfig();
+  const headers = getHeaders(config);
+  const relations = new Map<string, SmartTradeRelation>();
+  const seenRelationIds = new Set<string>();
+
+  for (let page = 1; page <= MAILCHIMP_RELATION_MAX_PAGES; page += 1) {
+    const response = await fetchWithTimeout(buildRelationsUrl(config.baseUrl, page).toString(), headers, config.timeoutMs);
+    const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
+    const rows = Array.isArray(json.data) ? json.data : [];
+
+    let addedOnPage = 0;
+    for (const row of rows) {
+      const relation = mapRelationRow(row);
+      if (!relation) continue;
+      const relationId = String(relation.id);
+      if (!seenRelationIds.has(relationId)) addedOnPage += 1;
+      seenRelationIds.add(relationId);
+      if (isActiveMailchimpRelation(relation)) relations.set(relationId, relation);
+    }
+
+    if (rows.length === 0 || addedOnPage === 0) break;
+  }
+
+  const taggedRelations = Array.from(relations.values()).filter((relation) =>
+    relation.customFields?.some((field) => booleanValue(field.value)),
+  );
+  const contactsByEmail = new Map<string, {
+    companies: Set<string>;
+    tags: Set<string>;
+    relationIds: Set<string>;
+    sources: Set<"relation" | "contact">;
+  }>();
+  let invalidEmailCount = 0;
+  let contactPersonCount = 0;
+  let contactPersonErrorCount = 0;
+
+  function addContact(relation: SmartTradeRelation, emailValue: unknown, source: "relation" | "contact") {
+    const email = normalizeMailchimpEmail(emailValue);
+    if (!email) {
+      if (typeof emailValue === "string" && emailValue.trim()) invalidEmailCount += 1;
+      return;
+    }
+
+    const company = getRelationName(relation);
+    const current = contactsByEmail.get(email) ?? {
+      companies: new Set<string>(),
+      tags: new Set<string>(),
+      relationIds: new Set<string>(),
+      sources: new Set<"relation" | "contact">(),
+    };
+    current.companies.add(company);
+    current.relationIds.add(String(relation.id));
+    current.sources.add(source);
+    for (const field of relation.customFields ?? []) {
+      const tag = customFieldTag(field);
+      if (tag) current.tags.add(tag);
+    }
+    contactsByEmail.set(email, current);
+  }
+
+  for (const relation of taggedRelations) addContact(relation, relation.email, "relation");
+
+  await mapWithConcurrency(taggedRelations, MAILCHIMP_CONTACT_CONCURRENCY, async (relation) => {
+    const url = new URL(`${config.baseUrl.replace(/\/+$/, "")}/relations/${encodeURIComponent(String(relation.id))}/contactpersons`);
+    url.searchParams.set("per_page", "100");
+
+    try {
+      const response = await fetchWithTimeout(url.toString(), headers, config.timeoutMs);
+      const rows = readContactPersonRows(await readSmartTradeJson<SmartTradeContactPersonsApiResponse>(response));
+      for (const row of rows) {
+        if (!contactPersonIsOnMailingList(row) || contactPersonIsDeleted(row)) continue;
+        contactPersonCount += 1;
+        addContact(relation, recordText(row, ["email", "emailAddress", "email_address"]), "contact");
+      }
+    } catch {
+      contactPersonErrorCount += 1;
+    }
+  });
+
+  const contacts = Array.from(contactsByEmail.entries())
+    .map(([email, value]) => ({
+      email,
+      company: Array.from(value.companies).sort((a, b) => a.localeCompare(b, "nl")).join(" / "),
+      tags: Array.from(value.tags).sort((a, b) => a.localeCompare(b, "nl")),
+      relationIds: Array.from(value.relationIds).sort((a, b) => Number(a) - Number(b)),
+      sources: Array.from(value.sources),
+      conflict: value.companies.size > 1,
+    }))
+    .sort((a, b) => a.company.localeCompare(b.company, "nl") || a.email.localeCompare(b.email));
+  const tags = Array.from(new Set(contacts.flatMap((contact) => contact.tags))).sort((a, b) => a.localeCompare(b, "nl"));
+
+  return {
+    contacts,
+    relationCount: taggedRelations.length,
+    contactPersonCount,
+    contactPersonErrorCount,
+    invalidEmailCount,
+    conflictCount: contacts.filter((contact) => contact.conflict).length,
+    tags,
+  };
 }

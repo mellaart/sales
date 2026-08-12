@@ -11,6 +11,7 @@ export type AppTabKey =
   | "postcode"
   | "worldlineMcc"
   | "workActivities"
+  | "mailchimp"
   | "admin";
 
 export type AppTabConfig = {
@@ -54,6 +55,7 @@ export const APP_TABS: AppTabConfig[] = [
   { key: "postcode", label: "Postcode", href: "/postcode", pathPrefix: "/postcode" },
   { key: "worldlineMcc", label: "Worldline MCC", href: "/worldline-mcc", pathPrefix: "/worldline-mcc" },
   { key: "workActivities", label: "Werkzaamheden", href: "/werkzaamheden", pathPrefix: "/werkzaamheden" },
+  { key: "mailchimp", label: "Mailchimp", href: "/mailchimp", pathPrefix: "/mailchimp" },
   { key: "admin", label: "Admin", href: "/admin", pathPrefix: "/admin" },
 ];
 
@@ -75,6 +77,7 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
     "postcode",
     "worldlineMcc",
     "workActivities",
+    "mailchimp",
     "admin",
   ]),
 };

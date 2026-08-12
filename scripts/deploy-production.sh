@@ -10,6 +10,8 @@ DEPLOY_LOG="${SALES_DEPLOY_LOG:-$LOG_DIR/sales-deploy.log}"
 APP_LOG="${SALES_APP_LOG:-$LOG_DIR/sales-next.log}"
 PID_FILE="${SALES_PID_FILE:-$APP_DIR/.next-server.pid}"
 DEPLOYED_FILE="${SALES_DEPLOYED_FILE:-$APP_DIR/.last-deployed-commit}"
+ENV_FILE="${SALES_ENV_FILE:-$APP_DIR/.env.local}"
+DEPLOYED_ENV_FILE="${SALES_DEPLOYED_ENV_FILE:-$APP_DIR/.last-deployed-env-hash}"
 LOCK_DIR="${SALES_DEPLOY_LOCK_DIR:-/tmp/sales-deploy.lock}"
 FORCE_DEPLOY="${SALES_FORCE_DEPLOY:-0}"
 
@@ -60,12 +62,27 @@ trap 'on_error $LINENO' ERR
 
 cd "$APP_DIR"
 
+file_hash() {
+  if [ ! -f "$1" ]; then
+    printf "missing"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{ print $1 }'
+  else
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  fi
+}
+
 CURRENT_COMMIT="$(git rev-parse HEAD)"
 git fetch "$REMOTE" "$BRANCH"
 REMOTE_COMMIT="$(git rev-parse "$REMOTE/$BRANCH")"
 DEPLOYED_COMMIT="$(cat "$DEPLOYED_FILE" 2>/dev/null || true)"
+CURRENT_ENV_HASH="$(file_hash "$ENV_FILE")"
+DEPLOYED_ENV_HASH="$(cat "$DEPLOYED_ENV_FILE" 2>/dev/null || true)"
 
-if [ "$FORCE_DEPLOY" != "1" ] && [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ] && [ "$DEPLOYED_COMMIT" = "$REMOTE_COMMIT" ]; then
+if [ "$FORCE_DEPLOY" != "1" ] \
+  && [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ] \
+  && [ "$DEPLOYED_COMMIT" = "$REMOTE_COMMIT" ] \
+  && [ "$CURRENT_ENV_HASH" = "$DEPLOYED_ENV_HASH" ]; then
   if command -v curl >/dev/null 2>&1 && ! curl -fsS --max-time 10 "http://127.0.0.1:$PORT" >/dev/null; then
     log "Geen nieuwe versie, maar de app op poort $PORT reageert niet. Herstel-deploy gestart."
   else
@@ -76,6 +93,8 @@ fi
 
 if [ "$FORCE_DEPLOY" = "1" ]; then
   log "Deploy geforceerd voor $CURRENT_COMMIT."
+elif [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ] && [ "$CURRENT_ENV_HASH" != "$DEPLOYED_ENV_HASH" ]; then
+  log "Serverinstellingen gewijzigd; herbouw en herstart gestart."
 elif [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ]; then
   log "Versie staat al op de server, maar is nog niet succesvol live gezet: $CURRENT_COMMIT."
 else
@@ -169,6 +188,7 @@ start_app() {
   if command -v curl >/dev/null 2>&1; then
     if curl -fsS "http://127.0.0.1:$PORT" >/dev/null; then
       git rev-parse HEAD > "$DEPLOYED_FILE"
+      printf "%s\n" "$CURRENT_ENV_HASH" > "$DEPLOYED_ENV_FILE"
       log "Deploy klaar: $(git rev-parse --short HEAD)"
       exit 0
     fi
@@ -178,6 +198,7 @@ start_app() {
   fi
 
   git rev-parse HEAD > "$DEPLOYED_FILE"
+  printf "%s\n" "$CURRENT_ENV_HASH" > "$DEPLOYED_ENV_FILE"
   log "Deploy klaar: $(git rev-parse --short HEAD)"
 }
 

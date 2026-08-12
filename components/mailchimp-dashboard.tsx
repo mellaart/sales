@@ -87,7 +87,13 @@ const STATE_LABELS: Record<ContactState, string> = {
 function localDate(value: string | null) {
   if (!value) return "Nog niet uitgevoerd";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" });
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("nl-NL", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Europe/Amsterdam",
+      });
 }
 
 function syncFailures(value: unknown): MailchimpFailure[] {

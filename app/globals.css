@@ -5905,6 +5905,12 @@ td {
   color: #fecaca;
 }
 
+.mailchimp-alert.success {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: rgba(6, 78, 59, 0.2);
+  color: #a7f3d0;
+}
+
 .mailchimp-actions,
 .mailchimp-connection-status {
   display: flex;
@@ -5953,6 +5959,58 @@ td {
 
 .mailchimp-sync-confirmation-actions {
   flex: 0 0 auto;
+}
+
+.mailchimp-failures-panel {
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.mailchimp-failures-heading {
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.mailchimp-failures-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.price-table.mailchimp-failure-table {
+  min-width: 860px;
+}
+
+.mailchimp-failure-table th:first-child,
+.mailchimp-failure-table td:first-child {
+  width: 30%;
+  min-width: 260px;
+}
+
+.mailchimp-failure-table th:last-child,
+.mailchimp-failure-table td:last-child {
+  width: 190px;
+  text-align: right;
+}
+
+.mailchimp-failure-message {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #fecaca;
+  line-height: 1.5;
+}
+
+.mailchimp-failure-message svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #f87171;
+}
+
+.mailchimp-retry-button {
+  min-height: 40px;
+  padding: 8px 12px;
+  white-space: nowrap;
 }
 
 .mailchimp-settings-grid {
@@ -6577,6 +6635,17 @@ td {
   .mailchimp-sync-confirmation-actions,
   .mailchimp-sync-confirmation-actions .primary-button,
   .mailchimp-sync-confirmation-actions .secondary-button {
+    width: 100%;
+  }
+
+  .mailchimp-failures-heading,
+  .mailchimp-failures-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mailchimp-failures-actions,
+  .mailchimp-failures-actions .secondary-button {
     width: 100%;
   }
 

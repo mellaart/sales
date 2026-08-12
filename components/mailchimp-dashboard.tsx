@@ -59,6 +59,11 @@ type MailchimpPreview = {
 
 type StateFilter = "all" | ContactState | "conflict";
 
+type MailchimpFailure = {
+  email: string;
+  error: string;
+};
+
 type MailchimpRefreshStatus = {
   state: "idle" | "running" | "ready" | "error";
   phase: "idle" | "relations" | "contactpersons" | "complete";
@@ -84,6 +89,28 @@ function localDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function syncFailures(value: unknown): MailchimpFailure[] {
+  if (!value || typeof value !== "object") return [];
+  const failures = (value as { failures?: unknown }).failures;
+  if (!Array.isArray(failures)) return [];
+  return failures.flatMap((failure) => {
+    if (!failure || typeof failure !== "object") return [];
+    const email = typeof (failure as { email?: unknown }).email === "string"
+      ? (failure as { email: string }).email.trim()
+      : "";
+    const error = typeof (failure as { error?: unknown }).error === "string"
+      ? (failure as { error: string }).error.trim()
+      : "";
+    return email && error ? [{ email, error }] : [];
+  });
+}
+
+function syncNumber(value: unknown, key: string) {
+  if (!value || typeof value !== "object") return 0;
+  const number = Number((value as Record<string, unknown>)[key]);
+  return Number.isFinite(number) ? number : 0;
+}
+
 function getToken() {
   return import("@/lib/supabase").then(async ({ getSupabaseClient }) => {
     const { data } = await getSupabaseClient()!.auth.getSession();
@@ -100,6 +127,7 @@ export default function MailchimpDashboard() {
   const [loadingSeconds, setLoadingSeconds] = useState(0);
   const [refreshStatus, setRefreshStatus] = useState<MailchimpRefreshStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const [confirmingSync, setConfirmingSync] = useState(false);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -247,6 +275,7 @@ export default function MailchimpDashboard() {
   function synchronizationBlockReason() {
     if (!canWrite) return "Je hebt alleen leesrechten voor Mailchimp.";
     if (loading) return "Wacht tot het vooroverzicht volledig is geladen.";
+    if (retrying) return "Wacht tot de nieuwe poging volledig is afgerond.";
     if (!preview) return "Laad eerst het Mailchimp-vooroverzicht.";
     if (!preview.configured) return "De Mailchimp API-key is nog niet ingesteld.";
     if (!selectedAudienceId || !preview.audienceSelected) return "Selecteer eerst een Mailchimp-publiek.";
@@ -290,6 +319,34 @@ export default function MailchimpDashboard() {
     }
   }
 
+  async function retryFailures(emails: string[]) {
+    const blockedReason = synchronizationBlockReason();
+    if (blockedReason) {
+      setStatus(blockedReason);
+      return;
+    }
+    const uniqueEmails = Array.from(new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean)));
+    if (!uniqueEmails.length) return;
+    setConfirmingSync(false);
+    setRetrying(uniqueEmails.length === 1 ? uniqueEmails[0] : "all");
+    setStatus(`${uniqueEmails.length} ${uniqueEmails.length === 1 ? "adres wordt" : "adressen worden"} opnieuw geprobeerd...`);
+    try {
+      const result = await requestPreview("POST", {
+        action: "retryFailures",
+        audienceId: selectedAudienceId,
+        emails: uniqueEmails,
+      });
+      const sync = result.syncResult ?? {};
+      const resolved = syncNumber(sync, "resolved");
+      const failed = syncNumber(sync, "failed");
+      setStatus(`Nieuwe poging klaar: ${resolved} opgelost, ${failed} ${failed === 1 ? "mislukking" : "mislukkingen"} over.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Opnieuw proberen mislukt.");
+    } finally {
+      setRetrying(null);
+    }
+  }
+
   const filteredContacts = useMemo(() => {
     if (!preview) return [];
     const needle = search.trim().toLowerCase();
@@ -302,6 +359,11 @@ export default function MailchimpDashboard() {
       return stateMatches && tagMatches && textMatches;
     });
   }, [preview, search, stateFilter, tagFilter]);
+
+  const failures = useMemo(
+    () => syncFailures(preview?.syncResult ?? preview?.lastSyncResult),
+    [preview],
+  );
 
   if (accessLoading) return <div className="page-shell"><div className="container"><section className="card panel"><h1>Mailchimp wordt geladen...</h1></section></div></div>;
   if (!canView) return (
@@ -355,12 +417,12 @@ export default function MailchimpDashboard() {
           <div className="top-row">
             <div><div className="eyebrow">Koppeling</div><h2>Synchronisatie voorbereiden</h2><p className="subtext">Laatste synchronisatie: {localDate(preview?.lastSyncAt ?? null)}</p>{refreshStatus?.sourceUpdatedAt ? <p className="subtext">Smart Trade gecontroleerd: {localDate(refreshStatus.sourceUpdatedAt)}</p> : null}</div>
             <div className="mailchimp-actions">
-              <button type="button" className="secondary-button" onClick={() => void loadPreview(true)} disabled={loading || syncing}><RefreshCw size={16} />{loading ? "Laden..." : "Voorbeeld vernieuwen"}</button>
+              <button type="button" className="secondary-button" onClick={() => void loadPreview(true)} disabled={loading || syncing || Boolean(retrying)}><RefreshCw size={16} />{loading ? "Laden..." : "Voorbeeld vernieuwen"}</button>
               <button
                 type="button"
                 className="primary-button"
                 onClick={prepareSynchronization}
-                disabled={syncing}
+                disabled={syncing || Boolean(retrying)}
               >
                 <MailCheck size={17} />
                 {syncing ? "Synchroniseren..." : "Synchroniseren met Mailchimp"}
@@ -389,7 +451,7 @@ export default function MailchimpDashboard() {
           ) : null}
 
           <div className="mailchimp-settings-grid">
-            <label className="input-wrap"><span className="input-label">Mailchimp-publiek</span><select className="input" value={selectedAudienceId} onChange={(event) => void selectAudience(event.target.value)} disabled={loading || syncing || !canWrite}><option value="">Selecteer een publiek</option>{preview?.audiences.map((audience) => <option value={audience.id} key={audience.id}>{audience.name} ({audience.memberCount})</option>)}</select></label>
+            <label className="input-wrap"><span className="input-label">Mailchimp-publiek</span><select className="input" value={selectedAudienceId} onChange={(event) => void selectAudience(event.target.value)} disabled={loading || syncing || Boolean(retrying) || !canWrite}><option value="">Selecteer een publiek</option>{preview?.audiences.map((audience) => <option value={audience.id} key={audience.id}>{audience.name} ({audience.memberCount})</option>)}</select></label>
             <div className="mailchimp-connection-status">
               {!preview ? (
                 <span className="warning"><RefreshCw size={18} />API-key controleren</span>
@@ -402,6 +464,65 @@ export default function MailchimpDashboard() {
           </div>
           {status ? <div className="save-status">{status}{loadingSeconds > 0 ? ` (${loadingSeconds} sec.)` : ""}</div> : null}
         </section>
+
+        {failures.length ? (
+          <section className="card panel mailchimp-failures-panel">
+            <div className="top-row mailchimp-failures-heading">
+              <div>
+                <div className="eyebrow">Aandacht nodig</div>
+                <h2>Mislukte synchronisaties</h2>
+                <p className="subtext">
+                  Bekijk per e-mailadres waarom Mailchimp de wijziging heeft geweigerd. Geslaagde nieuwe pogingen verdwijnen automatisch uit deze lijst.
+                </p>
+              </div>
+              <div className="mailchimp-failures-actions">
+                <StatusPill tone="warning">{failures.length} mislukt</StatusPill>
+                {canWrite ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void retryFailures(failures.map((failure) => failure.email))}
+                    disabled={Boolean(retrying) || syncing || loading}
+                  >
+                    <RefreshCw size={16} />
+                    {retrying === "all" ? "Opnieuw proberen..." : "Alles opnieuw proberen"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="price-table-wrap">
+              <table className="price-table mailchimp-failure-table">
+                <thead><tr><th>E-mailadres</th><th>Mailchimp-melding</th>{canWrite ? <th>Actie</th> : null}</tr></thead>
+                <tbody>
+                  {failures.map((failure) => (
+                    <tr key={failure.email}>
+                      <td><strong>{failure.email}</strong></td>
+                      <td><span className="mailchimp-failure-message"><AlertTriangle size={17} />{failure.error}</span></td>
+                      {canWrite ? (
+                        <td>
+                          <button
+                            type="button"
+                            className="secondary-button mailchimp-retry-button"
+                            onClick={() => void retryFailures([failure.email])}
+                            disabled={Boolean(retrying) || syncing || loading}
+                          >
+                            <RefreshCw size={15} />
+                            {retrying === failure.email.toLowerCase() ? "Bezig..." : "Opnieuw proberen"}
+                          </button>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : preview?.lastSyncAt ? (
+          <div className="mailchimp-alert success">
+            <CheckCircle2 size={20} />
+            <span>De laatste synchronisatie bevat geen mislukte e-mailadressen.</span>
+          </div>
+        ) : null}
 
         <section className="card panel">
           <div className="top-row"><div><div className="eyebrow">Vooroverzicht</div><h2>Contacten en tags</h2><p className="subtext">{preview?.source.relationCount ?? 0} relaties, {preview?.source.contactPersonCount ?? 0} geselecteerde contactpersonen en {preview?.source.tags.length ?? 0} tags.</p></div><StatusPill tone={preview?.source.conflictCount ? "warning" : "success"}>{preview?.source.conflictCount ?? 0} conflicten</StatusPill></div>

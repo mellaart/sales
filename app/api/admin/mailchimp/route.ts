@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServiceClient, type ServiceClient } from "@/lib/admin-api";
-import { buildMailchimpPreview, synchronizeMailchimp } from "@/lib/mailchimp";
+import {
+  buildMailchimpPreview,
+  synchronizeMailchimp,
+  type MailchimpSyncFailure,
+} from "@/lib/mailchimp";
 import { readMailchimpSettings, writeMailchimpSettings } from "@/lib/mailchimp-settings-storage";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
@@ -28,6 +32,22 @@ const EMPTY_SOURCE = {
 
 function jsonResponse(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+function syncFailures(value: unknown): MailchimpSyncFailure[] {
+  if (!value || typeof value !== "object") return [];
+  const failures = (value as { failures?: unknown }).failures;
+  if (!Array.isArray(failures)) return [];
+  return failures.flatMap((failure) => {
+    if (!failure || typeof failure !== "object") return [];
+    const email = typeof (failure as { email?: unknown }).email === "string"
+      ? (failure as { email: string }).email.trim().toLowerCase()
+      : "";
+    const error = typeof (failure as { error?: unknown }).error === "string"
+      ? (failure as { error: string }).error.trim()
+      : "";
+    return email && error ? [{ email, error }] : [];
+  });
 }
 
 async function verifyMailchimpAccess(request: Request, service: ServiceClient, write = false) {
@@ -100,8 +120,16 @@ export async function POST(request: Request) {
     const verified = await verifyMailchimpAccess(request, service, true);
     if (!verified.ok) return jsonResponse({ error: verified.message }, 403);
 
-    const body = await request.json().catch(() => null) as { action?: unknown; audienceId?: unknown } | null;
-    const action = body?.action === "sync" ? "sync" : "selectAudience";
+    const body = await request.json().catch(() => null) as {
+      action?: unknown;
+      audienceId?: unknown;
+      emails?: unknown;
+    } | null;
+    const action = body?.action === "sync"
+      ? "sync"
+      : body?.action === "retryFailures"
+        ? "retryFailures"
+        : "selectAudience";
     const audienceId = typeof body?.audienceId === "string" ? body.audienceId.trim() : "";
     if (!audienceId) return jsonResponse({ error: "Selecteer eerst een Mailchimp-publiek." }, 400);
 
@@ -128,17 +156,54 @@ export async function POST(request: Request) {
         error: `Synchronisatie geblokkeerd: bij ${source.contactPersonErrorCount} relaties konden de contactpersonen niet volledig worden opgehaald. Vernieuw het voorbeeld en probeer het opnieuw.`,
       }, 409);
     }
-    const result = await synchronizeMailchimp(source, selectedSettings);
+    const previousFailures = syncFailures(currentSettings.lastSyncResult);
+    const requestedEmails = action === "retryFailures" && Array.isArray(body?.emails)
+      ? Array.from(new Set(body.emails.map((email) => String(email).trim().toLowerCase()).filter(Boolean)))
+      : [];
+    if (action === "retryFailures" && requestedEmails.length === 0) {
+      return jsonResponse({ error: "Selecteer minimaal één mislukt e-mailadres." }, 400);
+    }
+    const knownFailureEmails = new Set(previousFailures.map((failure) => failure.email));
+    const retryEmails = action === "retryFailures"
+      ? requestedEmails.filter((email) => knownFailureEmails.has(email))
+      : [];
+    if (action === "retryFailures" && retryEmails.length === 0) {
+      return jsonResponse({ error: "Deze fout is inmiddels niet meer aanwezig. Vernieuw het overzicht." }, 409);
+    }
+
+    const result = await synchronizeMailchimp(
+      source,
+      selectedSettings,
+      action === "retryFailures" ? { onlyEmails: retryEmails } : {},
+    );
+    const retrySet = new Set(retryEmails);
+    const unresolvedFailures = action === "retryFailures"
+      ? [
+          ...previousFailures.filter((failure) => !retrySet.has(failure.email)),
+          ...result.failures,
+        ]
+      : result.failures;
+    const failedRetryEmails = new Set(result.failures.map((failure) => failure.email));
+    const storedResult = action === "retryFailures"
+      ? {
+          ...result,
+          failed: unresolvedFailures.length,
+          failures: unresolvedFailures,
+          retry: true,
+          retried: retryEmails.length,
+          resolved: retryEmails.filter((email) => !failedRetryEmails.has(email)).length,
+        }
+      : result;
     const lastSyncAt = new Date().toISOString();
     const nextSettings = await writeMailchimpSettings(service, {
       audienceId,
       managedTags: result.managedTags,
       previousEmails: result.previousEmails,
       lastSyncAt,
-      lastSyncResult: result,
+      lastSyncResult: storedResult,
     });
     const preview = await buildMailchimpPreview(source, nextSettings);
-    return jsonResponse({ ...preview, syncResult: result });
+    return jsonResponse({ ...preview, syncResult: storedResult });
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : "Mailchimp-synchronisatie mislukt." }, 500);
   }

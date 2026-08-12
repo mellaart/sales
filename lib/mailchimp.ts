@@ -51,6 +51,15 @@ type MailchimpConfig = {
   companyMergeTag: string;
 };
 
+export type MailchimpSyncFailure = {
+  email: string;
+  error: string;
+};
+
+type MailchimpSyncOptions = {
+  onlyEmails?: string[];
+};
+
 const BLOCKED_STATUSES = new Set(["unsubscribed", "cleaned", "pending", "transactional"]);
 const SYNC_CONCURRENCY = 5;
 const MAILCHIMP_REQUEST_TIMEOUT_MS = 30_000;
@@ -127,8 +136,24 @@ async function mailchimpRequest<T>(config: MailchimpConfig, path: string, init?:
     json = { detail: body };
   }
   if (!response.ok) {
-    const error = json as { title?: string; detail?: string };
-    throw new Error(error.detail || error.title || `Mailchimp-fout ${response.status}.`);
+    const error = json as {
+      title?: string;
+      detail?: string;
+      errors?: Array<{ field?: string; message?: string }>;
+    };
+    const validationDetails = Array.isArray(error.errors)
+      ? error.errors.flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const field = typeof item.field === "string" ? item.field.trim() : "";
+          const detail = typeof item.message === "string" ? item.message.trim() : "";
+          const message = [field, detail].filter(Boolean).join(": ");
+          return message ? [message] : [];
+        })
+      : [];
+    const message = [error.detail || error.title || `Mailchimp-fout ${response.status}.`, ...validationDetails]
+      .filter(Boolean)
+      .join(" ");
+    throw new Error(message);
   }
   return json as T;
 }
@@ -298,7 +323,11 @@ async function mapWithConcurrency<T, R>(items: T[], mapper: (item: T) => Promise
   return output;
 }
 
-export async function synchronizeMailchimp(source: SmartTradeMailchimpSource, settings: MailchimpSyncSettings) {
+export async function synchronizeMailchimp(
+  source: SmartTradeMailchimpSource,
+  settings: MailchimpSyncSettings,
+  options: MailchimpSyncOptions = {},
+) {
   if (source.contactPersonErrorCount > 0) {
     throw new Error(
       `Synchronisatie geblokkeerd: bij ${source.contactPersonErrorCount} relaties konden de contactpersonen niet volledig worden opgehaald.`,
@@ -312,13 +341,19 @@ export async function synchronizeMailchimp(source: SmartTradeMailchimpSource, se
   const members = await getMembers(config, audience.id);
   await ensureCompanyField(config, audience.id);
   const managedTags = Array.from(new Set([...settings.managedTags, ...source.tags])).sort((a, b) => a.localeCompare(b, "nl"));
-  const failures: Array<{ email: string; error: string }> = [];
+  const requestedEmails = options.onlyEmails?.length
+    ? new Set(options.onlyEmails.map((email) => email.trim().toLowerCase()).filter(Boolean))
+    : null;
+  const contacts = requestedEmails
+    ? source.contacts.filter((contact) => requestedEmails.has(contact.email.trim().toLowerCase()))
+    : source.contacts;
+  const failures: MailchimpSyncFailure[] = [];
   let created = 0;
   let updated = 0;
   let unchanged = 0;
   let blocked = 0;
 
-  await mapWithConcurrency(source.contacts, async (contact) => {
+  await mapWithConcurrency(contacts, async (contact) => {
     const current = members.get(contact.email);
     if (current && BLOCKED_STATUSES.has(current.status)) {
       blocked += 1;
@@ -357,8 +392,11 @@ export async function synchronizeMailchimp(source: SmartTradeMailchimpSource, se
   });
 
   const currentEmails = new Set(source.contacts.map((contact) => contact.email));
-  const removedEmails = settings.previousEmails.filter((email) => !currentEmails.has(email));
+  const removedEmails = settings.previousEmails.filter((email) => (
+    !currentEmails.has(email) && (!requestedEmails || requestedEmails.has(email))
+  ));
   const removalRetries = new Set<string>();
+  const successfulTagRemovals = new Set<string>();
   let tagsRemoved = 0;
   await mapWithConcurrency(removedEmails, async (email) => {
     const current = members.get(email);
@@ -371,6 +409,7 @@ export async function synchronizeMailchimp(source: SmartTradeMailchimpSource, se
         body: JSON.stringify({ tags: tags.map((name) => ({ name, status: "inactive" })) }),
       });
       tagsRemoved += 1;
+      successfulTagRemovals.add(email);
     } catch (error) {
       removalRetries.add(email);
       failures.push({ email, error: error instanceof Error ? error.message : "Tags verwijderen mislukt" });
@@ -386,10 +425,13 @@ export async function synchronizeMailchimp(source: SmartTradeMailchimpSource, se
     blocked,
     tagsRemoved,
     failed: failures.length,
-    failures: failures.slice(0, 50),
+    failures,
     managedTags,
     previousEmails: Array.from(new Set([
       ...source.contacts.map((contact) => contact.email),
+      ...(requestedEmails
+        ? settings.previousEmails.filter((email) => !successfulTagRemovals.has(email))
+        : []),
       ...removalRetries,
     ])),
   };

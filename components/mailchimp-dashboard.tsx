@@ -194,6 +194,7 @@ export default function MailchimpDashboard() {
     const json = await response.json().catch(() => ({})) as MailchimpPreview & { error?: string };
     if (!response.ok) throw new Error(json.error || "Mailchimp laden mislukt.");
     setPreview(json);
+    if (json.refresh) setRefreshStatus(json.refresh);
     setSelectedAudienceId(json.audience?.id ?? "");
     return json;
   }

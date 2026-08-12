@@ -151,10 +151,13 @@ export async function GET(request: Request) {
         refresh: await startMailchimpContactsRefresh(),
       }, 202);
     }
-    return jsonResponse(await buildMailchimpPreview(
-      source,
-      removeFailuresMissingFromSmartTrade(settings, source),
-    ));
+    return jsonResponse({
+      ...await buildMailchimpPreview(
+        source,
+        removeFailuresMissingFromSmartTrade(settings, source),
+      ),
+      refresh: await getMailchimpContactsRefreshStatus(),
+    });
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : "Mailchimp-voorvertoning laden mislukt." }, 500);
   }

@@ -227,7 +227,21 @@ export async function ensureLocalSchema() {
 
         create index if not exists deals_user_id_created_at_idx on public.deals(user_id, created_at desc);
         create index if not exists deals_archived_at_created_at_idx on public.deals(archived_at, created_at desc);
-        create unique index if not exists deals_smart_trade_relation_id_idx
+        do $$
+        begin
+          if exists (
+            select 1
+            from pg_class index_class
+            join pg_index index_definition on index_definition.indexrelid = index_class.oid
+            where index_class.relname = 'deals_smart_trade_relation_id_idx'
+              and index_definition.indisunique
+          ) then
+            drop index public.deals_smart_trade_relation_id_idx;
+          end if;
+        end
+        $$;
+
+        create index if not exists deals_smart_trade_relation_id_idx
           on public.deals(smart_trade_relation_id)
           where smart_trade_relation_id is not null;
 

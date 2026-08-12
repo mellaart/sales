@@ -81,6 +81,7 @@ export type DealCalculatorInputs = {
 export type DealRecord = {
   id: string;
   user_id?: string | null;
+  smart_trade_relation_id?: number | null;
 
   customer_name?: string | null;
   contact_name?: string | null;

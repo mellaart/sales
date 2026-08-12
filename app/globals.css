@@ -6673,7 +6673,7 @@ td {
 
 .customer-intake-controls {
   display: grid;
-  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(480px, 680px) minmax(0, 1fr);
   gap: 24px;
   align-items: end;
   margin-top: 24px;
@@ -6683,6 +6683,25 @@ td {
 
 .customer-intake-email {
   margin: 0;
+}
+
+.customer-intake-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.customer-intake-relation-id {
+  margin: 0;
+}
+
+.customer-intake-relation-id .input-help {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 .customer-intake-actions {
@@ -6797,6 +6816,10 @@ td {
 
   .customer-intake-actions {
     justify-content: flex-start;
+  }
+
+  .customer-intake-fields {
+    grid-template-columns: 1fr;
   }
 
   .customer-intake-summary {

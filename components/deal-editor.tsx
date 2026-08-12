@@ -242,6 +242,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [implementationBusy, setImplementationBusy] = useState(false);
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeSummary | null>(null);
   const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
+  const [customerIntakeRelationId, setCustomerIntakeRelationId] = useState("");
   const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
   const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
   const [customerOutlookBusy, setCustomerOutlookBusy] = useState(false);
@@ -345,6 +346,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setCustomerName(deal.customer_name || "");
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
       setContactName(deal.contact_name || "");
+      setCustomerIntakeRelationId(deal.smart_trade_relation_id
+        ? String(deal.smart_trade_relation_id)
+        : "");
       setSalesName(deal.user_id === user.id && currentSalesName ? currentSalesName : deal.sales_name || "");
       setNotes(deal.notes || "");
       setExtraUsers(inputs.extraUsers);
@@ -387,6 +391,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           if (intakeResponse.ok && intakeJson.intake) {
             setCustomerIntake(intakeJson.intake);
             setCustomerIntakeEmail(intakeJson.intake.recipientEmail);
+            setCustomerIntakeRelationId(intakeJson.intake.smartTradeRelationId
+              ? String(intakeJson.intake.smartTradeRelationId)
+              : "");
           } else if (!intakeResponse.ok) {
             setCustomerIntakeStatus(intakeJson.error || "Klantformulier laden mislukt.");
           }
@@ -1010,6 +1017,13 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   async function saveCustomerIntake(regenerate = false) {
     if (customerIntakeBusy) return null;
 
+    const relationIdText = customerIntakeRelationId.trim();
+    const relationId = relationIdText ? Number(relationIdText) : null;
+    if (relationId !== null && (!Number.isSafeInteger(relationId) || relationId <= 0)) {
+      setCustomerIntakeStatus("Vul een geldig bestaand relatie-ID in.");
+      return null;
+    }
+
     setCustomerIntakeBusy(true);
     setCustomerIntakeStatus(regenerate ? "Nieuwe klantlink wordt gemaakt..." : "Klantlink wordt gemaakt...");
 
@@ -1021,6 +1035,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           dealId,
           recipientEmail: customerIntakeEmail,
           regenerate,
+          smartTradeRelationId: relationId,
         }),
       });
       const json = await response.json().catch(() => ({})) as {
@@ -1035,6 +1050,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
       setCustomerIntake(json.intake);
       setCustomerIntakeEmail(json.intake.recipientEmail);
+      setCustomerIntakeRelationId(json.intake.smartTradeRelationId
+        ? String(json.intake.smartTradeRelationId)
+        : "");
       setCustomerIntakeStatus(regenerate ? "Nieuwe klantlink is klaar." : "Klantlink is klaar.");
       return json.intake;
     } catch {
@@ -1067,7 +1085,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       }
 
       setCustomerIntake(json.intake ?? null);
-      if (json.intake) setCustomerIntakeEmail(json.intake.recipientEmail);
+      if (json.intake) {
+        setCustomerIntakeEmail(json.intake.recipientEmail);
+        setCustomerIntakeRelationId(json.intake.smartTradeRelationId
+          ? String(json.intake.smartTradeRelationId)
+          : "");
+      }
       setCustomerIntakeStatus(json.intake?.submittedAt
         ? "De ingevulde klantgegevens zijn ontvangen."
         : "Status is bijgewerkt.");
@@ -1086,7 +1109,15 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       customerIntake && (customerIntake.status === "revoked" || expired),
     );
 
-    if (!customerIntake || mustRegenerate || customerIntake.recipientEmail !== customerIntakeEmail.trim().toLowerCase()) {
+    const currentRelationId = customerIntake?.smartTradeRelationId
+      ? String(customerIntake.smartTradeRelationId)
+      : "";
+    if (
+      !customerIntake
+      || mustRegenerate
+      || customerIntake.recipientEmail !== customerIntakeEmail.trim().toLowerCase()
+      || currentRelationId !== customerIntakeRelationId.trim()
+    ) {
       return saveCustomerIntake(mustRegenerate);
     }
 
@@ -2003,16 +2034,30 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             </div>
 
             <div className="customer-intake-controls">
-              <label className="input-wrap customer-intake-email">
-                <span className="input-label">E-mailadres klant</span>
-                <input
-                  className="input"
-                  type="email"
-                  value={customerIntakeEmail}
-                  onChange={(event) => setCustomerIntakeEmail(event.target.value)}
-                  placeholder="naam@bedrijf.nl"
-                />
-              </label>
+              <div className="customer-intake-fields">
+                <label className="input-wrap customer-intake-email">
+                  <span className="input-label">E-mailadres klant</span>
+                  <input
+                    className="input"
+                    type="email"
+                    value={customerIntakeEmail}
+                    onChange={(event) => setCustomerIntakeEmail(event.target.value)}
+                    placeholder="naam@bedrijf.nl"
+                  />
+                </label>
+                <label className="input-wrap customer-intake-relation-id">
+                  <span className="input-label">Bestaande relatie-ID (optioneel)</span>
+                  <input
+                    className="input"
+                    type="text"
+                    inputMode="numeric"
+                    value={customerIntakeRelationId}
+                    onChange={(event) => setCustomerIntakeRelationId(event.target.value)}
+                    placeholder="Bijv. 2498"
+                  />
+                  <span className="input-help">Laat leeg als Smart Trade een nieuwe relatie moet aanmaken.</span>
+                </label>
+              </div>
 
               <div className="customer-intake-actions">
                 {!customerIntake ? (

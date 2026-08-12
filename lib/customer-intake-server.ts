@@ -268,7 +268,11 @@ export async function createOrRefreshCustomerIntake(
   request: Request,
   dealId: string,
   actor: Actor,
-  input: { recipientEmail?: string; regenerate?: boolean },
+  input: {
+    recipientEmail?: string;
+    regenerate?: boolean;
+    smartTradeRelationId?: number | null;
+  },
 ) {
   const access = await requireAccessibleCalculatorDeal(dealId, actor);
   if (!access.ok) return access;
@@ -350,10 +354,12 @@ export async function createOrRefreshCustomerIntake(
       ],
     );
 
-    let relationId = lockedDeal.smart_trade_relation_id;
+    let relationId = input.smartTradeRelationId ?? lockedDeal.smart_trade_relation_id;
     if (!relationId && isNewIntake) {
       const createdRelation = await createLiveSmartTradeRelation(lockedDeal.customer_name ?? "");
       relationId = createdRelation.relationId;
+    }
+    if (relationId && relationId !== lockedDeal.smart_trade_relation_id) {
       await client.query(
         `update public.deals
          set smart_trade_relation_id = $2,

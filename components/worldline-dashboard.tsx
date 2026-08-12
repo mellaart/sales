@@ -1424,6 +1424,29 @@ export default function WorldlineDashboard() {
     void loadProjectOverview();
   }, [canAccessWorldline, loadProjectOverview, roleAccessLoading, supabase]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || loadingProjectOverview || activeProject) return;
+    const projectId = new URL(window.location.href).searchParams.get("project")?.trim();
+    if (!projectId) return;
+
+    const project = overviewProjects.find((item) => item.id === projectId);
+    if (!project) return;
+    const relation = getRelationFromProject(project);
+    setSelectedRelation(relation);
+    setQuery("");
+    setRelations([]);
+    setProjects(
+      overviewProjects
+        .filter((item) => item.relation_id === project.relation_id)
+        .sort((left, right) => (
+          String(right.updated_at ?? right.created_at ?? "")
+            .localeCompare(String(left.updated_at ?? left.created_at ?? ""))
+        )),
+    );
+    setActiveProject(project);
+    setStatus(`${project.relation_name} geopend.`);
+  }, [activeProject, loadingProjectOverview, overviewProjects]);
+
   function syncProjectOverview(project: WorldlineProject) {
     setOverviewProjects((currentProjects) => {
       const remainingProjects = currentProjects.filter((item) => item.id !== project.id);

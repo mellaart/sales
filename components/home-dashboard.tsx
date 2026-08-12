@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
+  BellRing,
   Calculator,
   CalendarClock,
   CalendarDays,
@@ -12,6 +13,7 @@ import {
   ClipboardCheck,
   ExternalLink,
   FileText,
+  Inbox,
   Layers3,
   RefreshCw,
   WalletCards,
@@ -35,11 +37,19 @@ import {
   normalizeRoleTabAccess,
 } from "@/lib/role-tabs";
 import { StatusPill } from "@/components/ui";
+import type { CustomerActivity } from "@/lib/customer-activity-server";
 
 const dashboardDateFormatter = new Intl.DateTimeFormat("nl-NL", {
   day: "2-digit",
   month: "short",
   year: "numeric",
+});
+
+const dashboardDateTimeFormatter = new Intl.DateTimeFormat("nl-NL", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
 });
 
 function isExpansionDeal(deal: DealRecord) {
@@ -95,6 +105,10 @@ export default function HomeDashboard() {
   const [implementations, setImplementations] = useState<ImplementationRecord[]>([]);
   const [showImplementationStats, setShowImplementationStats] = useState(false);
   const [salesNamesByUserId, setSalesNamesByUserId] = useState<SalesNamesByUserId>({});
+  const [customerActivities, setCustomerActivities] = useState<CustomerActivity[]>([]);
+  const [customerActivitiesLoading, setCustomerActivitiesLoading] = useState(true);
+  const [acknowledgingActivityKey, setAcknowledgingActivityKey] = useState("");
+  const [customerActivityStatus, setCustomerActivityStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
 
@@ -108,6 +122,26 @@ export default function HomeDashboard() {
 
     setLoading(true);
     const messages: string[] = [];
+
+    const customerActivityRequest = (async () => {
+      setCustomerActivitiesLoading(true);
+      setCustomerActivityStatus("");
+      try {
+        const response = await fetch("/api/dashboard/customer-activities", { cache: "no-store" });
+        const json = await response.json().catch(() => ({})) as {
+          activities?: CustomerActivity[];
+          error?: string;
+        };
+        if (!response.ok) throw new Error(json.error || "Klantacties laden mislukt.");
+        setCustomerActivities(Array.isArray(json.activities) ? json.activities : []);
+      } catch (error) {
+        setCustomerActivities([]);
+        return error instanceof Error ? error.message : "Klantacties laden mislukt.";
+      } finally {
+        setCustomerActivitiesLoading(false);
+      }
+      return "";
+    })();
 
     let roleTabAccess = ROLE_TAB_ACCESS;
     try {
@@ -153,9 +187,39 @@ export default function HomeDashboard() {
       setImplementations([]);
     }
 
+    const customerActivityError = await customerActivityRequest;
+    if (customerActivityError) messages.push(customerActivityError);
+
     setStatus(messages.join(" "));
     setLoading(false);
   }, [profile, role, user, supabase]);
+
+  const acknowledgeCustomerActivity = useCallback(async (activities: CustomerActivity[]) => {
+    if (activities.length === 0) return;
+
+    const activityKeys = new Set(activities.map((activity) => activity.key));
+    setAcknowledgingActivityKey(activities.length === 1 ? activities[0].key : "all");
+    setCustomerActivityStatus("");
+    try {
+      const response = await fetch("/api/dashboard/customer-activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activities: activities.map(({ key, occurredAt }) => ({ key, occurredAt })),
+        }),
+      });
+      const json = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(json.error || "Klantactie afhandelen mislukt.");
+
+      setCustomerActivities((current) => current.filter((activity) => !activityKeys.has(activity.key)));
+    } catch (error) {
+      setCustomerActivityStatus(
+        error instanceof Error ? error.message : "Klantactie afhandelen mislukt.",
+      );
+    } finally {
+      setAcknowledgingActivityKey("");
+    }
+  }, []);
 
   useEffect(() => {
     void loadStats();
@@ -310,6 +374,80 @@ export default function HomeDashboard() {
               <span>Start direct een nieuwe calculatorberekening</span>
             </div>
           </Link>
+        </section>
+
+        <section className="dashboard-customer-activity card panel">
+          <div className="top-row dashboard-customer-activity-header">
+            <div>
+              <div className="eyebrow">Klantupdates</div>
+              <h2 className="headline">Nieuwe klantacties</h2>
+              <p className="subtext">
+                Ingevulde formulieren, online akkoorden, opmerkingen en aangeleverde bestanden.
+              </p>
+            </div>
+            <div className="button-row compact">
+              <StatusPill tone={customerActivities.length ? "warning" : "success"}>
+                {customerActivities.length === 1
+                  ? "1 nieuwe actie"
+                  : `${customerActivities.length} nieuwe acties`}
+              </StatusPill>
+              {customerActivities.length ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={Boolean(acknowledgingActivityKey)}
+                  onClick={() => void acknowledgeCustomerActivity(customerActivities)}
+                >
+                  <CheckCircle2 size={16} />
+                  {acknowledgingActivityKey === "all" ? "Verwerken..." : "Alles als gezien"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {customerActivitiesLoading ? (
+            <div className="dashboard-customer-activity-clear">
+              <RefreshCw size={18} className="spin" /> Klantacties worden geladen...
+            </div>
+          ) : customerActivities.length ? (
+            <div className="dashboard-customer-activity-list">
+              {customerActivities.map((activity) => (
+                <article key={activity.key} className="dashboard-customer-activity-row">
+                  <div className="dashboard-customer-activity-icon"><BellRing size={18} /></div>
+                  <div className="dashboard-customer-activity-copy">
+                    <strong>{activity.customerName}</strong>
+                    <span>{activity.title}</span>
+                    <small>{activity.detail}</small>
+                  </div>
+                  <time dateTime={activity.occurredAt}>
+                    {dashboardDateTimeFormatter.format(new Date(activity.occurredAt))}
+                  </time>
+                  <div className="button-row compact dashboard-customer-activity-actions">
+                    <Link href={activity.href} className="primary-button">
+                      <ExternalLink size={16} /> Openen
+                    </Link>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      title="Markeer als gezien"
+                      aria-label={`${activity.customerName}: markeer als gezien`}
+                      disabled={Boolean(acknowledgingActivityKey)}
+                      onClick={() => void acknowledgeCustomerActivity([activity])}
+                    >
+                      {acknowledgingActivityKey === activity.key
+                        ? <RefreshCw size={17} className="spin" />
+                        : <CheckCircle2 size={17} />}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="dashboard-customer-activity-clear">
+              <Inbox size={19} /> Geen nieuwe klantacties. Je bent helemaal bij.
+            </div>
+          )}
+          {customerActivityStatus ? <div className="save-status error">{customerActivityStatus}</div> : null}
         </section>
 
         {showImplementationStats ? (

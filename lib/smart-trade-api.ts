@@ -1,3 +1,5 @@
+import { readStoredFile, writeStoredFile } from "@/lib/local-storage";
+
 export type SmartTradeRelation = {
   id: number | string;
   company?: string | null;
@@ -42,6 +44,18 @@ export type SmartTradeMailchimpSource = {
   invalidEmailCount: number;
   conflictCount: number;
   tags: string[];
+};
+
+export type MailchimpSourceRefreshStatus = {
+  state: "idle" | "running" | "ready" | "error";
+  phase: "idle" | "relations" | "contactpersons" | "complete";
+  processed: number;
+  total: number | null;
+  hasSource: boolean;
+  sourceUpdatedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
 };
 
 export type SmartTradePrimaryContact = {
@@ -176,8 +190,11 @@ const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
 const MAILCHIMP_RELATION_MAX_PAGES = 100;
-const MAILCHIMP_CONTACT_CONCURRENCY = 16;
+const MAILCHIMP_RELATION_PAGE_CONCURRENCY = 6;
+const MAILCHIMP_CONTACT_CONCURRENCY = 24;
 const MAILCHIMP_SOURCE_CACHE_TTL_MS = 15 * 60 * 1000;
+const MAILCHIMP_SOURCE_CACHE_BUCKET = "smart-trade-settings";
+const MAILCHIMP_SOURCE_CACHE_FILE = "mailchimp-source-cache.json";
 const RELATION_CACHE_TTL_MS = 30 * 60 * 1000;
 const ASSET_PAGE_SIZE = 500;
 const ASSET_CLASS_PAGE_SIZE = 1000;
@@ -198,13 +215,28 @@ let relationCacheLoad: {
 let mailchimpSourceCache: {
   cacheKey: string;
   expiresAt: number;
+  updatedAt: string;
   source: SmartTradeMailchimpSource;
 } | null = null;
 
 let mailchimpSourceLoad: {
   cacheKey: string;
-  promise: Promise<SmartTradeMailchimpSource>;
+  promise: Promise<void>;
 } | null = null;
+
+let mailchimpSourceRestore: Promise<void> | null = null;
+
+let mailchimpSourceRefreshStatus: MailchimpSourceRefreshStatus = {
+  state: "idle",
+  phase: "idle",
+  processed: 0,
+  total: null,
+  hasSource: false,
+  sourceUpdatedAt: null,
+  startedAt: null,
+  completedAt: null,
+  error: null,
+};
 
 let assetClassCache: {
   cacheKey: string;
@@ -919,27 +951,43 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper:
   return output;
 }
 
-async function loadMailchimpContacts(config: SmartTradeConfig): Promise<SmartTradeMailchimpSource> {
+async function loadMailchimpContacts(
+  config: SmartTradeConfig,
+  onProgress?: (phase: "relations" | "contactpersons", processed: number, total: number | null) => void,
+): Promise<SmartTradeMailchimpSource> {
   const headers = getHeaders(config);
   const relations = new Map<string, SmartTradeRelation>();
   const seenRelationIds = new Set<string>();
 
-  for (let page = 1; page <= MAILCHIMP_RELATION_MAX_PAGES; page += 1) {
-    const response = await fetchWithTimeout(buildRelationsUrl(config.baseUrl, page).toString(), headers, config.timeoutMs);
-    const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
-    const rows = Array.isArray(json.data) ? json.data : [];
+  for (
+    let firstPage = 1;
+    firstPage <= MAILCHIMP_RELATION_MAX_PAGES;
+    firstPage += MAILCHIMP_RELATION_PAGE_CONCURRENCY
+  ) {
+    const pageNumbers = Array.from(
+      { length: Math.min(MAILCHIMP_RELATION_PAGE_CONCURRENCY, MAILCHIMP_RELATION_MAX_PAGES - firstPage + 1) },
+      (_, index) => firstPage + index,
+    );
+    const pages = await Promise.all(pageNumbers.map(async (page) => {
+      const response = await fetchWithTimeout(buildRelationsUrl(config.baseUrl, page).toString(), headers, config.timeoutMs);
+      const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
+      return Array.isArray(json.data) ? json.data : [];
+    }));
 
-    let addedOnPage = 0;
-    for (const row of rows) {
-      const relation = mapRelationRow(row);
-      if (!relation) continue;
-      const relationId = String(relation.id);
-      if (!seenRelationIds.has(relationId)) addedOnPage += 1;
-      seenRelationIds.add(relationId);
-      if (isActiveMailchimpRelation(relation)) relations.set(relationId, relation);
+    let addedInBatch = 0;
+    for (const rows of pages) {
+      for (const row of rows) {
+        const relation = mapRelationRow(row);
+        if (!relation) continue;
+        const relationId = String(relation.id);
+        if (!seenRelationIds.has(relationId)) addedInBatch += 1;
+        seenRelationIds.add(relationId);
+        if (isActiveMailchimpRelation(relation)) relations.set(relationId, relation);
+      }
     }
+    onProgress?.("relations", seenRelationIds.size, null);
 
-    if (rows.length === 0 || addedOnPage === 0) break;
+    if (pages.some((rows) => rows.length === 0) || addedInBatch === 0) break;
   }
 
   const taggedRelations = Array.from(relations.values()).filter((relation) =>
@@ -954,6 +1002,7 @@ async function loadMailchimpContacts(config: SmartTradeConfig): Promise<SmartTra
   let invalidEmailCount = 0;
   let contactPersonCount = 0;
   let contactPersonErrorCount = 0;
+  let processedRelations = 0;
 
   function addContact(relation: SmartTradeRelation, emailValue: unknown, source: "relation" | "contact") {
     const email = normalizeMailchimpEmail(emailValue);
@@ -995,6 +1044,9 @@ async function loadMailchimpContacts(config: SmartTradeConfig): Promise<SmartTra
       }
     } catch {
       contactPersonErrorCount += 1;
+    } finally {
+      processedRelations += 1;
+      onProgress?.("contactpersons", processedRelations, taggedRelations.length);
     }
   });
 
@@ -1028,25 +1080,167 @@ export async function getMailchimpContacts(
   const cacheKey = getRelationCacheKey(config);
   const now = Date.now();
 
+  await restoreMailchimpSourceCache(cacheKey);
+
   if (!options.forceRefresh && mailchimpSourceCache?.cacheKey === cacheKey && mailchimpSourceCache.expiresAt > now) {
     return mailchimpSourceCache.source;
   }
 
-  if (mailchimpSourceLoad?.cacheKey === cacheKey) return mailchimpSourceLoad.promise;
+  await startMailchimpContactsRefresh({ forceRefresh: options.forceRefresh });
+  if (mailchimpSourceLoad?.cacheKey === cacheKey) await mailchimpSourceLoad.promise;
+  if (mailchimpSourceCache?.cacheKey === cacheKey) return mailchimpSourceCache.source;
+  throw new Error(mailchimpSourceRefreshStatus.error || "Smart Trade-contacten konden niet worden opgebouwd.");
+}
 
-  const promise = loadMailchimpContacts(config).then((source) => {
-    mailchimpSourceCache = {
-      cacheKey,
-      expiresAt: Date.now() + MAILCHIMP_SOURCE_CACHE_TTL_MS,
-      source,
-    };
-    return source;
+function isMailchimpSource(value: unknown): value is SmartTradeMailchimpSource {
+  if (!value || typeof value !== "object") return false;
+  const source = value as Partial<SmartTradeMailchimpSource>;
+  return Array.isArray(source.contacts) && Array.isArray(source.tags);
+}
+
+async function restoreMailchimpSourceCache(cacheKey: string) {
+  if (mailchimpSourceCache?.cacheKey === cacheKey) return;
+  if (mailchimpSourceRestore) return mailchimpSourceRestore;
+
+  mailchimpSourceRestore = (async () => {
+    try {
+      const stored = JSON.parse(
+        (await readStoredFile(MAILCHIMP_SOURCE_CACHE_BUCKET, MAILCHIMP_SOURCE_CACHE_FILE)).toString("utf8"),
+      ) as { cacheKey?: unknown; updatedAt?: unknown; source?: unknown };
+      if (stored.cacheKey !== cacheKey || typeof stored.updatedAt !== "string" || !isMailchimpSource(stored.source)) return;
+
+      const updatedAtMs = Date.parse(stored.updatedAt);
+      mailchimpSourceCache = {
+        cacheKey,
+        updatedAt: stored.updatedAt,
+        expiresAt: Number.isFinite(updatedAtMs) ? updatedAtMs + MAILCHIMP_SOURCE_CACHE_TTL_MS : 0,
+        source: stored.source,
+      };
+      mailchimpSourceRefreshStatus = {
+        state: "ready",
+        phase: "complete",
+        processed: stored.source.relationCount,
+        total: stored.source.relationCount,
+        hasSource: true,
+        sourceUpdatedAt: stored.updatedAt,
+        startedAt: null,
+        completedAt: stored.updatedAt,
+        error: null,
+      };
+    } catch {
+      // Een ontbrekende of oude cache betekent alleen dat de eerste controle opnieuw wordt opgebouwd.
+    }
+  })().finally(() => {
+    mailchimpSourceRestore = null;
   });
-  mailchimpSourceLoad = { cacheKey, promise };
 
-  try {
-    return await promise;
-  } finally {
-    if (mailchimpSourceLoad?.promise === promise) mailchimpSourceLoad = null;
+  return mailchimpSourceRestore;
+}
+
+function currentMailchimpRefreshStatus(): MailchimpSourceRefreshStatus {
+  return {
+    ...mailchimpSourceRefreshStatus,
+    hasSource: Boolean(mailchimpSourceCache),
+    sourceUpdatedAt: mailchimpSourceCache?.updatedAt ?? mailchimpSourceRefreshStatus.sourceUpdatedAt,
+  };
+}
+
+export async function getMailchimpContactsSnapshot() {
+  const config = getConfig();
+  const cacheKey = getRelationCacheKey(config);
+  await restoreMailchimpSourceCache(cacheKey);
+  return mailchimpSourceCache?.cacheKey === cacheKey ? mailchimpSourceCache.source : null;
+}
+
+export async function getMailchimpContactsRefreshStatus() {
+  const config = getConfig();
+  await restoreMailchimpSourceCache(getRelationCacheKey(config));
+  return currentMailchimpRefreshStatus();
+}
+
+export async function startMailchimpContactsRefresh(
+  options: { forceRefresh?: boolean } = {},
+): Promise<MailchimpSourceRefreshStatus> {
+  const config = getConfig();
+  const cacheKey = getRelationCacheKey(config);
+  await restoreMailchimpSourceCache(cacheKey);
+
+  if (mailchimpSourceLoad?.cacheKey === cacheKey) return currentMailchimpRefreshStatus();
+  if (
+    !options.forceRefresh
+    && mailchimpSourceCache?.cacheKey === cacheKey
+    && mailchimpSourceCache.expiresAt > Date.now()
+  ) {
+    return currentMailchimpRefreshStatus();
   }
+
+  const startedAt = new Date().toISOString();
+  mailchimpSourceRefreshStatus = {
+    state: "running",
+    phase: "relations",
+    processed: 0,
+    total: null,
+    hasSource: Boolean(mailchimpSourceCache),
+    sourceUpdatedAt: mailchimpSourceCache?.updatedAt ?? null,
+    startedAt,
+    completedAt: null,
+    error: null,
+  };
+
+  const promise = (async () => {
+    try {
+      const source = await loadMailchimpContacts(config, (phase, processed, total) => {
+        mailchimpSourceRefreshStatus = {
+          ...mailchimpSourceRefreshStatus,
+          state: "running",
+          phase,
+          processed,
+          total,
+          hasSource: Boolean(mailchimpSourceCache),
+          error: null,
+        };
+      });
+      const updatedAt = new Date().toISOString();
+      mailchimpSourceCache = {
+        cacheKey,
+        updatedAt,
+        expiresAt: Date.now() + MAILCHIMP_SOURCE_CACHE_TTL_MS,
+        source,
+      };
+      try {
+        await writeStoredFile(
+          MAILCHIMP_SOURCE_CACHE_BUCKET,
+          MAILCHIMP_SOURCE_CACHE_FILE,
+          JSON.stringify({ cacheKey, updatedAt, source }),
+        );
+      } catch {
+        // De actuele controle blijft in het draaiende proces beschikbaar als opslaan onverhoopt mislukt.
+      }
+      mailchimpSourceRefreshStatus = {
+        state: "ready",
+        phase: "complete",
+        processed: source.relationCount,
+        total: source.relationCount,
+        hasSource: true,
+        sourceUpdatedAt: updatedAt,
+        startedAt,
+        completedAt: updatedAt,
+        error: null,
+      };
+    } catch (error) {
+      mailchimpSourceRefreshStatus = {
+        ...mailchimpSourceRefreshStatus,
+        state: "error",
+        hasSource: Boolean(mailchimpSourceCache),
+        completedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Smart Trade-contacten ophalen mislukt.",
+      };
+    }
+  })();
+
+  mailchimpSourceLoad = { cacheKey, promise };
+  void promise.finally(() => {
+    if (mailchimpSourceLoad?.promise === promise) mailchimpSourceLoad = null;
+  });
+  return currentMailchimpRefreshStatus();
 }

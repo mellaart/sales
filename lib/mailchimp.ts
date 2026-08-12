@@ -53,6 +53,7 @@ type MailchimpConfig = {
 
 const BLOCKED_STATUSES = new Set(["unsubscribed", "cleaned", "pending", "transactional"]);
 const SYNC_CONCURRENCY = 5;
+const MAILCHIMP_REQUEST_TIMEOUT_MS = 30_000;
 
 function runtimeEnvironmentValue(name: string) {
   const processValue = process.env[name]?.trim();
@@ -95,16 +96,29 @@ function configOrNull(): MailchimpConfig | null {
 }
 
 async function mailchimpRequest<T>(config: MailchimpConfig, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${config.baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      Authorization: `Basic ${Buffer.from(`sales:${config.apiKey}`).toString("base64")}`,
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MAILCHIMP_REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${path}`, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Basic ${Buffer.from(`sales:${config.apiKey}`).toString("base64")}`,
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Mailchimp reageert niet binnen 30 seconden. Probeer het later opnieuw.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   const body = await response.text();
   let json: unknown = {};
   try {

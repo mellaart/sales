@@ -6,7 +6,11 @@ import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { canAccessTab, canWriteTab } from "@/lib/role-tabs";
 import { readRoleTabAccess } from "@/lib/role-tab-access-storage";
-import { getMailchimpContacts } from "@/lib/smart-trade-api";
+import {
+  getMailchimpContactsRefreshStatus,
+  getMailchimpContactsSnapshot,
+  startMailchimpContactsRefresh,
+} from "@/lib/smart-trade-api";
 import type { UserRole } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -63,10 +67,26 @@ export async function GET(request: Request) {
 
     const settings = await readMailchimpSettings(service);
     const searchParams = new URL(request.url).searchParams;
-    if (searchParams.get("mode") === "connection") {
+    const mode = searchParams.get("mode");
+    if (mode === "connection") {
       return jsonResponse(await buildMailchimpPreview(EMPTY_SOURCE, settings, { includeMembers: false }));
     }
-    const source = getMailchimpContacts({ forceRefresh: searchParams.get("refresh") === "1" });
+    if (mode === "status") {
+      return jsonResponse({ refresh: await getMailchimpContactsRefreshStatus() });
+    }
+    if (mode === "start") {
+      return jsonResponse({
+        refresh: await startMailchimpContactsRefresh({ forceRefresh: searchParams.get("refresh") === "1" }),
+      }, 202);
+    }
+
+    const source = await getMailchimpContactsSnapshot();
+    if (!source) {
+      return jsonResponse({
+        error: "De eerste Smart Trade-controle is nog bezig.",
+        refresh: await startMailchimpContactsRefresh(),
+      }, 202);
+    }
     return jsonResponse(await buildMailchimpPreview(source, settings));
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : "Mailchimp-voorvertoning laden mislukt." }, 500);
@@ -89,11 +109,20 @@ export async function POST(request: Request) {
     const selectedSettings = { ...currentSettings, audienceId };
     if (action === "selectAudience") {
       await writeMailchimpSettings(service, selectedSettings);
-      const source = await getMailchimpContacts();
-      return jsonResponse(await buildMailchimpPreview(source, selectedSettings));
+      const source = await getMailchimpContactsSnapshot();
+      return jsonResponse(await buildMailchimpPreview(source ?? EMPTY_SOURCE, selectedSettings));
     }
 
-    const source = await getMailchimpContacts();
+    const refresh = await getMailchimpContactsRefreshStatus();
+    const source = await getMailchimpContactsSnapshot();
+    if (!source || refresh.state === "running") {
+      return jsonResponse({
+        error: "Wacht tot de volledige Smart Trade-controle klaar is voordat je synchroniseert.",
+      }, 409);
+    }
+    if (refresh.state === "error") {
+      return jsonResponse({ error: refresh.error || "De Smart Trade-controle is mislukt." }, 409);
+    }
     if (source.contactPersonErrorCount > 0) {
       return jsonResponse({
         error: `Synchronisatie geblokkeerd: bij ${source.contactPersonErrorCount} relaties konden de contactpersonen niet volledig worden opgehaald. Vernieuw het voorbeeld en probeer het opnieuw.`,

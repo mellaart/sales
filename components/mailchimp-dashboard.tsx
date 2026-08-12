@@ -59,6 +59,18 @@ type MailchimpPreview = {
 
 type StateFilter = "all" | ContactState | "conflict";
 
+type MailchimpRefreshStatus = {
+  state: "idle" | "running" | "ready" | "error";
+  phase: "idle" | "relations" | "contactpersons" | "complete";
+  processed: number;
+  total: number | null;
+  hasSource: boolean;
+  sourceUpdatedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+};
+
 const STATE_LABELS: Record<ContactState, string> = {
   new: "Nieuw",
   update: "Bijwerken",
@@ -86,6 +98,7 @@ export default function MailchimpDashboard() {
   const [preview, setPreview] = useState<MailchimpPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSeconds, setLoadingSeconds] = useState(0);
+  const [refreshStatus, setRefreshStatus] = useState<MailchimpRefreshStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -149,14 +162,57 @@ export default function MailchimpDashboard() {
     return json;
   }
 
+  async function requestRefresh(query: string) {
+    const token = await getToken();
+    if (!token) throw new Error("Je sessie is verlopen. Log opnieuw in.");
+    const response = await fetch(`/api/admin/mailchimp${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const json = await response.json().catch(() => ({})) as {
+      error?: string;
+      refresh?: MailchimpRefreshStatus;
+    };
+    if (!response.ok && response.status !== 202) throw new Error(json.error || "Mailchimp laden mislukt.");
+    if (json.refresh) setRefreshStatus(json.refresh);
+    return json.refresh ?? null;
+  }
+
+  function refreshMessage(refresh: MailchimpRefreshStatus | null) {
+    if (!refresh) return "Smart Trade-contacten worden voorbereid...";
+    if (refresh.state === "error") return refresh.error || "Smart Trade-contacten ophalen mislukt.";
+    if (refresh.state === "ready") return "Smart Trade-contacten zijn gereed; Mailchimp wordt vergeleken...";
+    if (refresh.phase === "contactpersons") {
+      const total = refresh.total ?? 0;
+      return total > 0
+        ? `Contactpersonen ophalen: ${refresh.processed} van ${total} relaties verwerkt...`
+        : "Contactpersonen worden opgehaald...";
+    }
+    return `Relaties en klantgroepen ophalen${refresh.processed > 0 ? `: ${refresh.processed} gevonden` : ""}...`;
+  }
+
+  async function waitForRefresh() {
+    while (true) {
+      const refresh = await requestRefresh("?mode=status");
+      setStatus(refreshMessage(refresh));
+      if (refresh?.state === "ready") return;
+      if (refresh?.state === "error") throw new Error(refresh.error || "Smart Trade-contacten ophalen mislukt.");
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    }
+  }
+
   async function loadPreview(forceRefresh = false) {
     const startedAt = performance.now();
     setLoading(true);
     setStatus("Mailchimp-verbinding wordt gecontroleerd...");
     try {
       await requestPreview("GET", undefined, "?mode=connection");
-      setStatus("Mailchimp is verbonden. Smart Trade-contacten worden opgehaald; de eerste volledige controle duurt langer...");
-      await requestPreview("GET", undefined, forceRefresh ? "?refresh=1" : "");
+      setStatus("Mailchimp is verbonden. Smart Trade-contacten worden voorbereid...");
+      const refresh = await requestRefresh(`?mode=start${forceRefresh ? "&refresh=1" : ""}`);
+      setStatus(refreshMessage(refresh));
+      if (refresh?.hasSource && refresh.state === "running") await requestPreview();
+      if (refresh?.state !== "ready") await waitForRefresh();
+      await requestPreview();
       const seconds = Math.max(1, Math.round((performance.now() - startedAt) / 1000));
       setStatus(`Vooroverzicht bijgewerkt in ${seconds} seconden.`);
     } catch (error) {
@@ -268,7 +324,7 @@ export default function MailchimpDashboard() {
 
         <section className="card panel mailchimp-control-panel">
           <div className="top-row">
-            <div><div className="eyebrow">Koppeling</div><h2>Synchronisatie voorbereiden</h2><p className="subtext">Laatste synchronisatie: {localDate(preview?.lastSyncAt ?? null)}</p></div>
+            <div><div className="eyebrow">Koppeling</div><h2>Synchronisatie voorbereiden</h2><p className="subtext">Laatste synchronisatie: {localDate(preview?.lastSyncAt ?? null)}</p>{refreshStatus?.sourceUpdatedAt ? <p className="subtext">Smart Trade gecontroleerd: {localDate(refreshStatus.sourceUpdatedAt)}</p> : null}</div>
             <div className="mailchimp-actions">
               <button type="button" className="secondary-button" onClick={() => void loadPreview(true)} disabled={loading || syncing}><RefreshCw size={16} />{loading ? "Laden..." : "Voorbeeld vernieuwen"}</button>
               <button

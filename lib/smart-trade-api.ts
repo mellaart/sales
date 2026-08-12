@@ -18,6 +18,7 @@ export type SmartTradeRelation = {
   customFields?: SmartTradeRelationCustomField[] | null;
   hidden?: boolean | number | string | null;
   blocked?: boolean | number | string | null;
+  includedContactPersons?: Array<Record<string, unknown>> | null;
 };
 
 type SmartTradeRelationCustomField = {
@@ -129,6 +130,8 @@ type SmartTradeRelationsApiResponse = {
     hide?: boolean | number | string | null;
     blocked?: boolean | number | string | null;
     geblokkeerd?: boolean | number | string | null;
+    contactPersons?: SmartTradeContactPersonsApiResponse["data"];
+    contactpersons?: SmartTradeContactPersonsApiResponse["data"];
   }>;
 };
 
@@ -191,8 +194,11 @@ const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
 const MAILCHIMP_RELATION_MAX_PAGES = 100;
 const MAILCHIMP_RELATION_PAGE_CONCURRENCY = 6;
-const MAILCHIMP_CONTACT_CONCURRENCY = 24;
-const MAILCHIMP_SOURCE_CACHE_TTL_MS = 15 * 60 * 1000;
+const MAILCHIMP_RELATION_INCLUDE_PAGE_SIZE = 250;
+const MAILCHIMP_RELATION_PROBE_PAGE_SIZE = 25;
+const MAILCHIMP_CONTACT_CONCURRENCY = 48;
+const MAILCHIMP_CONTACT_INCLUDE_CANDIDATES = ["contactPersons", "contactpersons"] as const;
+const MAILCHIMP_SOURCE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const MAILCHIMP_SOURCE_CACHE_BUCKET = "smart-trade-settings";
 const MAILCHIMP_SOURCE_CACHE_FILE = "mailchimp-source-cache.json";
 const RELATION_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -501,11 +507,16 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>, ti
   }
 }
 
-function buildRelationsUrl(baseUrl: string, page: number) {
+function buildRelationsUrl(
+  baseUrl: string,
+  page: number,
+  contactPersonsInclude?: string | null,
+  pageSize = RELATION_PAGE_SIZE,
+) {
   const url = new URL(`${baseUrl.replace(/\/+$/, "")}/relations`);
   url.searchParams.set("page", String(page));
-  url.searchParams.set("per_page", String(RELATION_PAGE_SIZE));
-  url.searchParams.set("include", "customFields");
+  url.searchParams.set("per_page", String(pageSize));
+  url.searchParams.set("include", ["customFields", contactPersonsInclude].filter(Boolean).join(","));
   return url;
 }
 
@@ -557,6 +568,21 @@ function isSoftwareRelation(relation: SmartTradeRelation) {
   )) ?? false;
 }
 
+function readIncludedContactPersonRows(row: Record<string, unknown>) {
+  for (const key of MAILCHIMP_CONTACT_INCLUDE_CANDIDATES) {
+    if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+    const value = row[key];
+    if (Array.isArray(value)) return value.map((item) => unwrapContactPersonRow(item as Record<string, unknown>));
+    if (value && typeof value === "object") {
+      const data = (value as { data?: unknown }).data;
+      if (Array.isArray(data)) return data.map((item) => unwrapContactPersonRow(item as Record<string, unknown>));
+    }
+    return [];
+  }
+
+  return null;
+}
+
 function mapRelationRow(row: NonNullable<SmartTradeRelationsApiResponse["data"]>[number]) {
   if (row.id === undefined || row.id === null) return null;
 
@@ -578,6 +604,7 @@ function mapRelationRow(row: NonNullable<SmartTradeRelationsApiResponse["data"]>
     customFields: Array.isArray(row.customFields) ? row.customFields : [],
     hidden: row.hidden ?? row.hide ?? null,
     blocked: row.blocked ?? row.geblokkeerd ?? null,
+    includedContactPersons: readIncludedContactPersonRows(row as Record<string, unknown>),
   } satisfies SmartTradeRelation;
 }
 
@@ -958,6 +985,25 @@ async function loadMailchimpContacts(
   const headers = getHeaders(config);
   const relations = new Map<string, SmartTradeRelation>();
   const seenRelationIds = new Set<string>();
+  let contactPersonsInclude: string | null = null;
+
+  for (const includeCandidate of MAILCHIMP_CONTACT_INCLUDE_CANDIDATES) {
+    try {
+      const response = await fetchWithTimeout(
+        buildRelationsUrl(config.baseUrl, 1, includeCandidate, MAILCHIMP_RELATION_PROBE_PAGE_SIZE).toString(),
+        headers,
+        config.timeoutMs,
+      );
+      const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
+      const rows = Array.isArray(json.data) ? json.data : [];
+      if (rows.some((row) => readIncludedContactPersonRows(row as Record<string, unknown>) !== null)) {
+        contactPersonsInclude = includeCandidate;
+        break;
+      }
+    } catch {
+      // Niet iedere Smart Trade-versie ondersteunt deze relatie-include.
+    }
+  }
 
   for (
     let firstPage = 1;
@@ -969,7 +1015,16 @@ async function loadMailchimpContacts(
       (_, index) => firstPage + index,
     );
     const pages = await Promise.all(pageNumbers.map(async (page) => {
-      const response = await fetchWithTimeout(buildRelationsUrl(config.baseUrl, page).toString(), headers, config.timeoutMs);
+      const response = await fetchWithTimeout(
+        buildRelationsUrl(
+          config.baseUrl,
+          page,
+          contactPersonsInclude,
+          contactPersonsInclude ? MAILCHIMP_RELATION_INCLUDE_PAGE_SIZE : RELATION_PAGE_SIZE,
+        ).toString(),
+        headers,
+        config.timeoutMs,
+      );
       const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
       return Array.isArray(json.data) ? json.data : [];
     }));
@@ -1030,18 +1085,33 @@ async function loadMailchimpContacts(
 
   for (const relation of taggedRelations) addContact(relation, relation.email, "relation");
 
-  await mapWithConcurrency(taggedRelations, MAILCHIMP_CONTACT_CONCURRENCY, async (relation) => {
+  function addContactPersonRows(relation: SmartTradeRelation, rows: Array<Record<string, unknown>>) {
+    for (const row of rows) {
+      if (!contactPersonIsOnMailingList(row) || contactPersonIsDeleted(row)) continue;
+      contactPersonCount += 1;
+      addContact(relation, recordText(row, ["email", "emailAddress", "email_address"]), "contact");
+    }
+  }
+
+  const relationsWithoutIncludedContacts: SmartTradeRelation[] = [];
+  for (const relation of taggedRelations) {
+    if (relation.includedContactPersons === null || relation.includedContactPersons === undefined) {
+      relationsWithoutIncludedContacts.push(relation);
+      continue;
+    }
+    addContactPersonRows(relation, relation.includedContactPersons);
+    processedRelations += 1;
+    onProgress?.("contactpersons", processedRelations, taggedRelations.length);
+  }
+
+  await mapWithConcurrency(relationsWithoutIncludedContacts, MAILCHIMP_CONTACT_CONCURRENCY, async (relation) => {
     const url = new URL(`${config.baseUrl.replace(/\/+$/, "")}/relations/${encodeURIComponent(String(relation.id))}/contactpersons`);
     url.searchParams.set("per_page", "100");
 
     try {
       const response = await fetchWithTimeout(url.toString(), headers, config.timeoutMs);
       const rows = readContactPersonRows(await readSmartTradeJson<SmartTradeContactPersonsApiResponse>(response));
-      for (const row of rows) {
-        if (!contactPersonIsOnMailingList(row) || contactPersonIsDeleted(row)) continue;
-        contactPersonCount += 1;
-        addContact(relation, recordText(row, ["email", "emailAddress", "email_address"]), "contact");
-      }
+      addContactPersonRows(relation, rows);
     } catch {
       contactPersonErrorCount += 1;
     } finally {

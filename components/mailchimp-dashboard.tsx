@@ -55,6 +55,7 @@ type MailchimpPreview = {
   lastSyncAt: string | null;
   lastSyncResult: Record<string, unknown> | null;
   syncResult?: Record<string, unknown>;
+  refresh?: MailchimpRefreshStatus;
 };
 
 type StateFilter = "all" | ContactState | "conflict";
@@ -236,8 +237,26 @@ export default function MailchimpDashboard() {
     setStatus("Mailchimp-verbinding wordt gecontroleerd...");
     try {
       await requestPreview("GET", undefined, "?mode=connection");
+      if (forceRefresh) {
+        const previousUpdatedAt = refreshStatus?.sourceUpdatedAt;
+        setStatus("Nieuwe Smart Trade-controle wordt uitgevoerd...");
+        const result = await requestPreview("GET", undefined, "?mode=refresh");
+        const completedRefresh = result.refresh ?? null;
+        setRefreshStatus(completedRefresh);
+        const completedAt = completedRefresh?.sourceUpdatedAt;
+        if (
+          completedRefresh?.state !== "ready"
+          || !completedAt
+          || (previousUpdatedAt && Date.parse(completedAt) <= Date.parse(previousUpdatedAt))
+        ) {
+          throw new Error("De Smart Trade-controle heeft geen nieuw resultaat opgeleverd. Probeer het opnieuw.");
+        }
+        const seconds = Math.max(1, Math.round((performance.now() - startedAt) / 1000));
+        setStatus(`Smart Trade gecontroleerd en vooroverzicht bijgewerkt in ${seconds} seconden.`);
+        return;
+      }
       setStatus("Mailchimp is verbonden. Smart Trade-contacten worden voorbereid...");
-      const refresh = await requestRefresh(`?mode=start${forceRefresh ? "&refresh=1" : ""}`);
+      const refresh = await requestRefresh("?mode=start");
       setStatus(refreshMessage(refresh));
       if (refresh?.hasSource && refresh.state === "running") await requestPreview();
       if (refresh?.state !== "ready") await waitForRefresh();

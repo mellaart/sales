@@ -15,6 +15,7 @@ import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { canAccessTab, canWriteTab } from "@/lib/role-tabs";
 import { readRoleTabAccess } from "@/lib/role-tab-access-storage";
 import {
+  getMailchimpContacts,
   getMailchimpContactsRefreshStatus,
   getMailchimpContactsSnapshot,
   startMailchimpContactsRefresh,
@@ -124,6 +125,23 @@ export async function GET(request: Request) {
       return jsonResponse({
         refresh: await startMailchimpContactsRefresh({ forceRefresh: searchParams.get("refresh") === "1" }),
       }, 202);
+    }
+    if (mode === "refresh") {
+      const source = await getMailchimpContacts({ forceRefresh: true });
+      const refresh = await getMailchimpContactsRefreshStatus();
+      if (refresh.state !== "ready" || !refresh.sourceUpdatedAt) {
+        return jsonResponse({
+          error: refresh.error || "De nieuwe Smart Trade-controle is niet voltooid.",
+          refresh,
+        }, 500);
+      }
+      return jsonResponse({
+        ...await buildMailchimpPreview(
+          source,
+          removeFailuresMissingFromSmartTrade(settings, source),
+        ),
+        refresh,
+      });
     }
 
     const source = await getMailchimpContactsSnapshot();

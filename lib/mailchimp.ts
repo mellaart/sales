@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { SmartTradeMailchimpContact, SmartTradeMailchimpSource } from "@/lib/smart-trade-api";
 import type { MailchimpSyncSettings } from "@/lib/mailchimp-settings-storage";
 
@@ -52,11 +54,35 @@ type MailchimpConfig = {
 const BLOCKED_STATUSES = new Set(["unsubscribed", "cleaned", "pending", "transactional"]);
 const SYNC_CONCURRENCY = 5;
 
+function runtimeEnvironmentValue(name: string) {
+  const processValue = process.env[name]?.trim();
+  if (processValue) return processValue;
+
+  try {
+    const envPath = process.env.SALES_ENV_FILE?.trim() || join(process.cwd(), ".env.local");
+    const line = readFileSync(envPath, "utf8")
+      .split(/\r?\n/)
+      .find((candidate) => candidate.trim().replace(/^export\s+/, "").startsWith(`${name}=`));
+    if (!line) return "";
+
+    let value = line.trim().replace(/^export\s+/, "").slice(name.length + 1).trim();
+    const quote = value[0];
+    if ((quote === '"' || quote === "'") && value.endsWith(quote)) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, "").trim();
+    }
+    return value.trim();
+  } catch {
+    return "";
+  }
+}
+
 function configOrNull(): MailchimpConfig | null {
-  const apiKey = process.env.MAILCHIMP_API_KEY?.trim();
+  const apiKey = runtimeEnvironmentValue("MAILCHIMP_API_KEY");
   if (!apiKey) return null;
   const keyServer = apiKey.includes("-") ? apiKey.split("-").pop()?.trim() : "";
-  const server = process.env.MAILCHIMP_SERVER_PREFIX?.trim() || keyServer;
+  const server = runtimeEnvironmentValue("MAILCHIMP_SERVER_PREFIX") || keyServer;
   if (!server || !/^[a-z0-9-]+$/i.test(server)) {
     throw new Error("Mailchimp server-prefix ontbreekt. Vul MAILCHIMP_SERVER_PREFIX in.");
   }
@@ -64,7 +90,7 @@ function configOrNull(): MailchimpConfig | null {
     apiKey,
     server,
     baseUrl: `https://${server}.api.mailchimp.com/3.0`,
-    companyMergeTag: process.env.MAILCHIMP_COMPANY_MERGE_FIELD?.trim().toUpperCase() || "COMPANY",
+    companyMergeTag: runtimeEnvironmentValue("MAILCHIMP_COMPANY_MERGE_FIELD").toUpperCase() || "COMPANY",
   };
 }
 
@@ -95,7 +121,7 @@ async function mailchimpRequest<T>(config: MailchimpConfig, path: string, init?:
 
 export function getMailchimpConfigurationStatus() {
   const config = configOrNull();
-  const expiresAt = process.env.MAILCHIMP_API_KEY_EXPIRES_AT?.trim() || "2027-08-12";
+  const expiresAt = runtimeEnvironmentValue("MAILCHIMP_API_KEY_EXPIRES_AT") || "2027-08-12";
   const expiryTime = Date.parse(`${expiresAt}T23:59:59Z`);
   const apiKeyExpiryDays = Number.isFinite(expiryTime)
     ? Math.ceil((expiryTime - Date.now()) / 86_400_000)
@@ -171,7 +197,7 @@ function arraysEqual(left: string[], right: string[]) {
 }
 
 function resolveAudience(audiences: MailchimpAudience[], settings: MailchimpSyncSettings) {
-  const configuredId = process.env.MAILCHIMP_AUDIENCE_ID?.trim() || settings.audienceId;
+  const configuredId = runtimeEnvironmentValue("MAILCHIMP_AUDIENCE_ID") || settings.audienceId;
   if (configuredId) return audiences.find((audience) => audience.id === configuredId) ?? null;
   return audiences.length === 1 ? audiences[0] : null;
 }

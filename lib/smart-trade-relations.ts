@@ -67,7 +67,12 @@ function apiErrorMessage(status: number, body: unknown) {
     if (typeof message === "string" && message.trim()) return message.trim();
   }
 
-  if (typeof body === "string" && body.trim()) return body.trim().slice(0, 700);
+  if (typeof body === "string" && body.trim()) {
+    if (/<(?:!doctype|html|head|body)\b/i.test(body)) {
+      return `Smart Trade API gaf status ${status}; de ingestelde API-route is niet beschikbaar.`;
+    }
+    return body.trim().slice(0, 700);
+  }
   return `Smart Trade API gaf status ${status}.`;
 }
 
@@ -89,7 +94,7 @@ export async function createLiveSmartTradeRelation(companyName: string) {
   }
 
   const config = getSmartTradePullConfig("live");
-  const targetUrl = new URL("/api/v1/relations", config.baseUrl).toString();
+  const targetUrl = `${config.baseUrl.replace(/\/+$/, "")}/relations`;
   const response = await fetchWithSmartTradeTimeout(
     targetUrl,
     getSmartTradePullHeaders("live", { "content-type": "application/json" }),

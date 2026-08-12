@@ -198,6 +198,8 @@ const MAILCHIMP_RELATION_INCLUDE_PAGE_SIZE = 250;
 const MAILCHIMP_RELATION_PROBE_PAGE_SIZE = 25;
 const MAILCHIMP_CONTACT_CONCURRENCY = 48;
 const MAILCHIMP_CONTACT_INCLUDE_CANDIDATES = ["contactPersons", "contactpersons"] as const;
+const MAILCHIMP_REQUEST_TIMEOUT_MS = 60_000;
+const MAILCHIMP_REQUEST_ATTEMPTS = 3;
 const MAILCHIMP_SOURCE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const MAILCHIMP_SOURCE_CACHE_BUCKET = "smart-trade-settings";
 const MAILCHIMP_SOURCE_CACHE_FILE = "mailchimp-source-cache.json";
@@ -505,6 +507,38 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>, ti
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function getMailchimpRequestTimeoutMs(config: SmartTradeConfig) {
+  const configured = Number(process.env.SMART_TRADE_MAILCHIMP_TIMEOUT_MS);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return Math.max(config.timeoutMs, MAILCHIMP_REQUEST_TIMEOUT_MS);
+}
+
+function isRetryableSmartTradeError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Smart Trade API timeout|Smart Trade API verbinding mislukt|Smart Trade API fout (?:408|425|429|5\d\d)/i.test(message);
+}
+
+async function readSmartTradeJsonWithRetry<T>(
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAILCHIMP_REQUEST_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url, headers, timeoutMs);
+      return await readSmartTradeJson<T>(response);
+    } catch (error) {
+      lastError = error;
+      if (attempt === MAILCHIMP_REQUEST_ATTEMPTS || !isRetryableSmartTradeError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    }
+  }
+
+  throw lastError;
 }
 
 function buildRelationsUrl(
@@ -985,16 +1019,16 @@ async function loadMailchimpContacts(
   const headers = getHeaders(config);
   const relations = new Map<string, SmartTradeRelation>();
   const seenRelationIds = new Set<string>();
+  const requestTimeoutMs = getMailchimpRequestTimeoutMs(config);
   let contactPersonsInclude: string | null = null;
 
   for (const includeCandidate of MAILCHIMP_CONTACT_INCLUDE_CANDIDATES) {
     try {
-      const response = await fetchWithTimeout(
+      const json = await readSmartTradeJsonWithRetry<SmartTradeRelationsApiResponse>(
         buildRelationsUrl(config.baseUrl, 1, includeCandidate, MAILCHIMP_RELATION_PROBE_PAGE_SIZE).toString(),
         headers,
-        config.timeoutMs,
+        requestTimeoutMs,
       );
-      const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
       const rows = Array.isArray(json.data) ? json.data : [];
       if (rows.some((row) => readIncludedContactPersonRows(row as Record<string, unknown>) !== null)) {
         contactPersonsInclude = includeCandidate;
@@ -1015,7 +1049,7 @@ async function loadMailchimpContacts(
       (_, index) => firstPage + index,
     );
     const pages = await Promise.all(pageNumbers.map(async (page) => {
-      const response = await fetchWithTimeout(
+      const json = await readSmartTradeJsonWithRetry<SmartTradeRelationsApiResponse>(
         buildRelationsUrl(
           config.baseUrl,
           page,
@@ -1023,9 +1057,8 @@ async function loadMailchimpContacts(
           contactPersonsInclude ? MAILCHIMP_RELATION_INCLUDE_PAGE_SIZE : RELATION_PAGE_SIZE,
         ).toString(),
         headers,
-        config.timeoutMs,
+        requestTimeoutMs,
       );
-      const json = await readSmartTradeJson<SmartTradeRelationsApiResponse>(response);
       return Array.isArray(json.data) ? json.data : [];
     }));
 
@@ -1109,8 +1142,12 @@ async function loadMailchimpContacts(
     url.searchParams.set("per_page", "100");
 
     try {
-      const response = await fetchWithTimeout(url.toString(), headers, config.timeoutMs);
-      const rows = readContactPersonRows(await readSmartTradeJson<SmartTradeContactPersonsApiResponse>(response));
+      const json = await readSmartTradeJsonWithRetry<SmartTradeContactPersonsApiResponse>(
+        url.toString(),
+        headers,
+        requestTimeoutMs,
+      );
+      const rows = readContactPersonRows(json);
       addContactPersonRows(relation, rows);
     } catch {
       contactPersonErrorCount += 1;

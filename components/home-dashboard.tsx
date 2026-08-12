@@ -210,12 +210,19 @@ export default function HomeDashboard() {
       withoutDate,
     };
   }, [implementations]);
-  const implementationInvoiceActions = useMemo(() => implementations
-    .flatMap<ImplementationInvoiceAction>((implementation) => {
+  const implementationInvoiceActions = useMemo(() => {
+    const todayKey = getLocalDateKey(new Date());
+
+    return implementations.flatMap<ImplementationInvoiceAction>((implementation) => {
       const progress = normalizeImplementationProgress(implementation.progress);
       const actions: ImplementationInvoiceAction[] = [];
+      const implementationStartDateKey = getImplementationDateKey(implementation.implementation_start_date);
 
-      if (implementation.implementation_start_date && !progress.implementationStartInvoice) {
+      if (
+        implementationStartDateKey
+        && implementationStartDateKey < todayKey
+        && !progress.implementationStartInvoice
+      ) {
         actions.push({
           key: `${implementation.id}-start`,
           implementationId: implementation.id,
@@ -223,7 +230,7 @@ export default function HomeDashboard() {
           consultantName: implementation.assigned_consultant_name || "Nog niet toegewezen",
           label: "Factuur start implementatie",
           date: getImplementationDateLabel(implementation.implementation_start_date),
-          dateKey: getImplementationDateKey(implementation.implementation_start_date) ?? "",
+          dateKey: implementationStartDateKey,
         });
       }
 
@@ -241,7 +248,8 @@ export default function HomeDashboard() {
 
       return actions;
     })
-    .sort((left, right) => left.dateKey.localeCompare(right.dateKey)), [implementations]);
+      .sort((left, right) => left.dateKey.localeCompare(right.dateKey));
+  }, [implementations]);
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
 
   return (

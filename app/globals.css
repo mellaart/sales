@@ -4723,6 +4723,44 @@ td {
   justify-content: flex-end;
 }
 
+.deal-expansion-toggle.active {
+  border-color: rgba(96,165,250,0.52);
+  background: rgba(37,99,235,0.18);
+  color: var(--accent-text);
+}
+
+.deal-expansion-preview {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(148,163,184,0.16);
+}
+
+.deal-expansion-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.deal-expansion-preview-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.deal-expansion-preview-heading span {
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.deal-expansion-preview-heading strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
 .dashboard-page {
   display: grid;
   gap: 22px;

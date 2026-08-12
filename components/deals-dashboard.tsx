@@ -7,9 +7,12 @@ import {
   ArchiveRestore,
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   FileText,
   Inbox,
+  ListTree,
   RefreshCw,
   Search,
   Trash2,
@@ -18,7 +21,13 @@ import {
 import { getDealSalesName, loadDealSalesNames, type SalesNamesByUserId } from "@/lib/deal-sales-names";
 import { deleteDealWithFallback, listDealsWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { euro } from "@/lib/pricing";
-import { canViewAllDeals, type DealRecord, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
+import {
+  canViewAllDeals,
+  type AssetExpansionLine,
+  type DealRecord,
+  getSupabaseClient,
+  getUserDisplayName,
+} from "@/lib/supabase";
 import { StatusPill } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 
@@ -91,6 +100,17 @@ function getDealSearchValues(deal: DealRecord, salesName: string) {
   ];
 }
 
+function formatExpansionAmount(line: AssetExpansionLine) {
+  const suffix = line.cadence === "monthly" ? " p/m" : line.cadence === "annual" ? " p/j" : "";
+  return `${euro.format(Number(line.amount || 0))}${suffix}`;
+}
+
+function getExpansionCadenceLabel(line: AssetExpansionLine) {
+  if (line.cadence === "monthly") return "Per maand";
+  if (line.cadence === "annual") return "Per jaar";
+  return "Eenmalig";
+}
+
 export default function DealsDashboard() {
   const { user, profile, role } = useAuth();
   const supabase = getSupabaseClient();
@@ -100,6 +120,7 @@ export default function DealsDashboard() {
   const [query, setQuery] = useState("");
   const [dealFilter, setDealFilter] = useState<DealFilter>("all");
   const [archiveView, setArchiveView] = useState<ArchiveView>("active");
+  const [expandedDealIds, setExpandedDealIds] = useState<Set<string>>(() => new Set());
   const [status, setStatus] = useState("");
 
   const loadDeals = useCallback(async () => {
@@ -215,6 +236,15 @@ export default function DealsDashboard() {
 
     setStatus("Deal is teruggezet naar actieve deals.");
     await loadDeals();
+  };
+
+  const toggleExpansionLines = (dealId: string) => {
+    setExpandedDealIds((current) => {
+      const next = new Set(current);
+      if (next.has(dealId)) next.delete(dealId);
+      else next.add(dealId);
+      return next;
+    });
   };
 
   return (
@@ -347,6 +377,10 @@ export default function DealsDashboard() {
               const canDelete = role === "admin" || deal.user_id === user?.id;
               const canRestore = role === "admin" || deal.user_id === user?.id;
               const approval = dealApprovalLabel(deal);
+              const expansionDeal = isExpansionDeal(deal);
+              const expansionLines = expansionDeal ? deal.calculator_inputs?.assetsExpansion?.lines ?? [] : [];
+              const expansionLinesVisible = expansionDeal && expandedDealIds.has(deal.id);
+              const expansionPanelId = `deal-expansion-lines-${deal.id}`;
 
               return (
                 <article key={deal.id} className="deal-card-row">
@@ -374,6 +408,19 @@ export default function DealsDashboard() {
                       <strong>{euro.format(Number(deal.monthly_total || 0))}</strong>
                     </div>
                     <div className="button-row compact deal-actions">
+                      {expansionDeal ? (
+                        <button
+                          type="button"
+                          className={`secondary-button deal-expansion-toggle ${expansionLinesVisible ? "active" : ""}`}
+                          onClick={() => toggleExpansionLines(deal.id)}
+                          aria-expanded={expansionLinesVisible}
+                          aria-controls={expansionPanelId}
+                        >
+                          <ListTree size={16} />
+                          Uitbreidingsregels
+                          {expansionLinesVisible ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </button>
+                      ) : null}
                       <Link href={`/deals/${deal.id}`} className="primary-button"><ExternalLink size={16} /> Open</Link>
                       {archiveView === "archived" && canRestore ? (
                         <button type="button" className="secondary-button" onClick={() => void handleRestore(deal)}>
@@ -385,6 +432,33 @@ export default function DealsDashboard() {
                       ) : null}
                     </div>
                   </div>
+                  {expansionLinesVisible ? (
+                    <div id={expansionPanelId} className="deal-expansion-preview">
+                      <div className="deal-expansion-preview-heading">
+                        <div>
+                          <span>Uitbreiding</span>
+                          <strong>Uitbreidingsregels</strong>
+                        </div>
+                        <StatusPill tone="success">
+                          {expansionLines.length} {expansionLines.length === 1 ? "regel" : "regels"}
+                        </StatusPill>
+                      </div>
+                      <div className="expansion-line-list">
+                        {expansionLines.map((line, index) => (
+                          <div key={`${line.group}-${line.label}-${index}`} className="expansion-line-row">
+                            <div className="expansion-line-main">
+                              <strong className="expansion-line-title">{line.quantity}x {line.label}</strong>
+                              <span className="expansion-line-meta">
+                                {line.group} · {getExpansionCadenceLabel(line)}
+                                {line.note ? ` · ${line.note}` : ""}
+                              </span>
+                            </div>
+                            <strong className="expansion-line-price">{formatExpansionAmount(line)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </article>
               );
             })}

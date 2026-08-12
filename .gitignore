@@ -8,5 +8,7 @@ node_modules
 *.tsbuildinfo
 .next-server.pid
 .last-deployed-commit
+.last-deployed-env-hash
+.mailchimp-cron-secret
 storage
 EOF

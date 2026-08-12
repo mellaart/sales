@@ -176,7 +176,8 @@ const RELATION_PAGE_SIZE = 1000;
 const RELATION_MAX_PAGES = 5;
 const RELATION_MAX_RESULTS = 50;
 const MAILCHIMP_RELATION_MAX_PAGES = 100;
-const MAILCHIMP_CONTACT_CONCURRENCY = 8;
+const MAILCHIMP_CONTACT_CONCURRENCY = 16;
+const MAILCHIMP_SOURCE_CACHE_TTL_MS = 15 * 60 * 1000;
 const RELATION_CACHE_TTL_MS = 30 * 60 * 1000;
 const ASSET_PAGE_SIZE = 500;
 const ASSET_CLASS_PAGE_SIZE = 1000;
@@ -192,6 +193,17 @@ let relationCache: {
 let relationCacheLoad: {
   cacheKey: string;
   promise: Promise<SmartTradeRelation[]>;
+} | null = null;
+
+let mailchimpSourceCache: {
+  cacheKey: string;
+  expiresAt: number;
+  source: SmartTradeMailchimpSource;
+} | null = null;
+
+let mailchimpSourceLoad: {
+  cacheKey: string;
+  promise: Promise<SmartTradeMailchimpSource>;
 } | null = null;
 
 let assetClassCache: {
@@ -907,8 +919,7 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper:
   return output;
 }
 
-export async function getMailchimpContacts(): Promise<SmartTradeMailchimpSource> {
-  const config = getConfig();
+async function loadMailchimpContacts(config: SmartTradeConfig): Promise<SmartTradeMailchimpSource> {
   const headers = getHeaders(config);
   const relations = new Map<string, SmartTradeRelation>();
   const seenRelationIds = new Set<string>();
@@ -1008,4 +1019,34 @@ export async function getMailchimpContacts(): Promise<SmartTradeMailchimpSource>
     conflictCount: contacts.filter((contact) => contact.conflict).length,
     tags,
   };
+}
+
+export async function getMailchimpContacts(
+  options: { forceRefresh?: boolean } = {},
+): Promise<SmartTradeMailchimpSource> {
+  const config = getConfig();
+  const cacheKey = getRelationCacheKey(config);
+  const now = Date.now();
+
+  if (!options.forceRefresh && mailchimpSourceCache?.cacheKey === cacheKey && mailchimpSourceCache.expiresAt > now) {
+    return mailchimpSourceCache.source;
+  }
+
+  if (mailchimpSourceLoad?.cacheKey === cacheKey) return mailchimpSourceLoad.promise;
+
+  const promise = loadMailchimpContacts(config).then((source) => {
+    mailchimpSourceCache = {
+      cacheKey,
+      expiresAt: Date.now() + MAILCHIMP_SOURCE_CACHE_TTL_MS,
+      source,
+    };
+    return source;
+  });
+  mailchimpSourceLoad = { cacheKey, promise };
+
+  try {
+    return await promise;
+  } finally {
+    if (mailchimpSourceLoad?.promise === promise) mailchimpSourceLoad = null;
+  }
 }

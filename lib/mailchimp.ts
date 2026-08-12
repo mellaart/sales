@@ -202,12 +202,27 @@ function resolveAudience(audiences: MailchimpAudience[], settings: MailchimpSync
   return audiences.length === 1 ? audiences[0] : null;
 }
 
-export async function buildMailchimpPreview(source: SmartTradeMailchimpSource, settings: MailchimpSyncSettings): Promise<MailchimpPreview> {
+export async function buildMailchimpPreview(
+  sourceInput: SmartTradeMailchimpSource | Promise<SmartTradeMailchimpSource>,
+  settings: MailchimpSyncSettings,
+  options: { includeMembers?: boolean } = {},
+): Promise<MailchimpPreview> {
   const configuration = getMailchimpConfigurationStatus();
   const audiences = configuration.configured ? await getMailchimpAudiences() : [];
   const audience = resolveAudience(audiences, settings);
   const config = configOrNull();
-  const members = config && audience ? await getMembers(config, audience.id) : new Map<string, MailchimpMember>();
+  const includeMembers = options.includeMembers !== false;
+  const membersPromise = config && audience && includeMembers
+    ? getMembers(config, audience.id)
+    : Promise.resolve(new Map<string, MailchimpMember>());
+  const companyFieldPromise = config && audience
+    ? companyFieldExists(config, audience.id)
+    : Promise.resolve(false);
+  const [source, members, companyFieldReady] = await Promise.all([
+    Promise.resolve(sourceInput),
+    membersPromise,
+    companyFieldPromise,
+  ]);
   const managedTags = new Set([...settings.managedTags, ...source.tags]);
   const contacts: MailchimpPreviewContact[] = source.contacts.map((contact) => {
     const current = members.get(contact.email);
@@ -237,7 +252,7 @@ export async function buildMailchimpPreview(source: SmartTradeMailchimpSource, s
       blocked: contacts.filter((contact) => contact.state === "blocked").length,
       removeTags,
     },
-    companyFieldReady: config && audience ? await companyFieldExists(config, audience.id) : false,
+    companyFieldReady,
     lastSyncAt: settings.lastSyncAt,
     lastSyncResult: settings.lastSyncResult,
   };

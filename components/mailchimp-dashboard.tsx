@@ -85,6 +85,7 @@ export default function MailchimpDashboard() {
   const [accessLoading, setAccessLoading] = useState(true);
   const [preview, setPreview] = useState<MailchimpPreview | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingSeconds, setLoadingSeconds] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -94,6 +95,18 @@ export default function MailchimpDashboard() {
 
   const canView = canAccessTab(role, "mailchimp", roleTabAccess);
   const canWrite = canWriteTab(role, "mailchimp", roleTabAccess);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setLoadingSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading]);
 
   useEffect(() => {
     if (!role) {
@@ -136,14 +149,16 @@ export default function MailchimpDashboard() {
     return json;
   }
 
-  async function loadPreview() {
+  async function loadPreview(forceRefresh = false) {
+    const startedAt = performance.now();
     setLoading(true);
     setStatus("Mailchimp-verbinding wordt gecontroleerd...");
     try {
       await requestPreview("GET", undefined, "?mode=connection");
-      setStatus("Mailchimp is verbonden. Smart Trade-contacten worden opgehaald...");
-      await requestPreview();
-      setStatus("Vooroverzicht bijgewerkt.");
+      setStatus("Mailchimp is verbonden. Smart Trade-contacten worden opgehaald; de eerste volledige controle duurt langer...");
+      await requestPreview("GET", undefined, forceRefresh ? "?refresh=1" : "");
+      const seconds = Math.max(1, Math.round((performance.now() - startedAt) / 1000));
+      setStatus(`Vooroverzicht bijgewerkt in ${seconds} seconden.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Vooroverzicht laden mislukt.");
     } finally {
@@ -255,7 +270,7 @@ export default function MailchimpDashboard() {
           <div className="top-row">
             <div><div className="eyebrow">Koppeling</div><h2>Synchronisatie voorbereiden</h2><p className="subtext">Laatste synchronisatie: {localDate(preview?.lastSyncAt ?? null)}</p></div>
             <div className="mailchimp-actions">
-              <button type="button" className="secondary-button" onClick={() => void loadPreview()} disabled={loading || syncing}><RefreshCw size={16} />{loading ? "Laden..." : "Voorbeeld vernieuwen"}</button>
+              <button type="button" className="secondary-button" onClick={() => void loadPreview(true)} disabled={loading || syncing}><RefreshCw size={16} />{loading ? "Laden..." : "Voorbeeld vernieuwen"}</button>
               <button
                 type="button"
                 className="primary-button"
@@ -287,7 +302,7 @@ export default function MailchimpDashboard() {
               {preview?.audienceSelected ? <span className={preview.companyFieldReady ? "success" : "warning"}>{preview.companyFieldReady ? <CheckCircle2 size={18} /> : <RefreshCw size={18} />}{preview.companyFieldReady ? "Bedrijfsveld gereed" : "Bedrijfsveld wordt bij synchronisatie aangemaakt"}</span> : null}
             </div>
           </div>
-          {status ? <div className="save-status">{status}</div> : null}
+          {status ? <div className="save-status">{status}{loadingSeconds > 0 ? ` (${loadingSeconds} sec.)` : ""}</div> : null}
         </section>
 
         <section className="card panel">

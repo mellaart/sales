@@ -62,10 +62,11 @@ export async function GET(request: Request) {
     if (!verified.ok) return jsonResponse({ error: verified.message }, 403);
 
     const settings = await readMailchimpSettings(service);
-    if (new URL(request.url).searchParams.get("mode") === "connection") {
-      return jsonResponse(await buildMailchimpPreview(EMPTY_SOURCE, settings));
+    const searchParams = new URL(request.url).searchParams;
+    if (searchParams.get("mode") === "connection") {
+      return jsonResponse(await buildMailchimpPreview(EMPTY_SOURCE, settings, { includeMembers: false }));
     }
-    const source = await getMailchimpContacts();
+    const source = getMailchimpContacts({ forceRefresh: searchParams.get("refresh") === "1" });
     return jsonResponse(await buildMailchimpPreview(source, settings));
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : "Mailchimp-voorvertoning laden mislukt." }, 500);

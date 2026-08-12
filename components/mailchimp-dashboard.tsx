@@ -113,10 +113,14 @@ export default function MailchimpDashboard() {
     return () => { active = false; };
   }, [role]);
 
-  async function requestPreview(method: "GET" | "POST" = "GET", body?: Record<string, unknown>) {
+  async function requestPreview(
+    method: "GET" | "POST" = "GET",
+    body?: Record<string, unknown>,
+    query = "",
+  ) {
     const token = await getToken();
     if (!token) throw new Error("Je sessie is verlopen. Log opnieuw in.");
-    const response = await fetch("/api/admin/mailchimp", {
+    const response = await fetch(`/api/admin/mailchimp${query}`, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -134,8 +138,10 @@ export default function MailchimpDashboard() {
 
   async function loadPreview() {
     setLoading(true);
-    setStatus("Gegevens uit Smart Trade en Mailchimp worden vergeleken...");
+    setStatus("Mailchimp-verbinding wordt gecontroleerd...");
     try {
+      await requestPreview("GET", undefined, "?mode=connection");
+      setStatus("Mailchimp is verbonden. Smart Trade-contacten worden opgehaald...");
       await requestPreview();
       setStatus("Vooroverzicht bijgewerkt.");
     } catch (error) {
@@ -272,7 +278,11 @@ export default function MailchimpDashboard() {
           <div className="mailchimp-settings-grid">
             <label className="input-wrap"><span className="input-label">Mailchimp-publiek</span><select className="input" value={selectedAudienceId} onChange={(event) => void selectAudience(event.target.value)} disabled={loading || syncing || !canWrite}><option value="">Selecteer een publiek</option>{preview?.audiences.map((audience) => <option value={audience.id} key={audience.id}>{audience.name} ({audience.memberCount})</option>)}</select></label>
             <div className="mailchimp-connection-status">
-              <span className={preview?.configured ? "success" : "danger"}>{preview?.configured ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}{preview?.configured ? "API-key ingesteld" : "API-key ontbreekt"}</span>
+              {!preview ? (
+                <span className="warning"><RefreshCw size={18} />API-key controleren</span>
+              ) : (
+                <span className={preview.configured ? "success" : "danger"}>{preview.configured ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}{preview.configured ? "API-key ingesteld" : "API-key ontbreekt"}</span>
+              )}
               <span className={preview?.audienceSelected ? "success" : "warning"}>{preview?.audienceSelected ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}{preview?.audienceSelected ? `Publiek: ${preview.audience?.name}` : "Publiek nog niet gekozen"}</span>
               {preview?.audienceSelected ? <span className={preview.companyFieldReady ? "success" : "warning"}>{preview.companyFieldReady ? <CheckCircle2 size={18} /> : <RefreshCw size={18} />}{preview.companyFieldReady ? "Bedrijfsveld gereed" : "Bedrijfsveld wordt bij synchronisatie aangemaakt"}</span> : null}
             </div>

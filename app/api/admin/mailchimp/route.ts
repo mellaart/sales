@@ -12,6 +12,16 @@ import type { UserRole } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const EMPTY_SOURCE = {
+  contacts: [],
+  relationCount: 0,
+  contactPersonCount: 0,
+  contactPersonErrorCount: 0,
+  invalidEmailCount: 0,
+  conflictCount: 0,
+  tags: [],
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -52,6 +62,9 @@ export async function GET(request: Request) {
     if (!verified.ok) return jsonResponse({ error: verified.message }, 403);
 
     const settings = await readMailchimpSettings(service);
+    if (new URL(request.url).searchParams.get("mode") === "connection") {
+      return jsonResponse(await buildMailchimpPreview(EMPTY_SOURCE, settings));
+    }
     const source = await getMailchimpContacts();
     return jsonResponse(await buildMailchimpPreview(source, settings));
   } catch (error) {

@@ -385,6 +385,16 @@ export default function MailchimpDashboard() {
           </div>
         ) : null}
 
+        {refreshStatus?.state === "error" ? (
+          <div className="mailchimp-alert danger">
+            <AlertTriangle size={20} />
+            <span>
+              De laatste Smart Trade-controle is mislukt
+              {refreshStatus.completedAt ? ` op ${localDate(refreshStatus.completedAt)}` : ""}: {refreshStatus.error || "onbekende fout"}
+            </span>
+          </div>
+        ) : null}
+
         {preview?.source.contactPersonErrorCount ? (
           <div className="mailchimp-alert warning">
             <AlertTriangle size={20} />
@@ -415,7 +425,20 @@ export default function MailchimpDashboard() {
 
         <section className="card panel mailchimp-control-panel">
           <div className="top-row">
-            <div><div className="eyebrow">Koppeling</div><h2>Synchronisatie voorbereiden</h2><p className="subtext">Laatste synchronisatie: {localDate(preview?.lastSyncAt ?? null)}</p>{refreshStatus?.sourceUpdatedAt ? <p className="subtext">Smart Trade gecontroleerd: {localDate(refreshStatus.sourceUpdatedAt)}</p> : null}</div>
+            <div>
+              <div className="eyebrow">Koppeling</div>
+              <h2>Synchronisatie voorbereiden</h2>
+              <p className="subtext">Laatste synchronisatie: {localDate(preview?.lastSyncAt ?? null)}</p>
+              {refreshStatus?.sourceUpdatedAt ? (
+                <p className="subtext">Laatste geslaagde Smart Trade-controle: {localDate(refreshStatus.sourceUpdatedAt)}</p>
+              ) : null}
+              {refreshStatus?.state === "running" && refreshStatus.startedAt ? (
+                <p className="subtext">Nieuwe Smart Trade-controle gestart: {localDate(refreshStatus.startedAt)}</p>
+              ) : null}
+              {refreshStatus?.state === "error" && (refreshStatus.completedAt || refreshStatus.startedAt) ? (
+                <p className="subtext">Laatste poging: {localDate(refreshStatus.completedAt ?? refreshStatus.startedAt)}</p>
+              ) : null}
+            </div>
             <div className="mailchimp-actions">
               <button type="button" className="secondary-button" onClick={() => void loadPreview(true)} disabled={loading || syncing || Boolean(retrying)}><RefreshCw size={16} />{loading ? "Laden..." : "Voorbeeld vernieuwen"}</button>
               <button

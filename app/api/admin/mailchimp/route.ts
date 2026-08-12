@@ -5,7 +5,11 @@ import {
   synchronizeMailchimp,
   type MailchimpSyncFailure,
 } from "@/lib/mailchimp";
-import { readMailchimpSettings, writeMailchimpSettings } from "@/lib/mailchimp-settings-storage";
+import {
+  readMailchimpSettings,
+  writeMailchimpSettings,
+  type MailchimpSyncSettings,
+} from "@/lib/mailchimp-settings-storage";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { ensureProtectedAdminRole } from "@/lib/protected-admin-server";
 import { canAccessTab, canWriteTab } from "@/lib/role-tabs";
@@ -14,6 +18,7 @@ import {
   getMailchimpContactsRefreshStatus,
   getMailchimpContactsSnapshot,
   startMailchimpContactsRefresh,
+  type SmartTradeMailchimpSource,
 } from "@/lib/smart-trade-api";
 import type { UserRole } from "@/lib/supabase";
 
@@ -48,6 +53,27 @@ function syncFailures(value: unknown): MailchimpSyncFailure[] {
       : "";
     return email && error ? [{ email, error }] : [];
   });
+}
+
+function removeFailuresMissingFromSmartTrade(
+  settings: MailchimpSyncSettings,
+  source: SmartTradeMailchimpSource,
+) {
+  const failures = syncFailures(settings.lastSyncResult);
+  if (!failures.length || !settings.lastSyncResult) return settings;
+
+  const currentEmails = new Set(source.contacts.map((contact) => contact.email.trim().toLowerCase()));
+  const currentFailures = failures.filter((failure) => currentEmails.has(failure.email));
+  if (currentFailures.length === failures.length) return settings;
+
+  return {
+    ...settings,
+    lastSyncResult: {
+      ...settings.lastSyncResult,
+      failed: currentFailures.length,
+      failures: currentFailures,
+    },
+  };
 }
 
 async function verifyMailchimpAccess(request: Request, service: ServiceClient, write = false) {
@@ -107,7 +133,10 @@ export async function GET(request: Request) {
         refresh: await startMailchimpContactsRefresh(),
       }, 202);
     }
-    return jsonResponse(await buildMailchimpPreview(source, settings));
+    return jsonResponse(await buildMailchimpPreview(
+      source,
+      removeFailuresMissingFromSmartTrade(settings, source),
+    ));
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : "Mailchimp-voorvertoning laden mislukt." }, 500);
   }
@@ -138,7 +167,10 @@ export async function POST(request: Request) {
     if (action === "selectAudience") {
       await writeMailchimpSettings(service, selectedSettings);
       const source = await getMailchimpContactsSnapshot();
-      return jsonResponse(await buildMailchimpPreview(source ?? EMPTY_SOURCE, selectedSettings));
+      const previewSettings = source
+        ? removeFailuresMissingFromSmartTrade(selectedSettings, source)
+        : selectedSettings;
+      return jsonResponse(await buildMailchimpPreview(source ?? EMPTY_SOURCE, previewSettings));
     }
 
     const refresh = await getMailchimpContactsRefreshStatus();
@@ -156,7 +188,8 @@ export async function POST(request: Request) {
         error: `Synchronisatie geblokkeerd: bij ${source.contactPersonErrorCount} relaties konden de contactpersonen niet volledig worden opgehaald. Vernieuw het voorbeeld en probeer het opnieuw.`,
       }, 409);
     }
-    const previousFailures = syncFailures(currentSettings.lastSyncResult);
+    const activeSettings = removeFailuresMissingFromSmartTrade(selectedSettings, source);
+    const previousFailures = syncFailures(activeSettings.lastSyncResult);
     const requestedEmails = action === "retryFailures" && Array.isArray(body?.emails)
       ? Array.from(new Set(body.emails.map((email) => String(email).trim().toLowerCase()).filter(Boolean)))
       : [];
@@ -173,7 +206,7 @@ export async function POST(request: Request) {
 
     const result = await synchronizeMailchimp(
       source,
-      selectedSettings,
+      activeSettings,
       action === "retryFailures" ? { onlyEmails: retryEmails } : {},
     );
     const retrySet = new Set(retryEmails);

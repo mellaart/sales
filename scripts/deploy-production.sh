@@ -175,7 +175,12 @@ stop_app() {
 
 start_app() {
   log "Start app op poort $PORT"
-  nohup env PORT="$PORT" PATH="$NPM_DIR:$PATH" "$NPM_BIN" run start > "$APP_LOG" 2>&1 &
+  if [ -f "$ENV_FILE" ]; then
+    nohup env PATH="$NPM_DIR:$PATH" "$NODE_BIN" --env-file="$ENV_FILE" \
+      "$APP_DIR/node_modules/next/dist/bin/next" start -p "$PORT" > "$APP_LOG" 2>&1 &
+  else
+    nohup env PORT="$PORT" PATH="$NPM_DIR:$PATH" "$NPM_BIN" run start > "$APP_LOG" 2>&1 &
+  fi
   echo "$!" > "$PID_FILE"
   sleep 3
 

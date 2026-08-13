@@ -2737,6 +2737,56 @@ select optgroup {
   white-space: nowrap;
 }
 
+.implementation-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.implementation-order-actions .primary-button,
+.implementation-order-actions .secondary-button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.implementation-order-breakdown {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.implementation-order-breakdown span {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.implementation-order-breakdown strong,
+.implementation-order-breakdown b {
+  color: var(--text);
+}
+
+.implementation-order-message {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.implementation-order-message.success {
+  color: #86efac;
+}
+
+.implementation-order-message.error {
+  color: #fca5a5;
+}
+
 .implementation-dns-domain-field {
   grid-column: 1 / -1;
   width: min(100%, 440px);
@@ -3154,6 +3204,23 @@ select optgroup {
     display: grid;
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  .implementation-order-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .implementation-order-actions .primary-button,
+  .implementation-order-actions .secondary-button {
+    width: 100%;
+  }
+
+  .implementation-order-breakdown span {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 
   .implementation-dns-actions .primary-button,

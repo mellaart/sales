@@ -275,6 +275,9 @@ export async function ensureLocalSchema() {
           financial_package text,
           website_webshop text,
           dns_domain text,
+          smart_trade_order_id text,
+          smart_trade_order_created_at timestamptz,
+          smart_trade_order_pending_at timestamptz,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -304,6 +307,9 @@ export async function ensureLocalSchema() {
         alter table public.implementations add column if not exists financial_package text;
         alter table public.implementations add column if not exists website_webshop text;
         alter table public.implementations add column if not exists dns_domain text;
+        alter table public.implementations add column if not exists smart_trade_order_id text;
+        alter table public.implementations add column if not exists smart_trade_order_created_at timestamptz;
+        alter table public.implementations add column if not exists smart_trade_order_pending_at timestamptz;
         alter table public.implementations add column if not exists created_at timestamptz not null default now();
         alter table public.implementations add column if not exists updated_at timestamptz not null default now();
         alter table public.implementations drop constraint if exists implementations_deal_id_fkey;

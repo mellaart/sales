@@ -35,6 +35,7 @@ const dealColumns = [
   "created_at",
   "updated_at",
   "archived_at",
+  "smart_trade_relation_id",
   "customer_name",
   "quote_title",
   "contact_name",
@@ -182,6 +183,7 @@ async function ensureLocalSchema(client) {
       accepted_at timestamptz,
       accepted_by_name text,
       accepted_by_email text,
+      smart_trade_relation_id bigint,
       customer_name text,
       quote_title text,
       contact_name text,
@@ -216,6 +218,7 @@ async function ensureLocalSchema(client) {
     alter table public.deals add column if not exists accepted_at timestamptz;
     alter table public.deals add column if not exists accepted_by_name text;
     alter table public.deals add column if not exists accepted_by_email text;
+    alter table public.deals add column if not exists smart_trade_relation_id bigint;
 
     create table if not exists public.deal_approvals (
       id uuid primary key default gen_random_uuid(),

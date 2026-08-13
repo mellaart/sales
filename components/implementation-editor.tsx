@@ -76,6 +76,10 @@ import type {
   ImplementationPortalAccess,
 } from "@/lib/implementation-portal";
 import { getDealPriceSummary } from "@/lib/deal-price-summary";
+import {
+  getImplementationOrderBreakdown,
+  IMPLEMENTATION_ARTICLE_ID,
+} from "@/lib/implementation-order";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { euro } from "@/lib/pricing";
 import {
@@ -198,6 +202,16 @@ type AppointmentWorkGroup = {
 };
 
 type ImplementationWorkStatus = "" | "todo" | "completed";
+
+type ImplementationOrderResponse = {
+  error?: string;
+  orderId?: string | null;
+  orderCreatedAt?: string | null;
+  relationId?: number;
+  employeeId?: number;
+  reference?: string;
+  breakdown?: ReturnType<typeof getImplementationOrderBreakdown>;
+};
 
 const APPOINTMENT_WORK_CATEGORY_LABELS: Record<AppointmentWorkCategory, string> = {
   tasks: "Taken",
@@ -784,6 +798,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [saving, setSaving] = useState(false);
   const [dnsOutlookBusy, setDnsOutlookBusy] = useState(false);
   const [newCustomerOutlookBusy, setNewCustomerOutlookBusy] = useState(false);
+  const [implementationOrderBusy, setImplementationOrderBusy] = useState<"preview" | "create" | null>(null);
+  const [implementationOrderPreview, setImplementationOrderPreview] = useState<ImplementationOrderResponse | null>(null);
+  const [implementationOrderMessage, setImplementationOrderMessage] = useState("");
+  const [implementationOrderMessageTone, setImplementationOrderMessageTone] = useState<"info" | "success" | "error">("info");
   const [customerOutlookBusyKey, setCustomerOutlookBusyKey] = useState<string | null>(null);
   const [dnsCheck, setDnsCheck] = useState<ImplementationDnsCheck | null>(null);
   const [dnsCheckLoading, setDnsCheckLoading] = useState(false);
@@ -804,6 +822,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const dealPriceSummary = useMemo(
     () => linkedDeal ? getDealPriceSummary(linkedDeal, pricingConfig) : null,
     [linkedDeal, pricingConfig],
+  );
+  const implementationOrderBreakdown = useMemo(
+    () => linkedDeal ? getImplementationOrderBreakdown(linkedDeal) : null,
+    [linkedDeal],
   );
   const implementationCustomWorkItems = useMemo(
     () => normalizeImplementationCustomWorkItems(implementation?.implementation_custom_work_items),
@@ -950,6 +972,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setAppointmentsWarning("");
     setLinkedDeal(null);
     setLinkedDealError("");
+    setImplementationOrderPreview(null);
+    setImplementationOrderMessage("");
+    setImplementationOrderMessageTone("info");
     setDnsDomainInput("");
     dnsDomainInputRef.current = "";
 
@@ -2122,6 +2147,68 @@ export default function ImplementationEditor({ implementationId }: { implementat
       setMessage(errorMessage);
     } finally {
       setNewCustomerOutlookBusy(false);
+    }
+  }
+
+  async function handleImplementationOrder(mode: "preview" | "create") {
+    if (!implementation || implementationOrderBusy || saving) return;
+
+    if (mode === "create") {
+      const confirmed = window.confirm(
+        `Live order "${implementationOrderBreakdown?.reference || "Smart Trade implementatie"}" aanmaken voor ${implementation.customer_name}?`,
+      );
+      if (!confirmed) return;
+    }
+
+    setImplementationOrderBusy(mode);
+    setImplementationOrderMessageTone("info");
+    setImplementationOrderMessage(
+      mode === "preview" ? "Order wordt gecontroleerd..." : "Live order wordt aangemaakt...",
+    );
+
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/order`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode }),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as ImplementationOrderResponse;
+      if (!response.ok) throw new Error(json.error || "Implementatieorder verwerken mislukt.");
+
+      if (mode === "preview") {
+        setImplementationOrderPreview(json);
+        setImplementationOrderMessageTone("success");
+        setImplementationOrderMessage(
+          `Controle geslaagd voor relatie ${json.relationId}. De live order kan worden aangemaakt.`,
+        );
+        return;
+      }
+
+      setImplementation((current) => current ? {
+        ...current,
+        smart_trade_order_id: json.orderId ?? "Aangemaakt",
+        smart_trade_order_created_at: json.orderCreatedAt ?? new Date().toISOString(),
+        smart_trade_order_pending_at: null,
+        progress: {
+          ...normalizeImplementationProgress(current.progress),
+          implementationOrder: true,
+        },
+      } : current);
+      setImplementationOrderPreview(null);
+      setImplementationOrderMessageTone("success");
+      setImplementationOrderMessage(
+        `Smart Trade-order ${json.orderId || "is"} aangemaakt en Implementatieorder is afgevinkt.`,
+      );
+    } catch (error) {
+      setImplementationOrderMessageTone("error");
+      setImplementationOrderMessage(
+        error instanceof Error ? error.message : "Implementatieorder verwerken mislukt.",
+      );
+    } finally {
+      setImplementationOrderBusy(null);
     }
   }
 
@@ -3322,6 +3409,83 @@ export default function ImplementationEditor({ implementationId }: { implementat
               >
                 <Mail size={16} /> {newCustomerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
               </button>
+            </article>
+
+            <article className="implementation-communication-card implementation-order-card">
+              <div className="implementation-communication-icon"><ClipboardCheck size={22} /></div>
+              <div className="implementation-communication-copy">
+                <span>Implementatieorder</span>
+                <strong>
+                  {implementation.smart_trade_order_id
+                    ? `Smart Trade-order ${implementation.smart_trade_order_id}`
+                    : implementationOrderBreakdown?.reference || "Order wordt voorbereid"}
+                </strong>
+                <p>
+                  {implementation.smart_trade_order_id
+                    ? `Aangemaakt op ${formatDateTime(implementation.smart_trade_order_created_at) || "onbekende datum"}.`
+                    : linkedDeal?.smart_trade_relation_id
+                      ? `Relatie ${linkedDeal.smart_trade_relation_id} · artikel ${IMPLEMENTATION_ARTICLE_ID} · ${euro.format(implementationOrderBreakdown?.totalAmount ?? 0)}`
+                      : "Koppel eerst de Smart Trade-relatie aan deze deal."}
+                </p>
+              </div>
+              {implementation.smart_trade_order_id ? (
+                <StatusPill tone="success">Aangemaakt</StatusPill>
+              ) : (
+                <div className="implementation-order-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!canEdit || !linkedDeal?.smart_trade_relation_id || Boolean(implementationOrderBusy)}
+                    onClick={() => void handleImplementationOrder("preview")}
+                  >
+                    {implementationOrderBusy === "preview"
+                      ? <LoaderCircle className="implementation-dns-spinner" size={16} />
+                      : <ClipboardCheck size={16} />}
+                    {implementationOrderBusy === "preview" ? "Controleren..." : "Order controleren"}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={
+                      !canEdit
+                      || !implementationOrderPreview
+                      || Boolean(implementationOrderBusy)
+                    }
+                    title={implementationOrderPreview
+                      ? "Maak de gecontroleerde order live aan in Smart Trade"
+                      : "Controleer de order eerst"}
+                    onClick={() => void handleImplementationOrder("create")}
+                  >
+                    {implementationOrderBusy === "create"
+                      ? <LoaderCircle className="implementation-dns-spinner" size={16} />
+                      : <ClipboardCheck size={16} />}
+                    {implementationOrderBusy === "create" ? "Aanmaken..." : "Aanmaken in Smart Trade"}
+                  </button>
+                </div>
+              )}
+              {!implementation.smart_trade_order_id && implementationOrderBreakdown ? (
+                <div className="implementation-order-breakdown">
+                  <span>
+                    <strong>Artikel {IMPLEMENTATION_ARTICLE_ID}</strong>
+                    {implementationOrderBreakdown.description}
+                    <b>{euro.format(implementationOrderBreakdown.implementationAmount)}</b>
+                  </span>
+                  {implementationOrderBreakdown.travelAmount > 0 ? (
+                    <span>
+                      <strong>Artikel {implementationOrderBreakdown.travelArticleId ?? "-"}</strong>
+                      Reiskosten - Regio {implementationOrderBreakdown.travelRegion ?? "-"}
+                      <b>
+                        {implementationOrderBreakdown.travelQuantity} x {euro.format(implementationOrderBreakdown.travelPricePerUnit)}
+                      </b>
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              {implementationOrderMessage ? (
+                <div className={`implementation-order-message ${implementationOrderMessageTone}`}>
+                  {implementationOrderMessage}
+                </div>
+              ) : null}
             </article>
           </div>
 

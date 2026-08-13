@@ -239,6 +239,9 @@ export type ImplementationRecord = {
   financial_package?: string | null;
   website_webshop?: string | null;
   dns_domain?: string | null;
+  smart_trade_order_id?: string | null;
+  smart_trade_order_created_at?: string | null;
+  smart_trade_order_pending_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

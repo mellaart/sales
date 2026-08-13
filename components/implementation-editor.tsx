@@ -2255,6 +2255,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
     customerIntake,
   );
   const customerIntakeComplete = intakePresentation.tone === "success";
+  const customerIntakeProgressLabel = customerIntakeComplete
+    ? "Verwerkt"
+    : intakePresentation.label;
+  const dnsInstructionsProcessed = Boolean(progress.dnsInstructions);
   const customerDomain = getWebsiteDomain(dnsDomainInput);
   const customerEmail = customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || "";
   const hasCustomerEmail = /^\S+@\S+\.\S+$/.test(customerEmail.trim());
@@ -3248,7 +3252,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   >
                     <span className="implementation-progress-number">{item.number}</span>
                     <strong>{item.label}</strong>
-                    <StatusPill tone={intakePresentation.tone}>{intakePresentation.label}</StatusPill>
+                    <StatusPill tone={intakePresentation.tone}>{customerIntakeProgressLabel}</StatusPill>
                   </div>
                 ) : item.key === "implementationOrder" ? (
                   <div
@@ -3292,10 +3296,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <div className="implementation-communication-icon"><FileText size={22} /></div>
               <div className="implementation-communication-copy">
                 <span>Klantformulier</span>
-                <strong>{intakePresentation.label}</strong>
+                <strong>{customerIntakeProgressLabel}</strong>
                 <p>{customerEmail || "Nog geen e-mailadres beschikbaar"}</p>
               </div>
-              <StatusPill tone={intakePresentation.tone}>{intakePresentation.label}</StatusPill>
+              <StatusPill tone={intakePresentation.tone}>{customerIntakeProgressLabel}</StatusPill>
             </article>
 
             <article className="implementation-communication-card implementation-dns-card">
@@ -3306,6 +3310,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <p>Automatische controle van de verplichte SPF- en DKIM-records.</p>
               </div>
               <div className="implementation-dns-actions">
+                {dnsInstructionsProcessed ? (
+                  <StatusPill tone="success">Verwerkt</StatusPill>
+                ) : null}
                 <button
                   type="button"
                   className="secondary-button"

@@ -197,22 +197,26 @@ export async function POST(
       }, 409);
     }
 
+    const implementationDescription = breakdown.description;
     const lines = [{
       sortOrder: 1,
       article: IMPLEMENTATION_ARTICLE_ID,
       quantity: "1",
       unit: "st",
-      description: breakdown.description,
+      description: implementationDescription,
+      headerText: implementationDescription,
       remark: "",
       price: decimalString(breakdown.implementationAmount),
     }];
     if (breakdown.travelAmount > 0 && breakdown.travelArticleId && breakdown.travelRegion) {
+      const travelDescription = `Reiskosten - Regio ${breakdown.travelRegion}`;
       lines.push({
         sortOrder: 2,
         article: breakdown.travelArticleId,
         quantity: String(breakdown.travelQuantity),
         unit: "st",
-        description: `Reiskosten - Regio ${breakdown.travelRegion}`,
+        description: travelDescription,
+        headerText: implementationDescription,
         remark: "",
         price: decimalString(breakdown.travelPricePerUnit),
       });
@@ -226,7 +230,6 @@ export async function POST(
       shouldCondseHeader: true,
       reference: breakdown.reference,
       commentAboveLines: "",
-      internalComment: `Aangemaakt vanuit Sales-implementatie ${implementation.id}.`,
       lines,
     };
 

@@ -2154,13 +2154,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
   async function handleImplementationOrder(mode: "preview" | "create") {
     if (!implementation || !canManageImplementation || implementationOrderBusy || saving) return;
 
-    if (mode === "create") {
-      const confirmed = window.confirm(
-        `Live order "${implementationOrderBreakdown?.reference || "Smart Trade implementatie"}" aanmaken voor ${implementation.customer_name}?`,
-      );
-      if (!confirmed) return;
-    }
-
     setImplementationOrderBusy(mode);
     setImplementationOrderMessageTone("info");
     setImplementationOrderMessage(

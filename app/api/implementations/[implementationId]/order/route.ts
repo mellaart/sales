@@ -4,8 +4,6 @@ import { requireLocalUser } from "@/lib/local-auth";
 import { query } from "@/lib/local-db";
 import { executeLocalTableQuery } from "@/lib/local-table";
 import { PROTECTED_ADMIN_EMAILS, isProtectedAdminEmail } from "@/lib/protected-admin";
-import { readLocalRoleTabAccess } from "@/lib/role-tab-access-storage";
-import { canWriteTab } from "@/lib/role-tabs";
 import {
   fetchWithSmartTradeTimeout,
   getSmartTradePullConfig,
@@ -107,12 +105,8 @@ export async function POST(
     const verified = await requireLocalUser(request);
     if (!verified.ok) return jsonResponse({ error: verified.message }, 401);
 
-    const roleTabAccess = await readLocalRoleTabAccess();
-    if (
-      !isProtectedAdminEmail(verified.user.email)
-      && !canWriteTab(verified.profile.role, "implementation", roleTabAccess)
-    ) {
-      return jsonResponse({ error: "Je hebt geen schrijfrechten voor Implementatie." }, 403);
+    if (!isProtectedAdminEmail(verified.user.email)) {
+      return jsonResponse({ error: "Alleen Erik Mellaart kan de implementatieorder verwerken." }, 403);
     }
 
     const body = (await request.json().catch(() => null)) as ModeBody | null;

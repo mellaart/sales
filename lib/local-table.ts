@@ -482,6 +482,20 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
     actor &&
     !isProtectedAdminEmail(actor.user.email) &&
     [
+      "status",
+      "notes",
+      "progress",
+      "dns_domain",
+    ].some((column) => Object.prototype.hasOwnProperty.call(rawPayload, column))
+  ) {
+    throw new Error("Alleen Erik Mellaart kan Implementatie beheren wijzigen.");
+  }
+
+  if (
+    table === "implementations" &&
+    actor &&
+    !isProtectedAdminEmail(actor.user.email) &&
+    [
       "assigned_consultant_id",
       "assigned_consultant_name",
       "assigned_consultant_email",

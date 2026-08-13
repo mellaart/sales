@@ -816,9 +816,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const pendingAppointmentSavesRef = useRef(0);
   const [message, setMessage] = useState("");
 
-  const canAssign = isProtectedAdminEmail(user?.email);
-  const canView = canAssign || canAccessTab(role, "implementation", roleTabAccess);
-  const canEdit = canAssign || canWriteTab(role, "implementation", roleTabAccess);
+  const canManageImplementation = isProtectedAdminEmail(user?.email);
+  const canAssign = canManageImplementation;
+  const canView = canManageImplementation || canAccessTab(role, "implementation", roleTabAccess);
+  const canEdit = canManageImplementation || canWriteTab(role, "implementation", roleTabAccess);
   const dealPriceSummary = useMemo(
     () => linkedDeal ? getDealPriceSummary(linkedDeal, pricingConfig) : null,
     [linkedDeal, pricingConfig],
@@ -1214,7 +1215,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   function updateProgress(key: ImplementationProgressKey, checked: boolean) {
-    if (!implementation || !canEdit || saving) return;
+    if (!implementation || !canManageImplementation || saving || key === "implementationOrder") return;
 
     const progress = {
       ...normalizeImplementationProgress(implementation.progress),
@@ -1224,7 +1225,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function completeOutlookProgress(key: ImplementationProgressKey) {
-    if (!implementation || !canEdit) return false;
+    if (!implementation || !canManageImplementation || key === "implementationOrder") return false;
 
     const currentProgress = normalizeImplementationProgress(implementation.progress);
     if (currentProgress[key]) return true;
@@ -1564,7 +1565,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   function saveDnsDomain() {
-    if (!implementation || !canEdit) return;
+    if (!implementation || !canManageImplementation) return;
 
     const rawDomain = dnsDomainInputRef.current.trim();
     const domain = getWebsiteDomain(rawDomain);
@@ -1988,7 +1989,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function handleDnsOutlookDraft() {
-    if (!implementation || dnsOutlookBusy || saving) return;
+    if (!implementation || !canManageImplementation || dnsOutlookBusy || saving) return;
 
     const recipientEmail = (
       customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || ""
@@ -2082,7 +2083,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function handleNewCustomerOutlookDraft() {
-    if (!implementation || newCustomerOutlookBusy || saving) return;
+    if (!implementation || !canManageImplementation || newCustomerOutlookBusy || saving) return;
 
     const outlookWindow = window.open("about:blank", "_blank");
     if (outlookWindow) outlookWindow.opener = null;
@@ -2151,7 +2152,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function handleImplementationOrder(mode: "preview" | "create") {
-    if (!implementation || implementationOrderBusy || saving) return;
+    if (!implementation || !canManageImplementation || implementationOrderBusy || saving) return;
 
     if (mode === "create") {
       const confirmed = window.confirm(
@@ -2200,7 +2201,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
       setImplementationOrderPreview(null);
       setImplementationOrderMessageTone("success");
       setImplementationOrderMessage(
-        `Smart Trade-order ${json.orderId || "is"} aangemaakt en Implementatieorder is afgevinkt.`,
+        `Smart Trade-order ${json.orderId || "is"} aangemaakt. Implementatieorder staat op Verwerkt.`,
       );
     } catch (error) {
       setImplementationOrderMessageTone("error");
@@ -3179,7 +3180,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <div className="eyebrow">Planning en voortgang</div>
               <h2 className="headline">Implementatie beheren</h2>
             </div>
-            <StatusPill tone={canEdit ? "success" : "neutral"}>{canEdit ? "Schrijven" : "Lezen"}</StatusPill>
+            <StatusPill tone={canManageImplementation ? "success" : "neutral"}>
+              {canManageImplementation ? "Beheren" : "Alleen Erik kan wijzigen"}
+            </StatusPill>
           </div>
 
           <div className="implementation-controls implementation-detail-controls">
@@ -3210,7 +3213,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <select
                 className="input implementation-dark-select"
                 value={implementation.status}
-                disabled={!canEdit || saving}
+                disabled={!canManageImplementation || saving}
                 onChange={(event) => void saveImplementation(
                   { status: event.target.value as ImplementationStatus },
                   "Status bijgewerkt.",
@@ -3225,7 +3228,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <ImplementationNotesField
               label="Interne notities"
               value={implementation.notes ?? ""}
-              disabled={!canEdit || saving}
+              disabled={!canManageImplementation || saving}
               placeholder="Planning, afspraken of aandachtspunten"
               onChange={(value) => setImplementation({ ...implementation, notes: value })}
               onBlur={(value) => void saveImplementation(
@@ -3254,6 +3257,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     <strong>{item.label}</strong>
                     <StatusPill tone={intakePresentation.tone}>{intakePresentation.label}</StatusPill>
                   </div>
+                ) : item.key === "implementationOrder" ? (
+                  <div
+                    key={item.key}
+                    className={`implementation-progress-row ${implementation.smart_trade_order_id ? "completed" : ""}`}
+                  >
+                    <span className="implementation-progress-number">{item.number}</span>
+                    <strong>{item.label}</strong>
+                    <StatusPill tone={implementation.smart_trade_order_id ? "success" : "neutral"}>
+                      {implementation.smart_trade_order_id ? "Verwerkt" : "Niet verwerkt"}
+                    </StatusPill>
+                  </div>
                 ) : (
                   <label
                     key={item.key}
@@ -3270,7 +3284,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     <input
                       type="checkbox"
                       checked={Boolean(progress[item.key])}
-                      disabled={!canEdit || saving}
+                      disabled={!canManageImplementation || saving}
                       aria-label={`${item.label} afgerond`}
                       onChange={(event) => updateProgress(item.key, event.target.checked)}
                     />
@@ -3311,7 +3325,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={!canEdit || !customerDomain || !hasCustomerEmail || dnsOutlookBusy || saving}
+                  disabled={!canManageImplementation || !customerDomain || !hasCustomerEmail || dnsOutlookBusy || saving}
                   title={hasCustomerEmail
                     ? "DNS-instructies in Outlook klaarzetten"
                     : "Een klant-e-mailadres is nodig voor een Outlook-concept"}
@@ -3330,7 +3344,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   autoComplete="url"
                   maxLength={253}
                   value={dnsDomainInput}
-                  disabled={!canEdit}
+                  disabled={!canManageImplementation}
                   placeholder="bijv. klant.nl"
                   onChange={(event) => updateDnsDomainInput(event.currentTarget.value)}
                   onBlur={saveDnsDomain}
@@ -3401,7 +3415,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <button
                 type="button"
                 className="primary-button"
-                disabled={!canEdit || !newCustomerMailReady || newCustomerOutlookBusy || saving}
+                disabled={!canManageImplementation || !newCustomerMailReady || newCustomerOutlookBusy || saving}
                 title={newCustomerMailReady
                   ? "Maak de interne nieuwe klantmail in Outlook"
                   : `Nog nodig: ${newCustomerMailMissingFields.join(", ")}`}
@@ -3429,13 +3443,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 </p>
               </div>
               {implementation.smart_trade_order_id ? (
-                <StatusPill tone="success">Aangemaakt</StatusPill>
+                <StatusPill tone="success">Verwerkt</StatusPill>
               ) : (
                 <div className="implementation-order-actions">
                   <button
                     type="button"
                     className="secondary-button"
-                    disabled={!canEdit || !linkedDeal?.smart_trade_relation_id || Boolean(implementationOrderBusy)}
+                    disabled={!canManageImplementation || !linkedDeal?.smart_trade_relation_id || Boolean(implementationOrderBusy)}
                     onClick={() => void handleImplementationOrder("preview")}
                   >
                     {implementationOrderBusy === "preview"
@@ -3447,7 +3461,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     type="button"
                     className="primary-button"
                     disabled={
-                      !canEdit
+                      !canManageImplementation
                       || !implementationOrderPreview
                       || Boolean(implementationOrderBusy)
                     }

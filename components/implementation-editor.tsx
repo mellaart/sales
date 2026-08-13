@@ -2168,7 +2168,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const newCustomerMailReady = newCustomerMailMissingFields.length === 0;
   const progressRows = [
     ...IMPLEMENTATION_PROGRESS_ITEMS.map((item) => ({ kind: "check" as const, ...item })),
-    { kind: "intake" as const, number: 2, key: "customerIntake", label: "Klantformulier" },
+    { kind: "intake" as const, number: 1, key: "customerIntake", label: "Klantformulier" },
   ].sort((left, right) => left.number - right.number);
   const progressRequiresAction = (key: ImplementationProgressKey) => (
     key === "implementationStartInvoice" && Boolean(implementation.implementation_start_date)

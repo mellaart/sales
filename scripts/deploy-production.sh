@@ -192,6 +192,10 @@ start_app() {
 
   if command -v curl >/dev/null 2>&1; then
     if curl -fsS "http://127.0.0.1:$PORT" >/dev/null; then
+      if [ -x "$APP_DIR/scripts/run-customer-intake-sync.sh" ]; then
+        bash "$APP_DIR/scripts/run-customer-intake-sync.sh" || \
+          log "Klantformulieren konden tijdens de deploy niet volledig worden verwerkt; de automatische herhaling blijft actief."
+      fi
       git rev-parse HEAD > "$DEPLOYED_FILE"
       printf "%s\n" "$CURRENT_ENV_HASH" > "$DEPLOYED_ENV_FILE"
       log "Deploy klaar: $(git rev-parse --short HEAD)"
@@ -213,5 +217,8 @@ if [ "${SALES_INSTALL_WEEKLY_DEALS_CRON:-1}" = "1" ]; then
 fi
 if [ "${SALES_INSTALL_MAILCHIMP_CRON:-1}" = "1" ]; then
   bash "$APP_DIR/scripts/install-nightly-mailchimp-cron.sh"
+fi
+if [ "${SALES_INSTALL_CUSTOMER_INTAKE_CRON:-1}" = "1" ]; then
+  bash "$APP_DIR/scripts/install-customer-intake-sync-cron.sh"
 fi
 start_app

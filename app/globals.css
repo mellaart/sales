@@ -7025,6 +7025,27 @@ td {
   opacity: 0.62;
 }
 
+.customer-intake-sync-message {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.customer-intake-sync-message.success {
+  border-color: color-mix(in srgb, var(--success) 48%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+
+.customer-intake-sync-message.error {
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
 .customer-intake-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

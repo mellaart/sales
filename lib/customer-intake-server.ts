@@ -17,10 +17,12 @@ import {
 import {
   createLiveSmartTradeRelation,
   formatSmartTradeMandateReference,
+  syncCustomerIntakeToSmartTrade,
 } from "@/lib/smart-trade-relations";
 import type { ProfileRecord } from "@/lib/supabase";
 
 const CUSTOMER_INTAKE_TTL_DAYS = 30;
+const CUSTOMER_INTAKE_AUTOMATION_STARTED_AT = "2026-08-13T00:00:00+02:00";
 
 type Actor = {
   user: LocalUser;
@@ -51,6 +53,9 @@ type CustomerIntakeRow = {
   processed_by: string | null;
   notification_sent_at: string | null;
   notification_error: string | null;
+  smart_trade_synced_at: string | null;
+  smart_trade_sync_attempted_at: string | null;
+  smart_trade_sync_error: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -201,6 +206,9 @@ function toSummary(
     publicUrl: getCustomerIntakePublicUrl(request, row),
     expiresAt: row.expires_at,
     submittedAt: row.submitted_at,
+    smartTradeSyncedAt: row.smart_trade_synced_at,
+    smartTradeSyncAttemptedAt: row.smart_trade_sync_attempted_at,
+    smartTradeSyncError: row.smart_trade_sync_error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -336,6 +344,26 @@ export async function createOrRefreshCustomerIntake(
                when $7 then null
                else public.customer_intakes.submitted_at
              end,
+             processed_at = case
+               when $7 then null
+               else public.customer_intakes.processed_at
+             end,
+             processed_by = case
+               when $7 then null
+               else public.customer_intakes.processed_by
+             end,
+             smart_trade_synced_at = case
+               when $7 then null
+               else public.customer_intakes.smart_trade_synced_at
+             end,
+             smart_trade_sync_attempted_at = case
+               when $7 then null
+               else public.customer_intakes.smart_trade_sync_attempted_at
+             end,
+             smart_trade_sync_error = case
+               when $7 then null
+               else public.customer_intakes.smart_trade_sync_error
+             end,
              expires_at = case
                when $7 or public.customer_intakes.expires_at <= now()
                  then now() + ($6 * interval '1 day')
@@ -456,8 +484,13 @@ export async function submitPublicCustomerIntake(
          direct_debit_mandate = $4::jsonb,
          status = 'submitted',
          submitted_at = now(),
+         processed_at = null,
+         processed_by = null,
          notification_sent_at = null,
          notification_error = null,
+         smart_trade_synced_at = null,
+         smart_trade_sync_attempted_at = null,
+         smart_trade_sync_error = null,
          updated_at = now()
      where id = $1
        and status <> 'revoked'
@@ -482,6 +515,146 @@ export async function recordCustomerIntakeNotification(
     `update public.customer_intakes
      set notification_sent_at = case when $2::text is null then now() else null end,
          notification_error = $2,
+         updated_at = now()
+     where id = $1`,
+    [id, errorMessage],
+  );
+}
+
+type CustomerIntakeSyncRow = CustomerIntakeRow & {
+  smart_trade_relation_id: number | null;
+};
+
+export async function syncSubmittedCustomerIntake(id: string) {
+  try {
+    const { rows } = await query<CustomerIntakeSyncRow>(
+      `select ci.*, d.smart_trade_relation_id
+       from public.customer_intakes ci
+       join public.deals d on d.id = ci.deal_id
+       where ci.id = $1
+       limit 1`,
+      [id],
+    );
+    const row = rows[0];
+    if (!row) return { ok: false, error: "Klantformulier niet gevonden." } as const;
+    if (!row.smart_trade_relation_id) {
+      const error = "Het Smart Trade-relatienummer ontbreekt.";
+      await recordCustomerIntakeSmartTradeSync(row.id, error);
+      return { ok: false, error } as const;
+    }
+    if (!row.submitted_at) {
+      return { ok: false, error: "Het klantformulier is nog niet door de klant verzonden." } as const;
+    }
+
+    const result = await syncCustomerIntakeToSmartTrade(
+      row.smart_trade_relation_id,
+      normalizeCustomerIntakeData(row.form_data),
+    );
+    await recordCustomerIntakeSmartTradeSync(row.id, null);
+    return { ok: true, result } as const;
+  } catch (error) {
+    const message = error instanceof Error
+      ? error.message
+      : "Klantgegevens verwerken in Smart Trade mislukt.";
+    await recordCustomerIntakeSmartTradeSync(id, message.slice(0, 2_000)).catch((recordError) => {
+      console.error("Smart Trade-synchronisatiefout opslaan mislukt:", recordError);
+    });
+    return { ok: false, error: message } as const;
+  }
+}
+
+export async function syncCustomerIntakeForDeal(dealId: string, actor: Actor) {
+  const access = await requireAccessibleCalculatorDeal(dealId, actor);
+  if (!access.ok) return access;
+
+  const { rows } = await query<Pick<CustomerIntakeRow, "id">>(
+    `select id
+     from public.customer_intakes
+     where deal_id = $1
+     limit 1`,
+    [dealId],
+  );
+  if (!rows[0]) {
+    return { ok: false, error: "Voor deze deal is geen klantformulier gevonden." } as const;
+  }
+
+  return syncSubmittedCustomerIntake(rows[0].id);
+}
+
+export async function syncPendingCustomerIntakes(limit = 10) {
+  const safeLimit = Number.isSafeInteger(limit) ? Math.min(Math.max(limit, 1), 25) : 10;
+  let rows: Array<{ id: string; smart_trade_relation_id: number }>;
+  try {
+    const pending = await query<{ id: string; smart_trade_relation_id: number }>(
+      `select ci.id, d.smart_trade_relation_id
+       from public.customer_intakes ci
+       join public.deals d on d.id = ci.deal_id
+       where ci.submitted_at >= $1::timestamptz
+         and ci.status = 'submitted'
+         and ci.smart_trade_synced_at is null
+         and d.smart_trade_relation_id is not null
+         and (
+           ci.smart_trade_sync_attempted_at is null
+           or ci.smart_trade_sync_attempted_at <= now() - interval '10 minutes'
+         )
+       order by ci.submitted_at asc
+       limit $2`,
+      [CUSTOMER_INTAKE_AUTOMATION_STARTED_AT, safeLimit],
+    );
+    rows = pending.rows;
+  } catch (error) {
+    if (!/smart_trade_(?:synced|sync_attempted)_at/i.test(
+      error instanceof Error ? error.message : "",
+    )) throw error;
+
+    const pending = await query<{ id: string; smart_trade_relation_id: number }>(
+      `select ci.id, d.smart_trade_relation_id
+       from public.customer_intakes ci
+       join public.deals d on d.id = ci.deal_id
+       where ci.submitted_at >= $1::timestamptz
+         and ci.status = 'submitted'
+         and d.smart_trade_relation_id is not null
+       order by ci.submitted_at asc
+       limit $2`,
+      [CUSTOMER_INTAKE_AUTOMATION_STARTED_AT, safeLimit],
+    );
+    rows = pending.rows;
+  }
+
+  const results: Array<{
+    intakeId: string;
+    relationId: number;
+    ok: boolean;
+    error?: string;
+  }> = [];
+
+  for (const row of rows) {
+    const result = await syncSubmittedCustomerIntake(row.id);
+    results.push({
+      intakeId: row.id,
+      relationId: row.smart_trade_relation_id,
+      ok: result.ok,
+      ...(!result.ok ? { error: result.error } : {}),
+    });
+  }
+
+  return {
+    checked: rows.length,
+    succeeded: results.filter((result) => result.ok).length,
+    failed: results.filter((result) => !result.ok).length,
+    results,
+  };
+}
+
+async function recordCustomerIntakeSmartTradeSync(id: string, errorMessage: string | null) {
+  await query(
+    `update public.customer_intakes
+     set smart_trade_sync_attempted_at = now(),
+         smart_trade_synced_at = case when $2::text is null then now() else null end,
+         smart_trade_sync_error = $2,
+         status = case when $2::text is null then 'processed' else 'submitted' end,
+         processed_at = case when $2::text is null then now() else null end,
+         processed_by = null,
          updated_at = now()
      where id = $1`,
     [id, errorMessage],

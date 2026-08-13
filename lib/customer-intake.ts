@@ -69,6 +69,9 @@ export type CustomerIntakeSummary = {
   publicUrl: string;
   expiresAt: string;
   submittedAt: string | null;
+  smartTradeSyncedAt: string | null;
+  smartTradeSyncAttemptedAt: string | null;
+  smartTradeSyncError: string | null;
   createdAt: string;
   updatedAt: string;
 };

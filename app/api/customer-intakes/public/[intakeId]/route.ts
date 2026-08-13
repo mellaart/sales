@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import {
   getPublicCustomerIntake,
   recordCustomerIntakeNotification,
+  syncSubmittedCustomerIntake,
   submitPublicCustomerIntake,
 } from "@/lib/customer-intake-server";
 import { sendCustomerIntakeNotification } from "@/lib/customer-intake-notification";
@@ -78,30 +79,40 @@ export async function POST(
       );
     }
 
-    try {
-      await sendCustomerIntakeNotification({
-        request,
-        intakeId: updated.id,
-        dealId: updated.deal_id,
-        submittedAt: updated.submitted_at || new Date().toISOString(),
-        formData,
-      });
-      await recordCustomerIntakeNotification(updated.id, null);
-    } catch (notificationError) {
-      const message = notificationError instanceof Error
-        ? notificationError.message
-        : "Onbekende fout bij klantformulier-notificatie.";
-      console.error(`Klantformulier-notificatie voor ${updated.id} mislukt: ${message}`);
-      await recordCustomerIntakeNotification(updated.id, message.slice(0, 1_000))
-        .catch((recordError) => {
-          console.error("Notificatiefout opslaan mislukt:", recordError);
+    after(async () => {
+      const smartTradeSync = await syncSubmittedCustomerIntake(updated.id);
+      if (!smartTradeSync.ok) {
+        console.error(
+          `Klantformulier ${updated.id} verwerken in Smart Trade mislukt: ${smartTradeSync.error}`,
+        );
+      }
+
+      try {
+        await sendCustomerIntakeNotification({
+          request,
+          intakeId: updated.id,
+          dealId: updated.deal_id,
+          submittedAt: updated.submitted_at || new Date().toISOString(),
+          formData,
         });
-    }
+        await recordCustomerIntakeNotification(updated.id, null);
+      } catch (notificationError) {
+        const message = notificationError instanceof Error
+          ? notificationError.message
+          : "Onbekende fout bij klantformulier-notificatie.";
+        console.error(`Klantformulier-notificatie voor ${updated.id} mislukt: ${message}`);
+        await recordCustomerIntakeNotification(updated.id, message.slice(0, 1_000))
+          .catch((recordError) => {
+            console.error("Notificatiefout opslaan mislukt:", recordError);
+          });
+      }
+    });
 
     return jsonResponse({
       ok: true,
       status: "submitted",
       submittedAt: updated.submitted_at,
+      smartTradeSyncScheduled: true,
     });
   } catch (error) {
     return jsonResponse(

@@ -541,6 +541,9 @@ export async function ensureLocalSchema() {
         alter table public.customer_intakes add column if not exists notification_sent_at timestamptz;
         alter table public.customer_intakes add column if not exists notification_error text;
         alter table public.customer_intakes add column if not exists direct_debit_mandate jsonb;
+        alter table public.customer_intakes add column if not exists smart_trade_synced_at timestamptz;
+        alter table public.customer_intakes add column if not exists smart_trade_sync_attempted_at timestamptz;
+        alter table public.customer_intakes add column if not exists smart_trade_sync_error text;
 
         create index if not exists customer_intakes_created_by_idx
           on public.customer_intakes(created_by, updated_at desc);

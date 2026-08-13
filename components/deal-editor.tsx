@@ -1101,6 +1101,39 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  async function syncCustomerIntakeWithSmartTrade() {
+    if (customerIntakeBusy || !customerIntake?.submittedAt) return;
+
+    setCustomerIntakeBusy(true);
+    setCustomerIntakeStatus(`Klantgegevens worden verwerkt in relatie ${customerIntake.smartTradeRelationId ?? ""}...`);
+
+    try {
+      const response = await fetch("/api/customer-intakes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync", dealId }),
+      });
+      const json = await response.json().catch(() => ({})) as {
+        intake?: CustomerIntakeSummary | null;
+        error?: string;
+      };
+
+      if (!response.ok || !json.intake) {
+        setCustomerIntakeStatus(json.error || "Klantgegevens verwerken in Smart Trade mislukt.");
+        return;
+      }
+
+      setCustomerIntake(json.intake);
+      setCustomerIntakeStatus(
+        `Klantgegevens zijn verwerkt in Smart Trade-relatie ${json.intake.smartTradeRelationId}.`,
+      );
+    } catch {
+      setCustomerIntakeStatus("Klantgegevens verwerken in Smart Trade mislukt.");
+    } finally {
+      setCustomerIntakeBusy(false);
+    }
+  }
+
   async function getUsableCustomerIntake() {
     const expired = customerIntake
       ? new Date(customerIntake.expiresAt).getTime() <= Date.now()
@@ -2127,10 +2160,37 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     >
                       <Link2 size={16} /> Nieuwe link
                     </button>
+                    {customerIntake.submittedAt ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={customerIntakeBusy || !customerIntake.smartTradeRelationId}
+                        onClick={() => void syncCustomerIntakeWithSmartTrade()}
+                      >
+                        <RefreshCw size={16} />
+                        {customerIntake.smartTradeSyncedAt
+                          ? "Opnieuw verwerken"
+                          : "Verwerken in Smart Trade"}
+                      </button>
+                    ) : null}
                   </>
                 ) : null}
               </div>
             </div>
+
+            {customerIntake?.smartTradeSyncError ? (
+              <div className="customer-intake-sync-message error">
+                Smart Trade-verwerking mislukt: {customerIntake.smartTradeSyncError}
+              </div>
+            ) : customerIntake?.smartTradeSyncedAt ? (
+              <div className="customer-intake-sync-message success">
+                Verwerkt in Smart Trade-relatie {customerIntake.smartTradeRelationId} op{" "}
+                {new Intl.DateTimeFormat("nl-NL", {
+                  dateStyle: "long",
+                  timeStyle: "short",
+                }).format(new Date(customerIntake.smartTradeSyncedAt))}.
+              </div>
+            ) : null}
 
             {customerIntake?.submittedAt ? (
               <div className="customer-intake-summary">

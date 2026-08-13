@@ -159,7 +159,11 @@ export default function CustomerIntakeForm({
 
       setSaved(true);
       setIntake((current) => current
-        ? { ...current, status: "submitted", submittedAt: json.submittedAt ?? new Date().toISOString() }
+        ? {
+            ...current,
+            status: "submitted",
+            submittedAt: json.submittedAt ?? new Date().toISOString(),
+          }
         : current);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {

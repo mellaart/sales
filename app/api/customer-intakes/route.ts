@@ -3,6 +3,7 @@ import { requireLocalUser } from "@/lib/local-auth";
 import {
   createOrRefreshCustomerIntake,
   getCustomerIntakeForDeal,
+  syncCustomerIntakeForDeal,
 } from "@/lib/customer-intake-server";
 
 export const dynamic = "force-dynamic";
@@ -58,9 +59,20 @@ export async function POST(request: Request) {
       recipientEmail?: unknown;
       regenerate?: unknown;
       smartTradeRelationId?: unknown;
+      action?: unknown;
     } | null;
     const dealId = dealIdValue(body?.dealId);
     if (!dealId) return jsonResponse({ error: "Deal-ID ontbreekt." }, 400);
+
+    const actor = { user: verified.user, profile: verified.profile };
+    if (body?.action === "sync") {
+      const syncResult = await syncCustomerIntakeForDeal(dealId, actor);
+      if (!syncResult.ok) return jsonResponse({ error: syncResult.error }, 502);
+
+      const refreshed = await getCustomerIntakeForDeal(request, dealId, actor);
+      if (!("intake" in refreshed)) return jsonResponse({ error: refreshed.error }, 403);
+      return jsonResponse({ ok: true, intake: refreshed.intake, result: syncResult.result });
+    }
 
     const recipientEmail = typeof body?.recipientEmail === "string"
       ? body.recipientEmail.trim().toLowerCase()
@@ -76,7 +88,7 @@ export async function POST(request: Request) {
     const result = await createOrRefreshCustomerIntake(
       request,
       dealId,
-      { user: verified.user, profile: verified.profile },
+      actor,
       {
         recipientEmail,
         regenerate: body?.regenerate === true,

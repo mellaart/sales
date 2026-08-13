@@ -1198,6 +1198,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
     void saveImplementation({ progress }, `${IMPLEMENTATION_PROGRESS_ITEMS.find((item) => item.key === key)?.label ?? "Stap"} bijgewerkt.`, true);
   }
 
+  async function completeOutlookProgress(key: ImplementationProgressKey) {
+    if (!implementation || !canEdit) return false;
+
+    const currentProgress = normalizeImplementationProgress(implementation.progress);
+    if (currentProgress[key]) return true;
+
+    return saveImplementation(
+      { progress: { ...currentProgress, [key]: true } },
+      `${IMPLEMENTATION_PROGRESS_ITEMS.find((item) => item.key === key)?.label ?? "Stap"} automatisch afgerond.`,
+      true,
+    );
+  }
+
   function updateImplementationItem(
     item: ImplementationItem,
     checked: boolean,
@@ -1950,7 +1963,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function handleDnsOutlookDraft() {
-    if (!implementation || dnsOutlookBusy) return;
+    if (!implementation || dnsOutlookBusy || saving) return;
 
     const recipientEmail = (
       customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || ""
@@ -2029,8 +2042,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
       if (!response.ok || !json.webLink) {
         throw new Error(json.error || "DNS-concept maken mislukt.");
       }
+      const progressSaved = await completeOutlookProgress("dnsInstructions");
       if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
-      setMessage(`DNS-concept voor ${domain} is aangemaakt.`);
+      setMessage(progressSaved
+        ? `DNS-concept voor ${domain} is aangemaakt en DNS-instructies is afgevinkt.`
+        : `DNS-concept voor ${domain} is aangemaakt, maar DNS-instructies kon niet worden afgevinkt.`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "DNS-concept maken mislukt.";
       showOutlookPopupStatus(outlookWindow, "DNS-concept niet gemaakt", errorMessage, "error");
@@ -2041,7 +2057,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   }
 
   async function handleNewCustomerOutlookDraft() {
-    if (!implementation || newCustomerOutlookBusy) return;
+    if (!implementation || newCustomerOutlookBusy || saving) return;
 
     const outlookWindow = window.open("about:blank", "_blank");
     if (outlookWindow) outlookWindow.opener = null;
@@ -2095,8 +2111,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
       if (!response.ok || !json.webLink) {
         throw new Error(json.error || "Nieuwe klantmail maken mislukt.");
       }
+      const progressSaved = await completeOutlookProgress("newCustomerEmail");
       if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
-      setMessage("Nieuwe klantmail is in Outlook klaargezet.");
+      setMessage(progressSaved
+        ? "Nieuwe klantmail is in Outlook klaargezet en Nieuwe klantmail is afgevinkt."
+        : "Nieuwe klantmail is in Outlook klaargezet, maar de voortgang kon niet worden afgevinkt.");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Nieuwe klantmail maken mislukt.";
       showOutlookPopupStatus(outlookWindow, "Nieuwe klantmail niet gemaakt", errorMessage, "error");
@@ -3205,7 +3224,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={!canEdit || !customerDomain || !hasCustomerEmail || dnsOutlookBusy}
+                  disabled={!canEdit || !customerDomain || !hasCustomerEmail || dnsOutlookBusy || saving}
                   title={hasCustomerEmail
                     ? "DNS-instructies in Outlook klaarzetten"
                     : "Een klant-e-mailadres is nodig voor een Outlook-concept"}
@@ -3295,7 +3314,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               <button
                 type="button"
                 className="primary-button"
-                disabled={!canEdit || !newCustomerMailReady || newCustomerOutlookBusy}
+                disabled={!canEdit || !newCustomerMailReady || newCustomerOutlookBusy || saving}
                 title={newCustomerMailReady
                   ? "Maak de interne nieuwe klantmail in Outlook"
                   : `Nog nodig: ${newCustomerMailMissingFields.join(", ")}`}

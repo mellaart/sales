@@ -80,7 +80,12 @@ function apiErrorMessage(status: number, body: unknown) {
     if (typeof message === "string" && message.trim()) return message.trim();
   }
 
-  if (typeof body === "string" && body.trim()) return body.trim().slice(0, 700);
+  if (typeof body === "string" && body.trim()) {
+    if (/<(?:!doctype|html|head|body)\b/i.test(body)) {
+      return `Smart Trade API gaf status ${status}; de live orderroute is niet beschikbaar.`;
+    }
+    return body.trim().slice(0, 700);
+  }
   return `Smart Trade API gaf status ${status}.`;
 }
 
@@ -225,6 +230,22 @@ export async function POST(
       lines,
     };
 
+    if (mode === "preview") {
+      return jsonResponse({
+        ok: true,
+        mode,
+        previewed: true,
+        created: false,
+        orderId: null,
+        orderCreatedAt: null,
+        relationId,
+        employeeId,
+        reference: breakdown.reference,
+        breakdown,
+        lines,
+      });
+    }
+
     if (mode === "create") {
       const { rows: claimedRows } = await query<{ id: string }>(
         `update public.implementations
@@ -244,8 +265,7 @@ export async function POST(
     }
 
     const config = getSmartTradePullConfig("live");
-    const apiPath = mode === "preview" ? "/api/v1/orders/preview" : "/api/v1/orders";
-    const targetUrl = new URL(apiPath, config.baseUrl).toString();
+    const targetUrl = `${config.baseUrl.replace(/\/+$/, "")}/orders`;
     const headers = getSmartTradePullHeaders("live", { "content-type": "application/json" });
     const response = await fetchWithSmartTradeTimeout(targetUrl, headers, "live", {
       method: "POST",
@@ -298,8 +318,8 @@ export async function POST(
     return jsonResponse({
       ok: true,
       mode,
-      previewed: mode === "preview",
-      created: mode === "create",
+      previewed: false,
+      created: true,
       orderId,
       orderCreatedAt,
       relationId,
@@ -307,7 +327,7 @@ export async function POST(
       reference: breakdown.reference,
       breakdown,
       lines,
-    }, mode === "create" ? 201 : 200);
+    }, 201);
   } catch (error) {
     if (claimedImplementationId && !liveOrderAcceptedBySmartTrade) {
       await query(

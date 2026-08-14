@@ -1029,7 +1029,7 @@ select optgroup {
 
 .implementation-dark-select,
 .implementation-dark-select:disabled {
-  background-color: var(--surface-solid);
+  background-color: var(--surface-control);
   color: var(--text);
   color-scheme: dark;
   opacity: 1;

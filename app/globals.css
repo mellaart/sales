@@ -7389,10 +7389,16 @@ html[data-app-theme="standard"] {
   color-scheme: dark;
 }
 
+html[data-app-theme="standard"] select,
+html[data-app-theme="standard"] select:disabled {
+  color-scheme: only dark !important;
+}
+
 html[data-app-theme="standard"] select option,
 html[data-app-theme="standard"] select optgroup {
   background-color: #172238 !important;
   color: #f8fafc !important;
+  color-scheme: only dark !important;
 }
 
 html[data-app-theme="customer"] {

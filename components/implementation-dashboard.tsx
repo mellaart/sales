@@ -381,7 +381,7 @@ export default function ImplementationDashboard() {
             {seesAllImplementations ? (
               <label className="input-wrap">
                 <span className="input-label">Gebruiker</span>
-                <select className="input implementation-dark-select" value={consultantFilter} onChange={(event) => setConsultantFilter(event.target.value)}>
+                <select className="input implementation-dark-select implementation-user-select" value={consultantFilter} onChange={(event) => setConsultantFilter(event.target.value)}>
                   <option value="all">Alle gebruikers</option>
                   <option value="unassigned">Niet toegewezen</option>
                   {consultantFilterOptions.map((consultant) => (
@@ -440,7 +440,7 @@ export default function ImplementationDashboard() {
                     <label className="input-wrap">
                       <span className="input-label">Toewijzen aan gebruiker</span>
                       <select
-                        className="input implementation-dark-select"
+                        className="input implementation-dark-select implementation-user-select"
                         value={implementation.assigned_consultant_id ?? ""}
                         disabled={savingId === implementation.id}
                         onChange={(event) => void assignConsultant(implementation, event.target.value)}

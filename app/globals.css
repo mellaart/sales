@@ -7997,3 +7997,23 @@ html:is(
     left: auto;
   }
 }
+
+/* User selectors stay dark in every appearance profile, including native menus. */
+html .implementation-user-select,
+html .implementation-user-select:disabled,
+html[data-app-theme] .implementation-user-select,
+html[data-app-theme] .implementation-user-select:disabled {
+  background-color: #172238 !important;
+  color: #f8fafc !important;
+  color-scheme: dark !important;
+  opacity: 1;
+  -webkit-text-fill-color: #f8fafc !important;
+}
+
+html .implementation-user-select option,
+html .implementation-user-select optgroup,
+html[data-app-theme] .implementation-user-select option,
+html[data-app-theme] .implementation-user-select optgroup {
+  background-color: #172238 !important;
+  color: #f8fafc !important;
+}

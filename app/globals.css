@@ -5296,6 +5296,106 @@ td {
   color: #86efac;
 }
 
+.development-lines-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.development-lines-toolbar,
+.development-lines-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.development-lines-toolbar > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.development-add-button {
+  min-height: 44px;
+}
+
+.development-lines-empty {
+  padding: 18px;
+  border: 1px dashed rgba(96,165,250,0.28);
+  border-radius: 8px;
+  background: var(--surface-deep);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.development-lines-list {
+  display: grid;
+  gap: 10px;
+}
+
+.development-line-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(150px, 180px) minmax(140px, 170px) 44px;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-deep);
+}
+
+.development-line-total strong {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-control);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.development-remove-button {
+  display: grid;
+  width: 44px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid rgba(248,113,113,0.26);
+  border-radius: 8px;
+  background: rgba(127,29,29,0.14);
+  color: #fca5a5;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.development-remove-button:hover {
+  border-color: rgba(248,113,113,0.52);
+  background: rgba(127,29,29,0.24);
+  color: #fecaca;
+}
+
+.development-lines-summary {
+  min-height: 54px;
+  padding: 14px 16px;
+  border: 1px solid rgba(96,165,250,0.28);
+  border-radius: 8px;
+  background: rgba(37,99,235,0.12);
+  color: var(--text);
+}
+
+.development-lines-summary span {
+  color: var(--accent-soft);
+  font-weight: 750;
+}
+
+.development-lines-summary strong {
+  font-size: 18px;
+}
+
 .travel-toggle-grid {
   max-height: none;
   overflow: visible;
@@ -5345,6 +5445,30 @@ td {
 }
 
 @media (max-width: 720px) {
+  .development-lines-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .development-add-button {
+    width: 100%;
+  }
+
+  .development-line-row {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .development-description-field,
+  .development-hours-field,
+  .development-line-total {
+    grid-column: 1;
+  }
+
+  .development-remove-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .travel-cost-layout {
     grid-template-columns: 1fr;
   }

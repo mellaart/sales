@@ -8,6 +8,12 @@ import type {
   PublicDealApproval,
 } from "@/lib/deal-approval";
 import type { ProfileRecord } from "@/lib/supabase";
+import {
+  DEFAULT_DEVELOPMENT_HOURLY_RATE,
+  getDevelopmentHours,
+  getDevelopmentTotal,
+  normalizeDevelopmentLines,
+} from "@/lib/development-lines";
 
 const DEAL_APPROVAL_TTL_DAYS = 30;
 
@@ -125,6 +131,18 @@ function isoString(value: Date | string | null) {
 }
 
 function quoteSnapshotFromDeal(deal: DealRow): DealApprovalQuoteSnapshot {
+  const calculatorInputs = deal.calculator_inputs && typeof deal.calculator_inputs === "object" && !Array.isArray(deal.calculator_inputs)
+    ? deal.calculator_inputs as Record<string, unknown>
+    : {};
+  const developmentLines = normalizeDevelopmentLines(calculatorInputs.developmentLines);
+  const developmentHourlyRate = Math.max(
+    0,
+    asNumber(calculatorInputs.developmentHourlyRate) || DEFAULT_DEVELOPMENT_HOURLY_RATE,
+  );
+  const developmentHours = getDevelopmentHours(developmentLines);
+  const developmentTotal = getDevelopmentTotal(developmentLines, developmentHourlyRate);
+  const implementationTotal = asNumber(deal.implementation_total);
+
   return {
     customerName: asText(deal.customer_name),
     quoteTitle: asText(deal.quote_title) || "Offerte Smart Trade",
@@ -132,7 +150,10 @@ function quoteSnapshotFromDeal(deal: DealRow): DealApprovalQuoteSnapshot {
     packageName: asText(deal.package_name),
     totalUsers: Math.max(0, Math.floor(asNumber(deal.total_users))),
     monthlyTotal: asNumber(deal.monthly_total),
-    implementationTotal: asNumber(deal.implementation_total),
+    implementationTotal,
+    developmentHours,
+    developmentTotal,
+    oneTimeTotal: implementationTotal + developmentTotal,
     salesName: asText(deal.sales_name),
   };
 }
@@ -141,6 +162,9 @@ function normalizeQuoteSnapshot(value: unknown): DealApprovalQuoteSnapshot {
   const source = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+  const implementationTotal = asNumber(source.implementationTotal);
+  const developmentTotal = asNumber(source.developmentTotal);
+
   return {
     customerName: asText(source.customerName),
     quoteTitle: asText(source.quoteTitle) || "Offerte Smart Trade",
@@ -148,7 +172,10 @@ function normalizeQuoteSnapshot(value: unknown): DealApprovalQuoteSnapshot {
     packageName: asText(source.packageName),
     totalUsers: Math.max(0, Math.floor(asNumber(source.totalUsers))),
     monthlyTotal: asNumber(source.monthlyTotal),
-    implementationTotal: asNumber(source.implementationTotal),
+    implementationTotal,
+    developmentHours: asNumber(source.developmentHours),
+    developmentTotal,
+    oneTimeTotal: asNumber(source.oneTimeTotal) || implementationTotal + developmentTotal,
     salesName: asText(source.salesName),
   };
 }

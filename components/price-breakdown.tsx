@@ -1,5 +1,6 @@
 import { euro } from "@/lib/pricing";
 import type { DealPriceSummary } from "@/lib/deal-price-summary";
+import { formatDevelopmentHours } from "@/lib/development-lines";
 
 function travelLabel(appointments: number) {
   return appointments === 1
@@ -25,6 +26,15 @@ export default function PriceBreakdown({ summary }: { summary: DealPriceSummary 
         <div><span>{travelLabel(summary.onSiteAppointments)}</span><strong>{euro.format(summary.travelCosts)}</strong></div>
       ) : null}
       <div className="total-row"><span>Implementatie totaal</span><strong>{euro.format(summary.implementationTotal)}</strong></div>
+      {summary.developmentTotal > 0 ? (
+        <>
+          <div>
+            <span>Ontwikkelingen ({formatDevelopmentHours(summary.developmentHours)} uur)</span>
+            <strong>{euro.format(summary.developmentTotal)}</strong>
+          </div>
+          <div className="total-row"><span>Eenmalig totaal</span><strong>{euro.format(summary.oneTimeTotal)}</strong></div>
+        </>
+      ) : null}
     </>
   );
 }

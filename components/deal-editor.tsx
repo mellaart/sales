@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   ClipboardCopy,
   CloudUpload,
+  Code2,
   Download,
   ExternalLink,
   FileText,
@@ -49,11 +50,17 @@ import {
   getUserDisplayName,
 } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
+import DevelopmentLinesEditor from "@/components/development-lines-editor";
 import ExtraUserOffer from "@/components/extra-user-offer";
 import PriceBreakdown from "@/components/price-breakdown";
 import { NumberInput, StatCard, StatusPill, TextArea, TextInput } from "@/components/ui";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
+import {
+  getDevelopmentTotal,
+  normalizeDevelopmentLines,
+  type DevelopmentLine,
+} from "@/lib/development-lines";
 
 function toQuantities(dealModules: DealRecord["modules"] | undefined, modules: ModuleConfig[] = MODULES): Record<string, number> {
   const base = Object.fromEntries(modules.map((module) => [module.key, 0]));
@@ -66,7 +73,11 @@ function toQuantities(dealModules: DealRecord["modules"] | undefined, modules: M
   return base;
 }
 
-function normalizeInputs(deal: DealRecord, modules: ModuleConfig[]): DealCalculatorInputs {
+function normalizeInputs(
+  deal: DealRecord,
+  modules: ModuleConfig[],
+  defaultDevelopmentHourlyRate: number,
+): DealCalculatorInputs {
   const customerPortalOptionKeys = deal.calculator_inputs?.customerPortalOptionKeys;
 
   return {
@@ -83,6 +94,11 @@ function normalizeInputs(deal: DealRecord, modules: ModuleConfig[]): DealCalcula
       ? customerPortalOptionKeys.filter((key): key is string => typeof key === "string")
       : [],
     smartConnectConnections: Math.max(0, Number(deal.calculator_inputs?.smartConnectConnections ?? 0)),
+    developmentLines: normalizeDevelopmentLines(deal.calculator_inputs?.developmentLines),
+    developmentHourlyRate: Math.max(
+      0,
+      Number(deal.calculator_inputs?.developmentHourlyRate) || defaultDevelopmentHourlyRate,
+    ),
     quantities: deal.calculator_inputs?.quantities ?? toQuantities(deal.modules, modules),
     quoteLayout: normalizeQuoteLayout(deal.calculator_inputs?.quoteLayout),
     assetsExpansion: deal.calculator_inputs?.assetsExpansion ?? null,
@@ -272,6 +288,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
+  const [developmentLines, setDevelopmentLines] = useState<DevelopmentLine[]>([]);
+  const [developmentHourlyRate, setDevelopmentHourlyRate] = useState(pricingConfig.developmentHourlyRate);
   const [quantities, setQuantities] = useState<Record<string, number>>(Object.fromEntries(modules.map((module) => [module.key, 0])));
   const [quoteLayout, setQuoteLayout] = useState<QuoteLayoutKey>("standard");
   const [assetsExpansion, setAssetsExpansion] = useState<AssetExpansionSummary | null>(null);
@@ -333,7 +351,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       }
 
       const deal = result.deal;
-      const inputs = normalizeInputs(deal, modules);
+      const inputs = normalizeInputs(deal, modules, pricingConfig.developmentHourlyRate);
 
       setDealOwnerId(deal.user_id || user.id);
       setArchivedAt(deal.archived_at ?? null);
@@ -361,6 +379,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setTravelPostcodePrefix(inputs.travelPostcodePrefix ?? "");
       setSelectedCustomerPortalOptionKeys(inputs.customerPortalOptionKeys ?? []);
       setSmartConnectConnections(inputs.smartConnectConnections ?? 0);
+      setDevelopmentLines(inputs.developmentLines ?? []);
+      setDevelopmentHourlyRate(inputs.developmentHourlyRate ?? pricingConfig.developmentHourlyRate);
       setQuantities(inputs.quantities);
       setQuoteLayout(normalizeQuoteLayout(inputs.quoteLayout));
       setAssetsExpansion(inputs.assetsExpansion ?? null);
@@ -406,7 +426,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
 
     void loadDeal();
-  }, [currentSalesName, dealId, modules, supabase, user]);
+  }, [currentSalesName, dealId, modules, pricingConfig.developmentHourlyRate, supabase, user]);
 
   useEffect(() => {
     if (loading || typeof window === "undefined") return;
@@ -499,6 +519,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     ? travelImplementationDays * travelCostQuote.pricePerDay
     : 0;
   const implementationTotal = implementationBaseTotal + travelCostTotal;
+  const developmentTotal = getDevelopmentTotal(developmentLines, developmentHourlyRate);
+  const oneTimeTotal = implementationTotal + developmentTotal;
   const adjustedResult = useMemo(() => ({
     ...activeResult,
     supportFirst: includeSupport ? activeResult.supportFirst : 0,
@@ -508,12 +530,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     monthlyAfterDiscount: monthlyTotal,
     recurringTotalContract: monthlyTotal,
     implementationAfterAdjustment: implementationTotal,
-    contractValue: monthlyTotal * 12 + implementationTotal,
+    contractValue: monthlyTotal * 12 + oneTimeTotal,
     annualRecurring: monthlyTotal * 12,
     monthlyInclVat: monthlyTotal * activeResult.vatMultiplier,
     implementationInclVat: implementationTotal * activeResult.vatMultiplier,
-    contractValueInclVat: (monthlyTotal * 12 + implementationTotal) * activeResult.vatMultiplier,
-  }), [activeResult, implementationTotal, includeSupport, monthlyTotal, supportMonthly]);
+    contractValueInclVat: (monthlyTotal * 12 + oneTimeTotal) * activeResult.vatMultiplier,
+  }), [activeResult, implementationTotal, includeSupport, monthlyTotal, oneTimeTotal, supportMonthly]);
   const extraMonthlyRows = useMemo(() => {
     const rows = selectedCustomerPortalOptions.map((option) => ({
       amount: "1x",
@@ -761,6 +783,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
             travelCostTotal,
             travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
+            developmentLines: normalizeDevelopmentLines(developmentLines),
+            developmentHourlyRate,
             quantities,
             quoteLayout,
             assetsExpansion,
@@ -783,7 +807,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       monthly_base: monthlyTotal,
       monthly_total: monthlyTotal,
       implementation_total: implementationTotal,
-      contract_value: monthlyTotal * 12 + implementationTotal,
+      contract_value: monthlyTotal * 12 + oneTimeTotal,
       annual_recurring: monthlyTotal * 12,
       modules: selectedModuleRows,
       notes,
@@ -808,6 +832,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         })),
         smartConnectConnections,
         smartConnectPricing,
+        developmentLines: normalizeDevelopmentLines(developmentLines),
+        developmentHourlyRate,
         quantities,
         quoteLayout,
         assetsExpansion,
@@ -855,6 +881,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       planningAppUserMonthly: pricingConfig.planningAppUserMonthly,
       selectedModules: selectedModuleRows,
       extraMonthlyRows,
+      developmentLines: normalizeDevelopmentLines(developmentLines),
+      developmentHourlyRate,
       result: adjustedResult,
       includeTravelCosts: effectiveIncludeTravelCosts,
       travelPostcodePrefix,
@@ -1463,7 +1491,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   : "1 hoofdgebruiker + extra gebruikers"}
               />
               <StatCard title="Maandprijs" value={euro.format(monthlyTotal)} icon={FileText} sublabel="ex. BTW" />
-              <StatCard title="Implementatie" value={euro.format(implementationTotal)} icon={Package} sublabel={`${formatDays(implementationDays)} implementatie`} />
+              <StatCard
+                title={developmentTotal > 0 ? "Eenmalig" : "Implementatie"}
+                value={euro.format(oneTimeTotal)}
+                icon={Package}
+                sublabel={developmentTotal > 0 ? "Implementatie en ontwikkelingen" : `${formatDays(implementationDays)} implementatie`}
+              />
             </>
           )}
         </div>
@@ -1796,6 +1829,15 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     })}
                   </div>
                 </div>
+
+                <div className="section">
+                  <div className="section-title"><Code2 size={16} /> Ontwikkelingen</div>
+                  <DevelopmentLinesEditor
+                    lines={developmentLines}
+                    hourlyRate={developmentHourlyRate}
+                    onChange={setDevelopmentLines}
+                  />
+                </div>
               </>
             )}
           </section>
@@ -1889,6 +1931,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                           ? Math.ceil(travelImplementationDays)
                           : 0,
                         implementationTotal,
+                        developmentHours: developmentLines.reduce((sum, line) => sum + Math.max(0, line.hours), 0),
+                        developmentTotal,
+                        oneTimeTotal,
                       }} />
                     )}
                   </div>
@@ -1907,7 +1952,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   ) : isAssetsExpansionDeal && implementationTotal === 0 ? (
                     <div className="proposal-sub">{assetsExpansion?.lines.length ?? 0} uitbreidingsregel{assetsExpansion?.lines.length === 1 ? "" : "s"}</div>
                   ) : (
-                    <div className="proposal-sub">Eenmalig: {euro.format(implementationTotal)}</div>
+                    <div className="proposal-sub">Eenmalig: {euro.format(oneTimeTotal)}</div>
                   )}
                 </div>
               </div>

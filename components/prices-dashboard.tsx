@@ -524,6 +524,20 @@ export default function PricesDashboard() {
                     />
                   </td>
                 </tr>
+                <tr>
+                  <td>Uurtarief ontwikkelingen</td>
+                  <td colSpan={editablePackages.length}>
+                    <PriceInput
+                      label="Uurtarief ontwikkelingen"
+                      value={draftConfig.developmentHourlyRate}
+                      disabled={!canEditPrices}
+                      onChange={(value) => updateDraft((currentConfig) => ({
+                        ...currentConfig,
+                        developmentHourlyRate: value,
+                      }))}
+                    />
+                  </td>
+                </tr>
                 {implementationTiers.map((tier, tierIndex) => (
                   <Fragment key={`implementation-tier-${tierIndex}`}>
                     <tr key={`implementation-price-${tierIndex}`}>

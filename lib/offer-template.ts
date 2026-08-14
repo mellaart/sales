@@ -3,6 +3,10 @@ import { euro, IMPLEMENTATION_DAY_RATE } from "@/lib/pricing";
 import type { ExpansionWorkItemConfig } from "@/lib/price-config";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
 import type { AssetExpansionSummary } from "@/lib/supabase";
+import {
+  DEFAULT_DEVELOPMENT_HOURLY_RATE,
+  type DevelopmentLine,
+} from "@/lib/development-lines";
 
 export type OfferModule = {
   key: string;
@@ -39,6 +43,8 @@ export type OfferTemplateInput = {
   planningAppUserMonthly?: number;
   selectedModules: OfferModule[];
   extraMonthlyRows?: OfferMonthlyRow[];
+  developmentLines?: DevelopmentLine[];
+  developmentHourlyRate?: number;
   result: PricingResult;
   includeTravelCosts?: boolean;
   travelPostcodePrefix?: string;
@@ -279,6 +285,11 @@ export function getImplementationText(input: OfferTemplateInput) {
 }
 
 export function getOfferTextBlocks(input: OfferTemplateInput) {
+  const developmentHourlyRate = Math.max(
+    0,
+    Number(input.developmentHourlyRate) || DEFAULT_DEVELOPMENT_HOURLY_RATE,
+  );
+
   return {
     greeting: getGreeting(input.contactName),
     intro: "Naar aanleiding van ons overleg hierbij wat wij besproken hebben:",
@@ -300,7 +311,7 @@ export function getOfferTextBlocks(input: OfferTemplateInput) {
     finance:
       "Wij hebben een prima koppeling met diverse financiële pakketten. Een financieel pakket dien je zelf te betrekken en in te richten.",
     consultancy:
-      "Aanvullend ontwikkelwerk en extra toekomstige consultancy zijn niet inbegrepen in het supportcontract. Wanneer er consultancy of ontwikkelwerkzaamheden nodig zijn, dan zullen wij jullie van tevoren vertellen dat hier kosten aan verbonden zijn. Het tarief voor consultancy werk is € 135,00 per uur.",
+      `Aanvullend ontwikkelwerk en extra toekomstige consultancy zijn niet inbegrepen in het supportcontract. Wanneer er consultancy of ontwikkelwerkzaamheden nodig zijn, dan zullen wij jullie van tevoren vertellen dat hier kosten aan verbonden zijn. Het tarief voor consultancy werk is ${euro.format(developmentHourlyRate)} per uur.`,
     hardware:
       "De Troublefree consultant zal in overleg afstemmen wat voor hardware handig is en desgewenst hiervoor offertes bij zusterbedrijf PWA opvragen.",
     closing:

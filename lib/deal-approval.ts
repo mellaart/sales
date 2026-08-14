@@ -8,6 +8,9 @@ export type DealApprovalQuoteSnapshot = {
   totalUsers: number;
   monthlyTotal: number;
   implementationTotal: number;
+  developmentHours: number;
+  developmentTotal: number;
+  oneTimeTotal: number;
   salesName: string;
 };
 

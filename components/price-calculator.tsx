@@ -9,6 +9,7 @@ import {
   Calculator,
   CheckCircle2,
   CloudUpload,
+  Code2,
   Download,
   FileText,
   LifeBuoy,
@@ -30,9 +31,17 @@ import {
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import { NumberStepper } from "@/components/number-stepper";
+import DevelopmentLinesEditor from "@/components/development-lines-editor";
 import ExtraUserOffer from "@/components/extra-user-offer";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
+import {
+  formatDevelopmentHours,
+  getDevelopmentHours,
+  getDevelopmentTotal,
+  normalizeDevelopmentLines,
+  type DevelopmentLine,
+} from "@/lib/development-lines";
 
 function getCalculatorPackageForPaidModules(paidModuleCount: number, calculatorPackages: PackageConfig[]) {
   return calculatorPackages.find((packageConfig) => paidModuleCount <= packageConfig.includedModules)
@@ -91,6 +100,7 @@ function getCalculatorPdfResult(
   monthlyTotal: number,
   includeSupport: boolean,
   implementationTotal: number,
+  oneTimeTotal: number,
 ) {
   return {
     ...result,
@@ -101,11 +111,11 @@ function getCalculatorPdfResult(
     monthlyAfterDiscount: monthlyTotal,
     recurringTotalContract: monthlyTotal,
     implementationAfterAdjustment: implementationTotal,
-    contractValue: monthlyTotal * 12 + implementationTotal,
+    contractValue: monthlyTotal * 12 + oneTimeTotal,
     annualRecurring: monthlyTotal * 12,
     monthlyInclVat: monthlyTotal * result.vatMultiplier,
     implementationInclVat: implementationTotal * result.vatMultiplier,
-    contractValueInclVat: (monthlyTotal * 12 + implementationTotal) * result.vatMultiplier,
+    contractValueInclVat: (monthlyTotal * 12 + oneTimeTotal) * result.vatMultiplier,
   };
 }
 
@@ -140,6 +150,7 @@ export default function PriceCalculator() {
   const [includeSupport, setIncludeSupport] = useState(true);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
+  const [developmentLines, setDevelopmentLines] = useState<DevelopmentLine[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>(
     Object.fromEntries(modules.map((module) => [module.key, 0])),
   );
@@ -226,6 +237,10 @@ export default function PriceCalculator() {
     ? travelImplementationDays * travelCostQuote.pricePerDay
     : 0;
   const implementationTotal = activeResult.implementationAfterAdjustment + travelCostTotal;
+  const developmentHourlyRate = pricingConfig.developmentHourlyRate;
+  const developmentHours = getDevelopmentHours(developmentLines);
+  const developmentTotal = getDevelopmentTotal(developmentLines, developmentHourlyRate);
+  const oneTimeTotal = implementationTotal + developmentTotal;
   const selectedExpansionCount = selectedCustomerPortalOptions.length + (smartConnectPricing.connectionCount > 0 ? 1 : 0);
   const extraMonthlyRows = useMemo(() => {
     const rows = selectedCustomerPortalOptions.map((option) => ({
@@ -256,8 +271,15 @@ export default function PriceCalculator() {
     return rows;
   }, [pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
   const pdfResult = useMemo(
-    () => getCalculatorPdfResult(activeResult, supportMonthly, monthlyTotal, includeSupport, implementationTotal),
-    [activeResult, implementationTotal, includeSupport, monthlyTotal, supportMonthly],
+    () => getCalculatorPdfResult(
+      activeResult,
+      supportMonthly,
+      monthlyTotal,
+      includeSupport,
+      implementationTotal,
+      oneTimeTotal,
+    ),
+    [activeResult, implementationTotal, includeSupport, monthlyTotal, oneTimeTotal, supportMonthly],
   );
 
   function setModuleChecked(moduleKey: string, checked: boolean) {
@@ -310,7 +332,7 @@ export default function PriceCalculator() {
         monthly_base: monthlyTotal,
         monthly_total: monthlyTotal,
         implementation_total: implementationTotal,
-        contract_value: monthlyTotal * 12 + implementationTotal,
+        contract_value: monthlyTotal * 12 + oneTimeTotal,
         annual_recurring: monthlyTotal * 12,
         modules: selectedModuleRows,
         notes: notes.trim() || null,
@@ -336,6 +358,8 @@ export default function PriceCalculator() {
           })),
           smartConnectConnections,
           smartConnectPricing,
+          developmentLines: normalizeDevelopmentLines(developmentLines),
+          developmentHourlyRate,
           quantities,
           quoteLayout: "standard" as const,
           assetsExpansion: null,
@@ -381,6 +405,8 @@ export default function PriceCalculator() {
         planningAppUserMonthly: pricingConfig.planningAppUserMonthly,
         selectedModules: selectedModuleRows,
         extraMonthlyRows,
+        developmentLines: normalizeDevelopmentLines(developmentLines),
+        developmentHourlyRate,
         result: pdfResult,
         includeTravelCosts,
         travelPostcodePrefix,
@@ -443,8 +469,8 @@ export default function PriceCalculator() {
           <article className="deals-stat">
             <div className="stat-icon"><BarChart3 size={18} /></div>
             <div>
-              <span>Implementatie</span>
-              <strong>{euro.format(implementationTotal)}</strong>
+              <span>{developmentTotal > 0 ? "Eenmalig" : "Implementatie"}</span>
+              <strong>{euro.format(oneTimeTotal)}</strong>
             </div>
           </article>
         </section>
@@ -723,6 +749,15 @@ export default function PriceCalculator() {
                 })}
               </div>
             </div>
+
+            <div className="section">
+              <div className="section-title"><Code2 size={16} /> Ontwikkelingen</div>
+              <DevelopmentLinesEditor
+                lines={developmentLines}
+                hourlyRate={developmentHourlyRate}
+                onChange={setDevelopmentLines}
+              />
+            </div>
           </section>
 
           <section className="deals-results card panel">
@@ -766,6 +801,15 @@ export default function PriceCalculator() {
                     </div>
                   ) : null}
                   <div className="total-row"><span>Implementatie totaal</span><strong>{euro.format(implementationTotal)}</strong></div>
+                  {developmentTotal > 0 ? (
+                    <>
+                      <div>
+                        <span>Ontwikkelingen ({formatDevelopmentHours(developmentHours)} uur)</span>
+                        <strong>{euro.format(developmentTotal)}</strong>
+                      </div>
+                      <div className="total-row"><span>Eenmalig totaal</span><strong>{euro.format(oneTimeTotal)}</strong></div>
+                    </>
+                  ) : null}
                 </div>
               </div>
 
@@ -774,7 +818,7 @@ export default function PriceCalculator() {
                 <div className="proposal-title">{quoteTitle || "Prijsvoorstel"}</div>
                 <div className="proposal-meta">{customerName || "Nog geen klant ingevuld"} · {contactName || "Geen contactpersoon"}</div>
                 <div className="proposal-total">{euro.format(monthlyTotal)} p/m</div>
-                <div className="proposal-sub">Setup: {euro.format(implementationTotal)} · {totalUsers} gebruikers · {includeSupport ? "met support" : "zonder support"} · {selectedExpansionCount} uitbreidingen</div>
+                <div className="proposal-sub">Eenmalig: {euro.format(oneTimeTotal)} · {totalUsers} gebruikers · {includeSupport ? "met support" : "zonder support"} · {selectedExpansionCount} uitbreidingen</div>
               </div>
             </div>
 

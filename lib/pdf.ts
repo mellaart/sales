@@ -5,6 +5,12 @@ import { DEFAULT_PRICE_CONFIG, getDefaultModuleWorkItems, type ExpansionWorkItem
 import { euro } from "@/lib/pricing";
 import { getQuoteLayout } from "@/lib/quote-layouts";
 import {
+  DEFAULT_DEVELOPMENT_HOURLY_RATE,
+  formatDevelopmentHours,
+  getDevelopmentTotal,
+  getQuotedDevelopmentLines,
+} from "@/lib/development-lines";
+import {
   getImplementationText,
   getIncludedModulesForPackage,
   getLicenseRows,
@@ -227,7 +233,13 @@ function addQuoteHeader(
   return 110;
 }
 
-function addPriceTable(doc: jsPDF, title: string, rows: PdfTableRow[], y: number) {
+function addPriceTable(
+  doc: jsPDF,
+  title: string,
+  rows: PdfTableRow[],
+  y: number,
+  descriptionHeading = "Pakket",
+) {
   y = addSectionTitle(doc, title, y);
 
   const x = 16;
@@ -241,7 +253,7 @@ function addPriceTable(doc: jsPDF, title: string, rows: PdfTableRow[], y: number
   doc.setFontSize(9);
   doc.setTextColor(64, 80, 100);
   doc.text("Aantal", x + 2, y);
-  doc.text("Pakket", x + widths[0] + 2, y);
+  doc.text(descriptionHeading, x + widths[0] + 2, y);
   doc.text("Prijs", x + widths[0] + widths[1] + 2, y);
   doc.text("Totaal", x + widths[0] + widths[1] + widths[2] + 2, y);
 
@@ -251,17 +263,19 @@ function addPriceTable(doc: jsPDF, title: string, rows: PdfTableRow[], y: number
   doc.setTextColor(25, 40, 55);
 
   rows.forEach((row) => {
-    y = ensurePage(doc, y, 10);
+    const descriptionLines = doc.splitTextToSize(row.description, 88);
+    const rowHeight = Math.max(9, descriptionLines.length * 4.4 + 4);
+    y = ensurePage(doc, y, rowHeight + 2);
 
     doc.setDrawColor(234, 239, 245);
     doc.line(x, y + 2, x + 178, y + 2);
 
     doc.text(row.amount, x + 2, y);
-    doc.text(doc.splitTextToSize(row.description, 88), x + widths[0] + 2, y);
+    doc.text(descriptionLines, x + widths[0] + 2, y);
     doc.text(euro.format(row.price), x + widths[0] + widths[1] + 2, y);
     doc.text(euro.format(row.total), x + widths[0] + widths[1] + widths[2] + 2, y);
 
-    y += 9;
+    y += rowHeight;
   });
 
   const total = rows.reduce((sum, row) => sum + row.total, 0);
@@ -272,6 +286,19 @@ function addPriceTable(doc: jsPDF, title: string, rows: PdfTableRow[], y: number
   doc.text(euro.format(total), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
 
   return y + 13;
+}
+
+function addOneTimeTotal(doc: jsPDF, total: number, y: number) {
+  y = ensurePage(doc, y, 20);
+  doc.setFillColor(233, 244, 251);
+  doc.setDrawColor(207, 229, 247);
+  doc.roundedRect(16, y, 178, 14, 3, 3, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(17, 58, 86);
+  doc.text("Totaal eenmalig", 20, y + 9);
+  doc.text(euro.format(total), 190, y + 9, { align: "right" });
+  return y + 22;
 }
 
 function addIncludedModulesTable(doc: jsPDF, title: string, rows: Array<{ amount: string; description: string }>, y: number) {
@@ -707,6 +734,18 @@ async function buildQuotePdf(input: OfferTemplateInput) {
   }));
   const moduleRows = getModuleRows(input);
   const extraMonthlyRows = input.extraMonthlyRows ?? [];
+  const developmentHourlyRate = Math.max(
+    0,
+    Number(input.developmentHourlyRate) || DEFAULT_DEVELOPMENT_HOURLY_RATE,
+  );
+  const quotedDevelopmentLines = getQuotedDevelopmentLines(input.developmentLines ?? []);
+  const developmentRows = quotedDevelopmentLines.map((line) => ({
+    amount: `${formatDevelopmentHours(line.hours)} uur`,
+    description: line.description,
+    price: developmentHourlyRate,
+    total: line.hours * developmentHourlyRate,
+  }));
+  const developmentTotal = getDevelopmentTotal(quotedDevelopmentLines, developmentHourlyRate);
   const supportTotal = supportRows.reduce((sum, row) => sum + row.total, 0);
   const [logoDataUrl, troublefreeBadgeDataUrl] = await Promise.all([
     getSmartTradeLogoDataUrl(),
@@ -724,6 +763,11 @@ async function buildQuotePdf(input: OfferTemplateInput) {
     if (input.assetsExpansion?.priceComparison) {
       y = addExpansionCurrentBreakdown(doc, input.assetsExpansion.priceComparison, y + 1);
       y = addExpansionPriceComparison(doc, input.assetsExpansion.priceComparison, expansionLines, y + 1);
+    }
+
+    if (developmentRows.length > 0) {
+      y = addPriceTable(doc, "Ontwikkelingen", developmentRows, y + 1, "Omschrijving");
+      y = addOneTimeTotal(doc, input.result.implementationAfterAdjustment + developmentTotal, y);
     }
 
     const expansionWorkGroups = getExpansionWorkGroups(input);
@@ -821,6 +865,11 @@ async function buildQuotePdf(input: OfferTemplateInput) {
   y = addParagraph(doc, getImplementationText(input), y);
   if (!input.includeTravelCosts) {
     y = addParagraph(doc, "Reiskosten worden separaat afgestemd en zijn exclusief btw.", y);
+  }
+
+  if (developmentRows.length > 0) {
+    y = addPriceTable(doc, "Ontwikkelingen", developmentRows, y + 2, "Omschrijving");
+    y = addOneTimeTotal(doc, input.result.implementationAfterAdjustment + developmentTotal, y);
   }
 
   if (!isCompactLayout && !isAssetsExpansionLayout) {

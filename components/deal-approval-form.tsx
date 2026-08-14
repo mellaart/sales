@@ -209,6 +209,18 @@ export default function DealApprovalForm({
                 <dt>Implementatie</dt>
                 <dd>{euro.format(approval.quote.implementationTotal)}</dd>
               </div>
+              {approval.quote.developmentTotal > 0 ? (
+                <div>
+                  <dt>Ontwikkelingen ({approval.quote.developmentHours.toLocaleString("nl-NL")} uur)</dt>
+                  <dd>{euro.format(approval.quote.developmentTotal)}</dd>
+                </div>
+              ) : null}
+              {approval.quote.developmentTotal > 0 ? (
+                <div>
+                  <dt>Eenmalig totaal</dt>
+                  <dd>{euro.format(approval.quote.oneTimeTotal)}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Sales consultant</dt>
                 <dd>{approval.quote.salesName || "Smart Trade"}</dd>

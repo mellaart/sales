@@ -6,6 +6,7 @@ import {
   type PackageConfig,
   type PricingCatalog,
 } from "@/lib/pricing";
+import { DEFAULT_DEVELOPMENT_HOURLY_RATE } from "@/lib/development-lines";
 
 export type CustomerPortalPriceOption = {
   key: string;
@@ -72,6 +73,7 @@ export type ExpansionWorkItemConfig = {
 };
 
 export type EditablePricingConfig = PricingCatalog & {
+  developmentHourlyRate: number;
   customerPortalOptions: CustomerPortalPriceOption[];
   smartConnectTiers: SmartConnectPriceTier[];
   smartConnectExtraConnectionPrice: number;
@@ -149,6 +151,7 @@ export function getDefaultModuleWorkItems(moduleName: string) {
 
 export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
   implementationDayRate: IMPLEMENTATION_DAY_RATE,
+  developmentHourlyRate: DEFAULT_DEVELOPMENT_HOURLY_RATE,
   packages: PACKAGES,
   modules: MODULES.map((module) => ({
     ...module,
@@ -627,6 +630,10 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
 
   return {
     implementationDayRate: safeNumber(source.implementationDayRate, DEFAULT_PRICE_CONFIG.implementationDayRate),
+    developmentHourlyRate: safeNumber(
+      source.developmentHourlyRate,
+      DEFAULT_PRICE_CONFIG.developmentHourlyRate,
+    ),
     packages: DEFAULT_PRICE_CONFIG.packages.map((fallback) => normalizePackage(packageByKey.get(fallback.key), fallback)),
     modules: DEFAULT_PRICE_CONFIG.modules.map((fallback) => normalizeModule(moduleByKey.get(fallback.key), fallback)),
     customerPortalOptions: DEFAULT_PRICE_CONFIG.customerPortalOptions.map((fallback) =>

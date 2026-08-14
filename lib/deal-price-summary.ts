@@ -6,6 +6,11 @@ import {
   getPaidSelectedModuleCount,
 } from "@/lib/pricing";
 import type { DealRecord } from "@/lib/supabase";
+import {
+  getDevelopmentHours,
+  getDevelopmentTotal,
+  normalizeDevelopmentLines,
+} from "@/lib/development-lines";
 
 export type DealPriceSummary = {
   licenseMonthly: number;
@@ -18,6 +23,9 @@ export type DealPriceSummary = {
   travelCosts: number;
   onSiteAppointments: number;
   implementationTotal: number;
+  developmentHours: number;
+  developmentTotal: number;
+  oneTimeTotal: number;
 };
 
 function safeNumber(value: unknown, fallback = 0) {
@@ -128,6 +136,14 @@ export function getDealPriceSummary(
   const travelCosts = includeTravelCosts && travelQuote
     ? travelImplementationDays * travelQuote.pricePerDay
     : 0;
+  const implementationTotal = activeResult.implementationAfterAdjustment + travelCosts;
+  const developmentLines = normalizeDevelopmentLines(inputs?.developmentLines);
+  const developmentHourlyRate = Math.max(
+    0,
+    safeNumber(inputs?.developmentHourlyRate, pricingConfig.developmentHourlyRate),
+  );
+  const developmentHours = getDevelopmentHours(developmentLines);
+  const developmentTotal = getDevelopmentTotal(developmentLines, developmentHourlyRate);
 
   return {
     licenseMonthly,
@@ -141,6 +157,9 @@ export function getDealPriceSummary(
     onSiteAppointments: includeTravelCosts && travelQuote
       ? Math.ceil(travelImplementationDays)
       : 0,
-    implementationTotal: activeResult.implementationAfterAdjustment + travelCosts,
+    implementationTotal,
+    developmentHours,
+    developmentTotal,
+    oneTimeTotal: implementationTotal + developmentTotal,
   };
 }

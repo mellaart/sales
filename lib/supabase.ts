@@ -1,6 +1,7 @@
 import { createClient, type User } from "@supabase/supabase-js";
 import { getEffectiveUserRole, getProtectedAdminProfile } from "@/lib/protected-admin";
 import type { QuoteLayoutKey } from "@/lib/quote-layouts";
+import type { DevelopmentLine } from "@/lib/development-lines";
 import { getLocalBrowserClient } from "@/lib/local-browser-client";
 
 export type UserRole =
@@ -68,6 +69,8 @@ export type DealCalculatorInputs = {
   includeSupport?: boolean;
   customerPortalOptionKeys?: string[];
   smartConnectConnections?: number;
+  developmentLines?: DevelopmentLine[];
+  developmentHourlyRate?: number;
   includeTravelCosts?: boolean;
   customerPostcode?: string;
   travelPostcodePrefix?: string;

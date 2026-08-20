@@ -24,7 +24,6 @@ import {
   type ImplementationStatus,
 } from "@/lib/implementations";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
-import { euro } from "@/lib/pricing";
 import {
   ROLE_TAB_ACCESS,
   canAccessTab,
@@ -429,7 +428,6 @@ export default function ImplementationDashboard() {
                 <div className="implementation-meta-grid">
                   <span>Livegang<strong>{implementation.planned_go_live_date ? formatDate(implementation.planned_go_live_date) : "Nog niet gepland"}</strong></span>
                   <span>Pakket<strong>{implementation.package_name || "-"}</strong></span>
-                  <span>Implementatie<strong>{euro.format(Number(implementation.implementation_total || 0))}</strong></span>
                   <span>Sales<strong>{implementation.sales_name || "-"}</strong></span>
                   <span>Aangemaakt<strong>{formatDate(implementation.created_at)}</strong></span>
                   <span>Toegewezen aan<strong>{implementation.assigned_consultant_name || "Nog niet toegewezen"}</strong></span>

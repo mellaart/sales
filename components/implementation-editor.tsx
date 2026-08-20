@@ -9,7 +9,6 @@ import {
   ArrowRightLeft,
   CalendarDays,
   CheckCircle2,
-  CircleDollarSign,
   ClipboardCheck,
   Clock3,
   Copy,
@@ -35,7 +34,6 @@ import { useAuth } from "@/components/auth-provider";
 import ImplementationCustomerFilesPanel from "@/components/implementation-customer-files-panel";
 import ImplementationNotesField from "@/components/implementation-notes-field";
 import ImplementationWorkNoteEditor from "@/components/implementation-work-note-editor";
-import PriceBreakdown from "@/components/price-breakdown";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatCard, StatusPill } from "@/components/ui";
 import {
@@ -81,7 +79,6 @@ import {
   IMPLEMENTATION_ARTICLE_ID,
 } from "@/lib/implementation-order";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
-import { euro } from "@/lib/pricing";
 import {
   ROLE_TAB_ACCESS,
   canAccessTab,
@@ -769,7 +766,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [accessLoaded, setAccessLoaded] = useState(false);
   const [implementation, setImplementation] = useState<ImplementationRecord | null>(null);
   const [linkedDeal, setLinkedDeal] = useState<DealRecord | null>(null);
-  const [linkedDealError, setLinkedDealError] = useState("");
   const [assignableUsers, setAssignableUsers] = useState<ProfileRecord[]>([]);
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeProgress | null>(null);
   const [customerIntakeLoaded, setCustomerIntakeLoaded] = useState(false);
@@ -972,7 +968,6 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setAppointmentsError("");
     setAppointmentsWarning("");
     setLinkedDeal(null);
-    setLinkedDealError("");
     setImplementationOrderPreview(null);
     setImplementationOrderMessage("");
     setImplementationOrderMessageTone("info");
@@ -1002,11 +997,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
         .eq("id", loadedImplementation.deal_id)
         .maybeSingle();
 
-      if (dealError) {
-        setLinkedDealError(`Prijsopbouw laden mislukt: ${dealError.message}`);
-      } else {
+      if (!dealError) {
         setLinkedDeal((dealData as DealRecord | null) ?? null);
-        if (!dealData) setLinkedDealError("De gekoppelde deal is niet gevonden.");
       }
     }
 
@@ -2536,37 +2528,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
         <section className="kpi-grid">
           <StatCard title="Pakket" value={implementation.package_name || "-"} icon={Package} sublabel="Gekozen pakket" />
           <StatCard
-            title="Implementatie"
-            value={euro.format(Number(implementation.implementation_total || 0))}
-            icon={CircleDollarSign}
-            sublabel="Bedrag uit de deal"
-          />
-          <StatCard
             title="Toegewezen aan"
             value={implementation.assigned_consultant_name || "Niet toegewezen"}
             icon={UserRoundCheck}
             sublabel={implementation.assigned_consultant_email || "Nog te plannen"}
           />
           <StatCard title="Aangemaakt" value={formatDate(implementation.created_at)} icon={CalendarDays} sublabel="Start van het dossier" />
-        </section>
-
-        <section className="card panel implementation-price-breakdown">
-          <div className="top-row">
-            <div>
-              <div className="eyebrow">Offerte</div>
-              <h2 className="headline">Prijsopbouw</h2>
-            </div>
-            <CircleDollarSign size={28} aria-hidden="true" />
-          </div>
-          {dealPriceSummary ? (
-            <div className="summary-list">
-              <PriceBreakdown summary={dealPriceSummary} />
-            </div>
-          ) : (
-            <div className="empty-state">
-              {linkedDealError || "Prijsopbouw is niet beschikbaar voor deze implementatie."}
-            </div>
-          )}
         </section>
 
         <section className="card panel">
@@ -3438,7 +3405,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   {implementation.smart_trade_order_id
                     ? `Aangemaakt op ${formatDateTime(implementation.smart_trade_order_created_at) || "onbekende datum"}.`
                     : linkedDeal?.smart_trade_relation_id
-                      ? `Relatie ${linkedDeal.smart_trade_relation_id} · artikel ${IMPLEMENTATION_ARTICLE_ID} · ${euro.format(implementationOrderBreakdown?.totalAmount ?? 0)}`
+                      ? `Relatie ${linkedDeal.smart_trade_relation_id} · artikel ${IMPLEMENTATION_ARTICLE_ID}`
                       : "Koppel eerst de Smart Trade-relatie aan deze deal."}
                 </p>
               </div>
@@ -3482,14 +3449,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   <span>
                     <strong>Artikel {IMPLEMENTATION_ARTICLE_ID}</strong>
                     {implementationOrderBreakdown.description}
-                    <b>{euro.format(implementationOrderBreakdown.implementationAmount)}</b>
                   </span>
                   {implementationOrderBreakdown.travelAmount > 0 ? (
                     <span>
                       <strong>Artikel {implementationOrderBreakdown.travelArticleId ?? "-"}</strong>
                       Reiskosten - Regio {implementationOrderBreakdown.travelRegion ?? "-"}
                       <b>
-                        {implementationOrderBreakdown.travelQuantity} x {euro.format(implementationOrderBreakdown.travelPricePerUnit)}
+                        {implementationOrderBreakdown.travelQuantity} afspraak{implementationOrderBreakdown.travelQuantity === 1 ? "" : "en"} op locatie
                       </b>
                     </span>
                   ) : null}

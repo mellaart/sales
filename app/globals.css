@@ -7337,6 +7337,12 @@ td {
   overflow-wrap: anywhere;
 }
 
+.asset-creation-summary {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(220px, 1.7fr) minmax(180px, 1.2fr);
+  margin-top: 0;
+}
+
 .customer-intake-mandate-summary {
   margin-top: 16px;
   padding: 18px;

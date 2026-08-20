@@ -2812,7 +2812,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
             <div className="customer-intake-controls">
               <div className="customer-intake-fields">
-                <div className="customer-intake-summary">
+                <div className="customer-intake-summary asset-creation-summary">
                   <div>
                     <span>Relatie-ID</span>
                     <strong>{assetOverview?.relationId ?? (customerIntakeRelationId || "-")}</strong>

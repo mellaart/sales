@@ -1256,39 +1256,6 @@ export default function AssetsDashboardCurrent() {
           </div>
         ) : null}
 
-        {selectedRelation ? (
-          <div className={styles.transferControls}>
-            <label className={`${styles.transferRelationField} input-wrap`}>
-              <span className="input-label">Smart Trade relatie-ID</span>
-              <input
-                className="input"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={manualRelationId}
-                onChange={(event) => setManualRelationId(event.target.value.replace(/\D/g, ""))}
-                placeholder="Bijv. 2498"
-              />
-              <span className={styles.transferControlHint}>
-                Standaard overgenomen uit de gekozen relatie. Pas dit alleen aan wanneer de deal aan een ander relatienummer moet worden gekoppeld.
-              </span>
-            </label>
-
-            <label className={`${styles.approvalOption} ${customerApproved ? styles.approvalOptionSelected : ""}`}>
-              <input
-                type="checkbox"
-                checked={customerApproved}
-                onChange={(event) => setCustomerApproved(event.target.checked)}
-              />
-              <span>
-                <strong>Klant heeft akkoord gegeven</strong>
-                <small>Leg het akkoord nu handmatig vast op de deal.</small>
-              </span>
-              <em>{customerApproved ? "Akkoord vastleggen" : "Nog geen akkoord"}</em>
-            </label>
-          </div>
-        ) : null}
-
         {transferStatus ? <div className="save-status">{transferStatus}</div> : null}
       </section>
     );
@@ -1396,6 +1363,47 @@ export default function AssetsDashboardCurrent() {
               {contactPersonStatus ? (
                 <div className={`save-status ${styles.assetsStatus}`}>{contactPersonStatus}</div>
               ) : null}
+
+              <div className={styles.dealLinkControls}>
+                <div className={styles.dealLinkHeading}>
+                  <span className={styles.relationResultIcon}><Hash size={18} /></span>
+                  <div>
+                    <strong>Deal koppelen</strong>
+                    <span>Controleer het relatienummer en leg eventueel handmatig klantakkoord vast.</span>
+                  </div>
+                </div>
+
+                <div className={styles.transferControls}>
+                  <label className={`${styles.transferRelationField} input-wrap`}>
+                    <span className="input-label">Smart Trade relatie-ID</span>
+                    <input
+                      className="input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={manualRelationId}
+                      onChange={(event) => setManualRelationId(event.target.value.replace(/\D/g, ""))}
+                      placeholder="Bijv. 2498"
+                    />
+                    <span className={styles.transferControlHint}>
+                      Standaard overgenomen uit de gekozen relatie. Pas dit alleen aan wanneer de deal aan een ander relatienummer moet worden gekoppeld.
+                    </span>
+                  </label>
+
+                  <label className={`${styles.approvalOption} ${customerApproved ? styles.approvalOptionSelected : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={customerApproved}
+                      onChange={(event) => setCustomerApproved(event.target.checked)}
+                    />
+                    <span>
+                      <strong>Klant heeft akkoord gegeven</strong>
+                      <small>Leg het akkoord nu handmatig vast op de deal.</small>
+                    </span>
+                    <em>{customerApproved ? "Akkoord vastleggen" : "Nog geen akkoord"}</em>
+                  </label>
+                </div>
+              </div>
             </div>
           ) : null}
 

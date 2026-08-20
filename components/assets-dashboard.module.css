@@ -221,6 +221,36 @@
   font-size: 14px;
 }
 
+.dealLinkControls {
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.dealLinkHeading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.dealLinkHeading > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dealLinkHeading strong {
+  color: var(--text-strong);
+  font-size: 15px;
+}
+
+.dealLinkHeading span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .transferControls {
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);

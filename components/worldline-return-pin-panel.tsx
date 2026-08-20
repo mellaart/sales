@@ -9,6 +9,7 @@ import {
   Eye,
   EyeOff,
   Link2,
+  Mail,
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
@@ -52,6 +53,7 @@ export default function WorldlineReturnPinPanel({
   const [forms, setForms] = useState<WorldlineReturnPinFormSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [outlookBusy, setOutlookBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [showPins, setShowPins] = useState(false);
 
@@ -138,6 +140,85 @@ export default function WorldlineReturnPinPanel({
     window.open(latestForm.publicUrl, "_blank", "noopener,noreferrer");
   }
 
+  async function prepareOutlookDraft() {
+    if (!latestForm || !canWrite || outlookBusy) return;
+
+    const recipientEmail = latestForm.formData.email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setMessage("Vul eerst een geldig e-mailadres in op het retourpinnenformulier.");
+      return;
+    }
+
+    const returnTo = "/worldline";
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    setOutlookBusy(true);
+    setMessage("Outlook-verbinding wordt gecontroleerd...");
+
+    try {
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!statusResponse.ok) {
+        throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+      }
+      if (!statusJson.connected) {
+        setMessage("Outlook wordt eenmalig verbonden...");
+        const connectUrl = statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
+        if (outlookWindow) outlookWindow.location.href = connectUrl;
+        else window.location.assign(connectUrl);
+        return;
+      }
+
+      setMessage("Outlook-concept wordt gemaakt...");
+      const response = await fetch(
+        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: "worldline-return-pin",
+            recipientEmail,
+            customerName: latestForm.formData.companyName,
+            contactName: latestForm.formData.acceptedByName,
+            publicUrl: latestForm.publicUrl,
+          }),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (json.reconnectRequired && json.connectUrl) {
+        setMessage("Outlook moet opnieuw worden verbonden...");
+        if (outlookWindow) outlookWindow.location.href = json.connectUrl;
+        else window.location.assign(json.connectUrl);
+        return;
+      }
+      if (!response.ok || !json.webLink) {
+        throw new Error(json.error || "Outlook-concept maken mislukt.");
+      }
+
+      if (outlookWindow) outlookWindow.location.href = json.webLink;
+      else window.location.assign(json.webLink);
+      setMessage("Outlook-concept met acceptatieformulierlink is aangemaakt.");
+    } catch (error) {
+      outlookWindow?.close();
+      setMessage(error instanceof Error ? error.message : "Outlook-concept maken mislukt.");
+    } finally {
+      setOutlookBusy(false);
+    }
+  }
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -165,6 +246,11 @@ export default function WorldlineReturnPinPanel({
             <button type="button" className="secondary-button" disabled={busy} onClick={() => void copyLink()}>
               <ClipboardCopy size={16} /> Kopieer link
             </button>
+            {canWrite ? (
+              <button type="button" className="primary-button" disabled={busy || outlookBusy} onClick={() => void prepareOutlookDraft()}>
+                <Mail size={16} /> {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+              </button>
+            ) : null}
             <button type="button" className="secondary-button" disabled={busy} onClick={() => void loadForms(true)}>
               <RefreshCw size={16} /> Status vernieuwen
             </button>

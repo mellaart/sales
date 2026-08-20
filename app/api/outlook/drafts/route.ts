@@ -21,7 +21,8 @@ type OutlookDraftTemplate =
   | "dns-instructions"
   | "implementation-appointment"
   | "implementation-progress"
-  | "worldline-contract";
+  | "worldline-contract"
+  | "worldline-return-pin";
 
 type ImplementationAppointmentWorkItem = {
   group: string;
@@ -248,6 +249,30 @@ function worldlineContractEmail(input: {
     '<p style="margin:0 0 12pt">Binnenkort zal iemand van Worldline contact met u opnemen voor een korte UBO-check. Dit gebeurt telefonisch of per e-mail. Let op: de telefonische oproep komt vanuit België. Deze controle is verplicht ter voorkoming van witwassen en financiering van terrorisme.</p>',
     '<p style="margin:0 0 12pt">Na de controle ontvangt u van Worldline een e-mail met toegang tot het extranet voor het inzien van de pintransacties.</p>',
     '<p style="margin:0">Mochten er nog vragen zijn, dan hoor ik het graag.</p>',
+  ].join("");
+}
+
+function worldlineReturnPinEmail(input: {
+  contactName: string;
+  customerName: string;
+  publicUrl: string;
+}) {
+  const greetingName = firstName(input.contactName);
+  const greeting = greetingName ? `Beste ${escapeHtml(greetingName)},` : "Beste,";
+  const customerName = input.customerName ? ` voor ${escapeHtml(input.customerName)}` : "";
+  const publicUrl = escapeHtml(input.publicUrl);
+  const listStyle = "margin:0 0 12pt;padding-left:22px";
+
+  return [
+    `<p style="margin:0 0 12pt">${greeting}</p>`,
+    `<p style="margin:0 0 12pt">Om <strong>retourpinnen via Smart Trade</strong>${customerName} te kunnen activeren, willen wij u vragen om het onderstaande acceptatieformulier volledig in te vullen en digitaal goed te keuren:</p>`,
+    `<p style="margin:0 0 12pt"><a href="${publicUrl}" style="display:inline-block;padding:9pt 14pt;background:#1769bd;color:#ffffff;text-decoration:none;font-weight:700">Acceptatieformulier retourpinnen openen</a></p>`,
+    `<p style="margin:0 0 12pt"><a href="${publicUrl}" style="color:#0563c1;text-decoration:underline">${publicUrl}</a></p>`,
+    '<p style="margin:0 0 5pt"><strong>In het formulier vragen we onder andere om:</strong></p>',
+    `<ul style="${listStyle}"><li>de gewenste maximale bedragen per retourpintransactie en per dag;</li><li>vanaf welk bedrag een notificatie moet worden verstuurd;</li><li>het e-mailadres voor notificaties en de dagelijkse rapportage;</li><li>de medewerkers die geautoriseerd mogen worden om retourpintransacties uit te voeren;</li><li>de gegevens van de tekenbevoegde.</li></ul>`,
+    '<p style="margin:0 0 12pt">Omdat retourpinnen het mogelijk maakt om bedragen via de pinterminal terug te storten, hebben we hiervoor bewust een aantal extra beveiligingsmaatregelen ingebouwd. In het formulier staan ook de verantwoordelijkheden rondom het gebruik, het beheer van gebruikers en pincodes en de controle van retourpintransacties beschreven.</p>',
+    '<p style="margin:0 0 12pt">Na het volledig invullen en definitief goedkeuren van het formulier ontvangen wij de benodigde gegevens en kunnen wij <strong>retourpinnen in Smart Trade voor jullie activeren en instellen</strong>.</p>',
+    '<p style="margin:0">Mochten er vragen zijn over het invullen of over de gekozen limieten, laat het gerust weten.</p>',
   ].join("");
 }
 
@@ -511,6 +536,13 @@ export async function POST(request: Request) {
           contentType: "text/calendar; charset=utf-8; method=PUBLISH",
           fileContent: Buffer.from(ics, "utf8"),
         });
+      } else if (template === "worldline-return-pin") {
+        const publicUrl = jsonText(payload, "publicUrl", 2_000);
+        if (!validHttpUrl(publicUrl)) {
+          return NextResponse.json({ error: "De beveiligde retourpinnenlink is ongeldig." }, { status: 400 });
+        }
+        subject = `Acceptatieformulier retourpinnen${customerName ? ` - ${customerName}` : ""}`;
+        htmlBody = worldlineReturnPinEmail({ contactName, customerName, publicUrl });
       } else {
         return NextResponse.json({ error: "Onbekend Outlook-mailsjabloon." }, { status: 400 });
       }

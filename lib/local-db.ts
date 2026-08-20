@@ -327,6 +327,33 @@ export async function ensureLocalSchema() {
         create index if not exists implementations_status_updated_at_idx
           on public.implementations(status, updated_at desc);
 
+        create table if not exists public.deal_asset_creations (
+          id uuid primary key default gen_random_uuid(),
+          deal_id uuid not null references public.deals(id) on delete cascade,
+          plan_key text not null,
+          asset_class_id bigint not null,
+          asset_name text not null,
+          smart_trade_asset_id bigint,
+          status text not null default 'pending'
+            check (status in ('pending', 'created')),
+          created_by uuid references public.profiles(id) on delete set null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+
+        alter table public.deal_asset_creations add column if not exists plan_key text;
+        alter table public.deal_asset_creations add column if not exists asset_class_id bigint;
+        alter table public.deal_asset_creations add column if not exists asset_name text;
+        alter table public.deal_asset_creations add column if not exists smart_trade_asset_id bigint;
+        alter table public.deal_asset_creations add column if not exists status text not null default 'pending';
+        alter table public.deal_asset_creations add column if not exists created_by uuid references public.profiles(id) on delete set null;
+        alter table public.deal_asset_creations add column if not exists created_at timestamptz not null default now();
+        alter table public.deal_asset_creations add column if not exists updated_at timestamptz not null default now();
+        create unique index if not exists deal_asset_creations_deal_plan_key_idx
+          on public.deal_asset_creations(deal_id, plan_key);
+        create index if not exists deal_asset_creations_deal_status_idx
+          on public.deal_asset_creations(deal_id, status, created_at desc);
+
         create table if not exists public.implementation_customer_access (
           id uuid primary key default gen_random_uuid(),
           implementation_id uuid not null unique references public.implementations(id) on delete cascade,

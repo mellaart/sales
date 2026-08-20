@@ -136,6 +136,40 @@ function formatApprovalDate(value: string | null) {
   }).format(date);
 }
 
+type DealAssetOverview = {
+  ready: boolean;
+  prerequisiteErrors: string[];
+  warnings: string[];
+  total: number;
+  createdCount: number;
+  pendingCount: number;
+  missingCount: number;
+  relationId: number | null;
+  administrationName: string | null;
+  plannedGoLiveDate: string | null;
+  items: Array<{
+    key: string;
+    assetClassId: number;
+    name: string;
+    source: string;
+    status: "missing" | "pending" | "created";
+    smartTradeAssetId: number | null;
+    createdAt: string | null;
+  }>;
+};
+
+async function loadDealAssetOverview(dealId: string) {
+  const response = await fetch(`/api/deals/${encodeURIComponent(dealId)}/assets`, {
+    cache: "no-store",
+  });
+  const json = await response.json().catch(() => ({})) as {
+    overview?: DealAssetOverview;
+    error?: string;
+  };
+
+  return { response, json };
+}
+
 function getSmartConnectPricing(
   connectionCount: number,
   tiers: SmartConnectPriceTier[],
@@ -270,6 +304,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [acceptedAt, setAcceptedAt] = useState<string | null>(null);
   const [acceptedByName, setAcceptedByName] = useState("");
   const [acceptedByEmail, setAcceptedByEmail] = useState("");
+  const [assetOverview, setAssetOverview] = useState<DealAssetOverview | null>(null);
+  const [assetCreationBusy, setAssetCreationBusy] = useState(false);
+  const [assetCreationStatus, setAssetCreationStatus] = useState("");
 
   const [customerName, setCustomerName] = useState("");
   const [quoteTitle, setQuoteTitle] = useState("Prijsvoorstel Smart Trade");
@@ -420,6 +457,20 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         } catch {
           setCustomerIntakeStatus("Klantformulier laden mislukt.");
         }
+      }
+
+      if (inputs.quoteLayout !== "assets-expansion") {
+        try {
+          const { response, json } = await loadDealAssetOverview(dealId);
+          if (response.ok && json.overview) {
+            setAssetOverview(json.overview);
+          }
+        } catch {
+          // De deal blijft bruikbaar als het assetoverzicht tijdelijk niet kan laden.
+        }
+      } else {
+        setAssetOverview(null);
+        setAssetCreationStatus("");
       }
 
       setLoading(false);
@@ -705,6 +756,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
       setArchivedAt(archiveResult.deal?.archived_at ?? nextArchivedAt);
       setStatus("Nieuwe klant is als implementatie aangemaakt en staat klaar om toe te wijzen.");
+      await refreshDealAssets(true);
     } finally {
       setImplementationBusy(false);
     }
@@ -738,9 +790,61 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       const json = await response.json().catch(() => ({})) as {
         approval?: DealApprovalSummary | null;
       };
-      if (response.ok) applyDealApproval(json.approval ?? null);
+      if (response.ok) {
+        applyDealApproval(json.approval ?? null);
+        void refreshDealAssets(true);
+      }
     } catch {
       // De deal blijft bruikbaar; de status wordt bij de volgende actie opnieuw geladen.
+    }
+  }
+
+  async function refreshDealAssets(quiet = false) {
+    if (isAssetsExpansionDeal) return;
+
+    try {
+      const { response, json } = await loadDealAssetOverview(dealId);
+
+      if (!response.ok || !json.overview) {
+        if (!quiet) setAssetCreationStatus(json.error || "Assets voorbereiden mislukt.");
+        return;
+      }
+
+      setAssetOverview(json.overview);
+      if (!quiet) setAssetCreationStatus("");
+    } catch {
+      if (!quiet) setAssetCreationStatus("Assets voorbereiden mislukt.");
+    }
+  }
+
+  async function handleCreateAssets() {
+    if (assetCreationBusy) return;
+
+    setAssetCreationBusy(true);
+    setAssetCreationStatus("Assets worden aangemaakt in Smart Trade...");
+
+    try {
+      const response = await fetch(`/api/deals/${encodeURIComponent(dealId)}/assets`, {
+        method: "POST",
+      });
+      const json = await response.json().catch(() => ({})) as {
+        message?: string;
+        overview?: DealAssetOverview;
+        error?: string;
+      };
+
+      if (json.overview) setAssetOverview(json.overview);
+      if (!response.ok) {
+        setAssetCreationStatus(json.error || "Assets aanmaken mislukt.");
+        return;
+      }
+
+      setAssetCreationStatus(json.message || "Assets zijn aangemaakt in Smart Trade.");
+      await refreshDealAssets(true);
+    } catch {
+      setAssetCreationStatus("Assets aanmaken mislukt.");
+    } finally {
+      setAssetCreationBusy(false);
     }
   }
 
@@ -1394,6 +1498,10 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     approvalExpiresAt &&
     new Date(approvalExpiresAt).getTime() <= Date.now(),
   );
+  const assetsComplete = Boolean(
+    assetOverview && assetOverview.total > 0 && assetOverview.createdCount === assetOverview.total,
+  );
+  const assetsPending = Boolean(assetOverview?.pendingCount);
 
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;
@@ -2326,6 +2434,101 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             ) : null}
 
             {customerIntakeStatus ? <div className="save-status">{customerIntakeStatus}</div> : null}
+          </section>
+        ) : null}
+
+        {!isAssetsExpansionDeal ? (
+          <section className="card panel customer-intake-panel">
+            <div className="top-row customer-intake-heading">
+              <div>
+                <div className="eyebrow">Stap 3</div>
+                <h2 className="headline">Assets aanmaken</h2>
+                <div className="subtext">
+                  Maak de afgenomen licentie, gebruikers, modules, klantportaal en Smart Connect live aan in Smart Trade.
+                </div>
+              </div>
+              <StatusPill tone={assetsComplete
+                ? "success"
+                : assetsPending
+                  ? "warning"
+                  : "neutral"}
+              >
+                {assetsComplete
+                  ? "Aangemaakt"
+                  : assetsPending
+                    ? "In verwerking"
+                    : "Nog niet aangemaakt"}
+              </StatusPill>
+            </div>
+
+            <div className="customer-intake-controls">
+              <div className="customer-intake-fields">
+                <div className="customer-intake-summary">
+                  <div>
+                    <span>Relatie-ID</span>
+                    <strong>{assetOverview?.relationId ?? (customerIntakeRelationId || "-")}</strong>
+                  </div>
+                  <div>
+                    <span>Administratienaam</span>
+                    <strong>{assetOverview?.administrationName || "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Startdatum assets</span>
+                    <strong>{assetOverview?.plannedGoLiveDate
+                      ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "long" }).format(new Date(assetOverview.plannedGoLiveDate))
+                      : "-"}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="customer-intake-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={assetCreationBusy}
+                  onClick={() => void refreshDealAssets()}
+                >
+                  <RefreshCw size={16} /> Vernieuwen
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={assetCreationBusy || !assetOverview?.ready || assetsPending || assetOverview.missingCount === 0}
+                  onClick={() => void handleCreateAssets()}
+                >
+                  <Boxes size={16} />
+                  {assetCreationBusy
+                    ? "Assets aanmaken..."
+                    : assetsComplete
+                      ? "Assets aangemaakt"
+                      : "Assets aanmaken"}
+                </button>
+              </div>
+            </div>
+
+            {assetOverview?.prerequisiteErrors.map((error) => (
+              <div className="customer-intake-sync-message error" key={error}>{error}</div>
+            ))}
+            {assetOverview?.warnings.map((warning) => (
+              <div className="customer-intake-sync-message" key={warning}>{warning}</div>
+            ))}
+            {assetOverview?.items.length ? (
+              <div className="summary-list">
+                {assetOverview.items.map((item) => (
+                  <div key={item.key}>
+                    <span>{item.name}</span>
+                    <strong>
+                      {item.status === "created"
+                        ? `Asset ${item.smartTradeAssetId}`
+                        : item.status === "pending"
+                          ? "In verwerking"
+                          : "Klaar om aan te maken"}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {assetCreationStatus ? <div className="save-status">{assetCreationStatus}</div> : null}
           </section>
         ) : null}
         </fieldset>

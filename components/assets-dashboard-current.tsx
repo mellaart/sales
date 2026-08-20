@@ -542,6 +542,8 @@ export default function AssetsDashboardCurrent() {
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const travelPostcodeManuallyEditedRef = useRef(false);
   const [dealContactName, setDealContactName] = useState("");
+  const [manualRelationId, setManualRelationId] = useState("");
+  const [customerApproved, setCustomerApproved] = useState(false);
   const [contactPersonStatus, setContactPersonStatus] = useState("");
   const [loadingContactPerson, setLoadingContactPerson] = useState(false);
   const [offerGuidance, setOfferGuidance] = useState("");
@@ -935,6 +937,13 @@ export default function AssetsDashboardCurrent() {
       return;
     }
 
+    const relationIdText = manualRelationId.trim();
+    if (!/^\d+$/.test(relationIdText) || Number(relationIdText) <= 0) {
+      setTransferStatus("Vul een geldig Smart Trade relatie-ID in.");
+      return;
+    }
+    const relationId = Number(relationIdText);
+
     if (!user) {
       setTransferStatus("Je moet ingelogd zijn om een deal aan te maken.");
       return;
@@ -970,6 +979,7 @@ export default function AssetsDashboardCurrent() {
 
       const payload = {
         user_id: user.id,
+        smart_trade_relation_id: relationId,
         customer_name: selectedRelation.name,
         quote_title: `Uitbreidingen ${selectedRelation.name}`,
         contact_name: dealContactName.trim() || null,
@@ -989,6 +999,13 @@ export default function AssetsDashboardCurrent() {
         annual_recurring: expansionTotals.monthly * 12 + expansionTotals.annual,
         modules: selectedModuleRows,
         notes,
+        ...(customerApproved
+          ? {
+              accepted_at: new Date().toISOString(),
+              accepted_by_name: getUserDisplayName(user, profile),
+              accepted_by_email: user.email ?? null,
+            }
+          : {}),
         calculator_inputs: {
           extraUsers: safeExtraUsersToOffer,
           chauffeurExtraUsers: safeChauffeurExtraUsersToOffer,
@@ -1007,7 +1024,7 @@ export default function AssetsDashboardCurrent() {
           quoteLayout: "assets-expansion" as const,
           assetsExpansion: {
             source: "assets" as const,
-            relationId: selectedRelation.id,
+            relationId: String(relationId),
             relationName: selectedRelation.name,
             currentPackageName: selectedPackageName,
             targetPackageName: activeResult.name,
@@ -1088,6 +1105,8 @@ export default function AssetsDashboardCurrent() {
     setIncludeTravelCosts(true);
     setTravelPostcodePrefix("");
     setDealContactName("");
+    setManualRelationId("");
+    setCustomerApproved(false);
     setContactPersonStatus("");
     setLoadingContactPerson(false);
     setOfferGuidance("");
@@ -1128,6 +1147,8 @@ export default function AssetsDashboardCurrent() {
     travelPostcodeManuallyEditedRef.current = false;
     setTravelPostcodePrefix(normalizePostcodePrefix(relation.postcode ?? ""));
     setDealContactName("");
+    setManualRelationId(relation.id);
+    setCustomerApproved(false);
     setContactPersonStatus("Primaire contactpersoon wordt opgehaald...");
     setLoadingContactPerson(true);
     setOfferGuidance("");
@@ -1232,6 +1253,39 @@ export default function AssetsDashboardCurrent() {
                 <strong>+{assetDealLines.length - 4}</strong>
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {selectedRelation ? (
+          <div className={styles.transferControls}>
+            <label className={`${styles.transferRelationField} input-wrap`}>
+              <span className="input-label">Smart Trade relatie-ID</span>
+              <input
+                className="input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={manualRelationId}
+                onChange={(event) => setManualRelationId(event.target.value.replace(/\D/g, ""))}
+                placeholder="Bijv. 2498"
+              />
+              <span className={styles.transferControlHint}>
+                Standaard overgenomen uit de gekozen relatie. Pas dit alleen aan wanneer de deal aan een ander relatienummer moet worden gekoppeld.
+              </span>
+            </label>
+
+            <label className={`${styles.approvalOption} ${customerApproved ? styles.approvalOptionSelected : ""}`}>
+              <input
+                type="checkbox"
+                checked={customerApproved}
+                onChange={(event) => setCustomerApproved(event.target.checked)}
+              />
+              <span>
+                <strong>Klant heeft akkoord gegeven</strong>
+                <small>Leg het akkoord nu handmatig vast op de deal.</small>
+              </span>
+              <em>{customerApproved ? "Akkoord vastleggen" : "Nog geen akkoord"}</em>
+            </label>
           </div>
         ) : null}
 

@@ -221,6 +221,83 @@
   font-size: 14px;
 }
 
+.transferControls {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.transferRelationField {
+  align-content: start;
+}
+
+.transferControlHint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.approvalOption {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 100%;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: var(--surface-control);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.approvalOption:hover,
+.approvalOptionSelected {
+  border-color: rgba(16, 185, 129, 0.52);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.approvalOption input {
+  width: 18px;
+  height: 18px;
+  accent-color: #34d399;
+}
+
+.approvalOption span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.approvalOption strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.approvalOption small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.approvalOption em {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-soft);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.approvalOptionSelected em {
+  background: rgba(16, 185, 129, 0.16);
+  color: #a7f3d0;
+}
+
 .assetGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -775,6 +852,10 @@
   }
 
   .moduleSelectionSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .transferControls {
     grid-template-columns: 1fr;
   }
 

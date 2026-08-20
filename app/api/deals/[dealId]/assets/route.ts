@@ -5,6 +5,7 @@ import { query } from "@/lib/local-db";
 import { executeLocalTableQuery } from "@/lib/local-table";
 import { readLocalRoleTabAccess } from "@/lib/role-tab-access-storage";
 import { getTabPermission } from "@/lib/role-tabs";
+import type { DealRecord } from "@/lib/supabase";
 import {
   fetchWithSmartTradeTimeout,
   getSmartTradePullConfig,
@@ -19,8 +20,8 @@ type DealRow = {
   smart_trade_relation_id: number | null;
   package_key: string | null;
   package_name: string | null;
-  calculator_inputs: unknown;
-  modules: unknown;
+  calculator_inputs: DealRecord["calculator_inputs"];
+  modules: DealRecord["modules"];
   accepted_at: string | null;
 };
 

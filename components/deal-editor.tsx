@@ -18,6 +18,7 @@ import {
   FileText,
   LifeBuoy,
   Link2,
+  LoaderCircle,
   Mail,
   MapPin,
   Package,
@@ -35,7 +36,12 @@ import {
 } from "@/lib/customer-intake";
 import type { DealApprovalStatus, DealApprovalSummary } from "@/lib/deal-approval";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
-import type { ImplementationRecord } from "@/lib/implementations";
+import {
+  normalizeImplementationProgress,
+  type ImplementationProgressKey,
+  type ImplementationRecord,
+} from "@/lib/implementations";
+import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { calculatePricing, euro, getMinimumPackageForPaidModules, getPaidSelectedModuleCount, MODULES, type ModuleConfig } from "@/lib/pricing";
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
@@ -156,6 +162,13 @@ type DealAssetOverview = {
     smartTradeAssetId: number | null;
     createdAt: string | null;
   }>;
+};
+
+type ImplementationOrderResponse = {
+  error?: string;
+  orderId?: string | null;
+  orderCreatedAt?: string | null;
+  relationId?: number;
 };
 
 async function loadDealAssetOverview(dealId: string) {
@@ -296,6 +309,11 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
   const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
   const [customerOutlookBusy, setCustomerOutlookBusy] = useState(false);
+  const [newCustomerOutlookBusy, setNewCustomerOutlookBusy] = useState(false);
+  const [implementationOrderBusy, setImplementationOrderBusy] = useState<"preview" | "create" | null>(null);
+  const [implementationOrderPreview, setImplementationOrderPreview] = useState<ImplementationOrderResponse | null>(null);
+  const [implementationOrderMessage, setImplementationOrderMessage] = useState("");
+  const [implementationOrderMessageTone, setImplementationOrderMessageTone] = useState<"info" | "success" | "error">("info");
   const [quoteOutlookBusy, setQuoteOutlookBusy] = useState(false);
   const [quoteOutlookLink, setQuoteOutlookLink] = useState("");
   const [approvalStatus, setApprovalStatus] = useState<DealApprovalStatus | null>(null);
@@ -336,6 +354,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const currentSalesTitle = profile?.job_title ?? "";
   const currentSalesWorkdays = profile?.workdays ?? "";
   const currentSalesPhone = profile?.mobile_phone ?? "";
+  const canManageImplementation = isProtectedAdminEmail(user?.email);
   const selectedSalesConsultant = useMemo(
     () => salesConsultants.find((consultant) => consultant.id === dealOwnerId) ?? null,
     [dealOwnerId, salesConsultants],
@@ -759,6 +778,149 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       await refreshDealAssets(true);
     } finally {
       setImplementationBusy(false);
+    }
+  }
+
+  async function completeImplementationProgress(key: ImplementationProgressKey) {
+    if (!implementation || !supabase || !canManageImplementation) return false;
+
+    const currentProgress = normalizeImplementationProgress(implementation.progress);
+    if (currentProgress[key]) return true;
+
+    const { data, error } = await supabase
+      .from("implementations")
+      .update({ progress: { ...currentProgress, [key]: true } } as never)
+      .eq("id", implementation.id)
+      .select("*")
+      .single();
+
+    if (error) return false;
+    setImplementation(data as ImplementationRecord);
+    return true;
+  }
+
+  async function handleNewCustomerOutlookDraft() {
+    if (!implementation || !canManageImplementation || newCustomerOutlookBusy) return;
+
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    showOutlookPopupStatus(
+      outlookWindow,
+      "Nieuwe klantmail voorbereiden",
+      "Het Outlook-concept met alle klant- en implementatiegegevens wordt gemaakt.",
+    );
+    setNewCustomerOutlookBusy(true);
+    setStatus("Outlook-verbinding wordt gecontroleerd...");
+
+    const returnTo = `/deals/${encodeURIComponent(dealId)}`;
+
+    try {
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!statusResponse.ok) {
+        throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+      }
+      if (!statusJson.connected) {
+        const connectUrl = statusJson.connectUrl || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
+        setStatus("Outlook wordt eenmalig verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, connectUrl)) window.location.assign(connectUrl);
+        return;
+      }
+
+      setStatus("Nieuwe klantmail wordt gemaakt...");
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/new-customer-draft?returnTo=${encodeURIComponent(returnTo)}`,
+        { method: "POST" },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+
+      if (json.reconnectRequired && json.connectUrl) {
+        setStatus("Outlook moet opnieuw worden verbonden...");
+        if (!navigateOutlookPopup(outlookWindow, json.connectUrl)) window.location.assign(json.connectUrl);
+        return;
+      }
+      if (!response.ok || !json.webLink) {
+        throw new Error(json.error || "Nieuwe klantmail maken mislukt.");
+      }
+
+      const progressSaved = await completeImplementationProgress("newCustomerEmail");
+      if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
+      setStatus(progressSaved
+        ? "Nieuwe klantmail is in Outlook klaargezet en afgevinkt bij de implementatie."
+        : "Nieuwe klantmail is in Outlook klaargezet, maar de voortgang kon niet worden afgevinkt.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Nieuwe klantmail maken mislukt.";
+      showOutlookPopupStatus(outlookWindow, "Nieuwe klantmail niet gemaakt", message, "error");
+      setStatus(message);
+    } finally {
+      setNewCustomerOutlookBusy(false);
+    }
+  }
+
+  async function handleImplementationOrder(mode: "preview" | "create") {
+    if (!implementation || !canManageImplementation || implementationOrderBusy) return;
+
+    setImplementationOrderBusy(mode);
+    setImplementationOrderMessageTone("info");
+    setImplementationOrderMessage(
+      mode === "preview" ? "Order wordt gecontroleerd..." : "Live order wordt aangemaakt...",
+    );
+
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/order`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode }),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as ImplementationOrderResponse;
+      if (!response.ok) throw new Error(json.error || "Implementatieorder verwerken mislukt.");
+
+      if (mode === "preview") {
+        setImplementationOrderPreview(json);
+        setImplementationOrderMessageTone("success");
+        setImplementationOrderMessage(
+          `Controle geslaagd voor relatie ${json.relationId}. De live order kan worden aangemaakt.`,
+        );
+        return;
+      }
+
+      setImplementation((current) => current ? {
+        ...current,
+        smart_trade_order_id: json.orderId ?? "Aangemaakt",
+        smart_trade_order_created_at: json.orderCreatedAt ?? new Date().toISOString(),
+        smart_trade_order_pending_at: null,
+        progress: {
+          ...normalizeImplementationProgress(current.progress),
+          implementationOrder: true,
+        },
+      } : current);
+      setImplementationOrderPreview(null);
+      setImplementationOrderMessageTone("success");
+      setImplementationOrderMessage(
+        `Smart Trade-order ${json.orderId || "is"} aangemaakt. Implementatieorder staat op Verwerkt.`,
+      );
+    } catch (error) {
+      setImplementationOrderMessageTone("error");
+      setImplementationOrderMessage(
+        error instanceof Error ? error.message : "Implementatieorder verwerken mislukt.",
+      );
+    } finally {
+      setImplementationOrderBusy(null);
     }
   }
 
@@ -1482,6 +1644,14 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     : customerIntakeLabel === "Verlopen" || customerIntakeLabel === "Ingetrokken"
       ? "danger"
       : "warning";
+  const newCustomerMailMissingFields = [
+    !customerIntake?.submittedAt ? "klantformulier" : "",
+    !implementation?.assigned_consultant_name?.trim() ? "consultant" : "",
+    !implementation?.administration_name?.trim() ? "administratie" : "",
+    !implementation?.planned_go_live_date?.trim() ? "livegang" : "",
+    !implementation?.financial_package?.trim() ? "financieel pakket" : "",
+  ].filter(Boolean);
+  const newCustomerMailReady = newCustomerMailMissingFields.length === 0;
   const canArchiveDeal = Boolean(
     user && (role === "admin" || dealOwnerId === user.id),
   );
@@ -2434,6 +2604,104 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             ) : null}
 
             {customerIntakeStatus ? <div className="save-status">{customerIntakeStatus}</div> : null}
+          </section>
+        ) : null}
+
+        {!isAssetsExpansionDeal && implementation ? (
+          <section className="card panel customer-intake-panel">
+            <div className="top-row customer-intake-heading">
+              <div>
+                <div className="eyebrow">Implementatie</div>
+                <h2 className="headline">Vervolg nieuwe klant</h2>
+                <div className="subtext">
+                  Bereid de interne nieuwe klantmail en implementatieorder vanuit deze deal voor.
+                </div>
+              </div>
+              <StatusPill tone="success">Implementatie actief</StatusPill>
+            </div>
+
+            <div className="implementation-communication-stack">
+              <article className="implementation-communication-card">
+                <div className="implementation-communication-icon"><Mail size={22} /></div>
+                <div className="implementation-communication-copy">
+                  <span>Nieuwe klantmail</span>
+                  <strong>{newCustomerMailReady ? "Klaar om te maken" : "Nog niet compleet"}</strong>
+                  <p>
+                    {newCustomerMailReady
+                      ? "Aan martijn@troublefree.nl, met de overige gebruikers in CC."
+                      : `Nog nodig: ${newCustomerMailMissingFields.join(", ")}.`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={!canManageImplementation || !newCustomerMailReady || newCustomerOutlookBusy}
+                  title={newCustomerMailReady
+                    ? "Maak de interne nieuwe klantmail in Outlook"
+                    : `Nog nodig: ${newCustomerMailMissingFields.join(", ")}`}
+                  onClick={() => void handleNewCustomerOutlookDraft()}
+                >
+                  <Mail size={16} /> {newCustomerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                </button>
+              </article>
+
+              <article className="implementation-communication-card implementation-order-card">
+                <div className="implementation-communication-icon"><ClipboardCheck size={22} /></div>
+                <div className="implementation-communication-copy">
+                  <span>Implementatieorder</span>
+                  <strong>
+                    {implementation.smart_trade_order_id
+                      ? `Smart Trade-order ${implementation.smart_trade_order_id}`
+                      : customerIntakeRelationId
+                        ? `Relatie ${customerIntakeRelationId}`
+                        : "Order wordt voorbereid"}
+                  </strong>
+                  <p>
+                    {implementation.smart_trade_order_id
+                      ? "De implementatieorder is verwerkt in Smart Trade."
+                      : customerIntakeRelationId
+                        ? "Controleer de order voordat deze live wordt aangemaakt."
+                        : "Koppel of verwerk eerst de Smart Trade-relatie via het klantformulier."}
+                  </p>
+                </div>
+                {implementation.smart_trade_order_id ? (
+                  <StatusPill tone="success">Verwerkt</StatusPill>
+                ) : (
+                  <div className="implementation-order-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={!canManageImplementation || !customerIntakeRelationId || Boolean(implementationOrderBusy)}
+                      onClick={() => void handleImplementationOrder("preview")}
+                    >
+                      {implementationOrderBusy === "preview"
+                        ? <LoaderCircle className="implementation-dns-spinner" size={16} />
+                        : <ClipboardCheck size={16} />}
+                      {implementationOrderBusy === "preview" ? "Controleren..." : "Order controleren"}
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={!canManageImplementation || !implementationOrderPreview || Boolean(implementationOrderBusy)}
+                      title={implementationOrderPreview
+                        ? "Maak de gecontroleerde order live aan in Smart Trade"
+                        : "Controleer de order eerst"}
+                      onClick={() => void handleImplementationOrder("create")}
+                    >
+                      {implementationOrderBusy === "create"
+                        ? <LoaderCircle className="implementation-dns-spinner" size={16} />
+                        : <ClipboardCheck size={16} />}
+                      {implementationOrderBusy === "create" ? "Aanmaken..." : "Aanmaken in Smart Trade"}
+                    </button>
+                  </div>
+                )}
+                {implementationOrderMessage ? (
+                  <div className={`implementation-order-message ${implementationOrderMessageTone}`}>
+                    {implementationOrderMessage}
+                  </div>
+                ) : null}
+              </article>
+            </div>
           </section>
         ) : null}
 

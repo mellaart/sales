@@ -322,6 +322,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [acceptedAt, setAcceptedAt] = useState<string | null>(null);
   const [acceptedByName, setAcceptedByName] = useState("");
   const [acceptedByEmail, setAcceptedByEmail] = useState("");
+  const [manualApprovalBusy, setManualApprovalBusy] = useState(false);
+  const [isNewCustomerDeal, setIsNewCustomerDeal] = useState(false);
   const [assetOverview, setAssetOverview] = useState<DealAssetOverview | null>(null);
   const [assetCreationBusy, setAssetCreationBusy] = useState(false);
   const [assetCreationStatus, setAssetCreationStatus] = useState("");
@@ -417,6 +419,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setAcceptedAt(deal.accepted_at ?? null);
       setAcceptedByName(deal.accepted_by_name ?? "");
       setAcceptedByEmail(deal.accepted_by_email ?? "");
+      setIsNewCustomerDeal(inputs.quoteLayout !== "assets-expansion" && !deal.smart_trade_relation_id);
       setCustomerName(deal.customer_name || "");
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
       setContactName(deal.contact_name || "");
@@ -466,6 +469,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
           if (intakeResponse.ok && intakeJson.intake) {
             setCustomerIntake(intakeJson.intake);
+            setIsNewCustomerDeal(true);
             setCustomerIntakeEmail(intakeJson.intake.recipientEmail);
             setCustomerIntakeRelationId(intakeJson.intake.smartTradeRelationId
               ? String(intakeJson.intake.smartTradeRelationId)
@@ -712,6 +716,35 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       );
     } finally {
       setArchiveBusy(false);
+    }
+  }
+
+  async function handleManualCustomerApproval(checked: boolean) {
+    if (!checked || !user || manualApprovalBusy || acceptedAt || !isNewCustomerDeal) return;
+
+    const recordedAt = new Date().toISOString();
+    const recordedBy = currentSalesName || user.email || "Smart Trade";
+    setManualApprovalBusy(true);
+    setStatus("Klantakkoord wordt vastgelegd...");
+
+    try {
+      const result = await updateDealWithFallback(supabase, dealId, {
+        accepted_at: recordedAt,
+        accepted_by_name: `Handmatig vastgelegd door ${recordedBy}`,
+        accepted_by_email: user.email ?? null,
+      });
+      if (result.error) {
+        setStatus(`Klantakkoord vastleggen mislukt: ${result.error}`);
+        return;
+      }
+
+      setAcceptedAt(result.deal?.accepted_at ?? recordedAt);
+      setAcceptedByName(result.deal?.accepted_by_name ?? `Handmatig vastgelegd door ${recordedBy}`);
+      setAcceptedByEmail(result.deal?.accepted_by_email ?? user.email ?? "");
+      setApprovalStatus("accepted");
+      setStatus("Klantakkoord is handmatig vastgelegd. Het Klantformulier is nu beschikbaar.");
+    } finally {
+      setManualApprovalBusy(false);
     }
   }
 
@@ -1112,7 +1145,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       return false;
     }
     const saveMessage = result.warning ?? "Deal opnieuw berekend en opgeslagen.";
-    if (approvalStatus) await refreshDealApproval();
+    if (approvalStatus && approvalRequestedAt) await refreshDealApproval();
     setStatus(saveMessage);
     return true;
   }
@@ -1343,6 +1376,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       }
 
       setCustomerIntake(json.intake);
+      setIsNewCustomerDeal(true);
       setCustomerIntakeEmail(json.intake.recipientEmail);
       setCustomerIntakeRelationId(json.intake.smartTradeRelationId
         ? String(json.intake.smartTradeRelationId)
@@ -1352,6 +1386,34 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     } catch {
       setCustomerIntakeStatus("Klantlink maken mislukt.");
       return null;
+    } finally {
+      setCustomerIntakeBusy(false);
+    }
+  }
+
+  async function saveCustomerIntakeRelationId() {
+    if (!user || customerIntakeBusy) return;
+
+    const relationIdText = customerIntakeRelationId.trim();
+    const relationId = relationIdText ? Number(relationIdText) : null;
+    if (relationId !== null && (!Number.isSafeInteger(relationId) || relationId <= 0)) {
+      setCustomerIntakeStatus("Vul een geldig Smart Trade relatie-ID in.");
+      return;
+    }
+
+    setCustomerIntakeBusy(true);
+    setCustomerIntakeStatus("Relatie-ID wordt opgeslagen...");
+    try {
+      const result = await updateDealWithFallback(supabase, dealId, {
+        smart_trade_relation_id: relationId,
+      });
+      if (result.error) {
+        setCustomerIntakeStatus(`Relatie-ID opslaan mislukt: ${result.error}`);
+        return;
+      }
+      setCustomerIntakeStatus(relationId
+        ? `Smart Trade relatie-ID ${relationId} is opgeslagen.`
+        : "Smart Trade relatie-ID is leeggemaakt.");
     } finally {
       setCustomerIntakeBusy(false);
     }
@@ -1380,6 +1442,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
       setCustomerIntake(json.intake ?? null);
       if (json.intake) {
+        setIsNewCustomerDeal(true);
         setCustomerIntakeEmail(json.intake.recipientEmail);
         setCustomerIntakeRelationId(json.intake.smartTradeRelationId
           ? String(json.intake.smartTradeRelationId)
@@ -1672,6 +1735,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     assetOverview && assetOverview.total > 0 && assetOverview.createdCount === assetOverview.total,
   );
   const assetsPending = Boolean(assetOverview?.pendingCount);
+  const showCustomerIntake = isNewCustomerDeal && Boolean(acceptedAt);
 
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;
@@ -2322,6 +2386,21 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     </button>
                   ) : null}
                 </div>
+                {isNewCustomerDeal && !acceptedAt ? (
+                  <label className="deal-manual-approval">
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      disabled={manualApprovalBusy}
+                      onChange={(event) => void handleManualCustomerApproval(event.target.checked)}
+                    />
+                    <span>
+                      <strong>Klant heeft akkoord gegeven</strong>
+                      <small>Leg een mondeling of per e-mail ontvangen akkoord handmatig vast.</small>
+                    </span>
+                    <em>{manualApprovalBusy ? "Opslaan..." : "Akkoord vastleggen"}</em>
+                  </label>
+                ) : null}
               </div>
 
               {!isAssetsExpansionDeal && assetsExpansion?.lines?.length ? (
@@ -2374,7 +2453,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           </section>
         ) : null}
 
-        {!isAssetsExpansionDeal ? (
+        {showCustomerIntake ? (
           <section className="card panel customer-intake-panel">
             <div className="top-row customer-intake-heading">
               <div>
@@ -2402,16 +2481,17 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   />
                 </label>
                 <label className="input-wrap customer-intake-relation-id">
-                  <span className="input-label">Bestaande relatie-ID (optioneel)</span>
+                  <span className="input-label">Smart Trade relatie-ID (optioneel)</span>
                   <input
                     className="input"
                     type="text"
                     inputMode="numeric"
                     value={customerIntakeRelationId}
                     onChange={(event) => setCustomerIntakeRelationId(event.target.value)}
+                    onBlur={() => void saveCustomerIntakeRelationId()}
                     placeholder="Bijv. 2498"
                   />
-                  <span className="input-help">Laat leeg als Smart Trade een nieuwe relatie moet aanmaken.</span>
+                  <span className="input-help">Vul dit alleen in wanneer de relatie al handmatig in Smart Trade is aangemaakt.</span>
                 </label>
               </div>
 

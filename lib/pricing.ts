@@ -41,7 +41,7 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   contracten: "Registreer en bewaak contracten, abonnementen en serviceafspraken vanuit één centraal overzicht.",
   verhuur: "Beheer verhuurafspraken, looptijden en gekoppelde objecten vanuit Smart Trade.",
   prijsstaffels: "Leg uitgebreide prijsafspraken en staffels vast, zodat automatisch de juiste prijs wordt toegepast.",
-  hoveniersapp: "Laat hoveniers opdrachten en werkzaamheden op locatie ontvangen, uitvoeren en terugmelden.",
+  hoveniersapp: "Plan werkzaamheden, wijs medewerkers toe en houd de voortgang op locatie overzichtelijk bij.",
 };
 
 export const IMPLEMENTATION_DAY_RATE = 720;
@@ -170,7 +170,7 @@ export const MODULES: ModuleConfig[] = [
   { key: "contracten", name: "Contracten", description: MODULE_DESCRIPTIONS.contracten, monthlyPrice: 55 },
   { key: "verhuur", name: "Verhuur", description: MODULE_DESCRIPTIONS.verhuur, monthlyPrice: 55 },
   { key: "prijsstaffels", name: "Uitgebreide prijsstaffels", description: MODULE_DESCRIPTIONS.prijsstaffels, monthlyPrice: 55 },
-  { key: "hoveniersapp", name: "Hoveniersapp", description: MODULE_DESCRIPTIONS.hoveniersapp, monthlyPrice: 55 },
+  { key: "hoveniersapp", name: "Planningsapp", description: MODULE_DESCRIPTIONS.hoveniersapp, monthlyPrice: 55 },
 ];
 
 export type PricingInput = {

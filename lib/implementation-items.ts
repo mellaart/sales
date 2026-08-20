@@ -82,7 +82,10 @@ export function getImplementationItems(deal: DealImplementationSource): Implemen
   for (const value of asArray(deal.modules)) {
     const moduleRow = asRecord(value);
     const moduleKey = textValue(moduleRow.key);
-    const moduleName = textValue(moduleRow.name) || moduleNames.get(moduleKey) || moduleKey;
+    const rawModuleName = textValue(moduleRow.name) || moduleNames.get(moduleKey) || moduleKey;
+    const moduleName = moduleKey === "hoveniersapp" || moduleKey === "planningsapp" || /^hoveniersapp$/i.test(rawModuleName)
+      ? "Planningsapp"
+      : rawModuleName;
     const quantity = moduleRow.qty === undefined || moduleRow.qty === null
       ? 1
       : positiveInteger(moduleRow.qty);

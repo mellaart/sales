@@ -131,7 +131,10 @@ function moduleLines(deal: NewCustomerDeal, calculatorInputs: Record<string, unk
   const lines = asArray(deal.modules).flatMap((value) => {
     const moduleRow = asRecord(value);
     const key = textValue(moduleRow.key);
-    const name = textValue(moduleRow.name) || fallbackModuleNames.get(key) || key;
+    const rawName = textValue(moduleRow.name) || fallbackModuleNames.get(key) || key;
+    const name = key === "hoveniersapp" || key === "planningsapp" || /^hoveniersapp$/i.test(rawName)
+      ? "Planningsapp"
+      : rawName;
     const quantity = positiveInteger(moduleRow.qty ?? 1);
     if (!name || quantity === 0) return [];
     const prefix = quantity > 1 ? `${quantity}x ` : "";

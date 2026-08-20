@@ -68,6 +68,8 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
       kassa: 125,
       leverschema: 404,
       mailchimp: 126,
+      hoveniersapp: 124,
+      planningsapp: 124,
       powerbi: 127,
       rapportage: 128,
       scanHerken: 129,
@@ -101,6 +103,8 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
       kassa: 139,
       leverschema: 406,
       mailchimp: 140,
+      hoveniersapp: 138,
+      planningsapp: 138,
       powerbi: 141,
       rapportage: 142,
       scanHerken: 143,
@@ -134,6 +138,8 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
       kassa: 153,
       leverschema: 407,
       mailchimp: 154,
+      hoveniersapp: 152,
+      planningsapp: 152,
       powerbi: 155,
       rapportage: 156,
       scanHerken: 157,
@@ -167,6 +173,8 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
       kassa: 167,
       leverschema: 408,
       mailchimp: 168,
+      hoveniersapp: 166,
+      planningsapp: 166,
       partijregistratie: 360,
       powerbi: 169,
       rapportage: 170,
@@ -202,6 +210,8 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
       kassa: 181,
       leverschema: 409,
       mailchimp: 182,
+      hoveniersapp: 180,
+      planningsapp: 180,
       partijregistratie: 336,
       powerbi: 183,
       rapportage: 184,
@@ -225,6 +235,8 @@ const MODULE_LABELS: Record<string, string> = {
   kassa: "Kassa",
   leverschema: "Leverschema",
   mailchimp: "Mailchimp",
+  hoveniersapp: "Planningsapp",
+  planningsapp: "Planningsapp",
   partijregistratie: "Partijregistratie",
   powerbi: "Power BI",
   rapportage: "Rapportage",
@@ -294,15 +306,17 @@ function packageKeyForDeal(deal: Pick<DealRecord, "package_key" | "calculator_in
 function moduleQuantities(deal: Pick<DealRecord, "modules" | "calculator_inputs">) {
   const quantities = new Map<string, number>();
   const inputs = asRecord(deal.calculator_inputs);
+  const canonicalModuleKey = (key: string) => key === "planningsapp" ? "hoveniersapp" : key;
 
   for (const [key, value] of Object.entries(asRecord(inputs.quantities))) {
     const quantity = positiveInteger(value);
-    if (key && quantity > 0) quantities.set(key, quantity);
+    const moduleKey = canonicalModuleKey(key);
+    if (moduleKey && quantity > 0) quantities.set(moduleKey, quantity);
   }
 
   for (const value of asArray(deal.modules)) {
     const row = asRecord(value);
-    const key = typeof row.key === "string" ? row.key.trim() : "";
+    const key = typeof row.key === "string" ? canonicalModuleKey(row.key.trim()) : "";
     const quantity = positiveInteger(row.qty ?? row.quantity ?? 1);
     if (key && quantity > 0) quantities.set(key, Math.max(quantities.get(key) ?? 0, quantity));
   }

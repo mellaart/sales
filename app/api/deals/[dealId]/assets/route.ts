@@ -41,6 +41,11 @@ type AssetCreationRow = {
   created_at: string;
 };
 
+type RemoteAsset = {
+  id: number;
+  name: string;
+};
+
 type ContextResult = {
   deal: DealRow;
   implementation: ImplementationRow | null;
@@ -108,12 +113,73 @@ function assetIdFromResponse(body: unknown) {
   return positiveInteger(data.id);
 }
 
+function normalizeAssetName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
+}
+
+function nextAvailableAssetName(baseName: string, usedNames: Set<string>) {
+  const cleanName = baseName.trim().replace(/\s+/g, " ");
+  if (!cleanName) return baseName;
+
+  if (!usedNames.has(normalizeAssetName(cleanName))) {
+    usedNames.add(normalizeAssetName(cleanName));
+    return cleanName;
+  }
+
+  for (let suffix = 2; suffix < 1000; suffix += 1) {
+    const candidate = `${cleanName} (${suffix})`;
+    if (!usedNames.has(normalizeAssetName(candidate))) {
+      usedNames.add(normalizeAssetName(candidate));
+      return candidate;
+    }
+  }
+
+  throw new Error(`Er konden geen unieke assetnamen meer worden gemaakt voor ${cleanName}.`);
+}
+
+function isDuplicateAssetNameError(status: number, body: unknown) {
+  if (status !== 400 && status !== 409 && status !== 422) return false;
+  const message = apiErrorMessage(status, body).toLowerCase();
+  return /(?:naam|name).*(?:bestaat|exists|already|duplicate|unique)|(?:bestaat|exists|already|duplicate|unique).*(?:naam|name)/i.test(message);
+}
+
+async function getRemoteAssetsForRelation(relationId: number): Promise<RemoteAsset[]> {
+  const config = getSmartTradePullConfig("live");
+  const url = new URL(`${config.baseUrl}/assets`);
+  url.searchParams.set("owner", String(relationId));
+  url.searchParams.set("onlyRoot", "0");
+  url.searchParams.set("per_page", "1000");
+
+  const response = await fetchWithSmartTradeTimeout(
+    url.toString(),
+    getSmartTradePullHeaders("live"),
+  );
+  const body = await responseBody(response);
+
+  if (!response.ok) {
+    throw new Error(`Bestaande assets ophalen mislukt: ${apiErrorMessage(response.status, body)}`);
+  }
+
+  const rows = body && typeof body === "object" && Array.isArray((body as Record<string, unknown>).data)
+    ? (body as Record<string, unknown>).data as unknown[]
+    : [];
+
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const record = row as Record<string, unknown>;
+    const id = positiveInteger(record.id);
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    return id && name ? [{ id, name }] : [];
+  });
+}
+
 function toOverview(context: ContextResult) {
   const byKey = new Map(context.creations.map((creation) => [creation.plan_key, creation]));
   const items = context.plan.items.map((item) => {
     const creation = byKey.get(item.key);
     return {
       ...item,
+      name: creation?.asset_name ?? item.name,
       status: creation?.status ?? "missing",
       smartTradeAssetId: creation?.smart_trade_asset_id ?? null,
       createdAt: creation?.created_at ?? null,
@@ -265,12 +331,44 @@ export async function POST(
     const result = await loadContext(request, dealId);
     if ("error" in result) return jsonResponse({ error: result.error }, result.status);
 
-    const { context: assetContext, userId } = result;
+    let assetContext = result.context;
+    const { userId } = result;
     if (assetContext.prerequisiteErrors.length > 0) {
       return jsonResponse({
         error: "Assets kunnen nog niet worden aangemaakt.",
         overview: toOverview(assetContext),
       }, 409);
+    }
+
+    const relationId = positiveInteger(assetContext.deal.smart_trade_relation_id);
+    const administrationName = assetContext.implementation?.administration_name?.trim();
+    const commissionedAt = assetContext.implementation?.planned_go_live_date;
+    if (!relationId || !administrationName || !commissionedAt) {
+      return jsonResponse({ error: "De gegevens voor het aanmaken van assets zijn niet compleet." }, 409);
+    }
+
+    const remoteAssets = await getRemoteAssetsForRelation(relationId);
+    const remoteAssetIds = new Set(remoteAssets.map((asset) => asset.id));
+    const staleCreationIds = assetContext.creations
+      .filter((creation) => (
+        creation.status === "created"
+        && creation.smart_trade_asset_id !== null
+        && !remoteAssetIds.has(creation.smart_trade_asset_id)
+      ))
+      .map((creation) => creation.id);
+
+    // Een asset kan buiten Sales in Smart Trade zijn verwijderd. De lokale
+    // registratie mag dan geen nieuwe aanmaak meer blokkeren.
+    if (staleCreationIds.length > 0) {
+      await query(
+        "delete from public.deal_asset_creations where id = any($1::uuid[])",
+        [staleCreationIds],
+      );
+      const refreshedContext = await loadContext(request, dealId);
+      if ("error" in refreshedContext) {
+        return jsonResponse({ error: refreshedContext.error }, refreshedContext.status);
+      }
+      assetContext = refreshedContext.context;
     }
 
     if (assetContext.creations.some((creation) => creation.status === "pending")) {
@@ -281,15 +379,12 @@ export async function POST(
     }
 
     const systemName = await getAdministrationCustomFieldSystemName();
-    const relationId = positiveInteger(assetContext.deal.smart_trade_relation_id);
-    const administrationName = assetContext.implementation?.administration_name?.trim();
-    const commissionedAt = assetContext.implementation?.planned_go_live_date;
-    if (!relationId || !administrationName || !commissionedAt) {
-      return jsonResponse({ error: "De gegevens voor het aanmaken van assets zijn niet compleet." }, 409);
-    }
 
     const existingKeys = new Set(assetContext.creations.map((creation) => creation.plan_key));
-    const missingItems = assetContext.plan.items.filter((item) => !existingKeys.has(item.key));
+    const usedNames = new Set(remoteAssets.map((asset) => normalizeAssetName(asset.name)));
+    const missingItems = assetContext.plan.items
+      .filter((item) => !existingKeys.has(item.key))
+      .map((item) => ({ ...item, name: nextAvailableAssetName(item.name, usedNames) }));
     const createdItems: Array<{ item: DealAssetPlanItem; smartTradeAssetId: number }> = [];
     const latestOverview = async () => {
       const refreshed = await loadContext(request, dealId);
@@ -314,53 +409,78 @@ export async function POST(
         }, 409);
       }
 
-      let response: Response;
-      let body: unknown;
-      try {
-        const config = getSmartTradePullConfig("live");
-        response = await fetchWithSmartTradeTimeout(
-          `${config.baseUrl}/assets`,
-          getSmartTradePullHeaders("live", { "content-type": "application/json" }),
-          "live",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              assetClass: item.assetClassId,
-              owner: relationId,
-              name: item.name,
-              commissionedAt,
-              customFields: {
-                [systemName]: administrationName,
-              },
-            }),
-          },
-        );
-        body = await responseBody(response);
-      } catch (error) {
-        // Bij een netwerkfout is onbekend of Smart Trade de asset toch heeft ontvangen.
-        // De pending-regel blijft daarom staan als bescherming tegen dubbel aanmaken.
-        return jsonResponse({
-          error: `De status van ${item.name} kon niet betrouwbaar worden bevestigd. Deze staat veilig als in verwerking; maak hem niet opnieuw aan. ${error instanceof Error ? error.message : ""}`.trim(),
-          overview: await latestOverview(),
-        }, 502);
+      let createItem = item;
+      let smartTradeAssetId: number | null = null;
+      let creationError: string | null = null;
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        let response: Response;
+        let body: unknown;
+        try {
+          const config = getSmartTradePullConfig("live");
+          response = await fetchWithSmartTradeTimeout(
+            `${config.baseUrl}/assets`,
+            getSmartTradePullHeaders("live", { "content-type": "application/json" }),
+            "live",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                assetClass: createItem.assetClassId,
+                owner: relationId,
+                name: createItem.name,
+                commissionedAt,
+                customFields: {
+                  [systemName]: administrationName,
+                },
+              }),
+            },
+          );
+          body = await responseBody(response);
+        } catch (error) {
+          // Bij een netwerkfout is onbekend of Smart Trade de asset toch heeft ontvangen.
+          // De pending-regel blijft daarom staan als bescherming tegen dubbel aanmaken.
+          return jsonResponse({
+            error: `De status van ${createItem.name} kon niet betrouwbaar worden bevestigd. Deze staat veilig als in verwerking; maak hem niet opnieuw aan. ${error instanceof Error ? error.message : ""}`.trim(),
+            overview: await latestOverview(),
+          }, 502);
+        }
+
+        if (response.ok) {
+          smartTradeAssetId = assetIdFromResponse(body);
+          break;
+        }
+
+        if (isDuplicateAssetNameError(response.status, body) && attempt < 19) {
+          createItem = {
+            ...createItem,
+            name: nextAvailableAssetName(item.name, usedNames),
+          };
+          await query(
+            "update public.deal_asset_creations set asset_name = $2, updated_at = now() where id = $1",
+            [claim.id, createItem.name],
+          );
+          continue;
+        }
+
+        creationError = apiErrorMessage(response.status, body);
+        break;
       }
 
-      if (!response.ok) {
+      if (creationError) {
         await query(
           "delete from public.deal_asset_creations where id = $1 and status = 'pending'",
           [claim.id],
         );
         return jsonResponse({
-          error: `Asset ${item.name} aanmaken mislukt: ${apiErrorMessage(response.status, body)}`,
+          error: `Asset ${createItem.name} aanmaken mislukt: ${creationError}`,
           overview: await latestOverview(),
         }, 502);
       }
 
-      const smartTradeAssetId = assetIdFromResponse(body);
       if (!smartTradeAssetId) {
         // Ook hier kan Smart Trade de asset al hebben gemaakt, maar zonder een controleerbare ID.
         return jsonResponse({
-          error: `Smart Trade bevestigde ${item.name} zonder asset-ID. Deze staat veilig als in verwerking; maak hem niet opnieuw aan.`,
+          error: `Smart Trade bevestigde ${createItem.name} zonder asset-ID. Deze staat veilig als in verwerking; maak hem niet opnieuw aan.`,
           overview: await latestOverview(),
         }, 502);
       }
@@ -371,7 +491,7 @@ export async function POST(
          where id = $1`,
         [claim.id, smartTradeAssetId],
       );
-      createdItems.push({ item, smartTradeAssetId });
+      createdItems.push({ item: createItem, smartTradeAssetId });
     }
 
     const refreshed = await loadContext(request, dealId);

@@ -397,12 +397,17 @@ function normalizePackage(input: unknown, fallback: PackageConfig): PackageConfi
 
 function normalizeModule(input: unknown, fallback: ModuleConfig): ModuleConfig {
   const source = input && typeof input === "object" ? (input as Partial<ModuleConfig>) : {};
-  const workItems = cleanWorkItems(source.workItems);
+  const isPlanningApp = fallback.key === "hoveniersapp";
+  const workItems = cleanWorkItems(source.workItems)?.map((item) => (
+    isPlanningApp ? item.replace(/hoveniersapp/gi, "Planningsapp") : item
+  ));
 
   return {
     key: fallback.key,
-    name: typeof source.name === "string" ? source.name : fallback.name,
-    description: typeof source.description === "string"
+    name: isPlanningApp ? fallback.name : typeof source.name === "string" ? source.name : fallback.name,
+    description: isPlanningApp
+      ? fallback.description
+      : typeof source.description === "string"
       ? source.description.trim()
       : fallback.description,
     monthlyPrice: safeNumber(source.monthlyPrice, fallback.monthlyPrice),

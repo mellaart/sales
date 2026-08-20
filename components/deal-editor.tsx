@@ -72,8 +72,9 @@ function toQuantities(dealModules: DealRecord["modules"] | undefined, modules: M
   const base = Object.fromEntries(modules.map((module) => [module.key, 0]));
   if (!Array.isArray(dealModules)) return base;
   for (const item of dealModules as Array<{ key?: string; qty?: number }>) {
-    if (item?.key && Object.prototype.hasOwnProperty.call(base, item.key)) {
-      base[item.key] = Number(item.qty || 0);
+    const moduleKey = item?.key === "planningsapp" ? "hoveniersapp" : item?.key;
+    if (moduleKey && Object.prototype.hasOwnProperty.call(base, moduleKey)) {
+      base[moduleKey] = Number(item.qty || 0);
     }
   }
   return base;

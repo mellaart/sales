@@ -386,9 +386,17 @@ async function main() {
     dealsByUserId.get(userId).push(deal);
   }
 
+  // Alleen collega's met minimaal een openstaande deal krijgen de maandagse opvolgmail.
+  const eligibleProfiles = profiles.filter(
+    (profile) => (dealsByUserId.get(String(profile.id)) ?? []).length > 0,
+  );
+
   if (dryRun) {
     for (const profile of profiles) {
-      console.log(`${profile.email}: ${(dealsByUserId.get(String(profile.id)) ?? []).length} openstaande deals`);
+      const profileDeals = dealsByUserId.get(String(profile.id)) ?? [];
+      console.log(
+        `${profile.email}: ${profileDeals.length} openstaande deals${profileDeals.length === 0 ? " (geen e-mail)" : ""}`,
+      );
     }
     console.log("Proef uitgevoerd; er zijn geen e-mails verstuurd.");
     return;
@@ -398,7 +406,7 @@ async function main() {
   const sentSet = new Set(sentRecipients);
   let failed = 0;
 
-  for (const profile of profiles) {
+  for (const profile of eligibleProfiles) {
     const email = String(profile.email).trim().toLowerCase();
     const profileDeals = dealsByUserId.get(String(profile.id)) ?? [];
     if (sentSet.has(email)) {
@@ -418,14 +426,14 @@ async function main() {
     }
   }
 
-  const completed = profiles.every((profile) => sentSet.has(String(profile.email).trim().toLowerCase()));
+  const completed = eligibleProfiles.every((profile) => sentSet.has(String(profile.email).trim().toLowerCase()));
   await writeRunState(dateKey, sentRecipients, deals.length, completed);
 
   if (failed > 0 || !completed) {
     throw new Error(`De wekelijkse dealmail is niet voor alle ontvangers verzonden (${failed} mislukt).`);
   }
 
-  console.log(`Klaar: ${sentRecipients.length} persoonlijke e-mails; ${deals.length} openstaande deals verdeeld op eigenaar.`);
+  console.log(`Klaar: ${eligibleProfiles.length} persoonlijke e-mails; ${deals.length} openstaande deals verdeeld op eigenaar.`);
 }
 
 try {

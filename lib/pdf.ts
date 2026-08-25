@@ -254,8 +254,8 @@ function addPriceTable(
   doc.setTextColor(64, 80, 100);
   doc.text("Aantal", x + 2, y);
   doc.text(descriptionHeading, x + widths[0] + 2, y);
-  doc.text("Prijs", x + widths[0] + widths[1] + 2, y);
-  doc.text("Totaal", x + widths[0] + widths[1] + widths[2] + 2, y);
+  doc.text("Prijs", x + widths[0] + widths[1] + widths[2] - 2, y, { align: "right" });
+  doc.text("Totaal", x + 176, y, { align: "right" });
 
   y += 8;
 
@@ -264,18 +264,17 @@ function addPriceTable(
 
   rows.forEach((row) => {
     const descriptionLines = doc.splitTextToSize(row.description, 88);
-    const rowHeight = Math.max(9, descriptionLines.length * 4.4 + 4);
+    const rowHeight = Math.max(10, descriptionLines.length * 5 + 5);
     y = ensurePage(doc, y, rowHeight + 2);
-
-    doc.setDrawColor(234, 239, 245);
-    doc.line(x, y + 2, x + 178, y + 2);
 
     doc.text(row.amount, x + 2, y);
     doc.text(descriptionLines, x + widths[0] + 2, y);
-    doc.text(euro.format(row.price), x + widths[0] + widths[1] + 2, y);
-    doc.text(euro.format(row.total), x + widths[0] + widths[1] + widths[2] + 2, y);
+    doc.text(euro.format(row.price), x + widths[0] + widths[1] + widths[2] - 2, y, { align: "right" });
+    doc.text(euro.format(row.total), x + 176, y, { align: "right" });
 
     y += rowHeight;
+    doc.setDrawColor(234, 239, 245);
+    doc.line(x, y - 2, x + 178, y - 2);
   });
 
   const total = rows.reduce((sum, row) => sum + row.total, 0);
@@ -283,7 +282,7 @@ function addPriceTable(
   doc.setFont("helvetica", "bold");
   doc.setTextColor(17, 58, 86);
   doc.text(`Totaal ${title.toLowerCase()}`, x + 2, y + 3);
-  doc.text(euro.format(total), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+  doc.text(euro.format(total), x + 176, y + 3, { align: "right" });
 
   return y + 13;
 }
@@ -424,8 +423,8 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
   doc.setTextColor(64, 80, 100);
   doc.text("Aantal", x + 2, y);
   doc.text("Omschrijving", x + widths[0] + 2, y);
-  doc.text("Prijs", x + widths[0] + widths[1] + 2, y);
-  doc.text("Totaal", x + widths[0] + widths[1] + widths[2] + 2, y);
+  doc.text("Prijs", x + widths[0] + widths[1] + widths[2] - 2, y, { align: "right" });
+  doc.text("Totaal", x + 176, y, { align: "right" });
 
   y += 8;
 
@@ -434,13 +433,13 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
 
   lines.forEach((line) => {
     const descriptionLines = doc.splitTextToSize(line.label, 88) as string[];
-    const rowHeight = Math.max(9, descriptionLines.length * 5 + 3);
+    const rowHeight = Math.max(10, descriptionLines.length * 5 + 5);
     y = ensurePage(doc, y, rowHeight + 2);
 
     doc.text(`${line.quantity}x`, x + 2, y);
     doc.text(descriptionLines, x + widths[0] + 2, y);
-    doc.text(euro.format(getAssetExpansionUnitAmount(line)), x + widths[0] + widths[1] + 2, y);
-    doc.text(euro.format(line.amount), x + widths[0] + widths[1] + widths[2] + 2, y);
+    doc.text(euro.format(getAssetExpansionUnitAmount(line)), x + widths[0] + widths[1] + widths[2] - 2, y, { align: "right" });
+    doc.text(euro.format(line.amount), x + 176, y, { align: "right" });
 
     y += rowHeight;
     doc.setDrawColor(234, 239, 245);
@@ -455,13 +454,13 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
 
   if (totals.monthly > 0) {
     doc.text("Totaal per maand", x + 2, y + 3);
-    doc.text(euro.format(totals.monthly), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+    doc.text(euro.format(totals.monthly), x + 176, y + 3, { align: "right" });
     y += 8;
   }
 
   if (totals.annual > 0) {
     doc.text("Totaal per jaar", x + 2, y + 3);
-    doc.text(euro.format(totals.annual), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+    doc.text(euro.format(totals.annual), x + 176, y + 3, { align: "right" });
     y += 8;
   }
 
@@ -469,14 +468,14 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
     doc.setFont("helvetica", "normal");
     doc.setTextColor(25, 40, 55);
     doc.text("Reiskosten", x + 2, y + 3);
-    doc.text(euro.format(travelCostTotal), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+    doc.text(euro.format(travelCostTotal), x + 176, y + 3, { align: "right" });
     y += 8;
     doc.setFont("helvetica", "bold");
     doc.setTextColor(17, 58, 86);
   }
 
   doc.text("Eenmalige kosten:", x + 2, y + 3);
-  doc.text(euro.format(totals.once + travelCostTotal), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
+  doc.text(euro.format(totals.once + travelCostTotal), x + 176, y + 3, { align: "right" });
 
   return y + 13;
 }
@@ -757,7 +756,7 @@ async function buildQuotePdf(input: OfferTemplateInput) {
   let y = addQuoteHeader(doc, input, layout.name, logoDataUrl);
 
   y = addParagraph(doc, text.greeting, y);
-  y = addParagraph(doc, isAssetsExpansionLayout ? "Zoals besproken hierbij een offerte over wat jullie besproken hebben:" : text.intro, y);
+  y = addParagraph(doc, text.intro, y);
 
   if (isAssetsExpansionLayout && expansionLines.length > 0) {
     const expansionTravelCostTotal = input.includeTravelCosts ? input.travelCostTotal ?? 0 : 0;

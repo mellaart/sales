@@ -305,7 +305,7 @@ export function getOfferTextBlocks(input: OfferTemplateInput) {
 
   return {
     greeting: getGreeting(input.contactName),
-    intro: "Naar aanleiding van ons overleg hierbij wat wij besproken hebben:",
+    intro: "Zoals besproken ontvangt u hierbij onze offerte voor de besproken onderdelen.",
     packageChoice: `Op basis van jullie wensen kwamen wij uit bij Smart Trade ${input.result.name}. In deze offerte ga ik uit van een compleet ERP systeem voor ${input.totalUsers} gelijktijdig ingelogde gebruikers.`,
     supportIntro:
       "Bij Troublefree hebben wij de licentieprijs van Smart Trade losgekoppeld van de prijs van support. U kunt zelf kiezen of u de support per uur betaalt of in een vast bedrag per maand, dit laatste noemen wij een supportcontract.",

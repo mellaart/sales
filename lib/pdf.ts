@@ -246,7 +246,8 @@ function addPriceTable(
   const widths = [22, 92, 34, 34];
 
   doc.setFillColor(244, 247, 251);
-  doc.rect(x, y - 5, 178, 8, "F");
+  doc.setDrawColor(219, 228, 238);
+  doc.rect(x, y - 5, 178, 8, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -272,8 +273,6 @@ function addPriceTable(
     doc.text(euro.format(row.total), x + 176, y, { align: "right" });
 
     y += rowHeight;
-    doc.setDrawColor(234, 239, 245);
-    doc.line(x, y - 2, x + 178, y - 2);
   });
 
   const total = rows.reduce((sum, row) => sum + row.total, 0);
@@ -414,7 +413,8 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
   const widths = [22, 92, 34, 34];
 
   doc.setFillColor(244, 247, 251);
-  doc.rect(x, y - 5, 178, 8, "F");
+  doc.setDrawColor(219, 228, 238);
+  doc.rect(x, y - 5, 178, 8, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -440,8 +440,6 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
     doc.text(euro.format(line.amount), x + 176, y, { align: "right" });
 
     y += rowHeight;
-    doc.setDrawColor(234, 239, 245);
-    doc.line(x, y - 2, x + 178, y - 2);
   });
 
   const totals = getAssetExpansionTotals(lines);

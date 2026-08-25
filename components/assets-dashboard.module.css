@@ -494,9 +494,18 @@
 
 .miscellaneousOfferGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.4fr) minmax(180px, 0.35fr);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.4fr);
   gap: 14px;
   align-items: end;
+}
+
+.miscellaneousDescription {
+  grid-column: 1 / -1;
+}
+
+.miscellaneousDescription textarea {
+  min-height: 230px;
+  resize: vertical;
 }
 
 .miscellaneousOfferTotal {

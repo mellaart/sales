@@ -59,11 +59,24 @@ export type OfferTemplateInput = {
   moduleWorkItems?: Array<Pick<ModuleConfig, "key" | "name" | "workItems">>;
 };
 
+function getTimeBasedGreeting(date = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat("nl-NL", {
+    hour: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Europe/Amsterdam",
+  }).format(date));
+
+  if (hour < 12) return "Goedemorgen";
+  if (hour < 18) return "Goedemiddag";
+  return "Goedenavond";
+}
+
 export function getGreeting(contactName?: string) {
-  if (!contactName?.trim()) return "Goedemiddag,";
+  const greeting = getTimeBasedGreeting();
+  if (!contactName?.trim()) return `${greeting},`;
 
   const firstName = contactName.trim().split(/\s+/)[0];
-  return `Goedemiddag ${firstName},`;
+  return `${greeting} ${firstName},`;
 }
 
 export function getSelectedPaidModules(selectedModules: OfferModule[]) {

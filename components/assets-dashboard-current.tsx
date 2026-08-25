@@ -519,6 +519,18 @@ function parseEuroInput(value: string) {
   return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100) / 100) : 0;
 }
 
+function formatMiscellaneousOfferText(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line
+      .trim()
+      .replace(/\*\*/g, "")
+      .replace(/\\$/, "")
+      .replace(/^-\s+/, "• "))
+    .join("\n")
+    .trim();
+}
+
 function buildAssetDealNotes(relation: RelationOption, lines: AssetExpansionLine[]) {
   return [
     `Assets-uitbreiding voor ${relation.name}.`,
@@ -734,7 +746,11 @@ export default function AssetsDashboardCurrent() {
     () => parseEuroInput(miscellaneousPrice),
     [miscellaneousPrice],
   );
-  const hasMiscellaneousOfferItem = Boolean(miscellaneousDescription.trim()) && miscellaneousAmount > 0;
+  const miscellaneousOfferText = useMemo(
+    () => formatMiscellaneousOfferText(miscellaneousDescription),
+    [miscellaneousDescription],
+  );
+  const hasMiscellaneousOfferItem = Boolean(miscellaneousOfferText) && miscellaneousAmount > 0;
   const assetDealLines = useMemo(() => {
     const lines: AssetExpansionLine[] = [];
 
@@ -864,7 +880,7 @@ export default function AssetsDashboardCurrent() {
     if (hasMiscellaneousOfferItem) {
       lines.push({
         group: "Diversen",
-        label: `Eenmalige kosten - ${miscellaneousDescription.trim()}`,
+        label: miscellaneousOfferText,
         quantity: 1,
         cadence: "once",
         amount: miscellaneousAmount,
@@ -885,7 +901,7 @@ export default function AssetsDashboardCurrent() {
     includeMissingSupportOffer,
     missingSupportMonthlyTotal,
     miscellaneousAmount,
-    miscellaneousDescription,
+    miscellaneousOfferText,
     moduleMonthlyDelta,
     offerPackage,
     packageChangeDirection,
@@ -1750,13 +1766,14 @@ export default function AssetsDashboardCurrent() {
             <div className="empty-state">Kies eerst een relatie om een losse kostenpost aan de offerte toe te voegen.</div>
           ) : (
             <div className={styles.miscellaneousOfferGrid}>
-              <label className="input-wrap">
+              <label className={`input-wrap ${styles.miscellaneousDescription}`}>
                 <span className="input-label">Omschrijving</span>
-                <input
-                  className="input"
+                <textarea
+                  className="textarea"
                   value={miscellaneousDescription}
                   onChange={(event) => setMiscellaneousDescription(event.target.value)}
-                  placeholder="Bijv. 3 dagen ontwikkelkosten"
+                  placeholder="Bijv. 3 dagen ontwikkelkosten\n\nBeschrijf hier wat wordt ontwikkeld of geleverd."
+                  rows={10}
                 />
               </label>
               <label className="input-wrap">

@@ -423,7 +423,7 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
   doc.setFontSize(9);
   doc.setTextColor(64, 80, 100);
   doc.text("Aantal", x + 2, y);
-  doc.text("Pakket", x + widths[0] + 2, y);
+  doc.text("Omschrijving", x + widths[0] + 2, y);
   doc.text("Prijs", x + widths[0] + widths[1] + 2, y);
   doc.text("Totaal", x + widths[0] + widths[1] + widths[2] + 2, y);
 
@@ -433,20 +433,22 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
   doc.setTextColor(25, 40, 55);
 
   lines.forEach((line) => {
-    y = ensurePage(doc, y, 10);
-
-    doc.setDrawColor(234, 239, 245);
-    doc.line(x, y + 2, x + 178, y + 2);
+    const descriptionLines = doc.splitTextToSize(line.label, 88) as string[];
+    const rowHeight = Math.max(9, descriptionLines.length * 5 + 3);
+    y = ensurePage(doc, y, rowHeight + 2);
 
     doc.text(`${line.quantity}x`, x + 2, y);
-    doc.text(doc.splitTextToSize(line.label, 88), x + widths[0] + 2, y);
+    doc.text(descriptionLines, x + widths[0] + 2, y);
     doc.text(euro.format(getAssetExpansionUnitAmount(line)), x + widths[0] + widths[1] + 2, y);
     doc.text(euro.format(line.amount), x + widths[0] + widths[1] + widths[2] + 2, y);
 
-    y += 9;
+    y += rowHeight;
+    doc.setDrawColor(234, 239, 245);
+    doc.line(x, y - 2, x + 178, y - 2);
   });
 
   const totals = getAssetExpansionTotals(lines);
+  y = ensurePage(doc, y, 30);
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(17, 58, 86);

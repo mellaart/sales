@@ -492,6 +492,35 @@
   text-align: right;
 }
 
+.miscellaneousOfferGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.4fr) minmax(180px, 0.35fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.miscellaneousOfferTotal {
+  display: grid;
+  gap: 6px;
+  min-height: 50px;
+  padding: 10px 14px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 8px;
+  background: var(--surface-deep);
+}
+
+.miscellaneousOfferTotal span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.miscellaneousOfferTotal strong {
+  color: var(--text-strong);
+  font-size: 18px;
+  text-align: right;
+}
+
 .modulePlanner {
   display: grid;
   gap: 16px;
@@ -775,6 +804,10 @@
   }
 
   .moduleSelectionSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .miscellaneousOfferGrid {
     grid-template-columns: 1fr;
   }
 

@@ -2249,7 +2249,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                             {expansionTotals.annual > 0 ? <div><span>Jaarbedrag</span><strong>{euro.format(expansionTotals.annual)}</strong></div> : null}
                           </>
                         )}
-                        {expansionTotals.once > 0 ? <div><span>Setup</span><strong>{euro.format(expansionTotals.once)}</strong></div> : null}
+                        {expansionTotals.once > 0 ? <div><span>Setup en diversen</span><strong>{euro.format(expansionTotals.once)}</strong></div> : null}
                         {effectiveIncludeTravelCosts && travelCostQuote ? (
                           <div>
                             <span>

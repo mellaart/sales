@@ -473,7 +473,7 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
     doc.setTextColor(17, 58, 86);
   }
 
-  doc.text("Setupkosten:", x + 2, y + 3);
+  doc.text("Eenmalige kosten:", x + 2, y + 3);
   doc.text(euro.format(totals.once + travelCostTotal), x + widths[0] + widths[1] + widths[2] + 2, y + 3);
 
   return y + 13;

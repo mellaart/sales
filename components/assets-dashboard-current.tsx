@@ -507,6 +507,18 @@ function formatDays(days: number) {
   return `${new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 }).format(roundedDays)} ${label}`;
 }
 
+function parseEuroInput(value: string) {
+  const sanitized = value.replace(/[^0-9,.-]/g, "").trim();
+  if (!sanitized) return 0;
+
+  const normalized = sanitized.includes(",")
+    ? sanitized.replace(/\./g, "").replace(",", ".")
+    : sanitized;
+  const amount = Number(normalized);
+
+  return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100) / 100) : 0;
+}
+
 function buildAssetDealNotes(relation: RelationOption, lines: AssetExpansionLine[]) {
   return [
     `Assets-uitbreiding voor ${relation.name}.`,
@@ -545,6 +557,8 @@ export default function AssetsDashboardCurrent() {
   const [contactPersonStatus, setContactPersonStatus] = useState("");
   const [loadingContactPerson, setLoadingContactPerson] = useState(false);
   const [offerGuidance, setOfferGuidance] = useState("");
+  const [miscellaneousDescription, setMiscellaneousDescription] = useState("");
+  const [miscellaneousPrice, setMiscellaneousPrice] = useState("");
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
 
@@ -716,6 +730,11 @@ export default function AssetsDashboardCurrent() {
     () => selectedCustomerPortalOptions.filter((option) => !currentCustomerPortalKeys.includes(option.key)),
     [currentCustomerPortalKeys, selectedCustomerPortalOptions],
   );
+  const miscellaneousAmount = useMemo(
+    () => parseEuroInput(miscellaneousPrice),
+    [miscellaneousPrice],
+  );
+  const hasMiscellaneousOfferItem = Boolean(miscellaneousDescription.trim()) && miscellaneousAmount > 0;
   const assetDealLines = useMemo(() => {
     const lines: AssetExpansionLine[] = [];
 
@@ -842,6 +861,16 @@ export default function AssetsDashboardCurrent() {
       });
     }
 
+    if (hasMiscellaneousOfferItem) {
+      lines.push({
+        group: "Diversen",
+        label: `Eenmalige kosten - ${miscellaneousDescription.trim()}`,
+        quantity: 1,
+        cadence: "once",
+        amount: miscellaneousAmount,
+      });
+    }
+
     return lines;
   }, [
     addedModules,
@@ -852,8 +881,11 @@ export default function AssetsDashboardCurrent() {
     extraUserSupportTotal,
     hasPackageChange,
     hasModuleSelectionChanges,
+    hasMiscellaneousOfferItem,
     includeMissingSupportOffer,
     missingSupportMonthlyTotal,
+    miscellaneousAmount,
+    miscellaneousDescription,
     moduleMonthlyDelta,
     offerPackage,
     packageChangeDirection,
@@ -1091,6 +1123,8 @@ export default function AssetsDashboardCurrent() {
     setContactPersonStatus("");
     setLoadingContactPerson(false);
     setOfferGuidance("");
+    setMiscellaneousDescription("");
+    setMiscellaneousPrice("");
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -1131,6 +1165,8 @@ export default function AssetsDashboardCurrent() {
     setContactPersonStatus("Primaire contactpersoon wordt opgehaald...");
     setLoadingContactPerson(true);
     setOfferGuidance("");
+    setMiscellaneousDescription("");
+    setMiscellaneousPrice("");
 
     try {
       const [assetsResult, relationResult] = await Promise.allSettled([
@@ -1704,6 +1740,47 @@ export default function AssetsDashboardCurrent() {
           <div className="top-row">
             <div>
               <div className="eyebrow">Offerte</div>
+              <h2 className="headline">Diversen</h2>
+              <p className="subtext">Voeg een losse eenmalige kostenpost toe, bijvoorbeeld ontwikkelkosten of maatwerk.</p>
+            </div>
+            <div className="icon-badge"><FileText size={26} /></div>
+          </div>
+
+          {!selectedRelation ? (
+            <div className="empty-state">Kies eerst een relatie om een losse kostenpost aan de offerte toe te voegen.</div>
+          ) : (
+            <div className={styles.miscellaneousOfferGrid}>
+              <label className="input-wrap">
+                <span className="input-label">Omschrijving</span>
+                <input
+                  className="input"
+                  value={miscellaneousDescription}
+                  onChange={(event) => setMiscellaneousDescription(event.target.value)}
+                  placeholder="Bijv. 3 dagen ontwikkelkosten"
+                />
+              </label>
+              <label className="input-wrap">
+                <span className="input-label">Eenmalige prijs</span>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={miscellaneousPrice}
+                  onChange={(event) => setMiscellaneousPrice(event.target.value)}
+                  placeholder="Bijv. 2160,00"
+                />
+              </label>
+              <div className={styles.miscellaneousOfferTotal}>
+                <span>Eenmalige kosten</span>
+                <strong>{euro.format(miscellaneousAmount)}</strong>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="card panel">
+          <div className="top-row">
+            <div>
+              <div className="eyebrow">Offerte</div>
               <h2 className="headline">Complete prijsvergelijking</h2>
               <p className="subtext">Alle huidige bedragen en gekozen uitbreidingen zijn samengevoegd. Je hoeft niets meer handmatig op te tellen.</p>
             </div>
@@ -1746,7 +1823,7 @@ export default function AssetsDashboardCurrent() {
 
               <div className={styles.priceComparisonRow}>
                 <span>Eenmalige kosten</span>
-                <span>Implementatie/setup {euro.format(assetExpansionTotals.once)}</span>
+                <span>Setup en diversen {euro.format(assetExpansionTotals.once)}</span>
                 <span>Reiskosten {euro.format(travelCostTotal)}</span>
                 <strong>Totaal {euro.format(assetExpansionTotals.once + travelCostTotal)}</strong>
               </div>

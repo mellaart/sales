@@ -264,8 +264,8 @@ function addPriceTable(
 
   rows.forEach((row) => {
     const descriptionLines = doc.splitTextToSize(row.description, 88);
-    const rowHeight = Math.max(10, descriptionLines.length * 5 + 5);
-    y = ensurePage(doc, y, rowHeight + 2);
+    const rowHeight = Math.max(14, descriptionLines.length * 4.4 + 8);
+    y = ensurePage(doc, y, rowHeight + 10);
 
     doc.text(row.amount, x + 2, y);
     doc.text(descriptionLines, x + widths[0] + 2, y);
@@ -273,6 +273,9 @@ function addPriceTable(
     doc.text(euro.format(row.total), x + 176, y, { align: "right" });
 
     y += rowHeight;
+    doc.setDrawColor(234, 239, 245);
+    doc.line(x, y - 3, x + 178, y - 3);
+    y += 5;
   });
 
   const total = rows.reduce((sum, row) => sum + row.total, 0);
@@ -431,8 +434,8 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
 
   lines.forEach((line) => {
     const descriptionLines = doc.splitTextToSize(line.label, 88) as string[];
-    const rowHeight = Math.max(10, descriptionLines.length * 5 + 5);
-    y = ensurePage(doc, y, rowHeight + 2);
+    const rowHeight = Math.max(14, descriptionLines.length * 4.4 + 8);
+    y = ensurePage(doc, y, rowHeight + 10);
 
     doc.text(`${line.quantity}x`, x + 2, y);
     doc.text(descriptionLines, x + widths[0] + 2, y);
@@ -440,6 +443,9 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
     doc.text(euro.format(line.amount), x + 176, y, { align: "right" });
 
     y += rowHeight;
+    doc.setDrawColor(234, 239, 245);
+    doc.line(x, y - 3, x + 178, y - 3);
+    y += 5;
   });
 
   const totals = getAssetExpansionTotals(lines);

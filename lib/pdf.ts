@@ -246,8 +246,7 @@ function addPriceTable(
   const widths = [22, 92, 34, 34];
 
   doc.setFillColor(244, 247, 251);
-  doc.setDrawColor(219, 228, 238);
-  doc.rect(x, y - 5, 178, 8, "FD");
+  doc.rect(x, y - 5, 178, 8, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -415,8 +414,7 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
   const widths = [22, 92, 34, 34];
 
   doc.setFillColor(244, 247, 251);
-  doc.setDrawColor(219, 228, 238);
-  doc.rect(x, y - 5, 178, 8, "FD");
+  doc.rect(x, y - 5, 178, 8, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);

@@ -37,8 +37,9 @@ import { usePricingConfig } from "@/components/pricing-provider";
 import { StatCard, StatusPill } from "@/components/ui";
 import {
   customerIntakeStatusLabel,
-  type CustomerIntakeStatus,
+  type CustomerIntakeSummary,
 } from "@/lib/customer-intake";
+import { updateDealWithFallback } from "@/lib/deal-storage";
 import {
   IMPLEMENTATION_PROGRESS_ITEMS,
   IMPLEMENTATION_STATUSES,
@@ -131,26 +132,6 @@ function getStatusTone(status: ImplementationStatus): "success" | "warning" | "n
   return "neutral";
 }
 
-type CustomerIntakeProgress = {
-  status: CustomerIntakeStatus;
-  expiresAt: string;
-  submittedAt: string | null;
-  recipientEmail: string;
-  formData: {
-    website: string;
-    contactFirstName: string;
-    contactEmail: string;
-    deliveryStreet: string;
-    deliveryNumber: string;
-    deliveryPostcode: string;
-    deliveryCity: string;
-    postalStreet: string;
-    postalNumber: string;
-    postalPostcode: string;
-    postalCity: string;
-  };
-};
-
 type ImplementationDetailField =
   | "administration_name"
   | "implementation_start_date"
@@ -237,7 +218,7 @@ function normalizedImplementationWorkLabel(value: string) {
 
 function getAppointmentLocation(
   appointmentType: ImplementationAppointmentType,
-  intake: CustomerIntakeProgress | null,
+  intake: CustomerIntakeSummary | null,
   customerName: string,
 ) {
   if (appointmentType === "remote") return "Online / op afstand";
@@ -731,7 +712,7 @@ function navigateOutlookPopup(outlookWindow: Window | null, url: string) {
 function getCustomerIntakePresentation(
   loaded: boolean,
   loadFailed: boolean,
-  intake: CustomerIntakeProgress | null,
+  intake: CustomerIntakeSummary | null,
 ): { label: string; tone: "success" | "warning" | "danger" } {
   if (!loaded) return { label: "Laden...", tone: "warning" };
   if (loadFailed) return { label: "Niet beschikbaar", tone: "danger" };
@@ -752,9 +733,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [implementation, setImplementation] = useState<ImplementationRecord | null>(null);
   const [linkedDeal, setLinkedDeal] = useState<DealRecord | null>(null);
   const [assignableUsers, setAssignableUsers] = useState<ProfileRecord[]>([]);
-  const [customerIntake, setCustomerIntake] = useState<CustomerIntakeProgress | null>(null);
+  const [customerIntake, setCustomerIntake] = useState<CustomerIntakeSummary | null>(null);
   const [customerIntakeLoaded, setCustomerIntakeLoaded] = useState(false);
   const [customerIntakeLoadFailed, setCustomerIntakeLoadFailed] = useState(false);
+  const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
+  const [customerIntakeRelationId, setCustomerIntakeRelationId] = useState("");
+  const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
+  const [customerIntakeMessage, setCustomerIntakeMessage] = useState("");
   const [implementationItems, setImplementationItems] = useState<ImplementationItem[]>([]);
   const [implementationItemsLoaded, setImplementationItemsLoaded] = useState(false);
   const [implementationItemsError, setImplementationItemsError] = useState("");
@@ -971,7 +956,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
         .maybeSingle();
 
       if (!dealError) {
-        setLinkedDeal((dealData as DealRecord | null) ?? null);
+        const nextDeal = (dealData as DealRecord | null) ?? null;
+        setLinkedDeal(nextDeal);
+        setCustomerIntakeEmail(nextDeal?.customer_email?.trim().toLowerCase() ?? "");
+        setCustomerIntakeRelationId(nextDeal?.smart_trade_relation_id
+          ? String(nextDeal.smart_trade_relation_id)
+          : "");
       }
     }
 
@@ -982,10 +972,16 @@ export default function ImplementationEditor({ implementationId }: { implementat
           { cache: "no-store" },
         );
         const intakeJson = await intakeResponse.json().catch(() => ({})) as {
-          intake?: CustomerIntakeProgress | null;
+          intake?: CustomerIntakeSummary | null;
         };
         const loadedIntake = intakeResponse.ok ? intakeJson.intake ?? null : null;
         setCustomerIntake(loadedIntake);
+        if (loadedIntake) {
+          setCustomerIntakeEmail(loadedIntake.recipientEmail);
+          setCustomerIntakeRelationId(loadedIntake.smartTradeRelationId
+            ? String(loadedIntake.smartTradeRelationId)
+            : "");
+        }
         if (!storedDnsDomain && loadedIntake?.submittedAt) {
           const intakeDomain = getWebsiteDomain(loadedIntake.formData.website);
           setDnsDomainInput(intakeDomain);
@@ -1610,6 +1606,240 @@ export default function ImplementationEditor({ implementationId }: { implementat
       setMessage("Klantlink gekopieerd.");
     } catch {
       setPortalError("Kopiëren is niet gelukt. Selecteer de link en kopieer deze handmatig.");
+    }
+  }
+
+  async function saveCustomerIntakeDealFields() {
+    if (!implementation?.deal_id || customerIntakeBusy) return false;
+
+    const recipientEmail = customerIntakeEmail.trim().toLowerCase();
+    if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+      setCustomerIntakeMessage("Vul eerst een geldig e-mailadres van de klant in.");
+      return false;
+    }
+
+    const relationIdText = customerIntakeRelationId.trim();
+    const relationId = relationIdText ? Number(relationIdText) : null;
+    if (relationId !== null && (!Number.isSafeInteger(relationId) || relationId <= 0)) {
+      setCustomerIntakeMessage("Vul een geldig bestaand relatie-ID in.");
+      return false;
+    }
+
+    const result = await updateDealWithFallback(supabase, implementation.deal_id, {
+      customer_email: recipientEmail,
+      smart_trade_relation_id: relationId,
+    });
+    if (result.error) {
+      setCustomerIntakeMessage(`Klantgegevens opslaan mislukt: ${result.error}`);
+      return false;
+    }
+
+    setCustomerIntakeEmail(recipientEmail);
+    setCustomerIntakeRelationId(relationId ? String(relationId) : "");
+    setLinkedDeal((current) => current
+      ? {
+        ...current,
+        customer_email: result.deal?.customer_email ?? recipientEmail,
+        smart_trade_relation_id: result.deal?.smart_trade_relation_id ?? relationId,
+      }
+      : current);
+    return true;
+  }
+
+  async function refreshCustomerIntake() {
+    if (!implementation || customerIntakeBusy) return null;
+
+    setCustomerIntakeBusy(true);
+    setCustomerIntakeMessage("Status van het klantformulier wordt vernieuwd...");
+    try {
+      const response = await fetch(
+        `/api/implementations/${encodeURIComponent(implementation.id)}/customer-intake`,
+        { cache: "no-store" },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        intake?: CustomerIntakeSummary | null;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(json.error || "Klantformulier laden mislukt.");
+
+      const intake = json.intake ?? null;
+      setCustomerIntake(intake);
+      if (intake) {
+        setCustomerIntakeEmail(intake.recipientEmail);
+        setCustomerIntakeRelationId(intake.smartTradeRelationId
+          ? String(intake.smartTradeRelationId)
+          : "");
+      }
+      setCustomerIntakeMessage(intake?.submittedAt
+        ? "Het ingevulde klantformulier is ontvangen."
+        : "Status van het klantformulier is bijgewerkt.");
+      return intake;
+    } catch (error) {
+      setCustomerIntakeMessage(
+        error instanceof Error ? error.message : "Klantformulier laden mislukt.",
+      );
+      return null;
+    } finally {
+      setCustomerIntakeBusy(false);
+    }
+  }
+
+  async function saveCustomerIntake(regenerate = false) {
+    if (!implementation?.deal_id || !canEdit || customerIntakeBusy) return null;
+    if (!await saveCustomerIntakeDealFields()) return null;
+
+    const relationId = customerIntakeRelationId.trim()
+      ? Number(customerIntakeRelationId.trim())
+      : null;
+    setCustomerIntakeBusy(true);
+    setCustomerIntakeMessage(regenerate ? "Nieuwe klantlink wordt gemaakt..." : "Klantlink wordt gemaakt...");
+    try {
+      const response = await fetch("/api/customer-intakes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dealId: implementation.deal_id,
+          recipientEmail: customerIntakeEmail.trim().toLowerCase(),
+          regenerate,
+          smartTradeRelationId: relationId,
+        }),
+      });
+      const json = await response.json().catch(() => ({})) as {
+        intake?: CustomerIntakeSummary;
+        error?: string;
+      };
+      if (!response.ok || !json.intake) {
+        throw new Error(json.error || "Klantlink maken mislukt.");
+      }
+
+      setCustomerIntake(json.intake);
+      setCustomerIntakeEmail(json.intake.recipientEmail);
+      setCustomerIntakeRelationId(json.intake.smartTradeRelationId
+        ? String(json.intake.smartTradeRelationId)
+        : "");
+      setCustomerIntakeMessage(regenerate ? "Nieuwe klantlink is klaar." : "Klantlink is klaar.");
+      return json.intake;
+    } catch (error) {
+      setCustomerIntakeMessage(error instanceof Error ? error.message : "Klantlink maken mislukt.");
+      return null;
+    } finally {
+      setCustomerIntakeBusy(false);
+    }
+  }
+
+  async function getUsableCustomerIntake() {
+    const expired = customerIntake
+      ? new Date(customerIntake.expiresAt).getTime() <= Date.now()
+      : false;
+    const currentRelationId = customerIntake?.smartTradeRelationId
+      ? String(customerIntake.smartTradeRelationId)
+      : "";
+    const mustCreate = !customerIntake
+      || customerIntake.status === "revoked"
+      || expired
+      || customerIntake.recipientEmail !== customerIntakeEmail.trim().toLowerCase()
+      || currentRelationId !== customerIntakeRelationId.trim();
+
+    return mustCreate ? saveCustomerIntake(Boolean(customerIntake)) : customerIntake;
+  }
+
+  async function copyCustomerIntakeUrl() {
+    const intake = await getUsableCustomerIntake();
+    if (!intake) return;
+    try {
+      await navigator.clipboard.writeText(intake.publicUrl);
+      setCustomerIntakeMessage("Klantlink is gekopieerd.");
+    } catch {
+      setCustomerIntakeMessage("Kopiëren mislukt. Open de klantlink en kopieer het adres uit de browser.");
+    }
+  }
+
+  async function openCustomerIntake() {
+    const targetWindow = window.open("about:blank", "_blank");
+    if (targetWindow) targetWindow.opener = null;
+    const intake = await getUsableCustomerIntake();
+    if (!intake) {
+      targetWindow?.close();
+      return;
+    }
+    if (!targetWindow) {
+      setCustomerIntakeMessage("De browser blokkeerde het nieuwe tabblad. Sta pop-ups toe en probeer opnieuw.");
+      return;
+    }
+    targetWindow.location.href = intake.publicUrl;
+  }
+
+  async function handleCustomerIntakeOutlookDraft() {
+    if (!implementation || !canEdit || customerIntakeBusy || customerOutlookBusyKey) return;
+
+    const outlookWindow = window.open("about:blank", "_blank");
+    if (outlookWindow) outlookWindow.opener = null;
+    showOutlookPopupStatus(
+      outlookWindow,
+      "Klantformulier voorbereiden",
+      "Het Outlook-concept met de beveiligde klantlink wordt gemaakt.",
+    );
+    setCustomerOutlookBusyKey("customer-intake");
+
+    try {
+      const intake = await getUsableCustomerIntake();
+      if (!intake) {
+        outlookWindow?.close();
+        return;
+      }
+
+      const returnTo = `/implementatie/${encodeURIComponent(implementation.id)}`;
+      const statusResponse = await fetch(
+        `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
+        { cache: "no-store" },
+      );
+      const statusJson = await statusResponse.json().catch(() => ({})) as {
+        connected?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (!statusResponse.ok) throw new Error(statusJson.error || "Outlook-verbinding controleren mislukt.");
+      if (!statusJson.connected) {
+        const connectUrl = statusJson.connectUrl
+          || `/api/outlook/connect?returnTo=${encodeURIComponent(returnTo)}`;
+        if (!navigateOutlookPopup(outlookWindow, connectUrl)) window.location.assign(connectUrl);
+        return;
+      }
+
+      const response = await fetch(
+        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: "customer-intake",
+            recipientEmail: intake.recipientEmail,
+            customerName: implementation.customer_name,
+            contactName: intake.formData.contactName || implementation.contact_name || "",
+            publicUrl: intake.publicUrl,
+          }),
+        },
+      );
+      const json = await response.json().catch(() => ({})) as {
+        webLink?: string;
+        reconnectRequired?: boolean;
+        connectUrl?: string;
+        error?: string;
+      };
+      if (json.reconnectRequired && json.connectUrl) {
+        if (!navigateOutlookPopup(outlookWindow, json.connectUrl)) window.location.assign(json.connectUrl);
+        return;
+      }
+      if (!response.ok || !json.webLink) throw new Error(json.error || "Outlook-concept maken mislukt.");
+
+      if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
+      setCustomerIntakeMessage("Outlook-concept met klantlink is aangemaakt.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Outlook-concept maken mislukt.";
+      showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", errorMessage, "error");
+      setCustomerIntakeMessage(errorMessage);
+    } finally {
+      setCustomerOutlookBusyKey(null);
     }
   }
 
@@ -2395,6 +2625,128 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <span>Status<strong>{IMPLEMENTATION_STATUS_LABELS[implementation.status]}</strong></span>
             <span>Laatst gewijzigd<strong>{formatDate(implementation.updated_at)}</strong></span>
           </div>
+        </section>
+
+        <section className="card panel customer-intake-panel">
+          <div className="top-row customer-intake-heading">
+            <div>
+              <div className="eyebrow">Eerste stap</div>
+              <h2 className="headline">Klantformulier</h2>
+              <p className="subtext">
+                Stuur de beveiligde klantlink voordat je met de inrichting begint.
+              </p>
+            </div>
+            <StatusPill tone={intakePresentation.tone}>{customerIntakeProgressLabel}</StatusPill>
+          </div>
+
+          <div className="customer-intake-controls">
+            <div className="customer-intake-fields">
+              <label className="input-wrap customer-intake-email">
+                <span className="input-label">E-mailadres klant</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={customerIntakeEmail}
+                  disabled={!canEdit || customerIntakeBusy}
+                  placeholder="naam@bedrijf.nl"
+                  onChange={(event) => setCustomerIntakeEmail(event.target.value)}
+                  onBlur={() => void saveCustomerIntakeDealFields()}
+                />
+                <span className="input-help">Dit adres wordt automatisch bewaard bij de offerte.</span>
+              </label>
+              <label className="input-wrap customer-intake-relation-id">
+                <span className="input-label">Smart Trade relatie-ID (optioneel)</span>
+                <input
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  value={customerIntakeRelationId}
+                  disabled={!canEdit || customerIntakeBusy}
+                  placeholder="Bijv. 2498"
+                  onChange={(event) => setCustomerIntakeRelationId(event.target.value)}
+                  onBlur={() => void saveCustomerIntakeDealFields()}
+                />
+                <span className="input-help">Alleen invullen wanneer de relatie al handmatig is aangemaakt.</span>
+              </label>
+            </div>
+
+            <div className="customer-intake-actions">
+              {!customerIntake ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={!canEdit || customerIntakeBusy}
+                  onClick={() => void saveCustomerIntake()}
+                >
+                  <Mail size={16} /> {customerIntakeBusy ? "Link maken..." : "Klantlink maken"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={customerIntakeBusy}
+                    onClick={() => void openCustomerIntake()}
+                  >
+                    <ExternalLink size={16} /> Open formulier
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={customerIntakeBusy}
+                    onClick={() => void copyCustomerIntakeUrl()}
+                  >
+                    <Copy size={16} /> Kopieer link
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!canEdit || customerIntakeBusy || Boolean(customerOutlookBusyKey)}
+                onClick={() => void handleCustomerIntakeOutlookDraft()}
+              >
+                <Mail size={16} /> {customerOutlookBusyKey === "customer-intake"
+                  ? "Concept maken..."
+                  : "Klaarzetten in Outlook"}
+              </button>
+              {customerIntake ? (
+                <>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={customerIntakeBusy}
+                    onClick={() => void refreshCustomerIntake()}
+                  >
+                    <RefreshCw size={16} /> Status vernieuwen
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!canEdit || customerIntakeBusy}
+                    onClick={() => void saveCustomerIntake(true)}
+                  >
+                    <Link2 size={16} /> Nieuwe link
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          {customerIntake?.submittedAt ? (
+            <div className="customer-intake-summary">
+              <div><span>Ontvangen</span><strong>{formatDateTime(customerIntake.submittedAt)}</strong></div>
+              <div><span>Naam</span><strong>{customerIntake.formData.deliveryName || "-"}</strong></div>
+              <div>
+                <span>Contactpersoon</span>
+                <strong>{customerIntake.formData.contactName || "-"}</strong>
+              </div>
+              <div><span>E-mail administratie</span><strong>{customerIntake.formData.administrationEmail || "-"}</strong></div>
+              <div><span>Website</span><strong>{customerIntake.formData.website || "-"}</strong></div>
+            </div>
+          ) : null}
+
+          {customerIntakeMessage ? <div className="save-status">{customerIntakeMessage}</div> : null}
         </section>
 
         <section className="card panel implementation-data-panel">

@@ -10,14 +10,12 @@ import {
   Calculator,
   CheckCircle2,
   ClipboardCheck,
-  ClipboardCopy,
   CloudUpload,
   Code2,
   Download,
   ExternalLink,
   FileText,
   LifeBuoy,
-  Link2,
   LoaderCircle,
   Mail,
   MapPin,
@@ -29,11 +27,7 @@ import {
 import { createQuotePdfFile, exportQuotePdf } from "@/lib/pdf";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { exportCustomerIntakePdf } from "@/lib/customer-intake-pdf";
-import {
-  customerIntakeStatusLabel,
-  splitCustomerContactName,
-  type CustomerIntakeSummary,
-} from "@/lib/customer-intake";
+import { splitCustomerContactName, type CustomerIntakeSummary } from "@/lib/customer-intake";
 import type { DealApprovalStatus, DealApprovalSummary } from "@/lib/deal-approval";
 import { getDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import {
@@ -307,7 +301,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [customerIntake, setCustomerIntake] = useState<CustomerIntakeSummary | null>(null);
   const [customerIntakeEmail, setCustomerIntakeEmail] = useState("");
   const [customerIntakeRelationId, setCustomerIntakeRelationId] = useState("");
-  const [customerIntakeStatus, setCustomerIntakeStatus] = useState("");
+  const [, setCustomerIntakeStatus] = useState("");
   const [customerIntakeBusy, setCustomerIntakeBusy] = useState(false);
   const [customerOutlookBusy, setCustomerOutlookBusy] = useState(false);
   const [newCustomerOutlookBusy, setNewCustomerOutlookBusy] = useState(false);
@@ -1412,6 +1406,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  // De klantformulieracties zijn naar de implementatiepagina verplaatst.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function saveCustomerIntakeRelationId() {
     if (!user || customerIntakeBusy) return;
 
@@ -1440,6 +1436,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function refreshCustomerIntake() {
     if (customerIntakeBusy) return;
 
@@ -1479,6 +1476,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function syncCustomerIntakeWithSmartTrade() {
     if (customerIntakeBusy || !customerIntake?.submittedAt) return;
 
@@ -1535,6 +1533,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     return customerIntake;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleCopyCustomerIntakeLink() {
     const intake = await getUsableCustomerIntake();
     if (!intake) return;
@@ -1547,6 +1546,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleOpenCustomerIntake() {
     const targetWindow = window.open("about:blank", "_blank");
     if (targetWindow) targetWindow.opener = null;
@@ -1632,6 +1632,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     setCustomerIntakeStatus(successMessage);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleOutlookDraft() {
     const recipientEmail = customerIntakeEmail.trim().toLowerCase();
     if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
@@ -1676,6 +1677,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleCustomerIntakePdf() {
     setCustomerIntakeStatus("PDF van het klantformulier wordt gemaakt...");
     const fallbackContact = splitCustomerContactName(contactName);
@@ -1724,14 +1726,6 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
-  const customerIntakeLabel = customerIntake
-    ? customerIntakeStatusLabel(customerIntake.status, customerIntake.expiresAt)
-    : "Nog niet aangemaakt";
-  const customerIntakeTone = customerIntakeLabel === "Ontvangen" || customerIntakeLabel === "Verwerkt"
-    ? "success"
-    : customerIntakeLabel === "Verlopen" || customerIntakeLabel === "Ingetrokken"
-      ? "danger"
-      : "warning";
   const newCustomerMailMissingFields = [
     !customerIntake?.submittedAt ? "klantformulier" : "",
     !implementation?.assigned_consultant_name?.trim() ? "consultant" : "",
@@ -1760,8 +1754,6 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     assetOverview && assetOverview.total > 0 && assetOverview.createdCount === assetOverview.total,
   );
   const assetsPending = Boolean(assetOverview?.pendingCount);
-  const showCustomerIntake = Boolean(customerIntake) || (isNewCustomerDeal && Boolean(acceptedAt));
-
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;
   }
@@ -2479,241 +2471,6 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           </section>
         ) : null}
 
-        {showCustomerIntake ? (
-          <section id="klantformulier" className="card panel customer-intake-panel">
-            <div className="top-row customer-intake-heading">
-              <div>
-                <div className="eyebrow">Nieuwe klant</div>
-                <h2 className="headline">Klantformulier</h2>
-                <div className="subtext">
-                  {customerIntake?.submittedAt
-                    ? `Ontvangen op ${new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeStyle: "short" }).format(new Date(customerIntake.submittedAt))}`
-                    : "Beveiligde klantlink en PDF voor de gegevens van een nieuwe klant."}
-                </div>
-              </div>
-              <StatusPill tone={customerIntakeTone}>{customerIntakeLabel}</StatusPill>
-            </div>
-
-            <div className="customer-intake-controls">
-              <div className="customer-intake-fields">
-                <label className="input-wrap customer-intake-email">
-                  <span className="input-label">E-mailadres klant</span>
-                  <input
-                    className="input"
-                    type="email"
-                    value={customerIntakeEmail}
-                    onChange={(event) => setCustomerIntakeEmail(event.target.value)}
-                    onBlur={() => void saveCustomerEmail()}
-                    placeholder="naam@bedrijf.nl"
-                  />
-                </label>
-                <label className="input-wrap customer-intake-relation-id">
-                  <span className="input-label">Smart Trade relatie-ID (optioneel)</span>
-                  <input
-                    className="input"
-                    type="text"
-                    inputMode="numeric"
-                    value={customerIntakeRelationId}
-                    onChange={(event) => setCustomerIntakeRelationId(event.target.value)}
-                    onBlur={() => void saveCustomerIntakeRelationId()}
-                    placeholder="Bijv. 2498"
-                  />
-                  <span className="input-help">Vul dit alleen in wanneer de relatie al handmatig in Smart Trade is aangemaakt.</span>
-                </label>
-              </div>
-
-              <div className="customer-intake-actions">
-                {!customerIntake ? (
-                  <button
-                    type="button"
-                    className="primary-button"
-                    disabled={customerIntakeBusy}
-                    onClick={() => void saveCustomerIntake(false)}
-                  >
-                    <Mail size={16} />
-                    {customerIntakeBusy ? "Link maken..." : "Klantlink maken"}
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={customerIntakeBusy}
-                      onClick={() => void handleOpenCustomerIntake()}
-                    >
-                      <ExternalLink size={16} /> Open formulier
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={customerIntakeBusy}
-                      onClick={() => void handleCopyCustomerIntakeLink()}
-                    >
-                      <ClipboardCopy size={16} /> Kopieer link
-                    </button>
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  className="primary-button"
-                  disabled={customerIntakeBusy || customerOutlookBusy}
-                  onClick={() => void handleOutlookDraft()}
-                >
-                  <Mail size={16} />
-                  {customerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={customerIntakeBusy}
-                  onClick={() => void handleCustomerIntakePdf()}
-                >
-                  <Download size={16} />
-                  {customerIntake?.submittedAt ? "Download ingevulde PDF" : "Download lege PDF"}
-                </button>
-                {customerIntake ? (
-                  <>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={customerIntakeBusy}
-                      onClick={() => void refreshCustomerIntake()}
-                    >
-                      <RefreshCw size={16} /> Status vernieuwen
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={customerIntakeBusy}
-                      onClick={() => void saveCustomerIntake(true)}
-                    >
-                      <Link2 size={16} /> Nieuwe link
-                    </button>
-                    {customerIntake.submittedAt ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={customerIntakeBusy || !customerIntake.smartTradeRelationId}
-                        onClick={() => void syncCustomerIntakeWithSmartTrade()}
-                      >
-                        <RefreshCw size={16} />
-                        {customerIntake.smartTradeSyncedAt
-                          ? "Opnieuw verwerken"
-                          : "Verwerken in Smart Trade"}
-                      </button>
-                    ) : null}
-                  </>
-                ) : null}
-              </div>
-            </div>
-
-            {customerIntake?.smartTradeSyncError ? (
-              <div className="customer-intake-sync-message error">
-                Smart Trade-verwerking mislukt: {customerIntake.smartTradeSyncError}
-              </div>
-            ) : customerIntake?.smartTradeSyncedAt ? (
-              <div className="customer-intake-sync-message success">
-                Verwerkt in Smart Trade-relatie {customerIntake.smartTradeRelationId} op{" "}
-                {new Intl.DateTimeFormat("nl-NL", {
-                  dateStyle: "long",
-                  timeStyle: "short",
-                }).format(new Date(customerIntake.smartTradeSyncedAt))}.
-              </div>
-            ) : null}
-
-            {customerIntake?.submittedAt ? (
-              <div className="customer-intake-summary">
-                <div>
-                  <span>Naam</span>
-                  <strong>{customerIntake.formData.deliveryName || "-"}</strong>
-                </div>
-                <div>
-                  <span>Afleveradres</span>
-                  <strong>
-                    {[
-                      customerIntake.formData.deliveryStreet,
-                      customerIntake.formData.deliveryNumber,
-                      customerIntake.formData.deliveryPostcode,
-                      customerIntake.formData.deliveryCity,
-                    ].filter(Boolean).join(" ") || "-"}
-                  </strong>
-                </div>
-                <div>
-                  <span>Contactpersoon</span>
-                  <strong>{customerIntake.formData.contactName || "-"}</strong>
-                </div>
-                <div>
-                  <span>E-mail administratie</span>
-                  <strong>{customerIntake.formData.administrationEmail || "-"}</strong>
-                </div>
-                <div>
-                  <span>Website</span>
-                  <strong>{customerIntake.formData.website || "-"}</strong>
-                </div>
-                <div>
-                  <span>BTW-nummer</span>
-                  <strong>{customerIntake.formData.vatNumber || "-"}</strong>
-                </div>
-                <div>
-                  <span>KvK-nummer</span>
-                  <strong>{customerIntake.formData.chamberOfCommerceNumber || "-"}</strong>
-                </div>
-                <div>
-                  <span>Automatische incasso</span>
-                  <strong>{customerIntake.formData.directDebit === "yes" ? "Ja" : "Nee"}</strong>
-                </div>
-                {customerIntake.formData.directDebit === "yes" ? (
-                  <>
-                    <div>
-                      <span>Naam rekeninghouder</span>
-                      <strong>{customerIntake.formData.directDebitAccountHolder || "-"}</strong>
-                    </div>
-                    <div>
-                      <span>IBAN</span>
-                      <strong>{customerIntake.formData.directDebitBankAccount || "-"}</strong>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-
-            {customerIntake?.directDebitMandate ? (
-              <div className="customer-intake-mandate-summary">
-                <div className="customer-intake-mandate-heading">
-                  <span>Digitale incassomachtiging</span>
-                  <strong>Bewijs lokaal vastgelegd</strong>
-                </div>
-                <dl>
-                  <div>
-                    <dt>Mandaatkenmerk</dt>
-                    <dd>{customerIntake.directDebitMandate.mandateReference}</dd>
-                  </div>
-                  <div>
-                    <dt>Geaccepteerd op</dt>
-                    <dd>
-                      {new Intl.DateTimeFormat("nl-NL", {
-                        dateStyle: "long",
-                        timeStyle: "short",
-                      }).format(new Date(customerIntake.directDebitMandate.acceptedAt))}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>IP-adres</dt>
-                    <dd>{customerIntake.directDebitMandate.ipAddress || "Niet beschikbaar"}</dd>
-                  </div>
-                  <div>
-                    <dt>Browser</dt>
-                    <dd>{customerIntake.directDebitMandate.userAgent || "Niet beschikbaar"}</dd>
-                  </div>
-                </dl>
-              </div>
-            ) : null}
-
-            {customerIntakeStatus ? <div className="save-status">{customerIntakeStatus}</div> : null}
-          </section>
-        ) : null}
-
         {!isAssetsExpansionDeal && implementation ? (
           <section className="card panel customer-intake-panel">
             <div className="top-row customer-intake-heading">
@@ -2728,54 +2485,6 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             </div>
 
             <div className="implementation-communication-stack">
-              <article className="implementation-communication-card">
-                <div className="implementation-communication-icon"><FileText size={22} /></div>
-                <div className="implementation-communication-copy">
-                  <span>Klantformulier</span>
-                  <strong>
-                    {customerIntake?.submittedAt
-                      ? "Ontvangen van de klant"
-                      : customerIntake
-                        ? "Klaar om te delen"
-                        : "Klantlink voorbereiden"}
-                  </strong>
-                  <p>
-                    {customerIntake?.submittedAt
-                      ? "Bekijk hier de ingevulde gegevens van de nieuwe klant."
-                      : customerIntake
-                        ? "De klantlink is gemaakt en kan via Outlook met de klant worden gedeeld."
-                        : "Maak de klantlink en zet de e-mail voor de klant direct klaar in Outlook."}
-                  </p>
-                </div>
-                <div className="implementation-order-actions">
-                  {customerIntake?.submittedAt ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => document.getElementById("klantformulier")?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      })}
-                    >
-                      <FileText size={16} /> Klantformulier bekijken
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="primary-button"
-                    disabled={customerIntakeBusy || customerOutlookBusy}
-                    title={customerIntakeEmail.trim()
-                      ? "Maak de klantlink en zet de e-mail in Outlook klaar"
-                      : "Vul eerst het e-mailadres van de klant in bij Offerte layout"}
-                    onClick={() => void handleOutlookDraft()}
-                  >
-                    <Mail size={16} /> {customerOutlookBusy
-                      ? "Concept maken..."
-                      : "Klantlink delen via Outlook"}
-                  </button>
-                </div>
-              </article>
-
               <article className="implementation-communication-card">
                 <div className="implementation-communication-icon"><Mail size={22} /></div>
                 <div className="implementation-communication-copy">

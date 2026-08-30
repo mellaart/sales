@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
-import { query } from "@/lib/local-db";
 import { executeLocalTableQuery } from "@/lib/local-table";
 import {
-  normalizeCustomerIntakeData,
-  type CustomerIntakeStatus,
-} from "@/lib/customer-intake";
+  getCustomerIntakeForDeal,
+} from "@/lib/customer-intake-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,43 +40,13 @@ export async function GET(
       return jsonResponse({ error: "Implementatie niet gevonden of niet toegankelijk." }, 404);
     }
 
-    const { rows } = await query<{
-      status: CustomerIntakeStatus;
-      expires_at: string;
-      submitted_at: string | null;
-      recipient_email: string | null;
-      form_data: unknown;
-    }>(
-      `select status, expires_at, submitted_at, recipient_email, form_data
-       from public.customer_intakes
-       where deal_id = $1
-       limit 1`,
-      [implementation.deal_id],
-    );
+    const result = await getCustomerIntakeForDeal(request, implementation.deal_id, {
+      user: verified.user,
+      profile: verified.profile,
+    });
+    if (!("intake" in result)) return jsonResponse({ error: result.error }, 403);
 
-    const intakeFormData = rows[0] ? normalizeCustomerIntakeData(rows[0].form_data) : null;
-    const intake = rows[0] && intakeFormData
-      ? {
-        status: rows[0].status,
-        expiresAt: rows[0].expires_at,
-        submittedAt: rows[0].submitted_at,
-        recipientEmail: rows[0].recipient_email ?? "",
-        formData: {
-          website: intakeFormData.website,
-          contactFirstName: intakeFormData.contactFirstName,
-          contactEmail: intakeFormData.contactEmail,
-          deliveryStreet: intakeFormData.deliveryStreet,
-          deliveryNumber: intakeFormData.deliveryNumber,
-          deliveryPostcode: intakeFormData.deliveryPostcode,
-          deliveryCity: intakeFormData.deliveryCity,
-          postalStreet: intakeFormData.postalStreet,
-          postalNumber: intakeFormData.postalNumber,
-          postalPostcode: intakeFormData.postalPostcode,
-          postalCity: intakeFormData.postalCity,
-        },
-      }
-      : null;
-    return jsonResponse({ intake });
+    return jsonResponse({ intake: result.intake });
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Status klantformulier laden mislukt.",

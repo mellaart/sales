@@ -3065,12 +3065,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     <div className="implementation-intake-actions">
                       <StatusPill tone={intakePresentation.tone}>{customerIntakeProgressLabel}</StatusPill>
                       {customerIntake && implementation.deal_id ? (
-                        <Link
-                          className="secondary-button implementation-intake-link"
-                          href={`/deals/${encodeURIComponent(implementation.deal_id)}`}
+                        <button
+                          type="button"
+                          className="primary-button implementation-intake-link"
+                          onClick={() => {
+                            window.location.assign(
+                              `/deals/${encodeURIComponent(implementation.deal_id)}`,
+                            );
+                          }}
                         >
                           <ExternalLink size={15} /> Klantformulier openen
-                        </Link>
+                        </button>
                       ) : null}
                     </div>
                   </div>

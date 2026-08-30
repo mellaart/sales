@@ -163,6 +163,7 @@ export async function ensureLocalSchema() {
           accepted_by_email text,
           smart_trade_relation_id bigint,
           customer_name text,
+          customer_email text,
           quote_title text,
           contact_name text,
           sales_name text,
@@ -199,6 +200,7 @@ export async function ensureLocalSchema() {
         alter table public.deals add column if not exists accepted_by_email text;
         alter table public.deals add column if not exists smart_trade_relation_id bigint;
         alter table public.deals add column if not exists customer_name text;
+        alter table public.deals add column if not exists customer_email text;
         alter table public.deals add column if not exists quote_title text;
         alter table public.deals add column if not exists contact_name text;
         alter table public.deals add column if not exists sales_name text;

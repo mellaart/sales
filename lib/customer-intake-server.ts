@@ -34,6 +34,7 @@ type DealRow = {
   user_id: string;
   smart_trade_relation_id: number | null;
   customer_name: string | null;
+  customer_email: string | null;
   contact_name: string | null;
   calculator_inputs: Record<string, unknown> | null;
 };
@@ -242,7 +243,7 @@ function isCalculatorDeal(deal: DealRow) {
 
 async function getDeal(dealId: string) {
   const { rows } = await query<DealRow>(
-    `select id, user_id, smart_trade_relation_id, customer_name, contact_name, calculator_inputs
+    `select id, user_id, smart_trade_relation_id, customer_name, customer_email, contact_name, calculator_inputs
      from public.deals
      where id = $1
      limit 1`,
@@ -306,9 +307,10 @@ export async function createOrRefreshCustomerIntake(
   const access = await requireAccessibleCalculatorDeal(dealId, actor);
   if (!access.ok) return access;
 
-  const recipientEmail = typeof input.recipientEmail === "string"
+  const requestedRecipientEmail = typeof input.recipientEmail === "string"
     ? input.recipientEmail.trim().toLowerCase().slice(0, 180)
     : "";
+  const recipientEmail = requestedRecipientEmail || access.deal.customer_email?.trim().toLowerCase().slice(0, 180) || "";
   const contactName = access.deal.contact_name?.trim() ?? "";
   const contact = splitCustomerContactName(contactName);
   const initialFormData: CustomerIntakeData = {
@@ -323,7 +325,7 @@ export async function createOrRefreshCustomerIntake(
 
   const result = await withTransaction(async (client) => {
     const lockedDealResult = await client.query<DealRow>(
-      `select id, user_id, smart_trade_relation_id, customer_name, contact_name, calculator_inputs
+      `select id, user_id, smart_trade_relation_id, customer_name, customer_email, contact_name, calculator_inputs
        from public.deals
        where id = $1
        for update`,

@@ -87,6 +87,7 @@ export type DealRecord = {
   smart_trade_relation_id?: number | null;
 
   customer_name?: string | null;
+  customer_email?: string | null;
   contact_name?: string | null;
   quote_title?: string | null;
 

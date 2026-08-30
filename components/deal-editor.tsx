@@ -411,6 +411,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
       const deal = result.deal;
       const inputs = normalizeInputs(deal, modules, pricingConfig.developmentHourlyRate);
+      const savedCustomerEmail = deal.customer_email?.trim().toLowerCase() || "";
 
       setDealOwnerId(deal.user_id || user.id);
       setArchivedAt(deal.archived_at ?? null);
@@ -427,6 +428,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setCustomerIntakeRelationId(deal.smart_trade_relation_id
         ? String(deal.smart_trade_relation_id)
         : "");
+      setCustomerIntakeEmail(savedCustomerEmail);
       setSalesName(deal.user_id === user.id && currentSalesName ? currentSalesName : deal.sales_name || "");
       setNotes(deal.notes || "");
       setExtraUsers(inputs.extraUsers);
@@ -471,7 +473,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           if (intakeResponse.ok && intakeJson.intake) {
             setCustomerIntake(intakeJson.intake);
             setIsNewCustomerDeal(true);
-            setCustomerIntakeEmail(intakeJson.intake.recipientEmail);
+            setCustomerIntakeEmail(savedCustomerEmail || intakeJson.intake.recipientEmail);
             setCustomerIntakeRelationId(intakeJson.intake.smartTradeRelationId
               ? String(intakeJson.intake.smartTradeRelationId)
               : "");
@@ -1049,10 +1051,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setStatus("Je moet ingelogd zijn om deze deal op te slaan.");
       return false;
     }
+    const customerEmail = customerIntakeEmail.trim().toLowerCase();
     const payload = isAssetsExpansionDeal
       ? {
           user_id: dealOwnerId || user.id,
           customer_name: customerName || null,
+          customer_email: customerEmail || null,
           quote_title: quoteTitle,
           contact_name: contactName || null,
           sales_name: salesName || currentSalesName || null,
@@ -1093,6 +1097,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       : {
       user_id: dealOwnerId || user.id,
       customer_name: customerName || null,
+      customer_email: customerEmail || null,
       quote_title: quoteTitle,
       contact_name: contactName || null,
       sales_name: salesName || currentSalesName || null,
@@ -1148,6 +1153,21 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     const saveMessage = result.warning ?? "Deal opnieuw berekend en opgeslagen.";
     if (approvalStatus && approvalRequestedAt) await refreshDealApproval();
     setStatus(saveMessage);
+    return true;
+  }
+
+  async function saveCustomerEmail() {
+    if (!user) return false;
+
+    const customerEmail = customerIntakeEmail.trim().toLowerCase();
+    setCustomerIntakeEmail(customerEmail);
+    const result = await updateDealWithFallback(supabase, dealId, {
+      customer_email: customerEmail || null,
+    });
+    if (result.error) {
+      setStatus(`E-mailadres klant opslaan mislukt: ${result.error}`);
+      return false;
+    }
     return true;
   }
 
@@ -1625,6 +1645,10 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     setCustomerOutlookBusy(true);
 
     try {
+      if (!await saveCustomerEmail()) {
+        outlookWindow?.close();
+        return;
+      }
       const intake = await getUsableCustomerIntake();
       if (!intake) {
         outlookWindow?.close();
@@ -2327,6 +2351,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                       type="email"
                       value={customerIntakeEmail}
                       onChange={(event) => setCustomerIntakeEmail(event.target.value)}
+                      onBlur={() => void saveCustomerEmail()}
                       placeholder="naam@bedrijf.nl"
                     />
                   </label>
@@ -2478,6 +2503,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     type="email"
                     value={customerIntakeEmail}
                     onChange={(event) => setCustomerIntakeEmail(event.target.value)}
+                    onBlur={() => void saveCustomerEmail()}
                     placeholder="naam@bedrijf.nl"
                   />
                 </label>

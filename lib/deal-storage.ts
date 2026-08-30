@@ -124,6 +124,7 @@ function toSupabaseDealPayload(deal: DealRecord, userId: string): DealPayload {
     created_at: deal.created_at ?? new Date().toISOString(),
     archived_at: deal.archived_at ?? null,
     customer_name: deal.customer_name ?? null,
+    customer_email: deal.customer_email ?? null,
     quote_title: deal.quote_title || "Prijsvoorstel Smart Trade",
     contact_name: deal.contact_name ?? null,
     sales_name: deal.sales_name ?? null,

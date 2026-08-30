@@ -64,6 +64,7 @@ const TABLES = {
     "accepted_by_email",
     "smart_trade_relation_id",
     "customer_name",
+    "customer_email",
     "quote_title",
     "contact_name",
     "sales_name",

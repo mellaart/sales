@@ -2177,20 +2177,6 @@ select optgroup {
   font-size: 14px;
 }
 
-.implementation-intake-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.implementation-intake-link {
-  min-height: 34px;
-  padding: 7px 10px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 .implementation-item-copy {
   display: grid;
   min-width: 0;
@@ -3166,12 +3152,6 @@ select optgroup {
   .implementation-progress-row .status-pill {
     min-width: 0;
     white-space: nowrap;
-  }
-
-  .implementation-intake-actions {
-    align-items: flex-end;
-    flex-direction: column;
-    gap: 6px;
   }
 
   .implementation-task-status-row {

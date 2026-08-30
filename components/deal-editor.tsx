@@ -2455,7 +2455,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         ) : null}
 
         {showCustomerIntake ? (
-          <section className="card panel customer-intake-panel">
+          <section id="klantformulier" className="card panel customer-intake-panel">
             <div className="top-row customer-intake-heading">
               <div>
                 <div className="eyebrow">Nieuwe klant</div>
@@ -2702,6 +2702,41 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             </div>
 
             <div className="implementation-communication-stack">
+              <article className="implementation-communication-card">
+                <div className="implementation-communication-icon"><FileText size={22} /></div>
+                <div className="implementation-communication-copy">
+                  <span>Klantformulier</span>
+                  <strong>
+                    {customerIntake?.submittedAt
+                      ? "Ontvangen van de klant"
+                      : customerIntake
+                        ? "Wacht op klant"
+                        : "Nog niet aangemaakt"}
+                  </strong>
+                  <p>
+                    {customerIntake?.submittedAt
+                      ? "Bekijk hier de ingevulde gegevens van de nieuwe klant."
+                      : customerIntake
+                        ? "De klantlink is verstuurd; de ingevulde gegevens verschijnen hier zodra de klant opslaat."
+                        : "Maak eerst een klantlink aan om het formulier met de klant te delen."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={!customerIntake}
+                  title={customerIntake
+                    ? "Ga naar het klantformulier op deze deal"
+                    : "Maak eerst een klantlink aan"}
+                  onClick={() => document.getElementById("klantformulier")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  })}
+                >
+                  <FileText size={16} /> Klantformulier bekijken
+                </button>
+              </article>
+
               <article className="implementation-communication-card">
                 <div className="implementation-communication-icon"><Mail size={22} /></div>
                 <div className="implementation-communication-copy">

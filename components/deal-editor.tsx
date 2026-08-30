@@ -2710,31 +2710,44 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     {customerIntake?.submittedAt
                       ? "Ontvangen van de klant"
                       : customerIntake
-                        ? "Wacht op klant"
-                        : "Nog niet aangemaakt"}
+                        ? "Klaar om te delen"
+                        : "Klantlink voorbereiden"}
                   </strong>
                   <p>
                     {customerIntake?.submittedAt
                       ? "Bekijk hier de ingevulde gegevens van de nieuwe klant."
                       : customerIntake
-                        ? "De klantlink is verstuurd; de ingevulde gegevens verschijnen hier zodra de klant opslaat."
-                        : "Maak eerst een klantlink aan om het formulier met de klant te delen."}
+                        ? "De klantlink is gemaakt en kan via Outlook met de klant worden gedeeld."
+                        : "Maak de klantlink en zet de e-mail voor de klant direct klaar in Outlook."}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="primary-button"
-                  disabled={!customerIntake}
-                  title={customerIntake
-                    ? "Ga naar het klantformulier op deze deal"
-                    : "Maak eerst een klantlink aan"}
-                  onClick={() => document.getElementById("klantformulier")?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  })}
-                >
-                  <FileText size={16} /> Klantformulier bekijken
-                </button>
+                <div className="implementation-order-actions">
+                  {customerIntake?.submittedAt ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => document.getElementById("klantformulier")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      })}
+                    >
+                      <FileText size={16} /> Klantformulier bekijken
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={customerIntakeBusy || customerOutlookBusy}
+                    title={customerIntakeEmail.trim()
+                      ? "Maak de klantlink en zet de e-mail in Outlook klaar"
+                      : "Vul eerst het e-mailadres van de klant in bij Offerte layout"}
+                    onClick={() => void handleOutlookDraft()}
+                  >
+                    <Mail size={16} /> {customerOutlookBusy
+                      ? "Concept maken..."
+                      : "Klantlink delen via Outlook"}
+                  </button>
+                </div>
               </article>
 
               <article className="implementation-communication-card">

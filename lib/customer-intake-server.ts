@@ -255,13 +255,13 @@ async function getDeal(dealId: string) {
 export async function requireAccessibleCalculatorDeal(
   dealId: string,
   actor: Actor,
-  mode: "read" | "write" | "intake" = "write",
+  mode: "read" | "write" = "write",
 ) {
   const deal = await getDeal(dealId);
   if (!deal) return { ok: false, error: "Deal niet gevonden." } as const;
-  const hasAccess = mode === "write"
-    ? canAccessDeal(actor, deal)
-    : await canViewDealCustomerIntake(actor, deal);
+  const hasAccess = mode === "read"
+    ? await canViewDealCustomerIntake(actor, deal)
+    : canAccessDeal(actor, deal);
   if (!hasAccess) {
     return { ok: false, error: "Je hebt geen toegang tot deze deal." } as const;
   }
@@ -304,7 +304,7 @@ export async function createOrRefreshCustomerIntake(
     smartTradeRelationId?: number | null;
   },
 ) {
-  const access = await requireAccessibleCalculatorDeal(dealId, actor, "intake");
+  const access = await requireAccessibleCalculatorDeal(dealId, actor);
   if (!access.ok) return access;
 
   const requestedRecipientEmail = typeof input.recipientEmail === "string"
@@ -333,7 +333,7 @@ export async function createOrRefreshCustomerIntake(
     );
     const lockedDeal = lockedDealResult.rows[0];
     if (!lockedDeal) throw new Error("Deal niet gevonden.");
-    if (!await canViewDealCustomerIntake(actor, lockedDeal)) {
+    if (!canAccessDeal(actor, lockedDeal)) {
       throw new Error("Je hebt geen toegang tot deze deal.");
     }
 

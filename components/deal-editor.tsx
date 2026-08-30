@@ -1632,7 +1632,6 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     setCustomerIntakeStatus(successMessage);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleOutlookDraft() {
     const recipientEmail = customerIntakeEmail.trim().toLowerCase();
     if (!recipientEmail || !/^\S+@\S+\.\S+$/.test(recipientEmail)) {
@@ -2485,6 +2484,38 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             </div>
 
             <div className="implementation-communication-stack">
+              <article className="implementation-communication-card">
+                <div className="implementation-communication-icon"><FileText size={22} /></div>
+                <div className="implementation-communication-copy">
+                  <span>Klantformulier</span>
+                  <strong>
+                    {customerIntake?.submittedAt
+                      ? "Ontvangen van de klant"
+                      : customerIntake
+                        ? "Klaar om te versturen"
+                        : "Nog niet verstuurd"}
+                  </strong>
+                  <p>
+                    {customerIntake?.submittedAt
+                      ? "De ingevulde gegevens zijn ontvangen en staan klaar voor de implementatie."
+                      : "Zet een e-mail met het klantformulier klaar in Outlook. Het e-mailadres uit Offerte layout wordt gebruikt."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={customerIntakeBusy || customerOutlookBusy}
+                  title={customerIntakeEmail.trim()
+                    ? "Maak een Outlook-concept met het klantformulier"
+                    : "Vul eerst het e-mailadres van de klant in bij Offerte layout"}
+                  onClick={() => void handleOutlookDraft()}
+                >
+                  <Mail size={16} /> {customerOutlookBusy
+                    ? "Concept maken..."
+                    : "Klaarzetten in Outlook"}
+                </button>
+              </article>
+
               <article className="implementation-communication-card">
                 <div className="implementation-communication-icon"><Mail size={22} /></div>
                 <div className="implementation-communication-copy">

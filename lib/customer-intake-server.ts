@@ -222,6 +222,20 @@ function canAccessDeal(actor: Actor, deal: DealRow) {
   );
 }
 
+async function canViewDealCustomerIntake(actor: Actor, deal: DealRow) {
+  if (canAccessDeal(actor, deal)) return true;
+
+  const { rows } = await query<{ id: string }>(
+    `select id
+     from public.implementations
+     where deal_id = $1
+       and assigned_consultant_id = $2
+     limit 1`,
+    [deal.id, actor.user.id],
+  );
+  return Boolean(rows[0]);
+}
+
 function isCalculatorDeal(deal: DealRow) {
   return deal.calculator_inputs?.quoteLayout !== "assets-expansion";
 }
@@ -237,10 +251,17 @@ async function getDeal(dealId: string) {
   return rows[0] ?? null;
 }
 
-export async function requireAccessibleCalculatorDeal(dealId: string, actor: Actor) {
+export async function requireAccessibleCalculatorDeal(
+  dealId: string,
+  actor: Actor,
+  mode: "read" | "write" = "write",
+) {
   const deal = await getDeal(dealId);
   if (!deal) return { ok: false, error: "Deal niet gevonden." } as const;
-  if (!canAccessDeal(actor, deal)) {
+  const hasAccess = mode === "read"
+    ? await canViewDealCustomerIntake(actor, deal)
+    : canAccessDeal(actor, deal);
+  if (!hasAccess) {
     return { ok: false, error: "Je hebt geen toegang tot deze deal." } as const;
   }
   if (!isCalculatorDeal(deal)) {
@@ -253,7 +274,7 @@ export async function requireAccessibleCalculatorDeal(dealId: string, actor: Act
 }
 
 export async function getCustomerIntakeForDeal(request: Request, dealId: string, actor: Actor) {
-  const access = await requireAccessibleCalculatorDeal(dealId, actor);
+  const access = await requireAccessibleCalculatorDeal(dealId, actor, "read");
   if (!access.ok) return access;
 
   const { rows } = await query<CustomerIntakeRow>(

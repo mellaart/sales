@@ -1736,7 +1736,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     assetOverview && assetOverview.total > 0 && assetOverview.createdCount === assetOverview.total,
   );
   const assetsPending = Boolean(assetOverview?.pendingCount);
-  const showCustomerIntake = isNewCustomerDeal && Boolean(acceptedAt);
+  const showCustomerIntake = Boolean(customerIntake) || (isNewCustomerDeal && Boolean(acceptedAt));
 
   if (loading) {
     return <div className="save-status">Deal wordt geladen...</div>;

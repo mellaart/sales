@@ -17,10 +17,14 @@ const PERMISSION_LABELS: Record<TabPermission, string> = {
   write: "Schrijven",
 };
 
+function getAdminTabLabel(tab: (typeof APP_TABS)[number]) {
+  return tab.key === "worldline" ? "Worldline" : tab.label;
+}
+
 function formatTabAccessDescription(tabPermissions: RoleTabAccessMap[UserRole]) {
   const selectedLabels = APP_TABS
     .filter((tab) => tabPermissions[tab.key] !== "none")
-    .map((tab) => `${tab.label} ${PERMISSION_LABELS[tabPermissions[tab.key]].toLowerCase()}`);
+    .map((tab) => `${getAdminTabLabel(tab)} ${PERMISSION_LABELS[tabPermissions[tab.key]].toLowerCase()}`);
 
   if (selectedLabels.length === 0) {
     return "Geen tabbladen geselecteerd.";
@@ -56,18 +60,19 @@ export function RoleTabAccessOverview({
             {APP_TABS.map((tab) => {
               const permission = access[role][tab.key];
               const isSaving = savingKey === `${role}:${tab.key}`;
+              const tabLabel = getAdminTabLabel(tab);
 
               return (
                 <label key={`${role}-${tab.key}`} className="role-access-control">
                   <span>
-                    {tab.label}
+                    {tabLabel}
                     {isSaving ? " opslaan..." : null}
                   </span>
                   <select
                     className="input role-access-select"
                     value={permission}
                     disabled={disabled}
-                    aria-label={`${role} ${tab.label} rechten`}
+                    aria-label={`${role} ${tabLabel} rechten`}
                     onChange={(event) => onChange(role, tab.key, event.target.value as TabPermission)}
                   >
                     {Object.entries(PERMISSION_LABELS).map(([value, label]) => (

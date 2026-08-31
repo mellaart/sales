@@ -6,6 +6,7 @@ export type AppTabKey =
   | "implementation"
   | "assets"
   | "worldline"
+  | "ccv"
   | "testen"
   | "prices"
   | "postcode"
@@ -38,8 +39,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   sales: "Sales",
   support: "Support",
   consultant: "Consultant",
-  worldline: "Support Worldline",
-  worldline_consultant: "Consultant Worldline",
+  worldline: "Support Pin",
+  worldline_consultant: "Consultant Pin",
   manager: "Manager",
   admin: "Admin",
 };
@@ -49,11 +50,12 @@ export const APP_TABS: AppTabConfig[] = [
   { key: "deals", label: "Deals", href: "/deals", pathPrefix: "/deals" },
   { key: "implementation", label: "Implementatie", href: "/implementatie", pathPrefix: "/implementatie" },
   { key: "assets", label: "Assets", href: "/assets", pathPrefix: "/assets" },
-  { key: "worldline", label: "Worldline", href: "/worldline", pathPrefix: "/worldline" },
+  { key: "worldline", label: "Pin", href: "/worldline", pathPrefix: "/worldline" },
+  { key: "ccv", label: "CCV", href: "/ccv", pathPrefix: "/ccv" },
   { key: "testen", label: "Testen", href: "/testen", pathPrefix: "/testen" },
   { key: "prices", label: "Prijzen", href: "/prijzen", pathPrefix: "/prijzen" },
   { key: "postcode", label: "Postcode", href: "/postcode", pathPrefix: "/postcode" },
-  { key: "worldlineMcc", label: "Worldline MCC", href: "/worldline-mcc", pathPrefix: "/worldline-mcc" },
+  { key: "worldlineMcc", label: "Pin MCC", href: "/worldline-mcc", pathPrefix: "/worldline-mcc" },
   { key: "workActivities", label: "Werkzaamheden", href: "/werkzaamheden", pathPrefix: "/werkzaamheden" },
   { key: "mailchimp", label: "Mailchimp", href: "/mailchimp", pathPrefix: "/mailchimp" },
   { key: "admin", label: "Admin", href: "/admin", pathPrefix: "/admin" },
@@ -63,8 +65,8 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   sales: buildRoleAccess(["calculator", "deals", "assets", "implementation"]),
   consultant: buildRoleAccess(["calculator", "deals", "assets", "implementation"], ["prices", "postcode"]),
   support: buildRoleAccess(["deals", "assets", "testen"]),
-  worldline: buildRoleAccess(["worldline"]),
-  worldline_consultant: buildRoleAccess(["worldline"]),
+  worldline: buildRoleAccess(["worldline", "ccv"]),
+  worldline_consultant: buildRoleAccess(["worldline", "ccv"]),
   manager: buildRoleAccess(["calculator", "deals", "assets", "testen"], ["implementation"]),
   admin: buildRoleAccess([
     "calculator",
@@ -72,6 +74,7 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
     "implementation",
     "assets",
     "worldline",
+    "ccv",
     "testen",
     "prices",
     "postcode",

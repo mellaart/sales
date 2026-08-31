@@ -18,6 +18,8 @@ const ADMIN_MENU_TAB_KEYS = ["postcode", "testen", "worldlineMcc", "workActiviti
 const ADMIN_MENU_TAB_KEY_SET = new Set<string>(ADMIN_MENU_TAB_KEYS);
 const SALES_MENU_TAB_KEYS = ["calculator", "deals", "assets", "implementation", "prices"] as const;
 const SALES_MENU_TAB_KEY_SET = new Set<string>(SALES_MENU_TAB_KEYS);
+const PIN_MENU_TAB_KEYS = ["worldline", "ccv"] as const;
+const PIN_MENU_TAB_KEY_SET = new Set<string>(PIN_MENU_TAB_KEYS);
 
 const APPEARANCE_PROFILES = [
   {
@@ -68,11 +70,13 @@ export function AppShellHeader() {
   const [roleTabAccessLoaded, setRoleTabAccessLoaded] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [salesMenuOpen, setSalesMenuOpen] = useState(false);
+  const [pinMenuOpen, setPinMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [appearanceMenuOpen, setAppearanceMenuOpen] = useState(false);
   const [appearanceProfile, setAppearanceProfile] = useState<AppearanceProfile>("standard");
   const salesMenuRef = useRef<HTMLDivElement | null>(null);
+  const pinMenuRef = useRef<HTMLDivElement | null>(null);
   const adminMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const appearanceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -138,22 +142,25 @@ export function AppShellHeader() {
 
   useEffect(() => {
     setSalesMenuOpen(false);
+    setPinMenuOpen(false);
     setAdminMenuOpen(false);
     setAccountMenuOpen(false);
     setAppearanceMenuOpen(false);
   }, [pathname, user?.id]);
 
   useEffect(() => {
-    if (!salesMenuOpen && !adminMenuOpen && !accountMenuOpen && !appearanceMenuOpen) return;
+    if (!salesMenuOpen && !pinMenuOpen && !adminMenuOpen && !accountMenuOpen && !appearanceMenuOpen) return;
 
     function handleDocumentClick(event: MouseEvent) {
       const target = event.target as Node;
       const clickedSalesMenu = Boolean(salesMenuRef.current?.contains(target));
+      const clickedPinMenu = Boolean(pinMenuRef.current?.contains(target));
       const clickedAdminMenu = Boolean(adminMenuRef.current?.contains(target));
       const clickedAccountMenu = Boolean(accountMenuRef.current?.contains(target));
       const clickedAppearanceMenu = Boolean(appearanceMenuRef.current?.contains(target));
 
       if (!clickedSalesMenu) setSalesMenuOpen(false);
+      if (!clickedPinMenu) setPinMenuOpen(false);
       if (!clickedAdminMenu) setAdminMenuOpen(false);
       if (!clickedAccountMenu) setAccountMenuOpen(false);
       if (!clickedAppearanceMenu) setAppearanceMenuOpen(false);
@@ -162,6 +169,7 @@ export function AppShellHeader() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setSalesMenuOpen(false);
+        setPinMenuOpen(false);
         setAdminMenuOpen(false);
         setAccountMenuOpen(false);
         setAppearanceMenuOpen(false);
@@ -175,12 +183,15 @@ export function AppShellHeader() {
       document.removeEventListener("mousedown", handleDocumentClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [salesMenuOpen, adminMenuOpen, accountMenuOpen, appearanceMenuOpen]);
+  }, [salesMenuOpen, pinMenuOpen, adminMenuOpen, accountMenuOpen, appearanceMenuOpen]);
 
   if (!user || isAuthPage || isPublicUtilityPage || isFocusedDealPage) return null;
 
   const accessibleTabs = roleTabAccessLoaded ? getAccessibleTabs(role ?? "sales", roleTabAccess) : [];
   const salesMenuTabs = SALES_MENU_TAB_KEYS
+    .map((tabKey) => accessibleTabs.find((tab) => tab.key === tabKey))
+    .filter((tab): tab is (typeof accessibleTabs)[number] => Boolean(tab));
+  const pinMenuTabs = PIN_MENU_TAB_KEYS
     .map((tabKey) => accessibleTabs.find((tab) => tab.key === tabKey))
     .filter((tab): tab is (typeof accessibleTabs)[number] => Boolean(tab));
   const adminTab = accessibleTabs.find((tab) => tab.key === "admin") ?? null;
@@ -191,12 +202,16 @@ export function AppShellHeader() {
     : [];
   const mainTabs = accessibleTabs.filter((tab) => {
     if (SALES_MENU_TAB_KEY_SET.has(tab.key)) return false;
+    if (PIN_MENU_TAB_KEY_SET.has(tab.key)) return false;
     if (tab.key === "admin") return false;
     if (adminTab && ADMIN_MENU_TAB_KEY_SET.has(tab.key)) return false;
     return true;
   });
   const adminMenuTabs = adminTab ? [adminTab, ...adminUtilityTabs] : [];
   const salesMenuActive = salesMenuTabs.some((tab) => pathname.startsWith(tab.pathPrefix));
+  const pinMenuActive = pinMenuTabs.some((tab) => (
+    tab.key === "worldline" ? pathname === "/worldline" : pathname.startsWith(tab.pathPrefix)
+  ));
   const adminMenuActive = adminMenuTabs.some((tab) => pathname.startsWith(tab.pathPrefix));
 
   const handleLogout = async () => {
@@ -243,6 +258,7 @@ export function AppShellHeader() {
                 className={`nav-button nav-menu-trigger ${salesMenuOpen || salesMenuActive ? "active" : ""}`}
                 onClick={() => {
                   setAdminMenuOpen(false);
+                  setPinMenuOpen(false);
                   setAccountMenuOpen(false);
                   setSalesMenuOpen((open) => !open);
                 }}
@@ -270,6 +286,41 @@ export function AppShellHeader() {
             </div>
           ) : null}
 
+          {pinMenuTabs.length > 0 ? (
+            <div className="nav-menu" ref={pinMenuRef}>
+              <button
+                type="button"
+                className={`nav-button nav-menu-trigger ${pinMenuOpen || pinMenuActive ? "active" : ""}`}
+                onClick={() => {
+                  setSalesMenuOpen(false);
+                  setAdminMenuOpen(false);
+                  setAccountMenuOpen(false);
+                  setPinMenuOpen((open) => !open);
+                }}
+                aria-haspopup="menu"
+                aria-expanded={pinMenuOpen}
+              >
+                Pin
+                <ChevronDown size={13} className="account-menu-chevron" />
+              </button>
+
+              {pinMenuOpen ? (
+                <div className="nav-menu-panel" role="menu">
+                  {pinMenuTabs.map((tab) => (
+                    <Link
+                      key={tab.key}
+                      href={tab.href}
+                      className={`nav-menu-item ${pathname.startsWith(tab.pathPrefix) ? "active" : ""}`}
+                      role="menuitem"
+                    >
+                      {tab.key === "worldline" ? "Worldline" : tab.label}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {mainTabs.map((tab) => (
             <Link
               key={tab.key}
@@ -287,6 +338,7 @@ export function AppShellHeader() {
                 className={`nav-button nav-menu-trigger ${adminMenuOpen || adminMenuActive ? "active" : ""}`}
                 onClick={() => {
                   setSalesMenuOpen(false);
+                  setPinMenuOpen(false);
                   setAccountMenuOpen(false);
                   setAdminMenuOpen((open) => !open);
                 }}
@@ -327,6 +379,7 @@ export function AppShellHeader() {
               className={`user-chip email-chip account-menu-trigger ${accountMenuOpen ? "active" : ""}`}
               onClick={() => {
                 setSalesMenuOpen(false);
+                setPinMenuOpen(false);
                 setAdminMenuOpen(false);
                 setAccountMenuOpen((open) => !open);
               }}
@@ -359,6 +412,7 @@ export function AppShellHeader() {
               className={`appearance-menu-trigger ${appearanceMenuOpen ? "active" : ""}`}
               onClick={() => {
                 setSalesMenuOpen(false);
+                setPinMenuOpen(false);
                 setAdminMenuOpen(false);
                 setAccountMenuOpen(false);
                 setAppearanceMenuOpen((open) => !open);

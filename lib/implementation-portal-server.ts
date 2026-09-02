@@ -511,7 +511,7 @@ function normalizeAppointmentInput(input: AppointmentInput, partial = false) {
     normalized.title = textValue(input.title, 180) || "Implementatieafspraak";
   }
   if (!partial || input.customerNote !== undefined) {
-    normalized.customerNote = textValue(input.customerNote, 1_000) || null;
+    normalized.customerNote = textValue(input.customerNote, 5_000) || null;
   }
   if (!partial || input.workItems !== undefined) {
     normalized.workItems = normalizeAppointmentWorkItems(input.workItems);

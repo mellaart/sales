@@ -2752,7 +2752,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 className="implementation-appointment-note-field"
                 label="Toelichting klant"
                 value={appointmentDraft.customerNote}
-                maxLength={1000}
+                maxLength={5000}
                 multiline
                 placeholder="Bijv. ontvangst om 09:00 uur"
                 onChange={(value) => setAppointmentDraft({
@@ -2883,7 +2883,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     className="implementation-appointment-row-note"
                     label="Toelichting klant"
                     value={appointment.customerNote}
-                    maxLength={1000}
+                    maxLength={5000}
                     multiline
                     disabled={!canEdit}
                     onChange={(value) => updateAppointmentLocal(appointment.id, {

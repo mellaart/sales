@@ -486,7 +486,7 @@ export async function POST(request: Request) {
         const title = jsonText(payload, "title", 180) || "Implementatieafspraak Smart Trade";
         const location = jsonText(payload, "location", 500)
           || (appointmentType === "remote" ? "Online / op afstand" : "Op locatie");
-        const customerNote = jsonText(payload, "customerNote", 1_000);
+        const customerNote = jsonText(payload, "customerNote", 5_000);
         const workItems = jsonAppointmentWorkItems(payload);
 
         if (!validHttpUrl(publicUrl)) {

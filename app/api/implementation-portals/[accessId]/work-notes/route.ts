@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { savePublicImplementationWorkItemNote } from "@/lib/implementation-portal-server";
+import {
+  getImplementationPortalDeviceTokenFromRequest,
+  savePublicImplementationWorkItemNote,
+} from "@/lib/implementation-portal-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,6 +34,7 @@ export async function POST(
       accessId,
       tokenVersion,
       token,
+      getImplementationPortalDeviceTokenFromRequest(request, accessId),
       typeof body.workItemKey === "string" ? body.workItemKey : "",
       typeof body.text === "string" ? body.text : "",
     );

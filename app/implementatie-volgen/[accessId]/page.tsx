@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Image from "next/image";
 import {
   AlertTriangle,
@@ -17,13 +18,18 @@ import {
 } from "lucide-react";
 import PublicDnsRefreshButton from "@/components/public-dns-refresh-button";
 import ImplementationFileDelivery from "./implementation-file-delivery";
+import SmsVerification from "./sms-verification";
 import WorkApprovalControl from "./work-approval-control";
 import WorkNoteControl from "./work-note-control";
 import {
   IMPLEMENTATION_DNS_RECORDS,
   type DnsCheckItem,
 } from "@/lib/implementation-dns";
-import { getPublicImplementationPortal } from "@/lib/implementation-portal-server";
+import {
+  getImplementationPortalDeviceCookieName,
+  getImplementationPortalSmsVerificationStatus,
+  getPublicImplementationPortal,
+} from "@/lib/implementation-portal-server";
 import { IMPLEMENTATION_TASK_OWNER_LABELS } from "@/lib/price-config";
 import styles from "./implementation-progress.module.css";
 
@@ -112,6 +118,39 @@ export default async function ImplementationProgressPage({
   const query = await searchParams;
   const tokenVersion = Number(query.v ?? 0);
   const token = query.token ?? "";
+  const cookieStore = await cookies();
+  const deviceToken = cookieStore.get(getImplementationPortalDeviceCookieName(accessId))?.value ?? "";
+  const smsVerification = await getImplementationPortalSmsVerificationStatus(
+    accessId,
+    tokenVersion,
+    token,
+    deviceToken,
+  );
+
+  if (!smsVerification.ok) {
+    return (
+      <main className={styles.page}>
+        <section className={styles.unavailable}>
+          <Image src="/smart-trade-logo.png" alt="Smart Trade" width={244} height={170} priority />
+          <LockKeyhole size={34} aria-hidden="true" />
+          <h1>Klantpagina niet beschikbaar</h1>
+          <p>{smsVerification.error}</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!smsVerification.verified) {
+    return (
+      <SmsVerification
+        accessId={accessId}
+        token={token}
+        tokenVersion={tokenVersion}
+        mobilePhone={smsVerification.mobilePhone}
+      />
+    );
+  }
+
   const result = await getPublicImplementationPortal(
     accessId,
     tokenVersion,

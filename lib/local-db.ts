@@ -361,6 +361,9 @@ export async function ensureLocalSchema() {
           implementation_id uuid not null unique references public.implementations(id) on delete cascade,
           created_by uuid references public.profiles(id) on delete set null,
           token_version integer not null default 1,
+          mobile_phone text,
+          sms_verify_id text,
+          sms_verify_sent_at timestamptz,
           expires_at timestamptz not null default (now() + interval '365 days'),
           revoked_at timestamptz,
           last_viewed_at timestamptz,
@@ -370,6 +373,21 @@ export async function ensureLocalSchema() {
 
         create index if not exists implementation_customer_access_status_idx
           on public.implementation_customer_access(implementation_id, expires_at, revoked_at);
+
+        alter table public.implementation_customer_access add column if not exists mobile_phone text;
+        alter table public.implementation_customer_access add column if not exists sms_verify_id text;
+        alter table public.implementation_customer_access add column if not exists sms_verify_sent_at timestamptz;
+
+        create table if not exists public.implementation_portal_trusted_devices (
+          token_hash text primary key,
+          access_id uuid not null references public.implementation_customer_access(id) on delete cascade,
+          expires_at timestamptz not null,
+          created_at timestamptz not null default now(),
+          last_used_at timestamptz not null default now()
+        );
+
+        create index if not exists implementation_portal_trusted_devices_access_idx
+          on public.implementation_portal_trusted_devices(access_id, expires_at);
 
         create table if not exists public.implementation_appointments (
           id uuid primary key default gen_random_uuid(),

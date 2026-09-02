@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { approvePublicImplementationWorkItem } from "@/lib/implementation-portal-server";
+import {
+  approvePublicImplementationWorkItem,
+  getImplementationPortalDeviceTokenFromRequest,
+} from "@/lib/implementation-portal-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,6 +32,7 @@ export async function POST(
       accessId,
       tokenVersion,
       token,
+      getImplementationPortalDeviceTokenFromRequest(request, accessId),
       workItemKey,
     );
     if (!result.ok) return jsonResponse({ error: result.error }, result.status);

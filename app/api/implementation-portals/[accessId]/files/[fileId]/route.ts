@@ -4,7 +4,10 @@ import {
   deleteImplementationCustomerFile,
   readImplementationCustomerFile,
 } from "@/lib/implementation-files-server";
-import { getVerifiedImplementationPortalAccess } from "@/lib/implementation-portal-server";
+import {
+  getImplementationPortalDeviceTokenFromRequest,
+  getVerifiedImplementationPortalAccess,
+} from "@/lib/implementation-portal-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,7 +30,12 @@ async function verifiedRequest(
   const searchParams = new URL(request.url).searchParams;
   const token = searchParams.get("token")?.trim() ?? "";
   const tokenVersion = Number(searchParams.get("v") ?? 0);
-  const access = await getVerifiedImplementationPortalAccess(accessId, tokenVersion, token);
+  const access = await getVerifiedImplementationPortalAccess(
+    accessId,
+    tokenVersion,
+    token,
+    getImplementationPortalDeviceTokenFromRequest(request, accessId),
+  );
   return { access, fileId };
 }
 

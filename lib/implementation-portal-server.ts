@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   requireImplementationAccess,
   type ImplementationActor,
@@ -34,6 +34,13 @@ import {
   type ImplementationWorkItemNotes,
 } from "@/lib/implementations";
 import { createId, query } from "@/lib/local-db";
+import {
+  isMessageBirdVerifyConfigured,
+  maskMessageBirdMobileNumber,
+  normalizeMessageBirdMobileNumber,
+  startMessageBirdSmsVerification,
+  verifyMessageBirdSmsCode,
+} from "@/lib/messagebird-verify";
 import { getServiceClient } from "@/lib/admin-api";
 import type { EditablePricingConfig } from "@/lib/price-config";
 import { readStoredPricingConfig } from "@/lib/price-settings-storage";
@@ -47,16 +54,24 @@ import {
 } from "@/lib/work-activities";
 
 const IMPLEMENTATION_PORTAL_TTL_DAYS = 365;
+const IMPLEMENTATION_PORTAL_SMS_RESEND_SECONDS = 60;
 
 type PortalAccessRow = {
   id: string;
   implementation_id: string;
   token_version: number;
+  mobile_phone: string | null;
+  sms_verify_id: string | null;
+  sms_verify_sent_at: string | null;
   expires_at: string;
   revoked_at: string | null;
   last_viewed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type TrustedDeviceRow = {
+  token_hash: string;
 };
 
 type AppointmentRow = {
@@ -170,10 +185,50 @@ function accessIsActive(row: PortalAccessRow) {
   return !row.revoked_at && new Date(row.expires_at).getTime() > Date.now();
 }
 
+export function getImplementationPortalDeviceCookieName(accessId: string) {
+  return `smart_trade_portal_${accessId.replace(/[^a-z0-9]/gi, "").slice(0, 48)}`;
+}
+
+export function getImplementationPortalDeviceTokenFromRequest(request: Request, accessId: string) {
+  const cookieName = getImplementationPortalDeviceCookieName(accessId);
+  const cookieHeader = request.headers.get("cookie") || "";
+  const cookie = cookieHeader.split(";").map((part) => part.trim())
+    .find((part) => part.startsWith(`${cookieName}=`));
+  if (!cookie) return "";
+
+  try {
+    return decodeURIComponent(cookie.slice(cookieName.length + 1));
+  } catch {
+    return "";
+  }
+}
+
+function trustedDeviceHash(accessId: string, deviceToken: string) {
+  return createHmac("sha256", signingKey())
+    .update(`smart-trade-implementation-device:${accessId}:${deviceToken}`)
+    .digest("base64url");
+}
+
+async function trustedPortalDevice(accessId: string, deviceToken: string) {
+  if (!deviceToken || deviceToken.length < 24) return false;
+  const tokenHash = trustedDeviceHash(accessId, deviceToken);
+  const { rows } = await query<TrustedDeviceRow>(
+    `update public.implementation_portal_trusted_devices
+     set last_used_at = now()
+     where token_hash = $1
+       and access_id = $2
+       and expires_at > now()
+     returning token_hash`,
+    [tokenHash, accessId],
+  );
+  return Boolean(rows[0]);
+}
+
 async function verifiedPortalAccess(
   accessId: string,
   tokenVersion: number,
   token: string,
+  deviceToken?: string,
 ) {
   const { rows } = await query<PortalAccessRow>(
     `select *
@@ -190,6 +245,9 @@ async function verifiedPortalAccess(
   ) {
     return null;
   }
+  if (deviceToken !== undefined && !await trustedPortalDevice(access.id, deviceToken)) {
+    return null;
+  }
   return access;
 }
 
@@ -197,13 +255,165 @@ export async function getVerifiedImplementationPortalAccess(
   accessId: string,
   tokenVersion: number,
   token: string,
+  deviceToken: string,
 ) {
-  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token, deviceToken);
   if (!access) return null;
   return {
     id: access.id,
     implementationId: access.implementation_id,
   };
+}
+
+export async function getImplementationPortalSmsVerificationStatus(
+  accessId: string,
+  tokenVersion: number,
+  token: string,
+  deviceToken: string,
+) {
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  if (!access) {
+    return {
+      ok: false as const,
+      error: "Deze klantlink is ongeldig, verlopen of ingetrokken.",
+    };
+  }
+
+  if (!access.mobile_phone?.trim()) {
+    return {
+      ok: false as const,
+      error: "Deze klantpagina is nog niet beschikbaar. Neem contact op met uw consultant.",
+    };
+  }
+
+  const mobileNumber = normalizeMessageBirdMobileNumber(access.mobile_phone);
+  if (!mobileNumber) {
+    return {
+      ok: false as const,
+      error: "Deze klantpagina is nog niet goed ingesteld voor sms-verificatie.",
+    };
+  }
+  if (!isMessageBirdVerifyConfigured()) {
+    return {
+      ok: false as const,
+      error: "Deze klantpagina is tijdelijk niet beschikbaar. Neem contact op met uw consultant.",
+    };
+  }
+
+  return {
+    ok: true as const,
+    verified: await trustedPortalDevice(access.id, deviceToken),
+    mobilePhone: maskMessageBirdMobileNumber(mobileNumber),
+  };
+}
+
+export async function startImplementationPortalSmsVerification(
+  accessId: string,
+  tokenVersion: number,
+  token: string,
+) {
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  if (!access) {
+    return {
+      ok: false as const,
+      status: 404,
+      error: "Deze klantlink is ongeldig, verlopen of ingetrokken.",
+    };
+  }
+
+  const mobileNumber = normalizeMessageBirdMobileNumber(access.mobile_phone ?? "");
+  if (!mobileNumber) {
+    return {
+      ok: false as const,
+      status: 409,
+      error: "Er is nog geen geldig mobiel nummer ingesteld voor deze klantpagina.",
+    };
+  }
+  if (!isMessageBirdVerifyConfigured()) {
+    return {
+      ok: false as const,
+      status: 503,
+      error: "SMS-verificatie is nog niet ingesteld.",
+    };
+  }
+
+  const lastSentAt = access.sms_verify_sent_at ? new Date(access.sms_verify_sent_at).getTime() : 0;
+  const secondsSinceLastMessage = lastSentAt ? (Date.now() - lastSentAt) / 1_000 : Number.POSITIVE_INFINITY;
+  if (secondsSinceLastMessage < IMPLEMENTATION_PORTAL_SMS_RESEND_SECONDS) {
+    const retryIn = Math.ceil(IMPLEMENTATION_PORTAL_SMS_RESEND_SECONDS - secondsSinceLastMessage);
+    return {
+      ok: false as const,
+      status: 429,
+      error: `Wacht nog ${retryIn} seconden voordat je een nieuwe code aanvraagt.`,
+    };
+  }
+
+  try {
+    const verification = await startMessageBirdSmsVerification({
+      recipient: mobileNumber,
+      reference: `impl${access.id.replace(/[^a-z0-9]/gi, "").slice(0, 42)}`,
+    });
+    await query(
+      `update public.implementation_customer_access
+       set sms_verify_id = $2, sms_verify_sent_at = now(), updated_at = now()
+       where id = $1`,
+      [access.id, verification.id],
+    );
+    return { ok: true as const, mobilePhone: maskMessageBirdMobileNumber(mobileNumber) };
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 502,
+      error: error instanceof Error ? error.message : "SMS-code versturen mislukt.",
+    };
+  }
+}
+
+export async function verifyImplementationPortalSmsCode(
+  accessId: string,
+  tokenVersion: number,
+  token: string,
+  requestedCode: string,
+) {
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  if (!access) {
+    return {
+      ok: false as const,
+      status: 404,
+      error: "Deze klantlink is ongeldig, verlopen of ingetrokken.",
+    };
+  }
+
+  const code = requestedCode.replace(/\s/g, "");
+  if (!/^\d{6}$/.test(code)) {
+    return { ok: false as const, status: 400, error: "Vul de zescijferige sms-code in." };
+  }
+  if (!access.sms_verify_id) {
+    return { ok: false as const, status: 409, error: "Vraag eerst een sms-code aan." };
+  }
+  if (!isMessageBirdVerifyConfigured()) {
+    return { ok: false as const, status: 503, error: "SMS-verificatie is nog niet ingesteld." };
+  }
+
+  try {
+    await verifyMessageBirdSmsCode(access.sms_verify_id, code);
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: error instanceof Error ? error.message : "De code is onjuist of verlopen.",
+    };
+  }
+
+  const deviceToken = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(access.expires_at);
+  await query(
+    `insert into public.implementation_portal_trusted_devices
+       (token_hash, access_id, expires_at)
+     values ($1, $2, $3)`,
+    [trustedDeviceHash(access.id, deviceToken), access.id, expiresAt.toISOString()],
+  );
+  return { ok: true as const, deviceToken, expiresAt: access.expires_at };
 }
 
 function publicImplementationItem(
@@ -413,6 +623,7 @@ function toAccess(request: Request, row: PortalAccessRow): ImplementationPortalA
     id: row.id,
     implementationId: row.implementation_id,
     publicUrl: publicUrl(request, row),
+    mobilePhone: row.mobile_phone ?? "",
     active: accessIsActive(row),
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,
@@ -549,6 +760,42 @@ export async function getImplementationPortalAccess(
   return { ok: true as const, portalAccess: rows[0] ? toAccess(request, rows[0]) : null };
 }
 
+export async function updateImplementationPortalMobilePhone(
+  request: Request,
+  implementationId: string,
+  actor: ImplementationActor,
+  requestedMobilePhone: unknown,
+) {
+  const access = await requireImplementationAccess(implementationId, actor, "write");
+  if (!access.ok) return access;
+
+  const mobilePhone = typeof requestedMobilePhone === "string"
+    ? requestedMobilePhone.trim().slice(0, 40)
+    : "";
+  const { rows } = await query<PortalAccessRow>(
+    `insert into public.implementation_customer_access
+       (id, implementation_id, created_by, token_version, expires_at, mobile_phone)
+     values ($1, $2, $3, 1, now(), $4)
+     on conflict (implementation_id) do update
+       set mobile_phone = excluded.mobile_phone,
+           sms_verify_id = null,
+           sms_verify_sent_at = null,
+           updated_at = now()
+     returning *`,
+    [createId(), implementationId, actor.user.id, mobilePhone || null],
+  );
+  const portalAccess = rows[0];
+  if (!portalAccess) {
+    return { ok: false as const, status: 500, error: "Mobiel nummer opslaan mislukt." };
+  }
+
+  await query(
+    "delete from public.implementation_portal_trusted_devices where access_id = $1",
+    [portalAccess.id],
+  );
+  return { ok: true as const, portalAccess: toAccess(request, portalAccess) };
+}
+
 export async function createOrRefreshImplementationPortal(
   request: Request,
   implementationId: string,
@@ -557,6 +804,21 @@ export async function createOrRefreshImplementationPortal(
 ) {
   const access = await requireImplementationAccess(implementationId, actor, "write");
   if (!access.ok) return access;
+
+  const { rows: existingRows } = await query<Pick<PortalAccessRow, "mobile_phone">>(
+    `select mobile_phone
+     from public.implementation_customer_access
+     where implementation_id = $1
+     limit 1`,
+    [implementationId],
+  );
+  if (!normalizeMessageBirdMobileNumber(existingRows[0]?.mobile_phone ?? "")) {
+    return {
+      ok: false as const,
+      status: 409,
+      error: "Vul eerst een geldig mobiel nummer in voor sms-verificatie.",
+    };
+  }
 
   const { rows } = await query<PortalAccessRow>(
     `insert into public.implementation_customer_access
@@ -576,6 +838,12 @@ export async function createOrRefreshImplementationPortal(
      returning *`,
     [createId(), implementationId, actor.user.id, IMPLEMENTATION_PORTAL_TTL_DAYS, regenerate],
   );
+  if (regenerate && rows[0]) {
+    await query(
+      "delete from public.implementation_portal_trusted_devices where access_id = $1",
+      [rows[0].id],
+    );
+  }
   return { ok: true as const, portalAccess: toAccess(request, rows[0]) };
 }
 
@@ -594,6 +862,12 @@ export async function revokeImplementationPortal(
      returning *`,
     [implementationId],
   );
+  if (rows[0]) {
+    await query(
+      "delete from public.implementation_portal_trusted_devices where access_id = $1",
+      [rows[0].id],
+    );
+  }
   return {
     ok: true as const,
     portalAccess: rows[0] ? toAccess(request, rows[0]) : null,
@@ -833,6 +1107,7 @@ export async function approvePublicImplementationWorkItem(
   accessId: string,
   tokenVersion: number,
   token: string,
+  deviceToken: string,
   requestedWorkItemKey: string,
 ) {
   const workItemKey = requestedWorkItemKey.trim().slice(0, 240);
@@ -840,7 +1115,7 @@ export async function approvePublicImplementationWorkItem(
     return { ok: false as const, status: 400, error: "Kies een geldige werkzaamheid." };
   }
 
-  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token, deviceToken);
   if (!access) {
     return {
       ok: false as const,
@@ -952,6 +1227,7 @@ export async function savePublicImplementationWorkItemNote(
   accessId: string,
   tokenVersion: number,
   token: string,
+  deviceToken: string,
   requestedWorkItemKey: string,
   requestedText: string,
 ) {
@@ -966,7 +1242,7 @@ export async function savePublicImplementationWorkItemNote(
     };
   }
 
-  const access = await verifiedPortalAccess(accessId, tokenVersion, token);
+  const access = await verifiedPortalAccess(accessId, tokenVersion, token, deviceToken);
   if (!access) {
     return {
       ok: false as const,

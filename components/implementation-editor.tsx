@@ -762,6 +762,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [portalLoaded, setPortalLoaded] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalError, setPortalError] = useState("");
+  const [portalMobilePhone, setPortalMobilePhone] = useState("");
+  const [portalMobilePhoneState, setPortalMobilePhoneState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [portalMobilePhoneMessage, setPortalMobilePhoneMessage] = useState("");
   const [appointments, setAppointments] = useState<ImplementationAppointment[]>([]);
   const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
   const [appointmentsBusy, setAppointmentsBusy] = useState(false);
@@ -790,12 +793,21 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const pendingDetailSavesRef = useRef(0);
   const appointmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingAppointmentSavesRef = useRef(0);
+  const portalMobilePhoneSaveTimerRef = useRef<number | null>(null);
+  const portalMobilePhoneSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const portalMobilePhoneRef = useRef("");
   const [message, setMessage] = useState("");
 
   const canManageImplementation = isProtectedAdminEmail(user?.email);
   const canAssign = canManageImplementation;
   const canView = canManageImplementation || canAccessTab(role, "implementation", roleTabAccess);
   const canEdit = canManageImplementation || canWriteTab(role, "implementation", roleTabAccess);
+
+  useEffect(() => () => {
+    if (portalMobilePhoneSaveTimerRef.current !== null) {
+      window.clearTimeout(portalMobilePhoneSaveTimerRef.current);
+    }
+  }, []);
   const dealPriceSummary = useMemo(
     () => linkedDeal ? getDealPriceSummary(linkedDeal, pricingConfig) : null,
     [linkedDeal, pricingConfig],
@@ -940,6 +952,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
     setImplementationItemsError("");
     setPortalLoaded(false);
     setPortalError("");
+    setPortalMobilePhone("");
+    portalMobilePhoneRef.current = "";
+    setPortalMobilePhoneState("idle");
+    setPortalMobilePhoneMessage("");
     setAppointmentsLoaded(false);
     setAppointmentsError("");
     setAppointmentsWarning("");
@@ -1036,6 +1052,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
         };
         if (!portalResponse.ok) throw new Error(portalJson.error || "Klanttoegang laden mislukt.");
         setPortalAccess(portalJson.portalAccess ?? null);
+        setPortalMobilePhone(portalJson.portalAccess?.mobilePhone ?? "");
+        portalMobilePhoneRef.current = portalJson.portalAccess?.mobilePhone ?? "";
       } else {
         setPortalAccess(null);
       }
@@ -1548,6 +1566,62 @@ export default function ImplementationEditor({ implementationId }: { implementat
     if (domain) void loadDnsCheck(domain);
   }
 
+  function queuePortalMobilePhoneSave(value: string) {
+    portalMobilePhoneSaveQueueRef.current = portalMobilePhoneSaveQueueRef.current.then(async () => {
+      if (!implementation || !canEdit) return;
+
+      try {
+        const response = await fetch(
+          `/api/implementations/${encodeURIComponent(implementation.id)}/portal`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mobilePhone: value }),
+          },
+        );
+        const json = await response.json().catch(() => ({})) as {
+          portalAccess?: ImplementationPortalAccess;
+          error?: string;
+        };
+        if (!response.ok || !json.portalAccess) {
+          throw new Error(json.error || "Mobiel nummer opslaan mislukt.");
+        }
+        setPortalAccess(json.portalAccess);
+        if (portalMobilePhoneRef.current === value) {
+          setPortalMobilePhoneState("saved");
+          setPortalMobilePhoneMessage("Mobiel nummer opgeslagen");
+        }
+      } catch (error) {
+        if (portalMobilePhoneRef.current === value) {
+          setPortalMobilePhoneState("error");
+          setPortalMobilePhoneMessage(
+            error instanceof Error ? error.message : "Mobiel nummer opslaan mislukt.",
+          );
+        }
+      }
+    });
+  }
+
+  function updatePortalMobilePhone(value: string, saveImmediately = false) {
+    setPortalMobilePhone(value);
+    portalMobilePhoneRef.current = value;
+    setPortalMobilePhoneState("saving");
+    setPortalMobilePhoneMessage("Mobiel nummer wordt opgeslagen...");
+
+    if (portalMobilePhoneSaveTimerRef.current !== null) {
+      window.clearTimeout(portalMobilePhoneSaveTimerRef.current);
+      portalMobilePhoneSaveTimerRef.current = null;
+    }
+    if (saveImmediately) {
+      queuePortalMobilePhoneSave(value);
+      return;
+    }
+    portalMobilePhoneSaveTimerRef.current = window.setTimeout(() => {
+      portalMobilePhoneSaveTimerRef.current = null;
+      queuePortalMobilePhoneSave(value);
+    }, 450);
+  }
+
   async function createOrRefreshPortal(regenerate: boolean) {
     if (!implementation || !canEdit || portalBusy) return;
 
@@ -1570,6 +1644,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
         throw new Error(json.error || "Klantlink maken mislukt.");
       }
       setPortalAccess(json.portalAccess);
+      setPortalMobilePhone(json.portalAccess.mobilePhone);
+      portalMobilePhoneRef.current = json.portalAccess.mobilePhone;
       setMessage(regenerate ? "Nieuwe klantlink gemaakt." : "Klantpagina geactiveerd.");
     } catch (error) {
       setPortalError(error instanceof Error ? error.message : "Klantlink maken mislukt.");
@@ -1595,6 +1671,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
       };
       if (!response.ok) throw new Error(json.error || "Klantlink intrekken mislukt.");
       setPortalAccess(json.portalAccess ?? null);
+      setPortalMobilePhone(json.portalAccess?.mobilePhone ?? portalMobilePhoneRef.current);
+      portalMobilePhoneRef.current = json.portalAccess?.mobilePhone ?? portalMobilePhoneRef.current;
       setMessage("Klantlink is ingetrokken.");
     } catch (error) {
       setPortalError(error instanceof Error ? error.message : "Klantlink intrekken mislukt.");
@@ -2564,6 +2642,26 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 </button>
               ) : <Link2 size={28} aria-hidden="true" />}
             </div>
+          </div>
+
+          <div className="implementation-portal-sms-setting">
+            <label className="input-wrap">
+              <span className="input-label">Mobiel nummer voor sms-verificatie</span>
+              <input
+                className="input"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                disabled={!canEdit || !portalLoaded}
+                value={portalMobilePhone}
+                placeholder="Bijv. 06 12345678"
+                onChange={(event) => updatePortalMobilePhone(event.target.value)}
+                onBlur={(event) => updatePortalMobilePhone(event.currentTarget.value, true)}
+              />
+            </label>
+            <span className={`implementation-portal-sms-save-state ${portalMobilePhoneState}`} aria-live="polite">
+              {portalMobilePhoneMessage || ""}
+            </span>
           </div>
 
           {!portalLoaded ? (

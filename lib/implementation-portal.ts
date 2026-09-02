@@ -34,6 +34,7 @@ export type ImplementationPortalAccess = {
   id: string;
   implementationId: string;
   publicUrl: string;
+  mobilePhone: string;
   active: boolean;
   expiresAt: string;
   revokedAt: string | null;

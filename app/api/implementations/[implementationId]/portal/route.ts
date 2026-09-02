@@ -4,6 +4,7 @@ import {
   createOrRefreshImplementationPortal,
   getImplementationPortalAccess,
   revokeImplementationPortal,
+  updateImplementationPortalMobilePhone,
 } from "@/lib/implementation-portal-server";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,30 @@ export async function POST(
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Klantlink maken mislukt.",
+    }, 500);
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ implementationId: string }> },
+) {
+  try {
+    const verified = await actor(request);
+    if (!verified.ok) return jsonResponse({ error: verified.message }, 401);
+    const { implementationId } = await context.params;
+    const body = await request.json().catch(() => ({})) as { mobilePhone?: unknown };
+    const result = await updateImplementationPortalMobilePhone(
+      request,
+      implementationId,
+      verified,
+      body.mobilePhone,
+    );
+    if (!result.ok) return jsonResponse({ error: result.error }, result.status);
+    return jsonResponse({ portalAccess: result.portalAccess });
+  } catch (error) {
+    return jsonResponse({
+      error: error instanceof Error ? error.message : "Mobiel nummer opslaan mislukt.",
     }, 500);
   }
 }

@@ -1290,6 +1290,145 @@
   line-height: 1.5;
 }
 
+.smsVerification {
+  display: grid;
+  width: min(100% - 32px, 500px);
+  min-height: 100vh;
+  align-content: center;
+  justify-items: center;
+  gap: 18px;
+  margin: 0 auto;
+  padding: 44px 0;
+  text-align: center;
+}
+
+.smsVerification > img {
+  width: 190px;
+  height: auto;
+  margin-bottom: 6px;
+}
+
+.smsVerificationIcon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid #a9c8eb;
+  border-radius: 8px;
+  background: #eaf4ff;
+  color: #1f67b8;
+}
+
+.smsVerificationCopy {
+  display: grid;
+  gap: 8px;
+}
+
+.smsVerificationCopy > span,
+.smsVerificationForm label > span {
+  color: #58718d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.smsVerificationCopy h1,
+.smsVerificationCopy p {
+  margin: 0;
+}
+
+.smsVerificationCopy h1 {
+  color: #13233a;
+  font-size: 32px;
+}
+
+.smsVerificationCopy p {
+  color: #60738c;
+  line-height: 1.5;
+}
+
+.smsVerificationSend,
+.smsVerificationForm button {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 17px;
+  border: 1px solid #1769bd;
+  border-radius: 8px;
+  background: #1769bd;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.smsVerificationSend:hover:not(:disabled),
+.smsVerificationForm button:hover:not(:disabled) {
+  background: #0d5baa;
+}
+
+.smsVerificationSend:disabled,
+.smsVerificationForm button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.smsVerificationForm {
+  display: grid;
+  width: min(100%, 320px);
+  gap: 12px;
+}
+
+.smsVerificationForm label {
+  display: grid;
+  gap: 7px;
+  text-align: left;
+}
+
+.smsVerificationForm input {
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid #a9bed5;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #13233a;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.smsVerificationForm input:focus {
+  outline: 3px solid rgba(47, 122, 215, 0.2);
+  border-color: #2f7ad7;
+}
+
+.smsVerificationForm .smsVerificationResend {
+  min-height: 40px;
+  border-color: transparent;
+  background: transparent;
+  color: #286eaf;
+  font-size: 13px;
+}
+
+.smsVerificationForm .smsVerificationResend:hover:not(:disabled) {
+  background: #eaf4ff;
+}
+
+.smsVerificationError {
+  margin: 0;
+  color: #b3363f;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.smsVerificationSpinner {
+  animation: file-spinner 800ms linear infinite;
+}
+
 @media (max-width: 1050px) {
   .hero .content {
     grid-template-columns: 1fr;

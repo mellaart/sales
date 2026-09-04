@@ -401,7 +401,7 @@ export async function ensureLocalSchema() {
           customer_note text,
           work_items jsonb not null default '[]'::jsonb,
           status text not null default 'planned'
-            check (status in ('planned', 'completed')),
+            check (status in ('planned', 'sent', 'completed')),
           created_by uuid references public.profiles(id) on delete set null,
           outlook_event_id text,
           outlook_user_id uuid references public.profiles(id) on delete set null,
@@ -414,6 +414,11 @@ export async function ensureLocalSchema() {
         alter table public.implementation_appointments add column if not exists outlook_event_id text;
         alter table public.implementation_appointments add column if not exists outlook_user_id uuid references public.profiles(id) on delete set null;
         alter table public.implementation_appointments add column if not exists outlook_sync_error text;
+        alter table public.implementation_appointments
+          drop constraint if exists implementation_appointments_status_check;
+        alter table public.implementation_appointments
+          add constraint implementation_appointments_status_check
+          check (status in ('planned', 'sent', 'completed'));
 
         create index if not exists implementation_appointments_implementation_date_idx
           on public.implementation_appointments(implementation_id, appointment_date, start_time);

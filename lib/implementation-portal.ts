@@ -6,7 +6,7 @@ import type { ImplementationWorkItemNoteSet } from "@/lib/implementations";
 export const IMPLEMENTATION_APPOINTMENT_TYPES = ["on_site", "remote"] as const;
 export type ImplementationAppointmentType = typeof IMPLEMENTATION_APPOINTMENT_TYPES[number];
 
-export const IMPLEMENTATION_APPOINTMENT_STATUSES = ["planned", "completed"] as const;
+export const IMPLEMENTATION_APPOINTMENT_STATUSES = ["planned", "sent", "completed"] as const;
 export type ImplementationAppointmentStatus = typeof IMPLEMENTATION_APPOINTMENT_STATUSES[number];
 
 export type ImplementationAppointmentWorkItem = {

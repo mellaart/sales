@@ -607,6 +607,11 @@
   color: #147448;
 }
 
+.appointmentStatus.sent {
+  background: #fff3d6;
+  color: #9a5a00;
+}
+
 .emptyAppointments,
 .unavailable {
   display: flex;

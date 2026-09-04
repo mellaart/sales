@@ -216,6 +216,40 @@ create table if not exists public.implementation_portal_trusted_devices (
 create index if not exists implementation_portal_trusted_devices_access_idx
   on public.implementation_portal_trusted_devices(access_id, expires_at);
 
+create table if not exists public.implementation_appointments (
+  id uuid primary key default gen_random_uuid(),
+  implementation_id uuid not null references public.implementations(id) on delete cascade,
+  appointment_date date not null,
+  start_time time,
+  end_time time,
+  appointment_type text not null default 'on_site'
+    check (appointment_type in ('on_site', 'remote')),
+  title text not null default 'Implementatieafspraak',
+  customer_note text,
+  work_items jsonb not null default '[]'::jsonb,
+  status text not null default 'planned'
+    check (status in ('planned', 'sent', 'completed')),
+  created_by uuid references public.profiles(id) on delete set null,
+  outlook_event_id text,
+  outlook_user_id uuid references public.profiles(id) on delete set null,
+  outlook_sync_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.implementation_appointments add column if not exists work_items jsonb not null default '[]'::jsonb;
+alter table public.implementation_appointments add column if not exists outlook_event_id text;
+alter table public.implementation_appointments add column if not exists outlook_user_id uuid references public.profiles(id) on delete set null;
+alter table public.implementation_appointments add column if not exists outlook_sync_error text;
+alter table public.implementation_appointments
+  drop constraint if exists implementation_appointments_status_check;
+alter table public.implementation_appointments
+  add constraint implementation_appointments_status_check
+  check (status in ('planned', 'sent', 'completed'));
+
+create index if not exists implementation_appointments_implementation_date_idx
+  on public.implementation_appointments(implementation_id, appointment_date, start_time);
+
 create table if not exists public.worldline_projects (
   id uuid primary key default gen_random_uuid(),
   relation_id text not null,

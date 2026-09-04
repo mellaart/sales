@@ -281,8 +281,18 @@ export default async function ImplementationProgressPage({
                       </div>
                     ) : null}
                   </div>
-                  <span className={`${styles.appointmentStatus} ${appointment.status === "completed" ? styles.completed : ""}`}>
-                    {appointment.status === "completed" ? "Afgerond" : "Gepland"}
+                  <span className={`${styles.appointmentStatus} ${
+                    appointment.status === "completed"
+                      ? styles.completed
+                      : appointment.status === "sent"
+                        ? styles.sent
+                        : ""
+                  }`}>
+                    {appointment.status === "completed"
+                      ? "Afgerond"
+                      : appointment.status === "sent"
+                        ? "Verstuurd"
+                        : "Gepland"}
                   </span>
                 </article>
               ))}

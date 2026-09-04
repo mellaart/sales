@@ -3008,6 +3008,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                       }}
                     >
                       <option value="planned">Gepland</option>
+                      <option value="sent">Verstuurd</option>
                       <option value="completed">Afgerond</option>
                     </select>
                   </label>

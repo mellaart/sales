@@ -155,7 +155,7 @@ export const MODULES: ModuleConfig[] = [
   { key: "rapportage", name: "Rapportage", description: MODULE_DESCRIPTIONS.rapportage, monthlyPrice: 27.5 },
   { key: "scanHerken", name: "Scan & Herken", description: MODULE_DESCRIPTIONS.scanHerken, monthlyPrice: 55 },
   { key: "statistiekenPlus", name: "Statistieken plus", description: MODULE_DESCRIPTIONS.statistiekenPlus, monthlyPrice: 27.5 },
-  { key: "digitaleOndertekening", name: "Digitale ondertekening", description: MODULE_DESCRIPTIONS.digitaleOndertekening, monthlyPrice: 0 },
+  { key: "digitaleOndertekening", name: "Digitale ondertekening", description: MODULE_DESCRIPTIONS.digitaleOndertekening, monthlyPrice: 27.5, setupCost: 360 },
   { key: "leverschema", name: "Leverschema", description: MODULE_DESCRIPTIONS.leverschema, monthlyPrice: 27.5 },
   { key: "postnl", name: "PostNL", description: MODULE_DESCRIPTIONS.postnl, monthlyPrice: 0 },
   { key: "suiteMkb", name: "Suite MKB koppeling", description: MODULE_DESCRIPTIONS.suiteMkb, monthlyPrice: 30.15 },
@@ -225,8 +225,15 @@ export function getVisitsForUsers(packageConfig: PackageConfig, totalUsers: numb
 }
 
 export function getPaidSelectedModuleCount(quantities: Record<string, number>, modules: ModuleConfig[] = MODULES) {
-  return modules.filter((module) => module.monthlyPrice > 0 && !module.noPackageSwitch).reduce(
-    (sum, module) => sum + Math.max(0, quantities[module.key] ?? 0),
+  const requiredQuantities = getRequiredModuleQuantities(quantities);
+
+  return modules.filter((module) => !getEffectiveModuleConfig(module, requiredQuantities).noPackageSwitch).reduce(
+    (sum, module) => {
+      const effectiveModule = getEffectiveModuleConfig(module, requiredQuantities);
+      return effectiveModule.monthlyPrice > 0
+        ? sum + Math.max(0, requiredQuantities[module.key] ?? 0)
+        : sum;
+    },
     0,
   );
 }
@@ -240,10 +247,48 @@ function safeNumber(value: unknown, fallback = 0) {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+const DIGITAL_SIGNATURE_MODULE_KEY = "digitaleOndertekening";
+const DRIVERS_MODULE_KEY = "chauffeurs";
+
+export function getRequiredModuleQuantities(quantities: Record<string, number> = {}) {
+  const normalizedQuantities = Object.fromEntries(
+    Object.entries(quantities).map(([key, value]) => [key, Math.max(0, Math.floor(safeNumber(value, 0)))]),
+  ) as Record<string, number>;
+
+  if ((normalizedQuantities[DRIVERS_MODULE_KEY] ?? 0) > 0) {
+    normalizedQuantities[DIGITAL_SIGNATURE_MODULE_KEY] = Math.max(
+      1,
+      normalizedQuantities[DIGITAL_SIGNATURE_MODULE_KEY] ?? 0,
+    );
+  }
+
+  return normalizedQuantities;
+}
+
+export function isDigitalSignatureIncludedWithDrivers(quantities: Record<string, number> = {}) {
+  const requiredQuantities = getRequiredModuleQuantities(quantities);
+  return (requiredQuantities[DRIVERS_MODULE_KEY] ?? 0) > 0
+    && (requiredQuantities[DIGITAL_SIGNATURE_MODULE_KEY] ?? 0) > 0;
+}
+
+export function getEffectiveModuleConfig(module: ModuleConfig, quantities: Record<string, number> = {}) {
+  if (module.key === DIGITAL_SIGNATURE_MODULE_KEY && isDigitalSignatureIncludedWithDrivers(quantities)) {
+    return {
+      ...module,
+      monthlyPrice: 0,
+      setupCost: 0,
+      requiresTravel: false,
+    };
+  }
+
+  return module;
+}
+
 function getSelectedModuleUnits(modules: ModuleConfig[], quantities: Record<string, number>) {
   return modules.flatMap((module) => {
     const quantity = Math.max(0, Math.floor(safeNumber(quantities[module.key], 0)));
-    return Array.from({ length: quantity }, () => module);
+    const effectiveModule = getEffectiveModuleConfig(module, quantities);
+    return Array.from({ length: quantity }, () => effectiveModule);
   });
 }
 
@@ -263,10 +308,12 @@ export function calculatePricing(input: PricingInput = {}, catalog?: Partial<Pri
   const manualMonthlyAdjustment = safeNumber(input.manualMonthlyAdjustment, 0);
   const manualImplementationAdjustment = safeNumber(input.manualImplementationAdjustment, 0);
   const includeVat = Boolean(input.includeVat);
-  const quantities = input.quantities ?? {};
+  const quantities = getRequiredModuleQuantities(input.quantities ?? {});
 
   const totalUsers = extraUsers + 1;
-  const selectedModules = resolvedCatalog.modules.filter((module) => (quantities[module.key] ?? 0) > 0);
+  const selectedModules = resolvedCatalog.modules
+    .filter((module) => (quantities[module.key] ?? 0) > 0)
+    .map((module) => getEffectiveModuleConfig(module, quantities));
   const selectedModuleUnits = getSelectedModuleUnits(resolvedCatalog.modules, quantities);
   const paidSelectedUnits = getPaidSelectedModuleCount(quantities, resolvedCatalog.modules);
   const grossModuleMonthly = selectedModules.reduce(

@@ -36,7 +36,17 @@ import {
   type ImplementationRecord,
 } from "@/lib/implementations";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
-import { calculatePricing, euro, getMinimumPackageForPaidModules, getPaidSelectedModuleCount, MODULES, type ModuleConfig } from "@/lib/pricing";
+import {
+  calculatePricing,
+  euro,
+  getEffectiveModuleConfig,
+  getMinimumPackageForPaidModules,
+  getPaidSelectedModuleCount,
+  getRequiredModuleQuantities,
+  isDigitalSignatureIncludedWithDrivers,
+  MODULES,
+  type ModuleConfig,
+} from "@/lib/pricing";
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix, type SmartConnectPriceTier } from "@/lib/price-config";
 import { QUOTE_LAYOUTS, normalizeQuoteLayout, type QuoteLayoutKey } from "@/lib/quote-layouts";
 import {
@@ -100,7 +110,7 @@ function normalizeInputs(
       0,
       Number(deal.calculator_inputs?.developmentHourlyRate) || defaultDevelopmentHourlyRate,
     ),
-    quantities: deal.calculator_inputs?.quantities ?? toQuantities(deal.modules, modules),
+    quantities: getRequiredModuleQuantities(deal.calculator_inputs?.quantities ?? toQuantities(deal.modules, modules)),
     quoteLayout: normalizeQuoteLayout(deal.calculator_inputs?.quoteLayout),
     assetsExpansion: deal.calculator_inputs?.assetsExpansion ?? null,
   };
@@ -516,6 +526,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     () => calculatePricing({ extraUsers: smartTradeExtraUsers, manualImplementationAdjustment, includeVat: false, quantities }, pricingConfig),
     [manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
   );
+  const effectiveQuantities = useMemo(() => getRequiredModuleQuantities(quantities), [quantities]);
   const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
   const minimumPackage = getMinimumPackageForPaidModules(paidModuleCount, packages);
   const selectedPackageIndex = packages.findIndex((pkg) => pkg.key === selectedPackage);
@@ -569,9 +580,10 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     ? Math.max(0, implementationBaseTotal / pricingConfig.implementationDayRate)
     : 0;
   const assetTravelImplementationTotal = modules
-    .filter((module) => (quantities[module.key] ?? 0) > 0 && module.requiresTravel !== false)
+    .map((module) => getEffectiveModuleConfig(module, effectiveQuantities))
+    .filter((module) => (effectiveQuantities[module.key] ?? 0) > 0 && module.requiresTravel !== false)
     .reduce(
-      (sum, module) => sum + (module.setupCost ?? 0) * Math.max(0, quantities[module.key] ?? 0),
+      (sum, module) => sum + (module.setupCost ?? 0) * Math.max(0, effectiveQuantities[module.key] ?? 0),
       0,
     );
   const travelImplementationBaseTotal = isAssetsExpansionDeal
@@ -635,11 +647,30 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
     return rows;
   }, [pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
-  const selectedModuleRows = modules.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
-    ...module,
-    qty: quantities[module.key] ?? 0,
-    total: module.monthlyPrice * (quantities[module.key] ?? 0),
-  }));
+  const selectedModuleRows = modules
+    .filter((module) => (effectiveQuantities[module.key] ?? 0) > 0)
+    .map((module) => {
+      const effectiveModule = getEffectiveModuleConfig(module, effectiveQuantities);
+      const quantity = effectiveQuantities[module.key] ?? 0;
+
+      return {
+        ...effectiveModule,
+        qty: quantity,
+        total: effectiveModule.monthlyPrice * quantity,
+      };
+    });
+
+  function setModuleChecked(moduleKey: string, checked: boolean) {
+    setQuantities((currentQuantities) => {
+      if (moduleKey === "digitaleOndertekening" && !checked && (currentQuantities.chauffeurs ?? 0) > 0) {
+        return currentQuantities;
+      }
+
+      const nextQuantities = { ...currentQuantities, [moduleKey]: checked ? 1 : 0 };
+      if (moduleKey === "chauffeurs" && checked) nextQuantities.digitaleOndertekening = 1;
+      return nextQuantities;
+    });
+  }
 
   function toggleCustomerPortalOption(optionKey: string, checked: boolean) {
     setSelectedCustomerPortalOptionKeys((currentKeys) => {
@@ -1083,7 +1114,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
             developmentLines: normalizeDevelopmentLines(developmentLines),
             developmentHourlyRate,
-            quantities,
+            quantities: effectiveQuantities,
             quoteLayout,
             assetsExpansion,
           },
@@ -1133,7 +1164,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         smartConnectPricing,
         developmentLines: normalizeDevelopmentLines(developmentLines),
         developmentHourlyRate,
-        quantities,
+        quantities: effectiveQuantities,
         quoteLayout,
         assetsExpansion,
       },
@@ -2168,20 +2199,24 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <div className="section-title"><SlidersHorizontal size={16} /> Modules</div>
                   <div className="calculator-module-grid">
                     {modules.map((module) => {
-                      const active = (quantities[module.key] ?? 0) > 0;
+                      const active = (effectiveQuantities[module.key] ?? 0) > 0;
+                      const isIncludedWithDrivers = module.key === "digitaleOndertekening"
+                        && isDigitalSignatureIncludedWithDrivers(effectiveQuantities);
+                      const displayedModule = getEffectiveModuleConfig(module, effectiveQuantities);
 
                       return (
                         <label key={module.key} className={`calculator-module-card ${active ? "active" : ""}`}>
                           <input
                             type="checkbox"
                             checked={active}
-                            onChange={(event) => setQuantities((prev) => ({ ...prev, [module.key]: event.target.checked ? 1 : 0 }))}
+                            disabled={isIncludedWithDrivers}
+                            onChange={(event) => setModuleChecked(module.key, event.target.checked)}
                           />
                           <span className="calculator-module-main">
                             <strong>{module.name}</strong>
-                            <span>{euro.format(module.monthlyPrice)} p/m</span>
+                            <span>{euro.format(displayedModule.monthlyPrice)} p/m</span>
                           </span>
-                          <span className="calculator-module-state">{active ? "Aan" : "Uit"}</span>
+                          <span className="calculator-module-state">{isIncludedWithDrivers ? "Inbegrepen" : active ? "Aan" : "Uit"}</span>
                         </label>
                       );
                     })}

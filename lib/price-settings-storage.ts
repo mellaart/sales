@@ -23,7 +23,7 @@ function migratePricingConfig(config: EditablePricingConfig, storedVersion: numb
     ...config,
     modules: config.modules.map((module) => {
       if (module.key === "digitaleOndertekening") {
-        return { ...module, monthlyPrice: 0, setupCost: 0 };
+        return { ...module, monthlyPrice: 27.5, setupCost: 360 };
       }
       if (module.key === "chauffeurs") {
         return { ...module, dependencyNote: "Vereist: Digitale ondertekening" };

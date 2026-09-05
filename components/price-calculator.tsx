@@ -24,7 +24,10 @@ import { exportQuotePdf } from "@/lib/pdf";
 import {
   calculatePricing,
   euro,
+  getEffectiveModuleConfig,
   getPaidSelectedModuleCount,
+  getRequiredModuleQuantities,
+  isDigitalSignatureIncludedWithDrivers,
   type PackageConfig,
   type PricingResult,
 } from "@/lib/pricing";
@@ -173,14 +176,20 @@ export default function PriceCalculator() {
     }
   }, [currentSalesName, salesName]);
 
+  const effectiveQuantities = useMemo(() => getRequiredModuleQuantities(quantities), [quantities]);
   const selectedModuleRows = useMemo(
     () =>
-      modules.filter((module) => (quantities[module.key] ?? 0) > 0).map((module) => ({
-        ...module,
-        qty: quantities[module.key] ?? 0,
-        total: module.monthlyPrice * (quantities[module.key] ?? 0),
-      })),
-    [modules, quantities],
+      modules.filter((module) => (effectiveQuantities[module.key] ?? 0) > 0).map((module) => {
+        const effectiveModule = getEffectiveModuleConfig(module, effectiveQuantities);
+        const quantity = effectiveQuantities[module.key] ?? 0;
+
+        return {
+          ...effectiveModule,
+          qty: quantity,
+          total: effectiveModule.monthlyPrice * quantity,
+        };
+      }),
+    [effectiveQuantities, modules],
   );
 
   const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
@@ -283,10 +292,15 @@ export default function PriceCalculator() {
   );
 
   function setModuleChecked(moduleKey: string, checked: boolean) {
-    setQuantities((currentQuantities) => ({
-      ...currentQuantities,
-      [moduleKey]: checked ? 1 : 0,
-    }));
+    setQuantities((currentQuantities) => {
+      if (moduleKey === "digitaleOndertekening" && !checked && (currentQuantities.chauffeurs ?? 0) > 0) {
+        return currentQuantities;
+      }
+
+      const nextQuantities = { ...currentQuantities, [moduleKey]: checked ? 1 : 0 };
+      if (moduleKey === "chauffeurs" && checked) nextQuantities.digitaleOndertekening = 1;
+      return nextQuantities;
+    });
   }
 
   function toggleCustomerPortalOption(optionKey: string, checked: boolean) {
@@ -360,7 +374,7 @@ export default function PriceCalculator() {
           smartConnectPricing,
           developmentLines: normalizeDevelopmentLines(developmentLines),
           developmentHourlyRate,
-          quantities,
+          quantities: effectiveQuantities,
           quoteLayout: "standard" as const,
           assetsExpansion: null,
         },
@@ -730,20 +744,24 @@ export default function PriceCalculator() {
               <div className="section-title"><SlidersHorizontal size={16} /> Modules aan/uit</div>
               <div className="calculator-module-grid">
                 {modules.map((module) => {
-                  const active = (quantities[module.key] ?? 0) > 0;
+                  const active = (effectiveQuantities[module.key] ?? 0) > 0;
+                  const isIncludedWithDrivers = module.key === "digitaleOndertekening"
+                    && isDigitalSignatureIncludedWithDrivers(effectiveQuantities);
+                  const displayedModule = getEffectiveModuleConfig(module, effectiveQuantities);
 
                   return (
                     <label key={module.key} className={`calculator-module-card ${active ? "active" : ""}`}>
                       <input
                         type="checkbox"
                         checked={active}
+                        disabled={isIncludedWithDrivers}
                         onChange={(event) => setModuleChecked(module.key, event.target.checked)}
                       />
                       <span className="calculator-module-main">
                         <strong>{module.name}</strong>
-                        <span>{euro.format(module.monthlyPrice)} p/m</span>
+                        <span>{euro.format(displayedModule.monthlyPrice)} p/m</span>
                       </span>
-                      <span className="calculator-module-state">{active ? "Aan" : "Uit"}</span>
+                      <span className="calculator-module-state">{isIncludedWithDrivers ? "Inbegrepen" : active ? "Aan" : "Uit"}</span>
                     </label>
                   );
                 })}

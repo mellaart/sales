@@ -15,7 +15,9 @@ import {
   PACKAGES,
   calculatePricing,
   euro,
+  getEffectiveModuleConfig,
   getMinimumPackageForPaidModules,
+  getRequiredModuleQuantities,
   type ModuleConfig,
   type PackageConfig,
 } from "@/lib/pricing";
@@ -374,6 +376,14 @@ function getModulesByKeys(moduleKeys: string[], modules: ModuleConfig[] = MODULE
   return modules.filter((moduleConfig) => moduleKeys.includes(moduleConfig.key));
 }
 
+function getEffectiveModulesByKeys(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
+  const quantities = getRequiredModuleQuantities(
+    Object.fromEntries(moduleKeys.map((moduleKey) => [moduleKey, 1])),
+  );
+
+  return getModulesByKeys(moduleKeys, modules).map((moduleConfig) => getEffectiveModuleConfig(moduleConfig, quantities));
+}
+
 function getModuleName(moduleKey: string, modules: ModuleConfig[] = MODULES) {
   return modules.find((moduleConfig) => moduleConfig.key === moduleKey)?.name ?? moduleKey;
 }
@@ -415,7 +425,7 @@ function removeModuleAndDependents(moduleKey: string, moduleKeys: string[]) {
 }
 
 function getPackageRelevantModules(moduleKeys: string[], modules: ModuleConfig[] = MODULES) {
-  return getModulesByKeys(moduleKeys, modules).filter(
+  return getEffectiveModulesByKeys(moduleKeys, modules).filter(
     (moduleConfig) => moduleConfig.monthlyPrice > 0 && !moduleConfig.noPackageSwitch && !NO_PACKAGE_SWITCH_MODULE_KEYS.has(moduleConfig.key),
   );
 }
@@ -425,7 +435,7 @@ function getPackageRelevantModuleCount(moduleKeys: string[], modules: ModuleConf
 }
 
 function getModuleMonthlyForPackage(moduleKeys: string[], packageConfig: PackageConfig, modules: ModuleConfig[] = MODULES) {
-  const paidModules = getModulesByKeys(moduleKeys, modules).filter((moduleConfig) => moduleConfig.monthlyPrice > 0);
+  const paidModules = getEffectiveModulesByKeys(moduleKeys, modules).filter((moduleConfig) => moduleConfig.monthlyPrice > 0);
   const grossModuleMonthly = paidModules.reduce(
     (sum, moduleConfig) => sum + moduleConfig.monthlyPrice,
     0,
@@ -444,7 +454,7 @@ function getIncludedModuleKeysForPackage(
   packageConfig: PackageConfig,
   modules: ModuleConfig[] = MODULES,
 ) {
-  return getModulesByKeys(moduleKeys, modules)
+  return getEffectiveModulesByKeys(moduleKeys, modules)
     .filter((moduleConfig) => moduleConfig.monthlyPrice > 0)
     .slice()
     .sort((left, right) => right.monthlyPrice - left.monthlyPrice || left.name.localeCompare(right.name, "nl"))
@@ -605,7 +615,10 @@ export default function AssetsDashboardCurrent() {
   );
 
   const currentModuleKeys = useMemo(() => applyModuleDependencies(getModuleKeysFromAssets(visibleAssets, modules)), [modules, visibleAssets]);
-  const selectedModules = useMemo(() => getModulesByKeys(selectedModuleKeys, modules), [modules, selectedModuleKeys]);
+  const selectedModules = useMemo(
+    () => getEffectiveModulesByKeys(selectedModuleKeys, modules),
+    [modules, selectedModuleKeys],
+  );
   const addedModules = useMemo(
     () => selectedModules.filter((moduleConfig) => !currentModuleKeys.includes(moduleConfig.key)),
     [currentModuleKeys, selectedModules],
@@ -999,9 +1012,9 @@ export default function AssetsDashboardCurrent() {
     try {
       const finalPackage = targetPackage ?? selectedPackage ?? packages[packages.length - 1];
       const expansionTotals = assetExpansionTotals;
-      const quantities = Object.fromEntries(
+      const quantities = getRequiredModuleQuantities(Object.fromEntries(
         modules.map((moduleConfig) => [moduleConfig.key, addedModules.some((addedModule) => addedModule.key === moduleConfig.key) ? 1 : 0]),
-      );
+      ));
       const extraUsersForDeal = safeExtraUsersToOffer + safeChauffeurExtraUsersToOffer;
       const manualImplementationAdjustment = expansionTotals.once;
       const pricingResults = calculatePricing({
@@ -1010,11 +1023,19 @@ export default function AssetsDashboardCurrent() {
         quantities,
       }, pricingConfig);
       const activeResult = pricingResults.find((packageResult) => packageResult.key === finalPackage.key) ?? pricingResults[0];
-      const selectedModuleRows = modules.filter((moduleConfig) => (quantities[moduleConfig.key] ?? 0) > 0).map((moduleConfig) => ({
-        ...moduleConfig,
-        qty: quantities[moduleConfig.key] ?? 0,
-        total: moduleConfig.monthlyPrice * (quantities[moduleConfig.key] ?? 0),
-      }));
+      const addedModuleKeys = new Set(addedModules.map((moduleConfig) => moduleConfig.key));
+      const selectedModuleRows = modules
+        .filter((moduleConfig) => addedModuleKeys.has(moduleConfig.key))
+        .map((moduleConfig) => {
+          const effectiveModule = getEffectiveModuleConfig(moduleConfig, quantities);
+          const quantity = quantities[moduleConfig.key] ?? 0;
+
+          return {
+            ...effectiveModule,
+            qty: quantity,
+            total: effectiveModule.monthlyPrice * quantity,
+          };
+        });
       const notes = buildAssetDealNotes(selectedRelation, assetDealLines);
 
       const payload = {

@@ -45,7 +45,7 @@ const MODULE_IMPLEMENTATION_COSTS: Record<string, number> = {
   rapportage: 360,
   scanHerken: 720,
   statistiekenPlus: 360,
-  digitaleOndertekening: 0,
+  digitaleOndertekening: 360,
   postnl: 360,
   suiteMkb: 400,
   powerbi: 720,

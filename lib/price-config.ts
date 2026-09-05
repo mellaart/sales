@@ -8,7 +8,7 @@ import {
 } from "@/lib/pricing";
 import { DEFAULT_DEVELOPMENT_HOURLY_RATE } from "@/lib/development-lines";
 
-export const PRICING_CONFIG_VERSION = 2;
+export const PRICING_CONFIG_VERSION = 3;
 
 export type CustomerPortalPriceOption = {
   key: string;
@@ -127,7 +127,7 @@ const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependenc
   rapportage: { setupCost: 360 },
   scanHerken: { setupCost: 720 },
   statistiekenPlus: { setupCost: 360 },
-  digitaleOndertekening: { setupCost: 0 },
+  digitaleOndertekening: { setupCost: 360 },
   leverschema: { setupCost: 360, noPackageSwitch: true },
   postnl: { setupCost: 360, noPackageSwitch: true },
   suiteMkb: { setupCost: 400, dependencyNote: "Vereist: Rapportage", noPackageSwitch: true },

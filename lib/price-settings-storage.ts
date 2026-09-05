@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import {
   DEFAULT_PRICE_CONFIG,
+  PRICING_CONFIG_VERSION,
   normalizePricingConfig,
   type EditablePricingConfig,
 } from "@/lib/price-config";
@@ -8,6 +9,29 @@ import type { ServiceClient } from "@/lib/admin-api";
 
 export const PRICE_SETTINGS_BUCKET = "smart-trade-settings";
 export const PRICE_SETTINGS_FILE = "price-config.json";
+
+function storedPricingConfigVersion(source: unknown) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return 0;
+  const version = Number((source as { pricingConfigVersion?: unknown }).pricingConfigVersion);
+  return Number.isInteger(version) && version > 0 ? version : 0;
+}
+
+function migratePricingConfig(config: EditablePricingConfig, storedVersion: number): EditablePricingConfig {
+  if (storedVersion >= PRICING_CONFIG_VERSION) return config;
+
+  return {
+    ...config,
+    modules: config.modules.map((module) => {
+      if (module.key === "digitaleOndertekening") {
+        return { ...module, monthlyPrice: 0, setupCost: 0 };
+      }
+      if (module.key === "chauffeurs") {
+        return { ...module, dependencyNote: "Vereist: Digitale ondertekening" };
+      }
+      return module;
+    }),
+  };
+}
 
 export async function readStoredPricingConfig(service: ServiceClient | null) {
   if (!service) {
@@ -26,7 +50,8 @@ export async function readStoredPricingConfig(service: ServiceClient | null) {
       ? (parsed as { pricingConfig?: unknown }).pricingConfig
       : parsed;
 
-    const pricingConfig = normalizePricingConfig(source);
+    const storedVersion = storedPricingConfigVersion(source);
+    const pricingConfig = migratePricingConfig(normalizePricingConfig(source), storedVersion);
     const hasLegacyBaseFunctionalities = Boolean(
       source
       && typeof source === "object"
@@ -34,7 +59,7 @@ export async function readStoredPricingConfig(service: ServiceClient | null) {
       && "baseFunctionalityWorkItems" in source,
     );
 
-    if (hasLegacyBaseFunctionalities) {
+    if (hasLegacyBaseFunctionalities || storedVersion < PRICING_CONFIG_VERSION) {
       try {
         const migrated = await writeStoredPricingConfig(service, pricingConfig);
         return { pricingConfig: migrated.pricingConfig, persisted: true, storageReady: true };

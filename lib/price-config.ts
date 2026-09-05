@@ -8,6 +8,8 @@ import {
 } from "@/lib/pricing";
 import { DEFAULT_DEVELOPMENT_HOURLY_RATE } from "@/lib/development-lines";
 
+export const PRICING_CONFIG_VERSION = 2;
+
 export type CustomerPortalPriceOption = {
   key: string;
   name: string;
@@ -73,6 +75,7 @@ export type ExpansionWorkItemConfig = {
 };
 
 export type EditablePricingConfig = PricingCatalog & {
+  pricingConfigVersion: number;
   developmentHourlyRate: number;
   customerPortalOptions: CustomerPortalPriceOption[];
   smartConnectTiers: SmartConnectPriceTier[];
@@ -124,7 +127,7 @@ const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependenc
   rapportage: { setupCost: 360 },
   scanHerken: { setupCost: 720 },
   statistiekenPlus: { setupCost: 360 },
-  digitaleOndertekening: { setupCost: 720 },
+  digitaleOndertekening: { setupCost: 0 },
   leverschema: { setupCost: 360, noPackageSwitch: true },
   postnl: { setupCost: 360, noPackageSwitch: true },
   suiteMkb: { setupCost: 400, dependencyNote: "Vereist: Rapportage", noPackageSwitch: true },
@@ -133,7 +136,7 @@ const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependenc
   terrein: { setupCost: 720 },
   voorraad: { setupCost: 720 },
   partijregistratie: { setupCost: 720, dependencyNote: "Vereist: Voorraad" },
-  chauffeurs: { setupCost: 720 },
+  chauffeurs: { setupCost: 720, dependencyNote: "Vereist: Digitale ondertekening" },
   assets: { setupCost: 720 },
   ticketing: { setupCost: 720 },
   contracten: { setupCost: 720 },
@@ -150,6 +153,7 @@ export function getDefaultModuleWorkItems(moduleName: string) {
 }
 
 export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
+  pricingConfigVersion: PRICING_CONFIG_VERSION,
   implementationDayRate: IMPLEMENTATION_DAY_RATE,
   developmentHourlyRate: DEFAULT_DEVELOPMENT_HOURLY_RATE,
   packages: PACKAGES,
@@ -634,6 +638,7 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
       : DEFAULT_PRICE_CONFIG.postcodeRegions;
 
   return {
+    pricingConfigVersion: PRICING_CONFIG_VERSION,
     implementationDayRate: safeNumber(source.implementationDayRate, DEFAULT_PRICE_CONFIG.implementationDayRate),
     developmentHourlyRate: safeNumber(
       source.developmentHourlyRate,

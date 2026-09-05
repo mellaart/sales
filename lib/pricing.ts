@@ -155,7 +155,7 @@ export const MODULES: ModuleConfig[] = [
   { key: "rapportage", name: "Rapportage", description: MODULE_DESCRIPTIONS.rapportage, monthlyPrice: 27.5 },
   { key: "scanHerken", name: "Scan & Herken", description: MODULE_DESCRIPTIONS.scanHerken, monthlyPrice: 55 },
   { key: "statistiekenPlus", name: "Statistieken plus", description: MODULE_DESCRIPTIONS.statistiekenPlus, monthlyPrice: 27.5 },
-  { key: "digitaleOndertekening", name: "Digitale ondertekening", description: MODULE_DESCRIPTIONS.digitaleOndertekening, monthlyPrice: 27.5 },
+  { key: "digitaleOndertekening", name: "Digitale ondertekening", description: MODULE_DESCRIPTIONS.digitaleOndertekening, monthlyPrice: 0 },
   { key: "leverschema", name: "Leverschema", description: MODULE_DESCRIPTIONS.leverschema, monthlyPrice: 27.5 },
   { key: "postnl", name: "PostNL", description: MODULE_DESCRIPTIONS.postnl, monthlyPrice: 0 },
   { key: "suiteMkb", name: "Suite MKB koppeling", description: MODULE_DESCRIPTIONS.suiteMkb, monthlyPrice: 30.15 },

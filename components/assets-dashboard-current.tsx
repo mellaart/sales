@@ -34,7 +34,6 @@ const SERVICE_COST_OPTIONS = [
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   suiteMkb: ["rapportage"],
   partijregistratie: ["voorraad"],
-  chauffeurs: ["digitaleOndertekening"],
   hoveniersapp: ["ticketing"],
 };
 type RelationOption = {
@@ -1012,22 +1011,35 @@ export default function AssetsDashboardCurrent() {
     try {
       const finalPackage = targetPackage ?? selectedPackage ?? packages[packages.length - 1];
       const expansionTotals = assetExpansionTotals;
-      const quantities = getRequiredModuleQuantities(Object.fromEntries(
-        modules.map((moduleConfig) => [moduleConfig.key, addedModules.some((addedModule) => addedModule.key === moduleConfig.key) ? 1 : 0]),
-      ));
+      const quantities = getRequiredModuleQuantities(
+        Object.fromEntries(
+          modules.map((moduleConfig) => [moduleConfig.key, addedModules.some((addedModule) => addedModule.key === moduleConfig.key) ? 1 : 0]),
+        ),
+        safeChauffeurExtraUsersToOffer,
+      );
       const extraUsersForDeal = safeExtraUsersToOffer + safeChauffeurExtraUsersToOffer;
       const manualImplementationAdjustment = expansionTotals.once;
       const pricingResults = calculatePricing({
         extraUsers: extraUsersForDeal,
+        chauffeurUsers: safeChauffeurExtraUsersToOffer,
         manualImplementationAdjustment,
         quantities,
       }, pricingConfig);
       const activeResult = pricingResults.find((packageResult) => packageResult.key === finalPackage.key) ?? pricingResults[0];
-      const addedModuleKeys = new Set(addedModules.map((moduleConfig) => moduleConfig.key));
+      const addedModuleKeys = new Set([
+        ...addedModules.map((moduleConfig) => moduleConfig.key),
+        ...(safeChauffeurExtraUsersToOffer > 0 && !currentModuleKeys.includes("digitaleOndertekening")
+          ? ["digitaleOndertekening"]
+          : []),
+      ]);
       const selectedModuleRows = modules
         .filter((moduleConfig) => addedModuleKeys.has(moduleConfig.key))
         .map((moduleConfig) => {
-          const effectiveModule = getEffectiveModuleConfig(moduleConfig, quantities);
+          const effectiveModule = getEffectiveModuleConfig(
+            moduleConfig,
+            quantities,
+            safeChauffeurExtraUsersToOffer,
+          );
           const quantity = quantities[moduleConfig.key] ?? 0;
 
           return {

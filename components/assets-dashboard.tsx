@@ -37,7 +37,6 @@ const SERVICE_COST_OPTIONS = [
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   suiteMkb: ["rapportage"],
   partijregistratie: ["voorraad"],
-  chauffeurs: ["digitaleOndertekening"],
   hoveniersapp: ["ticketing"],
 };
 const MODULE_IMPLEMENTATION_COSTS: Record<string, number> = {

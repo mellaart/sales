@@ -43,7 +43,7 @@ import {
   getMinimumPackageForPaidModules,
   getPaidSelectedModuleCount,
   getRequiredModuleQuantities,
-  isDigitalSignatureIncludedWithDrivers,
+  isDigitalSignatureIncludedForChauffeurUsers,
   MODULES,
   type ModuleConfig,
 } from "@/lib/pricing";
@@ -90,10 +90,11 @@ function normalizeInputs(
   defaultDevelopmentHourlyRate: number,
 ): DealCalculatorInputs {
   const customerPortalOptionKeys = deal.calculator_inputs?.customerPortalOptionKeys;
+  const chauffeurExtraUsers = Math.max(0, Number(deal.calculator_inputs?.chauffeurExtraUsers ?? 0));
 
   return {
     extraUsers: Math.max(0, Number(deal.calculator_inputs?.extraUsers ?? Number(deal.total_users || 1) - 1)),
-    chauffeurExtraUsers: Math.max(0, Number(deal.calculator_inputs?.chauffeurExtraUsers ?? 0)),
+    chauffeurExtraUsers,
     planningAppUsers: Math.max(0, Number(deal.calculator_inputs?.planningAppUsers ?? 0)),
     selectedPackage: String(deal.calculator_inputs?.selectedPackage || deal.package_key || "enterprise"),
     manualImplementationAdjustment: Number(deal.calculator_inputs?.manualImplementationAdjustment ?? deal.manual_implementation_adjustment ?? 0),
@@ -110,7 +111,10 @@ function normalizeInputs(
       0,
       Number(deal.calculator_inputs?.developmentHourlyRate) || defaultDevelopmentHourlyRate,
     ),
-    quantities: getRequiredModuleQuantities(deal.calculator_inputs?.quantities ?? toQuantities(deal.modules, modules)),
+    quantities: getRequiredModuleQuantities(
+      deal.calculator_inputs?.quantities ?? toQuantities(deal.modules, modules),
+      chauffeurExtraUsers,
+    ),
     quoteLayout: normalizeQuoteLayout(deal.calculator_inputs?.quoteLayout),
     assetsExpansion: deal.calculator_inputs?.assetsExpansion ?? null,
   };
@@ -523,11 +527,20 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const smartTradeExtraUsers = extraUsers + chauffeurExtraUsers;
   const totalUsers = smartTradeExtraUsers + 1;
   const results = useMemo(
-    () => calculatePricing({ extraUsers: smartTradeExtraUsers, manualImplementationAdjustment, includeVat: false, quantities }, pricingConfig),
-    [manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
+    () => calculatePricing({
+      extraUsers: smartTradeExtraUsers,
+      chauffeurUsers: chauffeurExtraUsers,
+      manualImplementationAdjustment,
+      includeVat: false,
+      quantities,
+    }, pricingConfig),
+    [chauffeurExtraUsers, manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
   );
-  const effectiveQuantities = useMemo(() => getRequiredModuleQuantities(quantities), [quantities]);
-  const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
+  const effectiveQuantities = useMemo(
+    () => getRequiredModuleQuantities(quantities, chauffeurExtraUsers),
+    [chauffeurExtraUsers, quantities],
+  );
+  const paidModuleCount = getPaidSelectedModuleCount(quantities, modules, chauffeurExtraUsers);
   const minimumPackage = getMinimumPackageForPaidModules(paidModuleCount, packages);
   const selectedPackageIndex = packages.findIndex((pkg) => pkg.key === selectedPackage);
   const minimumPackageIndex = packages.findIndex((pkg) => pkg.key === minimumPackage.key);
@@ -580,7 +593,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     ? Math.max(0, implementationBaseTotal / pricingConfig.implementationDayRate)
     : 0;
   const assetTravelImplementationTotal = modules
-    .map((module) => getEffectiveModuleConfig(module, effectiveQuantities))
+    .map((module) => getEffectiveModuleConfig(module, effectiveQuantities, chauffeurExtraUsers))
     .filter((module) => (effectiveQuantities[module.key] ?? 0) > 0 && module.requiresTravel !== false)
     .reduce(
       (sum, module) => sum + (module.setupCost ?? 0) * Math.max(0, effectiveQuantities[module.key] ?? 0),
@@ -650,7 +663,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const selectedModuleRows = modules
     .filter((module) => (effectiveQuantities[module.key] ?? 0) > 0)
     .map((module) => {
-      const effectiveModule = getEffectiveModuleConfig(module, effectiveQuantities);
+      const effectiveModule = getEffectiveModuleConfig(module, effectiveQuantities, chauffeurExtraUsers);
       const quantity = effectiveQuantities[module.key] ?? 0;
 
       return {
@@ -662,13 +675,11 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
   function setModuleChecked(moduleKey: string, checked: boolean) {
     setQuantities((currentQuantities) => {
-      if (moduleKey === "digitaleOndertekening" && !checked && (currentQuantities.chauffeurs ?? 0) > 0) {
+      if (moduleKey === "digitaleOndertekening" && !checked && chauffeurExtraUsers > 0) {
         return currentQuantities;
       }
 
-      const nextQuantities = { ...currentQuantities, [moduleKey]: checked ? 1 : 0 };
-      if (moduleKey === "chauffeurs" && checked) nextQuantities.digitaleOndertekening = 1;
-      return nextQuantities;
+      return { ...currentQuantities, [moduleKey]: checked ? 1 : 0 };
     });
   }
 
@@ -2201,8 +2212,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     {modules.map((module) => {
                       const active = (effectiveQuantities[module.key] ?? 0) > 0;
                       const isIncludedWithDrivers = module.key === "digitaleOndertekening"
-                        && isDigitalSignatureIncludedWithDrivers(effectiveQuantities);
-                      const displayedModule = getEffectiveModuleConfig(module, effectiveQuantities);
+                        && isDigitalSignatureIncludedForChauffeurUsers(chauffeurExtraUsers);
+                      const displayedModule = getEffectiveModuleConfig(module, effectiveQuantities, chauffeurExtraUsers);
 
                       return (
                         <label key={module.key} className={`calculator-module-card ${active ? "active" : ""}`}>

@@ -175,6 +175,7 @@ export const MODULES: ModuleConfig[] = [
 
 export type PricingInput = {
   extraUsers?: number;
+  chauffeurUsers?: number;
   contractMonths?: number;
   discountPct?: number;
   manualMonthlyAdjustment?: number;
@@ -224,12 +225,16 @@ export function getVisitsForUsers(packageConfig: PackageConfig, totalUsers: numb
   return packageConfig.implementationVisits.find((tier) => totalUsers <= tier.maxUsers)?.visits ?? 0;
 }
 
-export function getPaidSelectedModuleCount(quantities: Record<string, number>, modules: ModuleConfig[] = MODULES) {
-  const requiredQuantities = getRequiredModuleQuantities(quantities);
+export function getPaidSelectedModuleCount(
+  quantities: Record<string, number>,
+  modules: ModuleConfig[] = MODULES,
+  chauffeurUsers = 0,
+) {
+  const requiredQuantities = getRequiredModuleQuantities(quantities, chauffeurUsers);
 
-  return modules.filter((module) => !getEffectiveModuleConfig(module, requiredQuantities).noPackageSwitch).reduce(
+  return modules.filter((module) => !getEffectiveModuleConfig(module, requiredQuantities, chauffeurUsers).noPackageSwitch).reduce(
     (sum, module) => {
-      const effectiveModule = getEffectiveModuleConfig(module, requiredQuantities);
+      const effectiveModule = getEffectiveModuleConfig(module, requiredQuantities, chauffeurUsers);
       return effectiveModule.monthlyPrice > 0
         ? sum + Math.max(0, requiredQuantities[module.key] ?? 0)
         : sum;
@@ -248,14 +253,13 @@ function safeNumber(value: unknown, fallback = 0) {
 }
 
 const DIGITAL_SIGNATURE_MODULE_KEY = "digitaleOndertekening";
-const DRIVERS_MODULE_KEY = "chauffeurs";
 
-export function getRequiredModuleQuantities(quantities: Record<string, number> = {}) {
+export function getRequiredModuleQuantities(quantities: Record<string, number> = {}, chauffeurUsers = 0) {
   const normalizedQuantities = Object.fromEntries(
     Object.entries(quantities).map(([key, value]) => [key, Math.max(0, Math.floor(safeNumber(value, 0)))]),
   ) as Record<string, number>;
 
-  if ((normalizedQuantities[DRIVERS_MODULE_KEY] ?? 0) > 0) {
+  if (Math.max(0, Math.floor(safeNumber(chauffeurUsers, 0))) > 0) {
     normalizedQuantities[DIGITAL_SIGNATURE_MODULE_KEY] = Math.max(
       1,
       normalizedQuantities[DIGITAL_SIGNATURE_MODULE_KEY] ?? 0,
@@ -265,14 +269,20 @@ export function getRequiredModuleQuantities(quantities: Record<string, number> =
   return normalizedQuantities;
 }
 
-export function isDigitalSignatureIncludedWithDrivers(quantities: Record<string, number> = {}) {
-  const requiredQuantities = getRequiredModuleQuantities(quantities);
-  return (requiredQuantities[DRIVERS_MODULE_KEY] ?? 0) > 0
-    && (requiredQuantities[DIGITAL_SIGNATURE_MODULE_KEY] ?? 0) > 0;
+export function isDigitalSignatureIncludedForChauffeurUsers(chauffeurUsers = 0) {
+  return Math.max(0, Math.floor(safeNumber(chauffeurUsers, 0))) > 0;
 }
 
-export function getEffectiveModuleConfig(module: ModuleConfig, quantities: Record<string, number> = {}) {
-  if (module.key === DIGITAL_SIGNATURE_MODULE_KEY && isDigitalSignatureIncludedWithDrivers(quantities)) {
+export function getEffectiveModuleConfig(
+  module: ModuleConfig,
+  quantities: Record<string, number> = {},
+  chauffeurUsers = 0,
+) {
+  if (
+    module.key === DIGITAL_SIGNATURE_MODULE_KEY
+    && isDigitalSignatureIncludedForChauffeurUsers(chauffeurUsers)
+    && (getRequiredModuleQuantities(quantities, chauffeurUsers)[DIGITAL_SIGNATURE_MODULE_KEY] ?? 0) > 0
+  ) {
     return {
       ...module,
       monthlyPrice: 0,
@@ -284,10 +294,10 @@ export function getEffectiveModuleConfig(module: ModuleConfig, quantities: Recor
   return module;
 }
 
-function getSelectedModuleUnits(modules: ModuleConfig[], quantities: Record<string, number>) {
+function getSelectedModuleUnits(modules: ModuleConfig[], quantities: Record<string, number>, chauffeurUsers: number) {
   return modules.flatMap((module) => {
     const quantity = Math.max(0, Math.floor(safeNumber(quantities[module.key], 0)));
-    const effectiveModule = getEffectiveModuleConfig(module, quantities);
+    const effectiveModule = getEffectiveModuleConfig(module, quantities, chauffeurUsers);
     return Array.from({ length: quantity }, () => effectiveModule);
   });
 }
@@ -303,19 +313,20 @@ function resolvePricingCatalog(catalog?: Partial<PricingCatalog>) {
 export function calculatePricing(input: PricingInput = {}, catalog?: Partial<PricingCatalog>): PricingResult[] {
   const resolvedCatalog = resolvePricingCatalog(catalog);
   const extraUsers = Math.max(0, safeNumber(input.extraUsers, 0));
+  const chauffeurUsers = Math.max(0, Math.floor(safeNumber(input.chauffeurUsers, 0)));
   const contractMonths = Math.max(1, safeNumber(input.contractMonths, 1));
   const discountPct = Math.max(0, safeNumber(input.discountPct, 0));
   const manualMonthlyAdjustment = safeNumber(input.manualMonthlyAdjustment, 0);
   const manualImplementationAdjustment = safeNumber(input.manualImplementationAdjustment, 0);
   const includeVat = Boolean(input.includeVat);
-  const quantities = getRequiredModuleQuantities(input.quantities ?? {});
+  const quantities = getRequiredModuleQuantities(input.quantities ?? {}, chauffeurUsers);
 
   const totalUsers = extraUsers + 1;
   const selectedModules = resolvedCatalog.modules
     .filter((module) => (quantities[module.key] ?? 0) > 0)
-    .map((module) => getEffectiveModuleConfig(module, quantities));
-  const selectedModuleUnits = getSelectedModuleUnits(resolvedCatalog.modules, quantities);
-  const paidSelectedUnits = getPaidSelectedModuleCount(quantities, resolvedCatalog.modules);
+    .map((module) => getEffectiveModuleConfig(module, quantities, chauffeurUsers));
+  const selectedModuleUnits = getSelectedModuleUnits(resolvedCatalog.modules, quantities, chauffeurUsers);
+  const paidSelectedUnits = getPaidSelectedModuleCount(quantities, resolvedCatalog.modules, chauffeurUsers);
   const grossModuleMonthly = selectedModules.reduce(
     (sum, module) => sum + module.monthlyPrice * Math.max(0, safeNumber(quantities[module.key], 0)),
     0,

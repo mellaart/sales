@@ -8,7 +8,7 @@ import {
 } from "@/lib/pricing";
 import { DEFAULT_DEVELOPMENT_HOURLY_RATE } from "@/lib/development-lines";
 
-export const PRICING_CONFIG_VERSION = 3;
+export const PRICING_CONFIG_VERSION = 4;
 
 export type CustomerPortalPriceOption = {
   key: string;
@@ -136,7 +136,7 @@ const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependenc
   terrein: { setupCost: 720 },
   voorraad: { setupCost: 720 },
   partijregistratie: { setupCost: 720, dependencyNote: "Vereist: Voorraad" },
-  chauffeurs: { setupCost: 720, dependencyNote: "Vereist: Digitale ondertekening" },
+  chauffeurs: { setupCost: 720, dependencyNote: "Vereist bij chauffeursgebruikers: Digitale ondertekening" },
   assets: { setupCost: 720 },
   ticketing: { setupCost: 720 },
   contracten: { setupCost: 720 },

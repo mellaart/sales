@@ -27,7 +27,7 @@ import {
   getEffectiveModuleConfig,
   getPaidSelectedModuleCount,
   getRequiredModuleQuantities,
-  isDigitalSignatureIncludedWithDrivers,
+  isDigitalSignatureIncludedForChauffeurUsers,
   type PackageConfig,
   type PricingResult,
 } from "@/lib/pricing";
@@ -176,11 +176,14 @@ export default function PriceCalculator() {
     }
   }, [currentSalesName, salesName]);
 
-  const effectiveQuantities = useMemo(() => getRequiredModuleQuantities(quantities), [quantities]);
+  const effectiveQuantities = useMemo(
+    () => getRequiredModuleQuantities(quantities, chauffeurExtraUsers),
+    [chauffeurExtraUsers, quantities],
+  );
   const selectedModuleRows = useMemo(
     () =>
       modules.filter((module) => (effectiveQuantities[module.key] ?? 0) > 0).map((module) => {
-        const effectiveModule = getEffectiveModuleConfig(module, effectiveQuantities);
+        const effectiveModule = getEffectiveModuleConfig(module, effectiveQuantities, chauffeurExtraUsers);
         const quantity = effectiveQuantities[module.key] ?? 0;
 
         return {
@@ -189,10 +192,10 @@ export default function PriceCalculator() {
           total: effectiveModule.monthlyPrice * quantity,
         };
       }),
-    [effectiveQuantities, modules],
+    [chauffeurExtraUsers, effectiveQuantities, modules],
   );
 
-  const paidModuleCount = getPaidSelectedModuleCount(quantities, modules);
+  const paidModuleCount = getPaidSelectedModuleCount(quantities, modules, chauffeurExtraUsers);
   const recommendedPackage = getCalculatorPackageForPaidModules(paidModuleCount, calculatorPackages);
   const selectedPackageIndex = calculatorPackages.findIndex((packageConfig) => packageConfig.key === selectedPackage);
   const recommendedPackageIndex = calculatorPackages.findIndex((packageConfig) => packageConfig.key === recommendedPackage.key);
@@ -201,8 +204,13 @@ export default function PriceCalculator() {
   ] ?? recommendedPackage;
   const smartTradeExtraUsers = extraUsers + chauffeurExtraUsers;
   const pricingResults = useMemo(
-    () => calculatePricing({ extraUsers: smartTradeExtraUsers, manualImplementationAdjustment, quantities }, pricingConfig),
-    [manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
+    () => calculatePricing({
+      extraUsers: smartTradeExtraUsers,
+      chauffeurUsers: chauffeurExtraUsers,
+      manualImplementationAdjustment,
+      quantities,
+    }, pricingConfig),
+    [chauffeurExtraUsers, manualImplementationAdjustment, pricingConfig, quantities, smartTradeExtraUsers],
   );
   const activeResult = pricingResults.find((result) => result.key === activePackage.key) ?? pricingResults[0];
   const packageWasManuallyRaised = selectedPackageIndex > recommendedPackageIndex;
@@ -293,13 +301,11 @@ export default function PriceCalculator() {
 
   function setModuleChecked(moduleKey: string, checked: boolean) {
     setQuantities((currentQuantities) => {
-      if (moduleKey === "digitaleOndertekening" && !checked && (currentQuantities.chauffeurs ?? 0) > 0) {
+      if (moduleKey === "digitaleOndertekening" && !checked && chauffeurExtraUsers > 0) {
         return currentQuantities;
       }
 
-      const nextQuantities = { ...currentQuantities, [moduleKey]: checked ? 1 : 0 };
-      if (moduleKey === "chauffeurs" && checked) nextQuantities.digitaleOndertekening = 1;
-      return nextQuantities;
+      return { ...currentQuantities, [moduleKey]: checked ? 1 : 0 };
     });
   }
 
@@ -746,8 +752,8 @@ export default function PriceCalculator() {
                 {modules.map((module) => {
                   const active = (effectiveQuantities[module.key] ?? 0) > 0;
                   const isIncludedWithDrivers = module.key === "digitaleOndertekening"
-                    && isDigitalSignatureIncludedWithDrivers(effectiveQuantities);
-                  const displayedModule = getEffectiveModuleConfig(module, effectiveQuantities);
+                    && isDigitalSignatureIncludedForChauffeurUsers(chauffeurExtraUsers);
+                  const displayedModule = getEffectiveModuleConfig(module, effectiveQuantities, chauffeurExtraUsers);
 
                   return (
                     <label key={module.key} className={`calculator-module-card ${active ? "active" : ""}`}>

@@ -141,7 +141,7 @@ create table if not exists public.implementations (
   assigned_by uuid references auth.users(id) on delete set null,
   assigned_at timestamptz,
   status text not null default 'new'
-    check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed')),
+    check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed', 'cancelled')),
   notes text,
   progress jsonb not null default '{}'::jsonb,
   implementation_item_progress jsonb not null default '{}'::jsonb,
@@ -182,6 +182,25 @@ create index if not exists implementations_assigned_consultant_idx
   on public.implementations(assigned_consultant_id, updated_at desc);
 create index if not exists implementations_status_updated_at_idx
   on public.implementations(status, updated_at desc);
+
+alter table public.implementations drop constraint if exists implementations_status_check;
+alter table public.implementations add constraint implementations_status_check
+  check (status in ('new', 'assigned', 'planned', 'in_progress', 'waiting_customer', 'completed', 'cancelled'));
+
+create or replace function public.archive_cancelled_implementation_deal()
+returns trigger language plpgsql as $$
+begin
+  if new.status = 'cancelled' then
+    update public.deals set archived_at = now(), updated_at = now()
+    where id = new.deal_id and archived_at is null;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists archive_cancelled_implementation_deal on public.implementations;
+create trigger archive_cancelled_implementation_deal
+  after insert or update of status on public.implementations
+  for each row execute function public.archive_cancelled_implementation_deal();
 
 create table if not exists public.implementation_customer_access (
   id uuid primary key default gen_random_uuid(),

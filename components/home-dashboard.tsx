@@ -23,6 +23,7 @@ import { getDealSalesName, loadDealSalesNames, type SalesNamesByUserId } from "@
 import { listDealsWithFallback } from "@/lib/deal-storage";
 import {
   IMPLEMENTATION_STATUS_LABELS,
+  isActiveImplementation,
   getImplementationDateKey,
   getLocalDateKey,
   normalizeImplementationProgress,
@@ -248,7 +249,7 @@ export default function HomeDashboard() {
     const todayKey = getLocalDateKey(today);
     const upcomingLimit = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
     const upcomingLimitKey = getLocalDateKey(upcomingLimit);
-    const active = implementations.filter((implementation) => implementation.status !== "completed");
+    const active = implementations.filter((implementation) => isActiveImplementation(implementation.status));
     const overdue = active
       .filter((implementation) => {
         const dateKey = getImplementationDateKey(implementation.planned_go_live_date);
@@ -278,6 +279,7 @@ export default function HomeDashboard() {
     const todayKey = getLocalDateKey(new Date());
 
     return implementations.flatMap<ImplementationInvoiceAction>((implementation) => {
+      if (implementation.status === "cancelled") return [];
       const progress = normalizeImplementationProgress(implementation.progress);
       const actions: ImplementationInvoiceAction[] = [];
       const implementationStartDateKey = getImplementationDateKey(implementation.implementation_start_date);

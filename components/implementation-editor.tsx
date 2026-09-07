@@ -1,5 +1,7 @@
 "use client";
 
+import { ImplementationSelect } from "@/components/implementation-select";
+
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -434,16 +436,16 @@ function AppointmentWorkSelector({
               onChange={(event) => setSearch(event.target.value)}
             />
           </label>
-          <select
+          <ImplementationSelect
             className="implementation-work-picker-filter"
             value={filter}
             aria-label="Filter werkzaamheden"
-            onChange={(event) => setFilter(event.target.value as AppointmentWorkFilter)}
+            onValueChange={(value) => setFilter(value as AppointmentWorkFilter)}
           >
             {(Object.keys(APPOINTMENT_WORK_FILTER_LABELS) as AppointmentWorkFilter[]).map((key) => (
               <option key={key} value={key}>{APPOINTMENT_WORK_FILTER_LABELS[key]}</option>
             ))}
-          </select>
+          </ImplementationSelect>
         </div>
 
         <div className="implementation-work-picker-content">
@@ -2267,20 +2269,20 @@ export default function ImplementationEditor({ implementationId }: { implementat
                         </span>
                         {approvalStatus}
                       </span>
-                      <select
+                      <ImplementationSelect
                         value={workStatus}
                         disabled={!canEdit || saving || Boolean(customerApproval)}
                         aria-label={`Status van ${workItem.label}`}
-                        onChange={(event) => updateImplementationWorkStatus(
+                        onValueChange={(value) => updateImplementationWorkStatus(
                           item,
                           workItem.label,
-                          event.target.value as ImplementationWorkStatus,
+                          value as ImplementationWorkStatus,
                         )}
                       >
                         <option value="">Niet geselecteerd</option>
                         <option value="todo">Te doen</option>
                         <option value="completed">Afgerond</option>
-                      </select>
+                      </ImplementationSelect>
                     </span>
                   ) : (
                     <label
@@ -2568,7 +2570,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
             <label className="input-wrap">
               <span className="input-label">Financieel pakket</span>
-              <select
+              <ImplementationSelect
                 className="input implementation-dark-select"
                 value={FINANCIAL_PACKAGE_OPTIONS.includes(implementation.financial_package ?? "")
                   ? implementation.financial_package ?? ""
@@ -2576,9 +2578,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     ? "Overig"
                     : ""}
                 disabled={!canEdit}
-                onChange={(event) => saveImplementationDetail(
+                onValueChange={(value) => saveImplementationDetail(
                   "financial_package",
-                  event.currentTarget.value,
+                  value,
                   "Financieel pakket",
                 )}
               >
@@ -2586,7 +2588,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 {FINANCIAL_PACKAGE_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
-              </select>
+              </ImplementationSelect>
             </label>
 
             <label className="input-wrap">
@@ -2821,17 +2823,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
               </label>
               <label className="input-wrap">
                 <span className="input-label">Soort afspraak</span>
-                <select
+                <ImplementationSelect
                   className="input implementation-dark-select"
                   value={appointmentDraft.appointmentType}
-                  onChange={(event) => setAppointmentDraft({
+                  onValueChange={(value) => setAppointmentDraft({
                     ...appointmentDraft,
-                    appointmentType: event.target.value as ImplementationAppointmentType,
+                    appointmentType: value as ImplementationAppointmentType,
                   })}
                 >
                   <option value="on_site">Op locatie</option>
                   <option value="remote">Online / op afstand</option>
-                </select>
+                </ImplementationSelect>
               </label>
               <label className="input-wrap implementation-appointment-title-field">
                 <span className="input-label">Onderwerp</span>
@@ -2943,14 +2945,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   </label>
                   <label className="input-wrap">
                     <span className="input-label">Soort</span>
-                    <select
+                    <ImplementationSelect
                       className="input implementation-dark-select"
                       disabled={!canEdit}
                       value={appointment.appointmentType}
-                      onChange={(event) => {
+                      onValueChange={(value) => {
                         const nextAppointment = {
                           ...appointment,
-                          appointmentType: event.target.value as ImplementationAppointmentType,
+                          appointmentType: value as ImplementationAppointmentType,
                         };
                         updateAppointmentLocal(appointment.id, nextAppointment);
                         void saveAppointment(nextAppointment);
@@ -2958,7 +2960,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     >
                       <option value="on_site">Op locatie</option>
                       <option value="remote">Online / op afstand</option>
-                    </select>
+                    </ImplementationSelect>
                   </label>
                   <label className="input-wrap implementation-appointment-row-title">
                     <span className="input-label">Onderwerp</span>
@@ -2994,14 +2996,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   />
                   <label className="input-wrap">
                     <span className="input-label">Status</span>
-                    <select
+                    <ImplementationSelect
                       className="input implementation-dark-select"
                       disabled={!canEdit}
                       value={appointment.status}
-                      onChange={(event) => {
+                      onValueChange={(value) => {
                         const nextAppointment = {
                           ...appointment,
-                          status: event.target.value as ImplementationAppointment["status"],
+                          status: value as ImplementationAppointment["status"],
                         };
                         updateAppointmentLocal(appointment.id, nextAppointment);
                         void saveAppointment(nextAppointment);
@@ -3010,7 +3012,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                       <option value="planned">Gepland</option>
                       <option value="sent">Verstuurd</option>
                       <option value="completed">Afgerond</option>
-                    </select>
+                    </ImplementationSelect>
                   </label>
                   <div className="implementation-appointment-kind" aria-hidden="true">
                     {appointment.appointmentType === "on_site"
@@ -3095,17 +3097,17 @@ export default function ImplementationEditor({ implementationId }: { implementat
             {canAssign ? (
               <label className="input-wrap">
                 <span className="input-label">Toewijzen aan gebruiker</span>
-                <select
+                <ImplementationSelect
                   className="input implementation-dark-select"
                   value={implementation.assigned_consultant_id ?? ""}
                   disabled={saving}
-                  onChange={(event) => void assignConsultant(event.target.value)}
+                  onValueChange={(value) => void assignConsultant(value)}
                 >
                   <option value="">Nog niet toegewezen</option>
                   {assignableUsers.map((assignableUser) => (
                     <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.full_name || assignableUser.email}</option>
                   ))}
-                </select>
+                </ImplementationSelect>
               </label>
             ) : (
               <div className="implementation-readonly-field">
@@ -3116,19 +3118,19 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
             <label className="input-wrap">
               <span className="input-label">Status</span>
-              <select
+              <ImplementationSelect
                 className="input implementation-dark-select"
                 value={implementation.status}
                 disabled={!canManageImplementation || saving}
-                onChange={(event) => void saveImplementation(
-                  { status: event.target.value as ImplementationStatus },
-                  "Status bijgewerkt.",
+                onValueChange={(value) => void saveImplementation(
+                  { status: value as ImplementationStatus },
+                  value === "cancelled" ? "Implementatie geannuleerd en gekoppelde deal gearchiveerd." : "Status bijgewerkt.",
                 )}
               >
                 {IMPLEMENTATION_STATUSES.map((status) => (
                   <option key={status} value={status}>{IMPLEMENTATION_STATUS_LABELS[status]}</option>
                 ))}
-              </select>
+              </ImplementationSelect>
             </label>
 
             <ImplementationNotesField
@@ -3347,21 +3349,21 @@ export default function ImplementationEditor({ implementationId }: { implementat
                           </span>
                         ) : null
                       ) : item.selectableWorkItems ? (
-                        <select
+                        <ImplementationSelect
                           className="implementation-task-status-select"
                           value={!selected ? "" : completed ? "completed" : "todo"}
                           disabled={!canEdit || saving || Boolean(customerApproval)}
                           aria-label={`Status van ${item.label}`}
-                          onChange={(event) => updateImplementationWorkStatus(
+                          onValueChange={(value) => updateImplementationWorkStatus(
                             item,
                             undefined,
-                            event.target.value as ImplementationWorkStatus,
+                            value as ImplementationWorkStatus,
                           )}
                         >
                           <option value="">Niet geselecteerd</option>
                           <option value="todo">Te doen</option>
                           <option value="completed">Afgerond</option>
-                        </select>
+                        </ImplementationSelect>
                       ) : (
                         <label className="implementation-item-toggle">
                           <input
@@ -3496,21 +3498,21 @@ export default function ImplementationEditor({ implementationId }: { implementat
                         </span>
                       ) : null
                     ) : item.selectableWorkItems ? (
-                      <select
+                      <ImplementationSelect
                         className="implementation-task-status-select"
                         value={!selected ? "" : completed ? "completed" : "todo"}
                         disabled={!canEdit || saving || Boolean(implementationCustomerWorkApprovals[item.key])}
                         aria-label={`Status van ${item.label}`}
-                        onChange={(event) => updateImplementationWorkStatus(
+                        onValueChange={(value) => updateImplementationWorkStatus(
                           item,
                           undefined,
-                          event.target.value as ImplementationWorkStatus,
+                          value as ImplementationWorkStatus,
                         )}
                       >
                         <option value="">Niet geselecteerd</option>
                         <option value="todo">Te doen</option>
                         <option value="completed">Afgerond</option>
-                      </select>
+                      </ImplementationSelect>
                     ) : (
                       <label className="implementation-item-toggle">
                         <input

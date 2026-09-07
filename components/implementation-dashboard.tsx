@@ -1,5 +1,7 @@
 "use client";
 
+import { ImplementationSelect } from "@/components/implementation-select";
+
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -18,6 +20,7 @@ import { StatCard, StatusPill } from "@/components/ui";
 import {
   IMPLEMENTATION_STATUSES,
   IMPLEMENTATION_STATUS_LABELS,
+  isActiveImplementation,
   getImplementationDateKey,
   getLocalDateKey,
   type ImplementationRecord,
@@ -166,7 +169,7 @@ export default function ImplementationDashboard() {
         implementation.assigned_consultant_id !== consultantFilter
       ) return false;
 
-      const isActive = implementation.status !== "completed";
+      const isActive = isActiveImplementation(implementation.status);
       const plannedDateKey = getImplementationDateKey(implementation.planned_go_live_date);
       if (planningFilter === "active" && !isActive) return false;
       if (planningFilter === "overdue" && !(isActive && plannedDateKey && plannedDateKey < todayKey)) return false;
@@ -195,8 +198,8 @@ export default function ImplementationDashboard() {
 
   const stats = useMemo(() => ({
     total: implementations.length,
-    unassigned: implementations.filter((implementation) => !implementation.assigned_consultant_id).length,
-    active: implementations.filter((implementation) => implementation.status !== "completed").length,
+    unassigned: implementations.filter((implementation) => implementation.status !== "cancelled" && !implementation.assigned_consultant_id).length,
+    active: implementations.filter((implementation) => isActiveImplementation(implementation.status)).length,
     completed: implementations.filter((implementation) => implementation.status === "completed").length,
   }), [implementations]);
 
@@ -356,37 +359,37 @@ export default function ImplementationDashboard() {
             </label>
             <label className="input-wrap">
               <span className="input-label">Status</span>
-              <select className="input implementation-dark-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+              <ImplementationSelect className="input implementation-dark-select" value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
                 <option value="all">Alle statussen</option>
                 {IMPLEMENTATION_STATUSES.map((status) => (
                   <option key={status} value={status}>{IMPLEMENTATION_STATUS_LABELS[status]}</option>
                 ))}
-              </select>
+              </ImplementationSelect>
             </label>
             <label className="input-wrap">
               <span className="input-label">Livegang</span>
-              <select
+              <ImplementationSelect
                 className="input implementation-dark-select"
                 value={planningFilter}
-                onChange={(event) => changePlanningFilter(event.target.value as PlanningFilter)}
+                onValueChange={(value) => changePlanningFilter(value as PlanningFilter)}
               >
                 <option value="all">Alle livegangen</option>
                 <option value="active">Alle actieve implementaties</option>
                 <option value="overdue">Livegang verstreken</option>
                 <option value="upcoming">Livegang binnen 30 dagen</option>
                 <option value="missing">Nog niet gepland</option>
-              </select>
+              </ImplementationSelect>
             </label>
             {seesAllImplementations ? (
               <label className="input-wrap">
                 <span className="input-label">Gebruiker</span>
-                <select className="input implementation-dark-select" value={consultantFilter} onChange={(event) => setConsultantFilter(event.target.value)}>
+                <ImplementationSelect className="input implementation-dark-select" value={consultantFilter} onValueChange={(value) => setConsultantFilter(value)}>
                   <option value="all">Alle gebruikers</option>
                   <option value="unassigned">Niet toegewezen</option>
                   {consultantFilterOptions.map((consultant) => (
                     <option key={consultant.id} value={consultant.id}>{consultant.label}</option>
                   ))}
-                </select>
+                </ImplementationSelect>
               </label>
             ) : null}
           </div>
@@ -437,36 +440,36 @@ export default function ImplementationDashboard() {
                   {canAssign ? (
                     <label className="input-wrap">
                       <span className="input-label">Toewijzen aan gebruiker</span>
-                      <select
+                      <ImplementationSelect
                         className="input implementation-dark-select"
                         value={implementation.assigned_consultant_id ?? ""}
                         disabled={savingId === implementation.id}
-                        onChange={(event) => void assignConsultant(implementation, event.target.value)}
+                        onValueChange={(value) => void assignConsultant(implementation, value)}
                       >
                         <option value="">Nog niet toegewezen</option>
                         {assignableUsers.map((assignableUser) => (
                           <option key={assignableUser.id} value={assignableUser.id}>{assignableUser.full_name || assignableUser.email}</option>
                         ))}
-                      </select>
+                      </ImplementationSelect>
                     </label>
                   ) : null}
 
                   <label className="input-wrap">
                     <span className="input-label">Status</span>
-                    <select
+                    <ImplementationSelect
                       className="input implementation-dark-select"
                       value={implementation.status}
                       disabled={!canEdit || savingId === implementation.id}
-                      onChange={(event) => void saveImplementation(
+                      onValueChange={(value) => void saveImplementation(
                         implementation,
-                        { status: event.target.value as ImplementationStatus },
-                        "Status bijgewerkt.",
+                        { status: value as ImplementationStatus },
+                        value === "cancelled" ? "Implementatie geannuleerd en gekoppelde deal gearchiveerd." : "Status bijgewerkt.",
                       )}
                     >
                       {IMPLEMENTATION_STATUSES.map((status) => (
                         <option key={status} value={status}>{IMPLEMENTATION_STATUS_LABELS[status]}</option>
                       ))}
-                    </select>
+                    </ImplementationSelect>
                   </label>
 
                   <ImplementationNotesField

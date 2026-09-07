@@ -5,6 +5,7 @@ export const IMPLEMENTATION_STATUSES = [
   "in_progress",
   "waiting_customer",
   "completed",
+  "cancelled",
 ] as const;
 
 export type ImplementationStatus = typeof IMPLEMENTATION_STATUSES[number];
@@ -16,7 +17,12 @@ export const IMPLEMENTATION_STATUS_LABELS: Record<ImplementationStatus, string> 
   in_progress: "In uitvoering",
   waiting_customer: "Wachten op klant",
   completed: "Afgerond",
+  cancelled: "Geannuleerd",
 };
+
+export function isActiveImplementation(status: ImplementationStatus) {
+  return status !== "completed" && status !== "cancelled";
+}
 
 export const IMPLEMENTATION_PROGRESS_ITEMS = [
   { number: 2, key: "dnsInstructions", label: "DNS-instructies" },

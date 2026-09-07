@@ -9,9 +9,11 @@
     "import:supabase": "node scripts/import-supabase-data.mjs",
     "mail:open-deals": "node scripts/send-weekly-open-deals.mjs",
     "lint": "next lint",
-    "test:password-reset": "node --test tests/password-reset.test.cjs"
+    "test:password-reset": "node --test tests/password-reset.test.cjs",
+    "test:implementation-cancellation": "node --test tests/implementation-cancellation.test.cjs"
   },
   "dependencies": {
+    "@radix-ui/react-select": "^2.3.7",
     "@supabase/supabase-js": "^2.49.8",
     "@types/qrcode": "^1.5.6",
     "fflate": "^0.8.3",

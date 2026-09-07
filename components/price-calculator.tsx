@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   MapPin,
   Package,
+  ShieldAlert,
   SlidersHorizontal,
   Users,
   WalletCards,
@@ -38,6 +39,12 @@ import DevelopmentLinesEditor from "@/components/development-lines-editor";
 import ExtraUserOffer from "@/components/extra-user-offer";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
+import {
+  ROLE_TAB_ACCESS,
+  canWriteTab,
+  normalizeRoleTabAccess,
+  type RoleTabAccessMap,
+} from "@/lib/role-tabs";
 import {
   formatDevelopmentHours,
   getDevelopmentHours,
@@ -130,9 +137,11 @@ function formatDays(days: number) {
 
 export default function PriceCalculator() {
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, profile, role, loading: authLoading } = useAuth();
   const { pricingConfig } = usePricingConfig();
   const supabase = getSupabaseClient();
+  const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
+  const [roleTabAccessLoaded, setRoleTabAccessLoaded] = useState(false);
   const modules = pricingConfig.modules;
   const calculatorPackages = useMemo(
     () => pricingConfig.packages.filter((packageConfig) => packageConfig.key !== "lite"),
@@ -163,6 +172,35 @@ export default function PriceCalculator() {
   const [savingDeal, setSavingDeal] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [status, setStatus] = useState("");
+
+  const canUseCalculator = canWriteTab(role, "calculator", roleTabAccess);
+
+  useEffect(() => {
+    if (!user) {
+      setRoleTabAccessLoaded(true);
+      return;
+    }
+
+    let active = true;
+    setRoleTabAccessLoaded(false);
+
+    async function loadRoleTabAccess() {
+      try {
+        const response = await fetch("/api/admin/role-tabs", { cache: "no-store" });
+        const json = await response.json().catch(() => ({})) as { roleTabAccess?: unknown };
+        if (active && response.ok) setRoleTabAccess(normalizeRoleTabAccess(json.roleTabAccess));
+      } catch {
+        if (active) setRoleTabAccess(ROLE_TAB_ACCESS);
+      } finally {
+        if (active) setRoleTabAccessLoaded(true);
+      }
+    }
+
+    void loadRoleTabAccess();
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);
   const currentSalesEmail = useMemo(() => user?.email ?? profile?.email ?? "", [profile, user]);
@@ -331,6 +369,11 @@ export default function PriceCalculator() {
       return;
     }
 
+    if (!canUseCalculator) {
+      setStatus("Je hebt geen schrijfrechten voor Calculator.");
+      return;
+    }
+
     setSavingDeal(true);
     setStatus("Berekening wordt opgeslagen...");
 
@@ -446,6 +489,35 @@ export default function PriceCalculator() {
     } finally {
       setExportingPdf(false);
     }
+  }
+
+  if (authLoading || !roleTabAccessLoaded) {
+    return (
+      <div className="page-shell">
+        <div className="container">
+          <div className="save-status">Calculator wordt geladen...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canUseCalculator) {
+    return (
+      <div className="page-shell">
+        <div className="container">
+          <section className="card panel">
+            <div className="top-row">
+              <div>
+                <div className="eyebrow">Geen toegang</div>
+                <h1>Calculator</h1>
+                <p className="subtext">Je rol heeft geen schrijfrechten voor de calculator.</p>
+              </div>
+              <div className="icon-badge"><ShieldAlert size={24} /></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
   }
 
   return (

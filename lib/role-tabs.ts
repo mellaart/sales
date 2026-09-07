@@ -63,7 +63,7 @@ export const APP_TABS: AppTabConfig[] = [
 
 export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   sales: buildRoleAccess(["calculator", "deals", "assets", "implementation"]),
-  consultant: buildRoleAccess(["calculator", "deals", "assets", "implementation"], ["prices", "postcode"]),
+  consultant: buildRoleAccess(["deals", "assets", "implementation"], ["prices", "postcode"]),
   support: buildRoleAccess(["deals", "assets", "testen"]),
   worldline: buildRoleAccess(["worldline", "ccv"]),
   worldline_consultant: buildRoleAccess(["worldline", "ccv"]),

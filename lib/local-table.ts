@@ -2,7 +2,7 @@ import { query } from "@/lib/local-db";
 import { canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { readLocalRoleTabAccess } from "@/lib/role-tab-access-storage";
-import { getTabPermission } from "@/lib/role-tabs";
+import { canWriteTab, getTabPermission, type AppTabKey } from "@/lib/role-tabs";
 import type { ProfileRecord, UserRole } from "@/lib/supabase";
 
 export type LocalFilter = {
@@ -285,6 +285,35 @@ async function getImplementationPermission(actor: Actor) {
   return getTabPermission(actor.profile.role, "implementation", roleTabAccess);
 }
 
+function getDealCreationTab(payload: Record<string, unknown>): AppTabKey {
+  const calculatorInputs = payload.calculator_inputs;
+  const inputs = typeof calculatorInputs === "string"
+    ? (() => {
+        try {
+          return JSON.parse(calculatorInputs) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      })()
+    : calculatorInputs && typeof calculatorInputs === "object" && !Array.isArray(calculatorInputs)
+      ? calculatorInputs as Record<string, unknown>
+      : {};
+
+  return inputs.quoteLayout === "assets-expansion" || inputs.assetsExpansion
+    ? "assets"
+    : "calculator";
+}
+
+async function ensureDealCreationPermission(actor: Actor, payload: Record<string, unknown>) {
+  if (isLocalAdmin(actor.profile)) return;
+
+  const tabKey = getDealCreationTab(payload);
+  const roleTabAccess = await readLocalRoleTabAccess();
+  if (!canWriteTab(actor.profile.role, tabKey, roleTabAccess)) {
+    throw new Error(`Je hebt geen schrijfrechten voor ${tabKey === "assets" ? "Assets" : "Calculator"}.`);
+  }
+}
+
 async function getAccessWhere(
   table: TableName,
   action: LocalTableQuery["action"],
@@ -512,6 +541,10 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
   if (columns.length === 0) throw new Error("Geen gegevens ontvangen.");
 
   if (input.action === "insert") {
+    if (table === "deals" && !serviceMode && actor) {
+      await ensureDealCreationPermission(actor, rawPayload);
+    }
+
     if (table === "worldline_projects" || table === "worldline_documents" || table === "implementations") {
       await getAccessWhere(table, input.action, actor, serviceMode, []);
     }

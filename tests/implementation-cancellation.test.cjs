@@ -99,3 +99,30 @@ test("overview excludes cancelled results even when searched or filtered explici
   assert.equal(filter("cancelled").length, 0);
   assert.equal(filter("completed").length, 1);
 });
+
+test("home dashboard total excludes cancelled implementations but includes completed ones", () => {
+  const source = ts.createSourceFile("dashboard.tsx", readFileSync(resolve(root, "components/home-dashboard.tsx"), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let callback;
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(source) === "implementationStats") {
+      callback = node.initializer.arguments[0].getText(source);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  assert.ok(callback);
+  const run = new Function("implementations", "getLocalDateKey", "getImplementationDateKey", "isActiveImplementation", `return (${callback})();`);
+  const stats = (rows) => run(rows, () => "2026-09-07", value => value, value => !["completed", "cancelled"].includes(value));
+  const rows = [
+    { status: "planned", planned_go_live_date: "2026-09-01" },
+    { status: "completed" },
+    { status: "cancelled", planned_go_live_date: "2026-09-01" },
+    { status: "cancelled" },
+  ];
+  assert.equal(stats(rows).total, 2);
+  assert.equal(stats(rows).active, 1);
+  assert.equal(stats(rows).overdue.length, 1);
+  assert.equal(stats(rows).withoutDate.length, 0);
+  assert.equal(stats([]).total, 0);
+  assert.equal(stats([{ status: "cancelled" }]).total, 0);
+});

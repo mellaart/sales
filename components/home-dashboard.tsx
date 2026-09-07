@@ -268,7 +268,7 @@ export default function HomeDashboard() {
     );
 
     return {
-      total: implementations.length,
+      total: implementations.filter((implementation) => implementation.status !== "cancelled").length,
       active: active.length,
       overdue,
       upcoming: upcoming.length,

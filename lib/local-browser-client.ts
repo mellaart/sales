@@ -267,8 +267,21 @@ function createLocalBrowserClient() {
           ? { data: payload?.data ?? null, error: null }
           : { data: null, error: { message: payload?.error || "Wachtwoord wijzigen mislukt." } };
       },
-      async resetPasswordForEmail() {
-        return { data: null, error: { message: "Wachtwoord resetten loopt nu via de admin pagina." } };
+      async resetPasswordForEmail(email: string) {
+        try {
+          const response = await fetch("/api/local/auth/reset-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+            cache: "no-store",
+          });
+          const payload = await response.json().catch(() => null);
+          return response.ok
+            ? { data: {}, error: null }
+            : { data: null, error: { message: payload?.error || "Herstelmail aanvragen mislukt." } };
+        } catch {
+          return { data: null, error: { message: "Geen verbinding met de server. Probeer het opnieuw." } };
+        }
       },
       onAuthStateChange(callback: (event: string, session: unknown) => void) {
         function handler(event: Event) {

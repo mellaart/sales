@@ -43,6 +43,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const [twoFactor, setTwoFactor] = useState<TwoFactorChallenge | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
@@ -104,6 +105,7 @@ export default function LoginPage() {
   }, [twoFactor]);
 
   async function handleResetPassword() {
+    if (busy || resetBusy) return;
     setStatus("");
 
     const supabase = getSupabaseClient();
@@ -112,25 +114,31 @@ export default function LoginPage() {
       return;
     }
 
-    if (!email.trim()) {
-      setStatus("Vul eerst je e-mailadres in.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setStatus("Vul eerst een geldig e-mailadres in.");
       return;
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-
-    if (error) {
-      setStatus(`Reset password mislukt: ${error.message}`);
-      return;
+    setResetBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        setStatus(`Wachtwoordherstel mislukt: ${error.message}`);
+        return;
+      }
+      setStatus("Als dit e-mailadres bij ons bekend is, ontvang je een herstelmail. Controleer ook je ongewenste e-mail.");
+    } catch {
+      setStatus("Herstelmail aanvragen mislukt. Controleer je verbinding en probeer het opnieuw.");
+    } finally {
+      setResetBusy(false);
     }
-
-    setStatus("E-mail verzonden. Open de link en stel daarna je nieuwe wachtwoord in.");
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy || resetBusy) return;
     setBusy(true);
     setStatus("");
 
@@ -344,18 +352,18 @@ export default function LoginPage() {
             />
           </label>
 
-          <button type="submit" className="modern-auth-primary" disabled={busy}>
+          <button type="submit" className="modern-auth-primary" disabled={busy || resetBusy}>
             <KeyRound size={18} />
             {busy ? "Bezig..." : "Inloggen"}
           </button>
 
-          <button type="button" className="modern-auth-secondary" onClick={handleResetPassword}>
+          <button type="button" className="modern-auth-secondary" onClick={handleResetPassword} disabled={busy || resetBusy}>
             <LockKeyhole size={16} />
-            Reset password
+            {resetBusy ? "Herstelmail aanvragen..." : "Wachtwoord vergeten"}
           </button>
         </form>
 
-        {status ? <div className="modern-auth-status">{status}</div> : null}
+        {status ? <div className="modern-auth-status" role="status">{status}</div> : null}
       </section>
     </div>
   );

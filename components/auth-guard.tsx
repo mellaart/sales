@@ -12,6 +12,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isLoginPage = pathname === "/login";
   const isResetPasswordPage = pathname === "/reset-password";
   const isPublicPage = isLoginPage
+    || isResetPasswordPage
     || pathname === "/worldline-test"
     || pathname.startsWith("/klantgegevens/")
     || pathname.startsWith("/implementatie-volgen/")

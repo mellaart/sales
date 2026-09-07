@@ -38,6 +38,26 @@ Log daarna in met:
 
 Wijzig daarna het wachtwoord in de app en verwijder `SALES_BOOTSTRAP_ADMIN_PASSWORD` uit `.env.local`.
 
+## Wachtwoord vergeten
+
+Gebruikers kunnen op het inlogscherm zelf een herstelmail aanvragen. Dit gebruikt dezelfde
+server-mailvoorziening als de maandagse dealmail, niet de Outlook-koppeling:
+
+```env
+SALES_NOTIFICATION_FROM_EMAIL=notifications@sales.troublefree.nl
+SALES_SENDMAIL_PATH=/usr/sbin/sendmail
+SALES_PUBLIC_URL=https://sales.troublefree.nl
+```
+
+De herstelpagina moet via HTTPS bereikbaar zijn. Links verlopen na 30 minuten en zijn
+eenmalig te gebruiken. Per e-mailadres worden maximaal drie mails per uur aangevraagd,
+met minimaal twee minuten ertussen. De knop bevestigt nooit of een account bestaat.
+Na herstel worden bestaande sessies en vertrouwde apparaten ingetrokken; 2FA blijft actief.
+Bij een mailserverfout wordt een melding zonder persoonsgegevens in de serverlog gezet.
+De benodigde tabellen worden automatisch toegevoegd; bestaande accounts blijven behouden.
+
+Testen zonder productiegegevens of echte e-mails: `npm run test:password-reset`.
+
 ## Outlook-concepten
 
 Voor de knop `Klaarzetten in Outlook` is een Microsoft Entra-appregistratie nodig. Voeg aan

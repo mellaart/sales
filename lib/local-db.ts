@@ -117,6 +117,21 @@ export async function ensureLocalSchema() {
         create index if not exists app_sessions_user_id_idx on public.app_sessions(user_id);
         create index if not exists app_sessions_expires_at_idx on public.app_sessions(expires_at);
 
+        create table if not exists public.app_password_resets (
+          user_id uuid primary key references public.profiles(id) on delete cascade,
+          token_hash text not null unique,
+          password_hash text,
+          email text not null,
+          expires_at timestamptz not null
+        );
+
+        create table if not exists public.app_password_reset_requests (
+          email_hash text primary key,
+          last_requested_at timestamptz not null,
+          window_started_at timestamptz not null,
+          attempts integer not null
+        );
+
         create table if not exists public.app_2fa_challenges (
           token_hash text primary key,
           user_id uuid not null references public.profiles(id) on delete cascade,

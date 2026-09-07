@@ -767,6 +767,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [portalMobilePhone, setPortalMobilePhone] = useState("");
   const [portalMobilePhoneState, setPortalMobilePhoneState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [portalMobilePhoneMessage, setPortalMobilePhoneMessage] = useState("");
+  const canOpenCustomerPortal = Boolean(
+    portalLoaded && portalAccess?.active && portalAccess.mobilePhone?.trim() &&
+    portalMobilePhone.trim() && (portalMobilePhoneState === "idle" || portalMobilePhoneState === "saved"),
+  );
   const [appointments, setAppointments] = useState<ImplementationAppointment[]>([]);
   const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
   const [appointmentsBusy, setAppointmentsBusy] = useState(false);
@@ -2680,14 +2684,23 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 <button type="button" className="secondary-button" onClick={() => void copyPortalUrl()}>
                   <Copy size={16} /> Kopiëren
                 </button>
-                <a
+                {canOpenCustomerPortal ? <a
                   className="primary-button"
                   href={portalAccess.publicUrl}
                   target="_blank"
                   rel="noreferrer"
                 >
                   <ExternalLink size={16} /> Open klantpagina
-                </a>
+                </a> : (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled
+                    title="Sla eerst een mobiel nummer voor sms-verificatie op."
+                  >
+                    <ExternalLink size={16} /> Open klantpagina
+                  </button>
+                )}
                 {canEdit ? (
                   <>
                     <button

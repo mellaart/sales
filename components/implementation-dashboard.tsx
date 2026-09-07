@@ -161,6 +161,7 @@ export default function ImplementationDashboard() {
     const upcomingLimitKey = getLocalDateKey(upcomingLimit);
 
     return implementations.filter((implementation) => {
+      if (implementation.status === "cancelled") return false;
       if (statusFilter !== "all" && implementation.status !== statusFilter) return false;
       if (consultantFilter === "unassigned" && implementation.assigned_consultant_id) return false;
       if (
@@ -197,7 +198,7 @@ export default function ImplementationDashboard() {
   }, [consultantFilter, implementations, planningFilter, query, statusFilter]);
 
   const stats = useMemo(() => ({
-    total: implementations.length,
+    total: implementations.filter((implementation) => implementation.status !== "cancelled").length,
     unassigned: implementations.filter((implementation) => implementation.status !== "cancelled" && !implementation.assigned_consultant_id).length,
     active: implementations.filter((implementation) => isActiveImplementation(implementation.status)).length,
     completed: implementations.filter((implementation) => implementation.status === "completed").length,
@@ -361,7 +362,7 @@ export default function ImplementationDashboard() {
               <span className="input-label">Status</span>
               <ImplementationSelect className="input implementation-dark-select" value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
                 <option value="all">Alle statussen</option>
-                {IMPLEMENTATION_STATUSES.map((status) => (
+                {IMPLEMENTATION_STATUSES.filter((status) => status !== "cancelled").map((status) => (
                   <option key={status} value={status}>{IMPLEMENTATION_STATUS_LABELS[status]}</option>
                 ))}
               </ImplementationSelect>

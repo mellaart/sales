@@ -79,3 +79,23 @@ test("cancelled implementations are not active", () => {
   assert.equal(module.exports.isActiveImplementation("completed"), false);
   assert.equal(module.exports.isActiveImplementation("planned"), true);
 });
+
+test("overview excludes cancelled results even when searched or filtered explicitly", () => {
+  const source = ts.createSourceFile("dashboard.tsx", readFileSync(resolve(root, "components/implementation-dashboard.tsx"), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let callback;
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(source) === "filteredImplementations") {
+      callback = node.initializer.arguments[0].getText(source);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  assert.ok(callback);
+  const rows = ["new", "assigned", "planned", "in_progress", "waiting_customer", "completed", "cancelled"].map(status => ({ status, customer_name: "Testklant" }));
+  const run = new Function("implementations", "statusFilter", "query", "consultantFilter", "planningFilter", "getLocalDateKey", "getImplementationDateKey", "isActiveImplementation", `return (${callback})();`);
+  const filter = (status, query = "") => run(rows, status, query, "all", "all", () => "2026-09-07", () => "", value => !["completed", "cancelled"].includes(value));
+  assert.deepEqual(filter("all").map(row => row.status), rows.slice(0, -1).map(row => row.status));
+  assert.equal(filter("all", "Testklant").length, 6);
+  assert.equal(filter("cancelled").length, 0);
+  assert.equal(filter("completed").length, 1);
+});

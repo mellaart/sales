@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { isCustomerSmsRequired } from "@/lib/customer-sms-settings";
 import {
   requireImplementationAccess,
   type ImplementationActor,
@@ -245,7 +246,7 @@ async function verifiedPortalAccess(
   ) {
     return null;
   }
-  if (deviceToken !== undefined && !await trustedPortalDevice(access.id, deviceToken)) {
+  if (deviceToken !== undefined && await isCustomerSmsRequired() && !await trustedPortalDevice(access.id, deviceToken)) {
     return null;
   }
   return access;
@@ -277,6 +278,10 @@ export async function getImplementationPortalSmsVerificationStatus(
       ok: false as const,
       error: "Deze klantlink is ongeldig, verlopen of ingetrokken.",
     };
+  }
+
+  if (!await isCustomerSmsRequired()) {
+    return { ok: true as const, verified: true, mobilePhone: "" };
   }
 
   if (!access.mobile_phone?.trim()) {
@@ -757,7 +762,7 @@ export async function getImplementationPortalAccess(
      limit 1`,
     [implementationId],
   );
-  return { ok: true as const, portalAccess: rows[0] ? toAccess(request, rows[0]) : null };
+  return { ok: true as const, portalAccess: rows[0] ? toAccess(request, rows[0]) : null, smsRequired: await isCustomerSmsRequired() };
 }
 
 export async function updateImplementationPortalMobilePhone(
@@ -812,7 +817,7 @@ export async function createOrRefreshImplementationPortal(
      limit 1`,
     [implementationId],
   );
-  if (!normalizeMessageBirdMobileNumber(existingRows[0]?.mobile_phone ?? "")) {
+  if (await isCustomerSmsRequired() && !normalizeMessageBirdMobileNumber(existingRows[0]?.mobile_phone ?? "")) {
     return {
       ok: false as const,
       status: 409,

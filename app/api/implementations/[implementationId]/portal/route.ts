@@ -33,7 +33,7 @@ export async function GET(
     const { implementationId } = await context.params;
     const result = await getImplementationPortalAccess(request, implementationId, verified);
     if (!result.ok) return jsonResponse({ error: result.error }, result.status);
-    return jsonResponse({ portalAccess: result.portalAccess });
+    return jsonResponse({ portalAccess: result.portalAccess, smsRequired: result.smsRequired });
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Klanttoegang laden mislukt.",

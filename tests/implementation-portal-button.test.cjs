@@ -15,7 +15,8 @@ test("customer portal opens only with a successfully saved mobile number", () =>
   }
   visit(source);
   assert.ok(expression);
-  const canOpen = new Function("portalLoaded", "portalAccess", "portalMobilePhone", "portalMobilePhoneState", `return ${expression};`);
+  const evaluate = new Function("portalLoaded", "portalAccess", "portalMobilePhone", "portalMobilePhoneState", "portalSmsRequired", `return ${expression};`);
+  const canOpen = (...args) => evaluate(...args, true);
   const access = { active: true, mobilePhone: "+31612345678" };
   assert.equal(canOpen(true, access, access.mobilePhone, "idle"), true);
   assert.equal(canOpen(true, access, access.mobilePhone, "saved"), true);
@@ -29,4 +30,6 @@ test("customer portal opens only with a successfully saved mobile number", () =>
   assert.equal(canOpen(false, access, access.mobilePhone, "idle"), false);
   assert.equal(canOpen(true, null, access.mobilePhone, "idle"), false);
   assert.equal(canOpen(true, { ...access, active: false }, access.mobilePhone, "saved"), false);
+  assert.equal(evaluate(true, { ...access, mobilePhone: "" }, "", "idle", false), true);
+  assert.equal(evaluate(true, { ...access, active: false }, "", "idle", false), false);
 });

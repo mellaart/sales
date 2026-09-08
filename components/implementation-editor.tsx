@@ -767,9 +767,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [portalMobilePhone, setPortalMobilePhone] = useState("");
   const [portalMobilePhoneState, setPortalMobilePhoneState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [portalMobilePhoneMessage, setPortalMobilePhoneMessage] = useState("");
+  const [portalSmsRequired, setPortalSmsRequired] = useState(true);
   const canOpenCustomerPortal = Boolean(
-    portalLoaded && portalAccess?.active && portalAccess.mobilePhone?.trim() &&
-    portalMobilePhone.trim() && (portalMobilePhoneState === "idle" || portalMobilePhoneState === "saved"),
+    portalLoaded && portalAccess?.active && (!portalSmsRequired || (portalAccess.mobilePhone?.trim() &&
+    portalMobilePhone.trim() && (portalMobilePhoneState === "idle" || portalMobilePhoneState === "saved"))),
   );
   const [appointments, setAppointments] = useState<ImplementationAppointment[]>([]);
   const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
@@ -1054,10 +1055,12 @@ export default function ImplementationEditor({ implementationId }: { implementat
         );
         const portalJson = await portalResponse.json().catch(() => ({})) as {
           portalAccess?: ImplementationPortalAccess | null;
+          smsRequired?: boolean;
           error?: string;
         };
         if (!portalResponse.ok) throw new Error(portalJson.error || "Klanttoegang laden mislukt.");
         setPortalAccess(portalJson.portalAccess ?? null);
+        setPortalSmsRequired(portalJson.smsRequired !== false);
         setPortalMobilePhone(portalJson.portalAccess?.mobilePhone ?? "");
         portalMobilePhoneRef.current = portalJson.portalAccess?.mobilePhone ?? "";
       } else {
@@ -2652,7 +2655,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
           <div className="implementation-portal-sms-setting">
             <label className="input-wrap">
-              <span className="input-label">Mobiel nummer voor sms-verificatie</span>
+              <span className="input-label">Mobiel nummer voor sms-verificatie{portalSmsRequired ? " (verplicht)" : " (optioneel)"}</span>
               <input
                 className="input"
                 type="tel"

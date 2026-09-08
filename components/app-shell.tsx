@@ -361,6 +361,11 @@ export function AppShellHeader() {
                       {tab.label}
                     </Link>
                   ))}
+                  {role === "admin" ? (
+                    <Link href="/admin/instellingen" className={`nav-menu-item ${pathname === "/admin/instellingen" ? "active" : ""}`} role="menuitem">
+                      Instellingen
+                    </Link>
+                  ) : null}
                 </div>
               ) : null}
             </div>

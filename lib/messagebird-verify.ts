@@ -31,8 +31,9 @@ async function responsePayload(response: Response) {
 function configuredOriginator() {
   const value = (process.env.MESSAGEBIRD_VERIFY_ORIGINATOR || "SmartTrade")
     .trim()
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 11);
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .slice(0, 11)
+    .trim();
   return value || "SmartTrade";
 }
 

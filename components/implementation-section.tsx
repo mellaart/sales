@@ -3,7 +3,15 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { LoaderCircle, Minus, Plus } from "lucide-react";
 
-export default function ImplementationAppointmentsSection({ children }: { children: ReactNode }) {
+export type ImplementationSectionPreference = "appointmentsOpen" | "managementOpen" | "sharingOpen" | "filesOpen" | "dnsOpen" | "tasksOpen";
+
+export default function ImplementationSection({ children, preference, title, eyebrow, className = "card panel implementation-collapsible-panel" }: {
+  children: ReactNode;
+  preference: ImplementationSectionPreference;
+  title: string;
+  eyebrow?: string;
+  className?: string;
+}) {
   const contentId = useId();
   const [open, setOpen] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -18,9 +26,9 @@ export default function ImplementationAppointmentsSection({ children }: { childr
       try {
         const response = await fetch("/api/me/implementation-preferences", { cache: "no-store", signal: controller.signal });
         const data = await response.json();
-        if (!response.ok || typeof data.appointmentsOpen !== "boolean") throw new Error(data.error || "Weergavevoorkeur laden mislukt.");
+        if (!response.ok || typeof data[preference] !== "boolean") throw new Error(data.error || "Weergavevoorkeur laden mislukt.");
         if (!controller.signal.aborted) {
-          setOpen(data.appointmentsOpen);
+          setOpen(data[preference]);
           setLoaded(true);
         }
       } catch (error) {
@@ -28,7 +36,7 @@ export default function ImplementationAppointmentsSection({ children }: { childr
       }
     })();
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, preference]);
 
   async function toggle() {
     const next = !open;
@@ -39,22 +47,22 @@ export default function ImplementationAppointmentsSection({ children }: { childr
       const response = await fetch("/api/me/implementation-preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentsOpen: next }),
+        body: JSON.stringify({ [preference]: next }),
       });
       const data = await response.json();
-      if (!response.ok || data.appointmentsOpen !== next) throw new Error(data.error || "Weergavevoorkeur opslaan mislukt. Probeer opnieuw.");
+      if (!response.ok || data[preference] !== next) throw new Error(data.error || "Weergavevoorkeur opslaan mislukt. Probeer opnieuw.");
     } catch (error) {
       setOpen(!next);
       setError(error instanceof Error ? error.message : "Weergavevoorkeur opslaan mislukt. Probeer opnieuw.");
     } finally { setBusy(false); }
   }
 
-  return <section className="card panel implementation-appointments-panel">
-    <div className="eyebrow">Planning</div>
+  return <section className={className}>
+    {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
     <h2 className="headline">
       <button type="button" className="implementation-section-toggle" aria-expanded={open}
         aria-controls={contentId} disabled={!loaded || busy} onClick={() => void toggle()}>
-        <span>Afspraken</span>
+        <span>{title}</span>
         {busy || (!loaded && !error) ? <LoaderCircle className="implementation-dns-spinner" size={22} aria-hidden="true" />
           : open ? <Minus size={22} aria-hidden="true" /> : <Plus size={22} aria-hidden="true" />}
       </button>

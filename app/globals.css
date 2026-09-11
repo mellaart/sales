@@ -8284,3 +8284,5 @@ html:is(
   outline-offset: 4px;
   border-radius: 4px;
 }
+
+.implementation-collapsible-panel { margin-top: 18px; }

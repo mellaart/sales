@@ -1,5 +1,6 @@
 "use client";
 
+import ImplementationSection from "@/components/implementation-section";
 import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
@@ -112,11 +113,9 @@ export default function ImplementationCustomerFilesPanel({
   )).length;
 
   return (
-    <section className="card panel implementation-customer-files-panel">
+    <ImplementationSection preference="filesOpen" title="Bestanden aanleveren" eyebrow="Klantbestanden" className="card panel implementation-customer-files-panel">
       <div className="top-row implementation-customer-files-heading">
         <div>
-          <div className="eyebrow">Klantbestanden</div>
-          <h2 className="headline">Bestanden aanleveren</h2>
           <p className="subtext">
             Briefpapier, relatiebestanden en artikelbestanden uit de beveiligde klantpagina.
           </p>
@@ -204,6 +203,6 @@ export default function ImplementationCustomerFilesPanel({
         </div>
       )}
       {error ? <div className="implementation-inline-error">{error}</div> : null}
-    </section>
+    </ImplementationSection>
   );
 }

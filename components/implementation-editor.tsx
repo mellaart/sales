@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import ImplementationAppointmentsSection from "@/components/implementation-appointments-section";
+import ImplementationSection from "@/components/implementation-section";
 import ImplementationCustomerFilesPanel from "@/components/implementation-customer-files-panel";
 import ImplementationNotesField from "@/components/implementation-notes-field";
 import ImplementationWorkNoteEditor from "@/components/implementation-work-note-editor";
@@ -2626,11 +2626,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
           </div>
         </section>
 
-        <section className="card panel implementation-customer-access-panel">
+        <ImplementationSection key={`sharing:${user?.id}`} preference="sharingOpen" title="Voortgang delen" eyebrow="Klanttoegang" className="card panel implementation-customer-access-panel">
           <div className="top-row">
             <div>
-              <div className="eyebrow">Klanttoegang</div>
-              <h2 className="headline">Voortgang delen</h2>
               <p className="subtext">
                 Deel een beveiligde pagina met alleen de voortgang, onderdelen en afspraken van deze implementatie.
               </p>
@@ -2752,14 +2750,15 @@ export default function ImplementationEditor({ implementationId }: { implementat
             </div>
           )}
           {portalError ? <div className="implementation-inline-error">{portalError}</div> : null}
-        </section>
+        </ImplementationSection>
 
         <ImplementationCustomerFilesPanel
+          key={user?.id}
           implementationId={implementation.id}
           canEdit={canEdit}
         />
 
-        <ImplementationAppointmentsSection key={user?.id}>
+        <ImplementationSection key={`appointments:${user?.id}`} preference="appointmentsOpen" title="Afspraken" eyebrow="Planning" className="card panel implementation-appointments-panel">
           <div className="top-row">
             <div>
               <p className="subtext">Iedere afspraak wordt direct zichtbaar op de beveiligde klantpagina.</p>
@@ -3095,14 +3094,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
               ) : null}
             </div>
           ) : null}
-        </ImplementationAppointmentsSection>
+        </ImplementationSection>
 
-        <section className="card panel">
+        <ImplementationSection key={`management:${user?.id}`} preference="managementOpen" title="Implementatie beheren" eyebrow="Planning en voortgang">
           <div className="top-row">
-            <div>
-              <div className="eyebrow">Planning en voortgang</div>
-              <h2 className="headline">Implementatie beheren</h2>
-            </div>
             <StatusPill tone={canManageImplementation ? "success" : "neutral"}>
               {canManageImplementation ? "Beheren" : "Alleen Erik kan wijzigen"}
             </StatusPill>
@@ -3217,6 +3212,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
             </div>
           </div>
 
+        </ImplementationSection>
+
+        <ImplementationSection key={`dns:${user?.id}`} preference="dnsOpen" title="DNS">
           <div className="implementation-communication-stack">
             <article className="implementation-communication-card implementation-dns-card">
               <div className="implementation-communication-icon"><Globe2 size={22} /></div>
@@ -3319,12 +3317,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
           </div>
 
+        </ImplementationSection>
+
+        <ImplementationSection key={`tasks:${user?.id}`} preference="tasksOpen" title="Taken" eyebrow="Planning">
           <div className="implementation-progress-block implementation-items-progress">
             <div className="implementation-progress-heading">
-              <div>
-                <span>Planning</span>
-                <strong>Taken</strong>
-              </div>
               <span>
                 {completedImplementationTasks}/{selectedImplementationTasks} geselecteerde groepen afgerond
               </span>
@@ -3571,12 +3568,13 @@ export default function ImplementationEditor({ implementationId }: { implementat
             </div>
           ) : null}
 
-          {message ? (
-            <div className="implementation-save-row">
-              <div className="save-status">{message}</div>
-            </div>
-          ) : null}
-        </section>
+        </ImplementationSection>
+
+        {message ? (
+          <div className="implementation-save-row" role="status">
+            <div className="save-status">{message}</div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

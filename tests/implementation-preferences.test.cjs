@@ -41,6 +41,23 @@ test('implementation view preferences persist per authenticated consultant, with
     assert.equal((await GET(request({}))).body.appointmentsOpen, false);
     actor.user.id = 'consultant-b';
     assert.equal((await GET(request({}))).body.appointmentsOpen, true);
+    const keys = ['appointmentsOpen', 'managementOpen', 'sharingOpen', 'filesOpen', 'dnsOpen', 'tasksOpen'];
+    actor.user.id = 'consultant-c';
+    const defaults = Object.fromEntries(keys.map(key => [key, true]));
+    assert.deepEqual((await GET(request({}))).body, defaults);
+    for (const key of keys) {
+      assert.equal((await POST(request({ [key]: false }))).status, 200);
+      assert.deepEqual((await GET(request({}))).body, { ...defaults, [key]: false });
+      await POST(request({ [key]: true }));
+    }
+    // Concurrent updates to different sections must not overwrite one another.
+    await Promise.all(keys.map(key => POST(request({ [key]: false }))));
+    assert.deepEqual((await GET(request({}))).body, Object.fromEntries(keys.map(key => [key, false])));
+    assert.equal((await POST(request({ dnsOpen: true, tasksOpen: 'false' }))).status, 400);
+    assert.equal((await POST(request({ unknownOpen: false }))).status, 400);
+    assert.equal((await GET(request({}))).body.dnsOpen, false);
+    actor.user.id = 'consultant-b';
+    assert.deepEqual((await GET(request({}))).body, defaults);
     await db.exec('drop table app_settings');
     assert.equal((await GET(request({}))).status, 500);
     assert.equal((await POST(request({ appointmentsOpen: false }))).status, 500);

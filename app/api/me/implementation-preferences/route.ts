@@ -5,7 +5,7 @@ import { query } from "@/lib/local-db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const preferenceKeys = ["appointmentsOpen", "managementOpen", "sharingOpen", "filesOpen", "dnsOpen", "tasksOpen"] as const;
+const preferenceKeys = ["appointmentsOpen", "managementOpen", "sharingOpen", "filesOpen", "dnsOpen", "tasksOpen", "dossierOpen", "implementationDataOpen"] as const;
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });

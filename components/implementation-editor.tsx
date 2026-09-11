@@ -14,7 +14,6 @@ import {
   ClipboardCheck,
   Clock3,
   Copy,
-  Database,
   ExternalLink,
   Globe2,
   Link2,
@@ -2467,14 +2466,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
           <StatCard title="Aangemaakt" value={formatDate(implementation.created_at)} icon={CalendarDays} sublabel="Start van het dossier" />
         </section>
 
-        <section className="card panel">
-          <div className="top-row">
-            <div>
-              <div className="eyebrow">Klant en offerte</div>
-              <h2 className="headline">Dossiergegevens</h2>
-            </div>
-            <ClipboardCheck size={28} aria-hidden="true" />
-          </div>
+        <ImplementationSection key={`dossierOpen:${user?.id}`} preference="dossierOpen" title="Dossiergegevens" eyebrow="Klant en offerte" className="card panel">
           <div className="implementation-meta-grid implementation-detail-meta">
             <span>Klant<strong>{implementation.customer_name}</strong></span>
             <span>Contactpersoon<strong>{implementation.contact_name || "-"}</strong></span>
@@ -2483,16 +2475,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
             <span>Status<strong>{IMPLEMENTATION_STATUS_LABELS[implementation.status]}</strong></span>
             <span>Laatst gewijzigd<strong>{formatDate(implementation.updated_at)}</strong></span>
           </div>
-        </section>
+        </ImplementationSection>
 
-        <section className="card panel implementation-data-panel">
-          <div className="top-row">
-            <div>
-              <div className="eyebrow">Inrichting</div>
-              <h2 className="headline">Implementatiegegevens</h2>
-            </div>
-            <Database size={28} aria-hidden="true" />
-          </div>
+        <ImplementationSection key={`implementationDataOpen:${user?.id}`} preference="implementationDataOpen" title="Implementatiegegevens" eyebrow="Inrichting" className="card panel implementation-data-panel">
 
           <div className="implementation-data-grid">
             <label className="input-wrap">
@@ -2624,7 +2609,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
           <div className={`implementation-data-save-state ${detailSaveState}`} aria-live="polite">
             {detailSaveMessage}
           </div>
-        </section>
+        </ImplementationSection>
 
         <ImplementationSection key={`sharing:${user?.id}`} preference="sharingOpen" title="Voortgang delen" eyebrow="Klanttoegang" className="card panel implementation-customer-access-panel">
           <div className="top-row">

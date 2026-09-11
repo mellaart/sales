@@ -3,7 +3,7 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { LoaderCircle, Minus, Plus } from "lucide-react";
 
-export type ImplementationSectionPreference = "appointmentsOpen" | "managementOpen" | "sharingOpen" | "filesOpen" | "dnsOpen" | "tasksOpen";
+export type ImplementationSectionPreference = "appointmentsOpen" | "managementOpen" | "sharingOpen" | "filesOpen" | "dnsOpen" | "tasksOpen" | "dossierOpen" | "implementationDataOpen";
 
 export default function ImplementationSection({ children, preference, title, eyebrow, className = "card panel implementation-collapsible-panel" }: {
   children: ReactNode;

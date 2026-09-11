@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import ImplementationAppointmentsSection from "@/components/implementation-appointments-section";
 import ImplementationCustomerFilesPanel from "@/components/implementation-customer-files-panel";
 import ImplementationNotesField from "@/components/implementation-notes-field";
 import ImplementationWorkNoteEditor from "@/components/implementation-work-note-editor";
@@ -2758,11 +2759,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
           canEdit={canEdit}
         />
 
-        <section className="card panel implementation-appointments-panel">
+        <ImplementationAppointmentsSection key={user?.id}>
           <div className="top-row">
             <div>
-              <div className="eyebrow">Planning</div>
-              <h2 className="headline">Afspraken</h2>
               <p className="subtext">Iedere afspraak wordt direct zichtbaar op de beveiligde klantpagina.</p>
             </div>
             <div className="implementation-calendar-actions">
@@ -3096,7 +3095,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               ) : null}
             </div>
           ) : null}
-        </section>
+        </ImplementationAppointmentsSection>
 
         <section className="card panel">
           <div className="top-row">

@@ -5,7 +5,7 @@ import { LoaderCircle, Minus, Plus } from "lucide-react";
 
 export default function ImplementationAppointmentsSection({ children }: { children: ReactNode }) {
   const contentId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

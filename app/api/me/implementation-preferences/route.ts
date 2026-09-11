@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       "select payload from public.app_settings where key = $1",
       [`implementation-preferences:${actor.user.id}`],
     );
-    return json({ appointmentsOpen: rows[0]?.payload?.appointmentsOpen === true });
+    return json({ appointmentsOpen: rows[0]?.payload?.appointmentsOpen !== false });
   } catch {
     return json({ error: "Weergavevoorkeur laden mislukt." }, 500);
   }

@@ -46,9 +46,15 @@ function statusLabel(form: WorldlineReturnPinFormSummary | null) {
 export default function WorldlineReturnPinPanel({
   projectId,
   canWrite,
+  returnTo = "/worldline",
+  beforePrepare,
+  mailDetails,
 }: {
   projectId: string;
   canWrite: boolean;
+  returnTo?: string;
+  beforePrepare?: () => Promise<void>;
+  mailDetails?: { email: string; companyName: string; contactName: string };
 }) {
   const [forms, setForms] = useState<WorldlineReturnPinFormSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +109,7 @@ export default function WorldlineReturnPinPanel({
     setBusy(true);
     setMessage(forceNew ? "Nieuwe klantlink wordt gemaakt..." : "Klantlink wordt gemaakt...");
     try {
+      await beforePrepare?.();
       const response = await fetch("/api/worldline/return-pin-forms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -118,8 +125,8 @@ export default function WorldlineReturnPinPanel({
       }
       await loadForms(false);
       setMessage(forceNew ? "Nieuwe klantlink is klaar." : "Klantlink is klaar.");
-    } catch {
-      setMessage("Retourpinnenlink maken mislukt.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Retourpinnenlink maken mislukt.");
     } finally {
       setBusy(false);
     }
@@ -143,19 +150,19 @@ export default function WorldlineReturnPinPanel({
   async function prepareOutlookDraft() {
     if (!latestForm || !canWrite || outlookBusy) return;
 
-    const recipientEmail = latestForm.formData.email.trim().toLowerCase();
+    const recipientEmail = (mailDetails?.email ?? latestForm.formData.email).trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
       setMessage("Vul eerst een geldig e-mailadres in op het retourpinnenformulier.");
       return;
     }
 
-    const returnTo = "/worldline";
     const outlookWindow = window.open("about:blank", "_blank");
     if (outlookWindow) outlookWindow.opener = null;
     setOutlookBusy(true);
     setMessage("Outlook-verbinding wordt gecontroleerd...");
 
     try {
+      await beforePrepare?.();
       const statusResponse = await fetch(
         `/api/outlook/status?returnTo=${encodeURIComponent(returnTo)}`,
         { cache: "no-store" },
@@ -185,8 +192,8 @@ export default function WorldlineReturnPinPanel({
           body: JSON.stringify({
             template: "worldline-return-pin",
             recipientEmail,
-            customerName: latestForm.formData.companyName,
-            contactName: latestForm.formData.acceptedByName,
+            customerName: mailDetails?.companyName ?? latestForm.formData.companyName,
+            contactName: mailDetails?.contactName ?? latestForm.formData.acceptedByName,
             publicUrl: latestForm.publicUrl,
           }),
         },

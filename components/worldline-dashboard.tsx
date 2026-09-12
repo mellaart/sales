@@ -1272,7 +1272,10 @@ function renderAgreementFieldControl(
   );
 }
 
-export default function WorldlineDashboard() {
+const RETURN_PIN_FIELD_KEYS = new Set(["companyName", "contactPerson", "companyEmail", "phoneNumber", "mobileNumber", "businessCity", "signers", "signerFunction"]);
+
+export default function WorldlineDashboard({ returnPinOnly = false }: { returnPinOnly?: boolean }) {
+  const pageTitle = returnPinOnly ? "Retourpinnen" : "Worldline";
   const { user, role, loading: authLoading } = useAuth();
   const supabase = getSupabaseClient();
   const [roleTabAccess, setRoleTabAccess] = useState<RoleTabAccessMap>(ROLE_TAB_ACCESS);
@@ -1505,12 +1508,12 @@ export default function WorldlineDashboard() {
     autoCheckedIdentityDocumentIds.current.clear();
     autoCheckedOcrDocumentIds.current.clear();
     autoCheckedRefundDocumentIds.current.clear();
-    if (activeProjectId) {
+    if (activeProjectId && !returnPinOnly) {
       void loadDocuments(activeProjectId);
     } else {
       setDocuments([]);
     }
-  }, [activeProjectId, loadDocuments]);
+  }, [activeProjectId, loadDocuments, returnPinOnly]);
 
   async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
@@ -2858,8 +2861,8 @@ export default function WorldlineDashboard() {
         <header className="brand-hero card">
           <div>
             <div className="brand-mark">Smart Trade</div>
-            <h1>Worldline</h1>
-            <p>Beheer aansluitovereenkomsten, KvK, ID, bankafschrift en refund-documenten per relatie.</p>
+            <h1>{pageTitle}</h1>
+            <p>{returnPinOnly ? "Bereid het acceptatieformulier retourpinnen voor en zet de klantlink klaar in Outlook." : "Beheer aansluitovereenkomsten, KvK, ID, bankafschrift en refund-documenten per relatie."}</p>
           </div>
           <div className="brand-actions">
             {!canWriteWorldline ? <StatusPill tone="warning">Alleen lezen</StatusPill> : null}
@@ -2873,7 +2876,7 @@ export default function WorldlineDashboard() {
           <div className="top-row">
             <div>
               <div className="eyebrow">Projectoverzicht</div>
-              <h2 className="headline">Worldline-projecten</h2>
+              <h2 className="headline">{returnPinOnly ? "Klantdossiers" : "Worldline-projecten"}</h2>
               <p className="subtext">
                 Open actieve en gearchiveerde Worldline-dossiers, ook als een andere gebruiker ze heeft aangemaakt.
               </p>
@@ -3023,7 +3026,7 @@ export default function WorldlineDashboard() {
             <div className="top-row">
               <div>
                 <div className="eyebrow">Project</div>
-                <h2 className="headline">Worldline-dossier voor {selectedRelation.name}</h2>
+                <h2 className="headline">{pageTitle}-dossier voor {selectedRelation.name}</h2>
                 <p className="subtext">
                   {loadingProjects ? "Projecten worden geladen..." : projects.length === 0 ? "Nog geen project voor deze relatie." : `${projects.length} project(en) gevonden.`}
                 </p>
@@ -3057,6 +3060,49 @@ export default function WorldlineDashboard() {
 
         {activeProject && selectedRelation ? (
           <>
+            {returnPinOnly ? (
+              <section className="card panel">
+                <div className="top-row">
+                  <div>
+                    <div className="eyebrow">Retourpinnen</div>
+                    <h2 className="headline">Gegevens voor het acceptatieformulier</h2>
+                    <p className="subtext">Vul de klant- en ondertekengegevens in. Wijzigingen worden automatisch opgeslagen. Maak daarna de klantlink en zet deze klaar in Outlook.</p>
+                  </div>
+                  <button type="button" className="secondary-button" onClick={() => void saveAgreementFields()} disabled={busy || savingAgreementFields || !canWriteWorldline}>
+                    <RefreshCw size={16} /> {savingAgreementFields ? "Opslaan..." : "Opslaan"}
+                  </button>
+                </div>
+                <div className="worldline-field-list">
+                  <div className="worldline-field-rows">
+                    {WORLDLINE_AGREEMENT_FIELD_DEFINITIONS.filter(field => RETURN_PIN_FIELD_KEYS.has(field.key)).map(definition => (
+                      <div key={definition.key} className="worldline-yellow-field">
+                        <span className="worldline-field-label">{definition.label}</span>
+                        <div className="worldline-field-control">
+                          {renderAgreementFieldControl(definition, agreementFields[definition.key], !canWriteWorldline || busy,
+                            value => updateAgreementField(definition.key, value),
+                            value => commitAgreementField(definition.key, value))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <WorldlineReturnPinPanel
+                  key={activeProject.id}
+                  projectId={activeProject.id}
+                  canWrite={canWriteWorldline}
+                  returnTo="/retourpinnen"
+                  beforePrepare={async () => {
+                    await flushAgreementFields();
+                    if (agreementFieldsDirtyRef.current) throw new Error("Gegevens opslaan mislukt. Sla de gegevens eerst opnieuw op.");
+                  }}
+                  mailDetails={{
+                    email: agreementFields.companyEmail || selectedRelation.email || "",
+                    companyName: agreementFields.companyName || selectedRelation.name,
+                    contactName: agreementFields.signers || agreementFields.contactPerson,
+                  }}
+                />
+              </section>
+            ) : (<>
             <section className="card panel">
               <div className="top-row">
                 <div>
@@ -3269,6 +3315,7 @@ export default function WorldlineDashboard() {
                 })}
               </div>
             </section>
+            </>)}
           </>
         ) : null}
 

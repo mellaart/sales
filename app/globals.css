@@ -5878,6 +5878,7 @@ td {
 }
 
 .work-task-delete {
+  margin-top: 21px;
   display: grid;
   width: 40px;
   height: 40px;

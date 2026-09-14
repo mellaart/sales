@@ -39,7 +39,6 @@ import {
   normalizeRoleTabAccess,
 } from "@/lib/role-tabs";
 import { StatusPill } from "@/components/ui";
-import { groupCustomerActivities } from "@/lib/customer-activity-groups";
 import type { CustomerActivity } from "@/lib/customer-activity-server";
 
 const dashboardDateFormatter = new Intl.DateTimeFormat("nl-NL", {
@@ -109,7 +108,6 @@ export default function HomeDashboard() {
   const [showImplementationStats, setShowImplementationStats] = useState(false);
   const [salesNamesByUserId, setSalesNamesByUserId] = useState<SalesNamesByUserId>({});
   const [customerActivities, setCustomerActivities] = useState<CustomerActivity[]>([]);
-  const customerActivityGroups = useMemo(() => groupCustomerActivities(customerActivities), [customerActivities]);
   const [customerActivitiesLoading, setCustomerActivitiesLoading] = useState(true);
   const [acknowledgingActivityKey, setAcknowledgingActivityKey] = useState("");
   const [customerActivityStatus, setCustomerActivityStatus] = useState("");
@@ -416,46 +414,35 @@ export default function HomeDashboard() {
             </div>
           ) : customerActivities.length ? (
             <div className="dashboard-customer-activity-list">
-              {customerActivityGroups.map((group) => (
-                <details key={group.key} className="dashboard-customer-group">
-                  <summary className="dashboard-customer-group-summary">
-                    <strong>{group.customerName}</strong>
-                    <span>{group.activities.length} {group.activities.length === 1 ? "nieuwe actie" : "nieuwe acties"}</span>
-                    <time dateTime={group.activities[0].occurredAt}>
-                      {dashboardDateTimeFormatter.format(new Date(group.activities[0].occurredAt))}
-                    </time>
-                  </summary>
-                  {group.activities.map((activity) => (
-                    <article key={activity.key} className="dashboard-customer-activity-row">
-                      <div className="dashboard-customer-activity-icon"><BellRing size={18} /></div>
-                      <div className="dashboard-customer-activity-copy">
-                        <strong>{activity.customerName}</strong>
-                        <span>{activity.title}</span>
-                        <small>{activity.detail}</small>
-                      </div>
-                      <time dateTime={activity.occurredAt}>
-                        {dashboardDateTimeFormatter.format(new Date(activity.occurredAt))}
-                      </time>
-                      <div className="button-row compact dashboard-customer-activity-actions">
-                        <Link href={activity.href} className="primary-button">
-                          <ExternalLink size={16} /> Openen
-                        </Link>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          title="Markeer als gezien"
-                          aria-label={`${activity.customerName}: markeer als gezien`}
-                          disabled={Boolean(acknowledgingActivityKey)}
-                          onClick={() => void acknowledgeCustomerActivity([activity])}
-                        >
-                          {acknowledgingActivityKey === activity.key
-                            ? <RefreshCw size={17} className="spin" />
-                            : <CheckCircle2 size={17} />}
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </details>
+              {customerActivities.map((activity) => (
+                <article key={activity.key} className="dashboard-customer-activity-row">
+                  <div className="dashboard-customer-activity-icon"><BellRing size={18} /></div>
+                  <div className="dashboard-customer-activity-copy">
+                    <strong>{activity.customerName}</strong>
+                    <span>{activity.title}</span>
+                    <small>{activity.detail}</small>
+                  </div>
+                  <time dateTime={activity.occurredAt}>
+                    {dashboardDateTimeFormatter.format(new Date(activity.occurredAt))}
+                  </time>
+                  <div className="button-row compact dashboard-customer-activity-actions">
+                    <Link href={activity.href} className="primary-button">
+                      <ExternalLink size={16} /> Openen
+                    </Link>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      title="Markeer als gezien"
+                      aria-label={`${activity.customerName}: markeer als gezien`}
+                      disabled={Boolean(acknowledgingActivityKey)}
+                      onClick={() => void acknowledgeCustomerActivity([activity])}
+                    >
+                      {acknowledgingActivityKey === activity.key
+                        ? <RefreshCw size={17} className="spin" />
+                        : <CheckCircle2 size={17} />}
+                    </button>
+                  </div>
+                </article>
               ))}
             </div>
           ) : (

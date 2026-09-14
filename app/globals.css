@@ -8309,3 +8309,18 @@ html:is(
 
 .dashboard-section-content:not([hidden]) { display: grid; gap: 16px; }
 .dashboard-section-content[hidden] { display: none; }
+
+.work-collapsible-group + .work-collapsible-group { border-top: 1px solid var(--line); }
+.work-group-toggle { display: flex; align-items: center; gap: 14px; width: 100%; padding: 18px 22px; border: 0; background: transparent; color: var(--text-strong); text-align: left; cursor: pointer; }
+.work-group-toggle:hover { background: var(--surface-subtle); }
+.work-group-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: -3px; }
+.work-group-indicator { width: 20px; font-size: 23px; flex-shrink: 0; }
+.work-group-title { flex: 1; min-width: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.work-group-title small, .work-group-count { color: var(--text-soft); font-size: 12px; }
+.work-group-controls { justify-content: flex-end; }
+.work-collapsible-group > [hidden] { display: none; }
+@media (max-width: 600px) {
+  .work-group-toggle { flex-wrap: wrap; padding: 15px; gap: 10px; }
+  .work-group-title { flex-basis: calc(100% - 35px); }
+  .work-group-count { margin-left: 30px; }
+}

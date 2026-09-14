@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Boxes,
@@ -241,6 +241,19 @@ function DescriptionEditor({ label, value, disabled, onChange }: DescriptionEdit
   );
 }
 
+function WorkActivityGroup({ title, count, category, open, onToggle, children }: {
+  title: string; count: number; category: string; open: boolean; onToggle: () => void; children: ReactNode;
+}) {
+  return <div className="work-collapsible-group">
+    <button type="button" className="work-group-toggle" aria-expanded={open} onClick={onToggle}>
+      <span className="work-group-indicator" aria-hidden="true">{open ? "−" : "+"}</span>
+      <span className="work-group-title"><strong>{title}</strong><small>{category}</small></span>
+      <span className="work-group-count">{count} {count === 1 ? "werkzaamheid" : "werkzaamheden"}</span>
+    </button>
+    <div hidden={!open}>{children}</div>
+  </div>;
+}
+
 export default function WorkActivitiesDashboard() {
   const { role } = useAuth();
   const router = useRouter();
@@ -252,6 +265,8 @@ export default function WorkActivitiesDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const toggleGroup = (key: string) => setOpenGroups(current => current.includes(key) ? current.filter(item => item !== key) : [...current, key]);
 
   const canView = canAccessTab(role, "workActivities", roleTabAccess);
   const canEdit = canWriteTab(role, "workActivities", roleTabAccess);
@@ -298,11 +313,13 @@ export default function WorkActivitiesDashboard() {
   }, [role]);
 
   function addImplementationTask() {
+    const key = createImplementationTaskKey();
+    setOpenGroups(current => [...current, `task:${key}`]);
     setDraftConfig((current) => ({
       ...current,
       implementationTasks: [
         ...current.implementationTasks,
-        { key: createImplementationTaskKey(), name: "", description: "", workItems: [] },
+        { key, name: "", description: "", workItems: [] },
       ],
     }));
   }
@@ -467,6 +484,15 @@ export default function WorkActivitiesDashboard() {
           <div><strong>{configuredLineCount} taken en werkzaamheden ingesteld</strong><span>Omschrijvingen worden op de klantpagina getoond; iedere niet-lege regel wordt afzonderlijk verwerkt.</span></div>
         </section>
 
+        <div className="button-row compact work-group-controls">
+          <button type="button" className="secondary-button" onClick={() => setOpenGroups([
+            ...draftConfig.implementationTasks.map(item => `task:${item.key}`),
+            ...draftConfig.expansionWorkItems.map(item => `expansion:${item.key}`),
+            ...draftConfig.modules.map(item => `module:${item.key}`),
+          ])}>Alles openen</button>
+          <button type="button" className="secondary-button" onClick={() => setOpenGroups([])}>Alles sluiten</button>
+        </div>
+
         <section className="card work-activities-section">
           <header className="work-activities-heading">
             <div className="icon-badge"><ListChecks size={22} /></div>
@@ -474,7 +500,8 @@ export default function WorkActivitiesDashboard() {
           </header>
           <div className="work-activity-groups">
             {draftConfig.implementationTasks.length > 0 ? draftConfig.implementationTasks.map((task, index) => (
-              <article className="work-activity-group work-task-group" key={task.key}>
+              <WorkActivityGroup key={task.key} title={task.name || `Groep ${index + 1}`} count={task.workItems.filter(item => item.label.trim()).length} category="Taakgroep" open={openGroups.includes(`task:${task.key}`)} onToggle={() => toggleGroup(`task:${task.key}`)}>
+<article className="work-activity-group work-task-group">
                 <div className="work-task-group-meta">
                   <label className="work-task-name">
                     <span>Groep {index + 1}</span>
@@ -536,6 +563,7 @@ export default function WorkActivitiesDashboard() {
                   </button>
                 </div>
               </article>
+              </WorkActivityGroup>
             )) : (
               <div className="work-task-empty">Nog geen taakgroepen toegevoegd.</div>
             )}
@@ -559,7 +587,8 @@ export default function WorkActivitiesDashboard() {
           </header>
           <div className="work-activity-groups">
             {draftConfig.expansionWorkItems.map((item) => (
-              <article className="work-activity-group" key={item.key}>
+              <WorkActivityGroup key={item.key} title={item.name} count={item.workItems.filter(line => line.trim()).length} category="Koppeling of uitbreiding" open={openGroups.includes(`expansion:${item.key}`)} onToggle={() => toggleGroup(`expansion:${item.key}`)}>
+<article className="work-activity-group">
                 <div className="work-activity-label"><strong>{item.name}</strong><span>Koppeling of uitbreiding</span></div>
                 <div className="work-activity-content">
                   {item.key === "customerPortal" ? (
@@ -590,9 +619,11 @@ export default function WorkActivitiesDashboard() {
                   />
                 </div>
               </article>
+              </WorkActivityGroup>
             ))}
             {draftConfig.modules.map((item) => (
-              <article className="work-activity-group" key={item.key}>
+              <WorkActivityGroup key={item.key} title={item.name} count={(item.workItems ?? []).filter(line => line.trim()).length} category="Smart Trade-module" open={openGroups.includes(`module:${item.key}`)} onToggle={() => toggleGroup(`module:${item.key}`)}>
+<article className="work-activity-group">
                 <div className="work-activity-label"><strong>{item.name}</strong><span>Smart Trade-module</span></div>
                 <div className="work-activity-content">
                   <DescriptionEditor
@@ -609,6 +640,7 @@ export default function WorkActivitiesDashboard() {
                   />
                 </div>
               </article>
+              </WorkActivityGroup>
             ))}
           </div>
         </section>

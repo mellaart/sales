@@ -23,6 +23,7 @@ export type CustomerActivity = {
     | "implementation_file";
   title: string;
   customerName: string;
+  customerId?: string | null;
   detail: string;
   occurredAt: string;
   href: string;
@@ -34,6 +35,7 @@ type Actor = {
 };
 
 type DealActivityRow = {
+  customer_id?: string | null;
   id: string;
   deal_id: string;
   customer_name: string | null;
@@ -45,6 +47,7 @@ type DealActivityRow = {
 };
 
 type WorldlineActivityRow = {
+  customer_id?: string | null;
   id: string;
   project_id: string;
   relation_name: string;
@@ -53,6 +56,7 @@ type WorldlineActivityRow = {
 };
 
 type ImplementationActivityRow = {
+  customer_id?: string | null;
   id: string;
   customer_name: string;
   created_by: string | null;
@@ -63,6 +67,7 @@ type ImplementationActivityRow = {
 };
 
 type FileActivityRow = {
+  customer_id?: string | null;
   id: string;
   implementation_id: string;
   customer_name: string;
@@ -124,7 +129,7 @@ export async function listCustomerActivities(actor: Actor) {
   const since = new Date(Date.now() - ACTIVITY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const [intakeResult, approvalResult, worldlineResult, implementationResult, fileResult, acknowledgementResult, roleTabAccess] = await Promise.all([
     query<DealActivityRow>(
-      `select ci.id, ci.deal_id, d.customer_name, d.user_id as owner_user_id,
+      `select ci.id, ci.deal_id, d.customer_name, d.smart_trade_relation_id::text as customer_id, d.user_id as owner_user_id,
               i.assigned_consultant_id, ci.submitted_at as occurred_at, ci.form_data
        from public.customer_intakes ci
        join public.deals d on d.id = ci.deal_id
@@ -136,7 +141,7 @@ export async function listCustomerActivities(actor: Actor) {
       [since, MAX_ACTIVITIES],
     ),
     query<DealActivityRow>(
-      `select da.id, da.deal_id, d.customer_name, d.user_id as owner_user_id,
+      `select da.id, da.deal_id, d.customer_name, d.smart_trade_relation_id::text as customer_id, d.user_id as owner_user_id,
               i.assigned_consultant_id, da.accepted_at as occurred_at,
               da.accepted_by_name
        from public.deal_approvals da
@@ -150,7 +155,7 @@ export async function listCustomerActivities(actor: Actor) {
       [since, MAX_ACTIVITIES],
     ),
     query<WorldlineActivityRow>(
-      `select form.id, form.project_id, project.relation_name,
+      `select form.id, form.project_id, project.relation_name, project.relation_id::text as customer_id,
               form.accepted_at as occurred_at, form.accepted_by_name
        from public.worldline_return_pin_forms form
        join public.worldline_projects project on project.id = form.project_id
@@ -163,7 +168,7 @@ export async function listCustomerActivities(actor: Actor) {
     ),
     query<ImplementationActivityRow>(
       `select i.id, i.customer_name, i.created_by, i.assigned_consultant_id,
-              d.user_id as owner_user_id,
+              d.user_id as owner_user_id, d.smart_trade_relation_id::text as customer_id,
               i.implementation_customer_work_approvals as approvals,
               i.implementation_work_item_notes as notes
        from public.implementations i
@@ -175,7 +180,7 @@ export async function listCustomerActivities(actor: Actor) {
     ),
     query<FileActivityRow>(
       `select event.id, event.implementation_id, i.customer_name, i.created_by,
-              i.assigned_consultant_id, d.user_id as owner_user_id,
+              i.assigned_consultant_id, d.user_id as owner_user_id, d.smart_trade_relation_id::text as customer_id,
               event.file_name, event.category, event.event_type,
               event.created_at as occurred_at
        from public.implementation_customer_file_events event
@@ -208,6 +213,7 @@ export async function listCustomerActivities(actor: Actor) {
       key: `customer-intake:${row.id}`,
       kind: "customer_intake",
       title: "Klantformulier opgeslagen",
+      customerId: row.customer_id,
       customerName: row.customer_name || formData.deliveryName || "Onbekende klant",
       detail: "De klant heeft het klantformulier ingevuld en opgeslagen.",
       occurredAt,
@@ -223,6 +229,7 @@ export async function listCustomerActivities(actor: Actor) {
       key: `deal-approval:${row.id}`,
       kind: "deal_approval",
       title: "Offerte online geaccepteerd",
+      customerId: row.customer_id,
       customerName: row.customer_name || "Onbekende klant",
       detail: row.accepted_by_name
         ? `Akkoord gegeven door ${row.accepted_by_name}.`
@@ -243,6 +250,7 @@ export async function listCustomerActivities(actor: Actor) {
         key: `worldline-return-pin:${row.id}`,
         kind: "worldline_return_pin",
         title: "Refundformulier opgeslagen",
+        customerId: row.customer_id,
         customerName: row.relation_name || "Onbekende relatie",
         detail: row.accepted_by_name
           ? `Het retourpinnenformulier is goedgekeurd door ${row.accepted_by_name}.`
@@ -263,6 +271,7 @@ export async function listCustomerActivities(actor: Actor) {
         key: `implementation-approval:${row.id}:${approval.workItemKey}`,
         kind: "implementation_approval",
         title: "Werkzaamheid door klant geaccepteerd",
+        customerId: row.customer_id,
         customerName: row.customer_name || "Onbekende klant",
         detail: approval.workItemLabel,
         occurredAt,
@@ -279,6 +288,7 @@ export async function listCustomerActivities(actor: Actor) {
         key: `implementation-note:${row.id}:${workItemKey}`,
         kind: "implementation_note",
         title: "Klantopmerking opgeslagen",
+        customerId: row.customer_id,
         customerName: row.customer_name || "Onbekende klant",
         detail: note.text,
         occurredAt,
@@ -295,6 +305,7 @@ export async function listCustomerActivities(actor: Actor) {
       key: `implementation-file:${row.id}`,
       kind: "implementation_file",
       title: row.event_type === "deleted" ? "Klantbestand verwijderd" : "Klantbestand aangeleverd",
+      customerId: row.customer_id,
       customerName: row.customer_name || "Onbekende klant",
       detail: `${fileCategoryLabel(row.category)}: ${row.file_name}`,
       occurredAt,

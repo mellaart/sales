@@ -8301,3 +8301,6 @@ html:is(
   .dashboard-customer-group-summary strong { flex-basis: calc(100% - 35px); }
   .dashboard-customer-group-summary span { margin-left: 28px; }
 }
+
+.dashboard-section-content:not([hidden]) { display: grid; gap: 16px; }
+.dashboard-section-content[hidden] { display: none; }

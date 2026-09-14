@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ImplementationSection from "@/components/implementation-section";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -466,11 +467,9 @@ export default function HomeDashboard() {
         </section>
 
         {showImplementationStats ? (
-          <section className="dashboard-implementation-overview">
+          <ImplementationSection key={`dashboardPlanningOpen:${user?.id}`} preference="dashboardPlanningOpen" title="Planning en voortgang" eyebrow="Implementatie" className="dashboard-implementation-overview" contentClassName="dashboard-section-content">
             <div className="top-row">
               <div>
-                <div className="eyebrow">Implementatie</div>
-                <h2 className="headline">Planning en voortgang</h2>
                 <p className="subtext">
                   {role === "manager" || role === "admin"
                     ? "Overzicht van alle implementaties."
@@ -614,15 +613,11 @@ export default function HomeDashboard() {
                 </div>
               ) : null}
             </div>
-          </section>
+          </ImplementationSection>
         ) : null}
 
-        <section className="deals-results card panel">
+        <ImplementationSection key={`dashboardDealsOpen:${user?.id}`} preference="dashboardDealsOpen" title="Laatste deals" eyebrow="Recent" className="deals-results card panel" contentClassName="dashboard-section-content">
           <div className="top-row">
-            <div>
-              <div className="eyebrow">Recent</div>
-              <h2 className="headline">Laatste deals</h2>
-            </div>
             <Link href="/deals" className="secondary-button">Volledig overzicht</Link>
           </div>
           {loading ? <div className="save-status">Dashboard wordt geladen...</div> : null}
@@ -658,7 +653,7 @@ export default function HomeDashboard() {
             {!loading && recentDeals.length === 0 ? <div className="save-status">Nog geen deals gevonden.</div> : null}
           </div>
           {canViewAllDeals(role) ? <p className="subtext">Je bekijkt data op manager/admin niveau.</p> : null}
-        </section>
+        </ImplementationSection>
       </div>
     </div>
   );

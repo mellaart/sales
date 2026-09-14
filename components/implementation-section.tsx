@@ -3,14 +3,15 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { LoaderCircle, Minus, Plus } from "lucide-react";
 
-export type ImplementationSectionPreference = "appointmentsOpen" | "managementOpen" | "sharingOpen" | "filesOpen" | "dnsOpen" | "tasksOpen" | "dossierOpen" | "implementationDataOpen";
+export type ImplementationSectionPreference = "appointmentsOpen" | "managementOpen" | "sharingOpen" | "filesOpen" | "dnsOpen" | "tasksOpen" | "dossierOpen" | "implementationDataOpen" | "dashboardPlanningOpen" | "dashboardDealsOpen";
 
-export default function ImplementationSection({ children, preference, title, eyebrow, className = "card panel implementation-collapsible-panel" }: {
+export default function ImplementationSection({ children, preference, title, eyebrow, contentClassName, className = "card panel implementation-collapsible-panel" }: {
   children: ReactNode;
   preference: ImplementationSectionPreference;
   title: string;
   eyebrow?: string;
   className?: string;
+  contentClassName?: string;
 }) {
   const contentId = useId();
   const [open, setOpen] = useState(true);
@@ -70,6 +71,6 @@ export default function ImplementationSection({ children, preference, title, eye
     {error ? <div className="implementation-inline-error" role="alert">{error}
       {!loaded ? <button type="button" className="secondary-button" onClick={() => setAttempt(value => value + 1)}>Opnieuw laden</button> : null}
     </div> : null}
-    <div id={contentId} hidden={!open}>{children}</div>
+    <div id={contentId} className={contentClassName} hidden={!open}>{children}</div>
   </section>;
 }

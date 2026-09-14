@@ -41,7 +41,7 @@ test('implementation view preferences persist per authenticated consultant, with
     assert.equal((await GET(request({}))).body.appointmentsOpen, false);
     actor.user.id = 'consultant-b';
     assert.equal((await GET(request({}))).body.appointmentsOpen, true);
-    const keys = ['appointmentsOpen', 'managementOpen', 'sharingOpen', 'filesOpen', 'dnsOpen', 'tasksOpen', 'dossierOpen', 'implementationDataOpen', 'dashboardPlanningOpen', 'dashboardDealsOpen'];
+    const keys = ['appointmentsOpen', 'managementOpen', 'sharingOpen', 'filesOpen', 'dnsOpen', 'tasksOpen', 'dossierOpen', 'implementationDataOpen', 'dashboardPlanningOpen', 'dashboardDealsOpen', 'dashboardCustomerActivitiesOpen'];
     actor.user.id = 'consultant-c';
     const defaults = Object.fromEntries(keys.map(key => [key, true]));
     assert.deepEqual((await GET(request({}))).body, defaults);

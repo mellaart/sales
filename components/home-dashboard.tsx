@@ -379,11 +379,9 @@ export default function HomeDashboard() {
           </Link>
         </section>
 
-        <section className="dashboard-customer-activity card panel">
+        <ImplementationSection key={`dashboardCustomerActivitiesOpen:${user?.id}`} preference="dashboardCustomerActivitiesOpen" title="Nieuwe klantacties" eyebrow="Klantupdates" className="dashboard-implementation-overview" contentClassName="dashboard-customer-activity card panel">
           <div className="top-row dashboard-customer-activity-header">
             <div>
-              <div className="eyebrow">Klantupdates</div>
-              <h2 className="headline">Nieuwe klantacties</h2>
               <p className="subtext">
                 Ingevulde formulieren, online akkoorden, opmerkingen en aangeleverde bestanden.
               </p>
@@ -451,7 +449,7 @@ export default function HomeDashboard() {
             </div>
           )}
           {customerActivityStatus ? <div className="save-status error">{customerActivityStatus}</div> : null}
-        </section>
+        </ImplementationSection>
 
         {showImplementationStats ? (
           <ImplementationSection key={`dashboardPlanningOpen:${user?.id}`} preference="dashboardPlanningOpen" title="Planning en voortgang" eyebrow="Implementatie" className="dashboard-implementation-overview" contentClassName="dashboard-section-content">

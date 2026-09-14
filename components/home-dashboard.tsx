@@ -616,7 +616,7 @@ export default function HomeDashboard() {
           </ImplementationSection>
         ) : null}
 
-        <ImplementationSection key={`dashboardDealsOpen:${user?.id}`} preference="dashboardDealsOpen" title="Laatste deals" eyebrow="Recent" className="deals-results card panel" contentClassName="dashboard-section-content">
+        <ImplementationSection key={`dashboardDealsOpen:${user?.id}`} preference="dashboardDealsOpen" title="Laatste deals" eyebrow="Recent" className="dashboard-implementation-overview" contentClassName="dashboard-section-content card panel">
           <div className="top-row">
             <Link href="/deals" className="secondary-button">Volledig overzicht</Link>
           </div>

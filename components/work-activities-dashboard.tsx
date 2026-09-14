@@ -3,11 +3,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Boxes,
   ChevronDown,
   ChevronUp,
   ClipboardList,
-  ListChecks,
   Plus,
   RefreshCw,
   Save,
@@ -314,7 +312,7 @@ export default function WorkActivitiesDashboard() {
 
   function addImplementationTask() {
     const key = createImplementationTaskKey();
-    setOpenGroups(current => [...current, `task:${key}`]);
+    setOpenGroups(current => [...current, "category:tasks", `task:${key}`]);
     setDraftConfig((current) => ({
       ...current,
       implementationTasks: [
@@ -486,6 +484,7 @@ export default function WorkActivitiesDashboard() {
 
         <div className="button-row compact work-group-controls">
           <button type="button" className="secondary-button" onClick={() => setOpenGroups([
+            "category:tasks", "category:expansions",
             ...draftConfig.implementationTasks.map(item => `task:${item.key}`),
             ...draftConfig.expansionWorkItems.map(item => `expansion:${item.key}`),
             ...draftConfig.modules.map(item => `module:${item.key}`),
@@ -494,10 +493,14 @@ export default function WorkActivitiesDashboard() {
         </div>
 
         <section className="card work-activities-section">
-          <header className="work-activities-heading">
-            <div className="icon-badge"><ListChecks size={22} /></div>
-            <div><span>Planning</span><h2>Taken</h2></div>
-          </header>
+          <h2 className="work-category-heading">
+            <button type="button" className="work-group-toggle" aria-expanded={openGroups.includes("category:tasks")} aria-controls="work-category-tasks" onClick={() => toggleGroup("category:tasks")}>
+              <span className="work-group-indicator" aria-hidden="true">{openGroups.includes("category:tasks") ? "−" : "+"}</span>
+              <span className="work-group-title"><strong>Taken</strong><small>Planning</small></span>
+              <span className="work-group-count">{draftConfig.implementationTasks.length} onderdelen</span>
+            </button>
+          </h2>
+          <div id="work-category-tasks" className="work-category-content" hidden={!openGroups.includes("category:tasks")}>
           <div className="work-activity-groups">
             {draftConfig.implementationTasks.length > 0 ? draftConfig.implementationTasks.map((task, index) => (
               <WorkActivityGroup key={task.key} title={task.name || `Groep ${index + 1}`} count={task.workItems.filter(item => item.label.trim()).length} category="Taakgroep" open={openGroups.includes(`task:${task.key}`)} onToggle={() => toggleGroup(`task:${task.key}`)}>
@@ -578,13 +581,18 @@ export default function WorkActivitiesDashboard() {
               <Plus size={16} /> Groep toevoegen
             </button>
           </div>
+          </div>
         </section>
 
         <section className="card work-activities-section">
-          <header className="work-activities-heading">
-            <div className="icon-badge"><Boxes size={22} /></div>
-            <div><span>Uitbreidingen</span><h2>Modules en koppelingen</h2></div>
-          </header>
+          <h2 className="work-category-heading">
+            <button type="button" className="work-group-toggle" aria-expanded={openGroups.includes("category:expansions")} aria-controls="work-category-expansions" onClick={() => toggleGroup("category:expansions")}>
+              <span className="work-group-indicator" aria-hidden="true">{openGroups.includes("category:expansions") ? "−" : "+"}</span>
+              <span className="work-group-title"><strong>Modules en koppelingen</strong><small>Uitbreidingen</small></span>
+              <span className="work-group-count">{draftConfig.expansionWorkItems.length + draftConfig.modules.length} onderdelen</span>
+            </button>
+          </h2>
+          <div id="work-category-expansions" className="work-category-content" hidden={!openGroups.includes("category:expansions")}>
           <div className="work-activity-groups">
             {draftConfig.expansionWorkItems.map((item) => (
               <WorkActivityGroup key={item.key} title={item.name} count={item.workItems.filter(line => line.trim()).length} category="Koppeling of uitbreiding" open={openGroups.includes(`expansion:${item.key}`)} onToggle={() => toggleGroup(`expansion:${item.key}`)}>
@@ -642,6 +650,7 @@ export default function WorkActivitiesDashboard() {
               </article>
               </WorkActivityGroup>
             ))}
+          </div>
           </div>
         </section>
 

@@ -8383,3 +8383,6 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
     flex-basis: 100%;
   }
 }
+
+.work-category-heading { margin: 0; font-size: 20px; }
+.work-category-content[hidden] { display: none; }

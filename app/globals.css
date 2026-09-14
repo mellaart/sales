@@ -5830,7 +5830,8 @@ td {
 }
 
 .work-task-name input::placeholder {
-  color: rgba(203, 213, 225, 0.45);
+  color: var(--text-soft);
+  opacity: 1;
 }
 
 .work-task-group-meta {
@@ -5941,7 +5942,8 @@ td {
 }
 
 .work-description-editor textarea::placeholder {
-  color: rgba(203, 213, 225, 0.45);
+  color: var(--text-soft);
+  opacity: 1;
 }
 
 .work-description-editor textarea:disabled {
@@ -6002,7 +6004,8 @@ td {
 }
 
 .work-task-item > input::placeholder {
-  color: rgba(203, 213, 225, 0.45);
+  color: var(--text-soft);
+  opacity: 1;
 }
 
 .work-task-item > input:disabled,
@@ -6057,7 +6060,8 @@ td {
 }
 
 .work-line input::placeholder {
-  color: rgba(203, 213, 225, 0.45);
+  color: var(--text-soft);
+  opacity: 1;
 }
 
 .work-line-delete {

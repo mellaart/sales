@@ -320,6 +320,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [customerOutlookBusy, setCustomerOutlookBusy] = useState(false);
   const [newCustomerOutlookBusy, setNewCustomerOutlookBusy] = useState(false);
   const [implementationOrderBusy, setImplementationOrderBusy] = useState<"preview" | "create" | null>(null);
+  const [implementationTicketBusy, setImplementationTicketBusy] = useState(false);
+  const [implementationTicketMessage, setImplementationTicketMessage] = useState("");
+  const [implementationTicketId, setImplementationTicketId] = useState("");
   const [implementationOrderPreview, setImplementationOrderPreview] = useState<ImplementationOrderResponse | null>(null);
   const [implementationOrderMessage, setImplementationOrderMessage] = useState("");
   const [implementationOrderMessageTone, setImplementationOrderMessageTone] = useState<"info" | "success" | "error">("info");
@@ -869,6 +872,21 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     if (error) return false;
     setImplementation(data as ImplementationRecord);
     return true;
+  }
+
+  async function handleImplementationTicket() {
+    if (!implementation || !canManageImplementation || implementationTicketBusy) return;
+    setImplementationTicketBusy(true);
+    setImplementationTicketMessage("");
+    try {
+      const response = await fetch(`/api/implementations/${encodeURIComponent(implementation.id)}/ticket`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Ticket aanmaken mislukt.");
+      setImplementationTicketId(data.ticketId);
+      setImplementationTicketMessage(`Implementatie ticket ${data.ticketId} ${data.alreadyCreated ? "bestaat al" : "aangemaakt"}.`);
+    } catch (error) {
+      setImplementationTicketMessage(error instanceof Error ? error.message : "Ticket aanmaken mislukt.");
+    } finally { setImplementationTicketBusy(false); }
   }
 
   async function handleNewCustomerOutlookDraft() {
@@ -2523,7 +2541,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                 <div className="eyebrow">Implementatie</div>
                 <h2 className="headline">Vervolg nieuwe klant</h2>
                 <div className="subtext">
-                  Bereid de interne nieuwe klantmail en implementatieorder vanuit deze deal voor.
+                  Bereid de interne nieuwe klantmail, het implementatieticket en de implementatieorder vanuit deze deal voor.
                 </div>
               </div>
               <StatusPill tone="success">Implementatie actief</StatusPill>
@@ -2583,6 +2601,21 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   onClick={() => void handleNewCustomerOutlookDraft()}
                 >
                   <Mail size={16} /> {newCustomerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                </button>
+              </article>
+
+              <article className="implementation-communication-card">
+                <div className="implementation-communication-icon"><ClipboardCheck size={22} /></div>
+                <div className="implementation-communication-copy">
+                  <span>Implementatie ticket</span>
+                  <strong>{implementationTicketId ? `Ticket ${implementationTicketId}` : "Consultancy"}</strong>
+                  <p>Maak het implementatieticket voor deze klant aan in Troublefree.</p>
+                  {implementationTicketMessage ? <p role="status">{implementationTicketMessage}</p> : null}
+                </div>
+                <button type="button" className="primary-button"
+                  disabled={!canManageImplementation || !customerIntakeRelationId || implementationTicketBusy || Boolean(implementationTicketId)}
+                  onClick={() => void handleImplementationTicket()}>
+                  <ClipboardCheck size={16} /> {implementationTicketBusy ? "Aanmaken..." : implementationTicketId ? "Ticket aangemaakt" : "Implementatie ticket aanmaken"}
                 </button>
               </article>
 

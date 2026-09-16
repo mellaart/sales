@@ -52,7 +52,7 @@ test('implementation tickets use server-side IDs, permissions and durable duplic
     assert.equal((await post()).status,502);
     assert.equal((await post()).status,409); assert.equal(calls.length,2);
     const context = { params: Promise.resolve({ implementationId: 'impl' }) };
-    const put = ticketId => module.exports.PUT(new Request('https://example.test', {method:'PUT',body:JSON.stringify({ticketId})}), context);
+    const put = (ticketId, expectedTicketId) => module.exports.PUT(new Request('https://example.test', {method:'PUT',body:JSON.stringify({ticketId,expectedTicketId})}), context);
     const get = () => module.exports.GET(new Request('https://example.test'),context);
     // A pending automatic creation must not be overwritten by a manual link.
     assert.equal((await put('555')).status,409);
@@ -67,6 +67,13 @@ test('implementation tickets use server-side IDs, permissions and durable duplic
     assert.equal((await put('777')).status,409);
     assert.equal((await post()).body.alreadyCreated,true);
     assert.equal(calls.length,2, 'linking an existing ticket must never create an external ticket');
+    actor.user.email='other@example.test'; assert.equal((await put('15429','555')).status,403); actor.user.email='admin@example.test';
+    assert.equal((await put('15429','17528')).status,409);
+    assert.equal((await put('15429','555')).body.ticketId,'15429');
+    assert.equal((await get()).body.ticketId,'15429');
+    assert.equal((await put('999','555')).status,409);
+    assert.equal(calls.length,2);
+    implementationId = 'uncertain'; assert.equal((await put('15429','555')).status,409);
     implementationId = 'another';
     assert.equal((await get()).body.ticketId,null);
     const links = await Promise.all([put('111'),put('222')]);

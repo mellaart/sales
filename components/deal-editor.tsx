@@ -941,11 +941,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       const response = await fetch(`/api/implementations/${encodeURIComponent(implementation.id)}/ticket`, {
         method: mode === "link" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        ...(mode === "link" ? { body: JSON.stringify({ ticketId: existingImplementationTicketId.trim() }) } : {}),
+        ...(mode === "link" ? { body: JSON.stringify({ ticketId: existingImplementationTicketId.trim(), ...(implementationTicketId ? { expectedTicketId: implementationTicketId } : {}) }) } : {}),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Ticket verwerken mislukt.");
       setImplementationTicketId(data.ticketId);
+      setExistingImplementationTicketId("");
       setImplementationTicketMessage(`Implementatie ticket ${data.ticketId} ${mode === "link" ? "gekoppeld" : data.alreadyCreated ? "bestaat al" : "aangemaakt"}.`);
     } catch (error) {
       setImplementationTicketMessage(error instanceof Error ? error.message : "Ticket aanmaken mislukt.");
@@ -2673,7 +2674,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <span>Implementatie ticket</span>
                   <strong>{implementationTicketId ? `Ticket ${implementationTicketId}` : "Consultancy"}</strong>
                   <p>Maak het ticket aan voor de toegewezen implementatieconsultant en team Smart Trade Consultancy.</p>
-                  {!implementationTicketId ? (
+                  {canManageImplementation ? (
                     <div>
                       <label>
                         <span className="input-label">Bestaand open implementatieticket (ticket-ID)</span>
@@ -2683,7 +2684,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                       </label>
                       <button type="button" className="secondary-button" onClick={() => void handleImplementationTicket("link")}
                         disabled={!canManageImplementation || implementationTicketBusy || !implementationTicketLoaded || implementationTicketPending || !/^[0-9]+$/.test(existingImplementationTicketId.trim())}>
-                        Bestaand ticket koppelen
+                        {implementationTicketId ? "Ticketkoppeling wijzigen" : "Bestaand ticket koppelen"}
                       </button>
                     </div>
                   ) : null}

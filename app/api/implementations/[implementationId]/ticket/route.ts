@@ -98,6 +98,15 @@ export async function PUT(request: Request, context: TicketContext) {
     const input = body?.ticketId;
     const ticketId = (typeof input === "string" && /^\d+$/.test(input.trim())) || typeof input === "number" ? positiveId(input) : null;
     if (!ticketId) return json({ error: "Vul een geldig numeriek ticket-ID in." }, 400);
+    if (body?.expectedTicketId !== undefined) {
+      const expected = typeof body.expectedTicketId === "string" && /^\d+$/.test(body.expectedTicketId) ? positiveId(body.expectedTicketId) : null;
+      if (!expected) return json({ error: "Het huidige ticket-ID ontbreekt of is ongeldig." }, 400);
+      const result = await query("update public.app_settings set payload = payload || $3::jsonb, updated_at = now() where key = $1 and payload->>'ticketId' = $2 returning key", [access.key, String(expected), JSON.stringify({
+        ticketId: String(ticketId), previousTicketId: String(expected), source: "manual", linkedBy: access.actor.user.id, linkedAt: new Date().toISOString(),
+      })]);
+      if (!result.rows.length) return json({ error: "De ticketkoppeling is gewijzigd. Vernieuw de pagina voordat je opnieuw opslaat." }, 409);
+      return json({ ticketId: String(ticketId) });
+    }
     // Share the same durable record as automatic creation, so linking and creation cannot race.
     await query("insert into public.app_settings (key, payload) values ($1, $2::jsonb) on conflict (key) do nothing", [access.key, JSON.stringify({
       ticketId: String(ticketId), source: "manual", linkedBy: access.actor.user.id, linkedAt: new Date().toISOString(),

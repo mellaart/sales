@@ -203,7 +203,7 @@ function mimeMessage(input: NotificationInput, recipient: string, sender: string
   ].join("\r\n");
 }
 
-function sendWithSendmail(path: string, sender: string, message: string) {
+export function sendWithSendmail(path: string, sender: string, message: string) {
   return new Promise<void>((resolve, reject) => {
     const child = spawn(path, ["-i", "-t", "-f", sender], {
       stdio: ["pipe", "ignore", "pipe"],

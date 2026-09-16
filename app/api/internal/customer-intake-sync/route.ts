@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
+import { deliverPendingApprovalNotifications } from "@/lib/deal-approval-notification";
 import { syncPendingCustomerIntakes } from "@/lib/customer-intake-server";
 
 export const dynamic = "force-dynamic";
@@ -53,8 +54,12 @@ export async function POST(request: Request) {
   if (!authorized(request)) return jsonResponse({ error: "Niet toegestaan." }, 401);
 
   try {
+    const approvalNotifications = await deliverPendingApprovalNotifications().catch(error => {
+      console.error("Akkoordmeldingen verwerken mislukt:", error);
+      return { sent: 0, failed: 1 };
+    });
     const result = await syncPendingCustomerIntakes();
-    return jsonResponse({ ok: result.failed === 0, ...result }, result.failed > 0 ? 207 : 200);
+    return jsonResponse({ ok: result.failed === 0 && approvalNotifications.failed === 0, ...result, approvalNotifications }, result.failed > 0 || approvalNotifications.failed > 0 ? 207 : 200);
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error

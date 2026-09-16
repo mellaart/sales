@@ -15,6 +15,8 @@ import {
   normalizeDevelopmentLines,
 } from "@/lib/development-lines";
 
+import { deliverPendingApprovalNotifications } from "@/lib/deal-approval-notification";
+
 const DEAL_APPROVAL_TTL_DAYS = 30;
 
 type Actor = {
@@ -563,10 +565,53 @@ export async function acceptPublicDealApproval(
       ],
     );
 
+    await client.query(
+      `insert into public.app_settings (key, payload) values ($1, $2::jsonb)
+       on conflict (key) do nothing`,
+      [`deal-approval-notification:${updated.id}:${updated.token_version}`, JSON.stringify({
+        status: "pending", dealId: approval.deal_id, customerName: deal.customer_name,
+        acceptedAt: updated.accepted_at, name: updated.accepted_by_name, email: updated.accepted_by_email,
+      })],
+    );
     return updated;
   });
 
+  // Mail errors must never undo the customer's agreement; failed jobs remain queued.
+  await deliverPendingApprovalNotifications(`deal-approval-notification:${result.id}:${result.token_version}`)
+    .catch(error => console.error("Akkoordmail kon niet worden verwerkt:", error));
   return toPublicSummary(result);
+}
+
+// Recovery only reuses recorded consent; it never records a new agreement.
+export async function recoverAcceptedDealApproval(approvalId: string, tokenVersion: number) {
+  const key = `deal-approval-notification:${approvalId}:${tokenVersion}`;
+  await withTransaction(async client => {
+    const { rows } = await client.query<DealApprovalRow>(
+      "select * from public.deal_approvals where id = $1 and token_version = $2 for update",
+      [approvalId, tokenVersion],
+    );
+    const approval = rows[0];
+    if (!approval || approval.status !== "accepted" || !approval.accepted_at) {
+      throw new Error("Er is geen vastgelegd akkoord om te herstellen.");
+    }
+    const dealResult = await client.query<DealRow>("select * from public.deals where id = $1 for update", [approval.deal_id]);
+    const deal = dealResult.rows[0];
+    if (!deal || snapshotHashFromDeal(deal) !== approval.snapshot_hash) {
+      throw new Error("De offerte is gewijzigd na het akkoord. Controleer de deal voordat de status wordt hersteld.");
+    }
+    await client.query(
+      `update public.deals set accepted_at = $2, accepted_by_name = $3, accepted_by_email = $4, approval_expires_at = $5 where id = $1`,
+      [deal.id, approval.accepted_at, approval.accepted_by_name, approval.accepted_by_email, approval.expires_at],
+    );
+    await client.query(
+      "insert into public.app_settings (key, payload) values ($1, $2::jsonb) on conflict (key) do nothing",
+      [key, JSON.stringify({ status: "pending", dealId: deal.id, customerName: deal.customer_name,
+        acceptedAt: approval.accepted_at, name: approval.accepted_by_name, email: approval.accepted_by_email })],
+    );
+  });
+  await deliverPendingApprovalNotifications(key);
+  const { rows } = await query<{ payload: { status: string } }>("select payload from public.app_settings where key = $1", [key]);
+  return { notificationStatus: rows[0]?.payload.status ?? "pending" };
 }
 
 export async function getDealApprovalForActor(

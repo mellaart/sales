@@ -153,6 +153,17 @@ export default function DealsDashboard() {
 
   useEffect(() => {
     void loadDeals();
+    const refresh = () => {
+      if (document.visibilityState !== "hidden") void loadDeals();
+    };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [user, role, loadDeals]);
 
   const currentSalesName = useMemo(() => getUserDisplayName(user, profile), [profile, user]);

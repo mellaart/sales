@@ -517,6 +517,37 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   }, [currentSalesName, dealId, modules, pricingConfig.developmentHourlyRate, supabase, user]);
 
   useEffect(() => {
+    if (!user || loading) return;
+    let cancelled = false;
+    let busy = false;
+    async function refreshApproval() {
+      if (busy || document.visibilityState === "hidden") return;
+      busy = true;
+      try {
+        const result = await getDealWithFallback(supabase, dealId);
+        if (cancelled || result.error || !result.deal) return;
+        const deal = result.deal;
+        setApprovalStatus(deal.accepted_at ? "accepted" : deal.approval_requested_at ? "open" : null);
+        setApprovalRequestedAt(deal.approval_requested_at ?? null);
+        setApprovalExpiresAt(deal.approval_expires_at ?? null);
+        setAcceptedAt(deal.accepted_at ?? null);
+        setAcceptedByName(deal.accepted_by_name ?? "");
+        setAcceptedByEmail(deal.accepted_by_email ?? "");
+      } finally { busy = false; }
+    }
+    const refresh = () => { void refreshApproval().catch(() => undefined); };
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [dealId, user, loading, supabase]);
+
+  useEffect(() => {
     if (loading || typeof window === "undefined") return;
 
     const url = new URL(window.location.href);

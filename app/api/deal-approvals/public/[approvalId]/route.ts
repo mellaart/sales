@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   acceptPublicDealApproval,
+  recoverAcceptedDealApproval,
   getPublicDealApproval,
 } from "@/lib/deal-approval-server";
 
@@ -54,6 +55,11 @@ export async function POST(
     if ("error" in access) return jsonResponse({ error: access.error }, 404);
 
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+    if (body?.action === "retry-notification") {
+      if (access.approval.status !== "accepted") return jsonResponse({ error: "Er is nog geen akkoord vastgelegd." }, 409);
+      const result = await recoverAcceptedDealApproval(approvalId, tokenVersion);
+      return jsonResponse(result, result.notificationStatus === "sent" ? 200 : 202);
+    }
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!name) return jsonResponse({ error: "Vul uw naam in." }, 400);

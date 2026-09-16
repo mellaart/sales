@@ -2668,16 +2668,17 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                 </button>
               </article>
 
-              <article className="implementation-communication-card">
+              <article className="implementation-communication-card implementation-ticket-card">
                 <div className="implementation-communication-icon"><ClipboardCheck size={22} /></div>
                 <div className="implementation-communication-copy">
                   <span>Implementatie ticket</span>
                   <strong>{implementationTicketId ? `Ticket ${implementationTicketId}` : "Consultancy"}</strong>
                   <p>Maak het ticket aan voor de toegewezen implementatieconsultant en team Smart Trade Consultancy.</p>
+                  <div className="implementation-ticket-actions">
                   {canManageImplementation ? (
-                    <div>
+                    <>
                       <label>
-                        <span className="input-label">Bestaand open implementatieticket (ticket-ID)</span>
+                        <span className="input-label">Ticket-ID</span>
                         <input className="input" type="text" inputMode="numeric" pattern="[0-9]+" placeholder="Bijvoorbeeld 12345"
                           value={existingImplementationTicketId} onChange={event => setExistingImplementationTicketId(event.target.value)}
                           disabled={!canManageImplementation || implementationTicketBusy || !implementationTicketLoaded || implementationTicketPending} />
@@ -2686,15 +2687,17 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                         disabled={!canManageImplementation || implementationTicketBusy || !implementationTicketLoaded || implementationTicketPending || !/^[0-9]+$/.test(existingImplementationTicketId.trim())}>
                         {implementationTicketId ? "Ticketkoppeling wijzigen" : "Bestaand ticket koppelen"}
                       </button>
-                    </div>
+                    </>
                   ) : null}
-                  {implementationTicketMessage ? <p role="status">{implementationTicketMessage}</p> : null}
-                </div>
                 <button type="button" className="primary-button"
                   disabled={!canManageImplementation || !customerIntakeRelationId || !implementationTicketLoaded || implementationTicketPending || implementationTicketBusy || Boolean(implementationTicketId)}
                   onClick={() => void handleImplementationTicket()}>
                   <ClipboardCheck size={16} /> {implementationTicketBusy ? "Aanmaken..." : implementationTicketId ? "Ticket gekoppeld" : "Implementatie ticket aanmaken"}
                 </button>
+                  </div>
+                  {implementationTicketMessage ? <p role="status">{implementationTicketMessage}</p> : null}
+                </div>
+
               </article>
 
               <article className="implementation-communication-card implementation-order-card">

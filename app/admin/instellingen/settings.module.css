@@ -10,3 +10,8 @@
 .toggle:disabled { opacity: .5; cursor: wait; }
 .toggle:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 4px; }
 @media (max-width: 600px) { .row { flex-wrap: wrap; gap: 12px; } .label { flex-basis: calc(100% - 40px); } }
+
+.hoursRow { flex-direction: column; align-items: flex-start; gap: 8px; }
+.hoursControls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.hoursControls input { width: 140px; max-width: 100%; }
+.hoursControls input, .hoursControls button { box-sizing: border-box; height: 48px; min-height: 48px; padding-top: 0; padding-bottom: 0; line-height: 1.25; }

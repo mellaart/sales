@@ -72,11 +72,12 @@ export default function SettingsPage() {
           onChange={(event) => void save(event.target.checked)} />
         <span className={styles.state}>{busy ? "Bezig..." : enabled === null ? "" : enabled ? "Aan" : "Uit"}</span>
       </section>
-      <section className={styles.row}>
-        <label className={styles.label}>Aantal uur per implementatie per dag
-          <input className="input" type="number" min="0.01" max="24" step="0.25" value={hours} onChange={event=>setHours(event.target.value)} disabled={busy} />
-        </label>
-        <button className="primary-button" disabled={busy || !hours} onClick={()=>void saveHours()}>Opslaan</button>
+      <section className={`${styles.row} ${styles.hoursRow}`}>
+        <label htmlFor="implementation-hours">Aantal uur per implementatie per dag</label>
+        <div className={styles.hoursControls}>
+          <input id="implementation-hours" className="input" type="number" min="0.01" max="24" step="0.25" value={hours} onChange={event=>setHours(event.target.value)} disabled={busy} />
+          <button className="primary-button" disabled={busy || !hours} onClick={()=>void saveHours()}>Opslaan</button>
+        </div>
       </section>
       <div role="status" aria-live="polite">{message}</div>
       {enabled === null && !busy ? <button type="button" className="secondary-button" onClick={() => void load()}><RefreshCw size={16} /> Opnieuw laden</button> : null}

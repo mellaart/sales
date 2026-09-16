@@ -20,10 +20,10 @@ export async function POST(request: Request, context: { params: Promise<{ implem
     if (!isProtectedAdminEmail(actor.user.email)) return json({ error: "Je hebt geen rechten om het implementatieticket aan te maken." }, 403);
     const { implementationId } = await context.params;
     const access = await executeLocalTableQuery({
-      table: "implementations", action: "select", select: "id,deal_id",
+      table: "implementations", action: "select", select: "id,deal_id,assigned_consultant_id",
       filters: [{ column: "id", op: "eq", value: implementationId }], maybeSingle: true,
     }, { user: actor.user, profile: actor.profile });
-    const implementation = access.data as { id: string; deal_id: string } | null;
+    const implementation = access.data as { id: string; deal_id: string; assigned_consultant_id: string | null } | null;
     if (!implementation) return json({ error: "Implementatie niet gevonden of niet toegankelijk." }, 404);
     const key = `implementation-ticket:${implementation.id}`;
     const existing = await query<{ payload: { ticketId?: string } }>("select payload from public.app_settings where key = $1", [key]);
@@ -33,15 +33,19 @@ export async function POST(request: Request, context: { params: Promise<{ implem
     }
     const { rows } = await query<{ smart_trade_relation_id: number | null }>("select smart_trade_relation_id from public.deals where id = $1", [implementation.deal_id]);
     const relation = positiveId(rows[0]?.smart_trade_relation_id);
-    const employee = positiveId(actor.profile.employee_relation_id);
+    if (!implementation.assigned_consultant_id) return json({ error: "Wijs eerst een implementatieconsultant toe voordat je het ticket aanmaakt." }, 400);
+    const consultant = await query<{ employee_relation_id: number | null }>(
+      "select employee_relation_id from public.profiles where id = $1", [implementation.assigned_consultant_id],
+    );
+    const employee = positiveId(consultant.rows[0]?.employee_relation_id);
     if (!relation) return json({ error: "Het relatienummer ontbreekt. Koppel eerst de klantrelatie aan deze deal." }, 400);
-    if (!employee) return json({ error: "Vul bij jouw gebruiker op de Admin-pagina eerst het medewerker relatie-ID in." }, 400);
+    if (!employee) return json({ error: "Vul op de Admin-pagina het medewerker relatie-ID van de toegewezen implementatieconsultant in." }, 400);
     const headers = getSmartTradePullHeaders("live", { "content-type": "application/json" });
     const claim = await query("insert into public.app_settings (key, payload) values ($1, $2::jsonb) on conflict (key) do nothing returning key", [key, JSON.stringify({ status: "pending", createdBy: actor.user.id, attemptedAt: new Date().toISOString() })]);
     if (!claim.rows.length) return json({ error: "Dit implementatieticket wordt al aangemaakt. Probeer de status later opnieuw te controleren." }, 409);
     // Retain the claim on network errors or ambiguous replies: a retry must not create a duplicate.
     const response = await fetchWithSmartTradeTimeout("https://my.troublefree.nl/v3/api/ticketing/tickets", headers, "live", {
-      method: "POST", body: JSON.stringify({ relation, name: "Implementatie", description: "Consultancy", labels: [100, 99], employee, priority: 2 }),
+      method: "POST", body: JSON.stringify({ relation, name: "Implementatie", description: "Consultancy", labels: [100, 99], primaryLabel: 100, employee, priority: 2, mainTask: { assignedTo: { team: 100, relation: employee } } }),
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {

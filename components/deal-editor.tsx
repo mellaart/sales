@@ -2640,7 +2640,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                 <div className="implementation-communication-copy">
                   <span>Implementatie ticket</span>
                   <strong>{implementationTicketId ? `Ticket ${implementationTicketId}` : "Consultancy"}</strong>
-                  <p>Maak het implementatieticket voor deze klant aan in Troublefree.</p>
+                  <p>Maak het ticket aan voor de toegewezen implementatieconsultant en team Smart Trade Consultancy.</p>
                   {implementationTicketMessage ? <p role="status">{implementationTicketMessage}</p> : null}
                 </div>
                 <button type="button" className="primary-button"

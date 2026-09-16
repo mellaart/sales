@@ -8405,3 +8405,8 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
   padding-bottom: 0;
   line-height: 1.25;
 }
+
+.implementation-overview-progress { min-width: 0; }
+.implementation-overview-progress .implementation-progress-track { display: block; width: 100%; height: 8px; margin-top: 8px; padding: 0; overflow: hidden; border: 0; border-radius: 99px; background: var(--line); }
+.implementation-overview-progress .implementation-progress-track > span { display: block; height: 100%; padding: 0; border: 0; border-radius: inherit; background: var(--success); transition: width 200ms ease; }
+.implementation-overview-progress small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }

@@ -1,5 +1,6 @@
 "use client";
 
+import ImplementationProgressMeter from "@/components/implementation-progress-meter";
 import { ImplementationSelect } from "@/components/implementation-select";
 
 import Link from "next/link";
@@ -435,6 +436,7 @@ export default function ImplementationDashboard() {
                   <span>Sales<strong>{implementation.sales_name || "-"}</strong></span>
                   <span>Aangemaakt<strong>{formatDate(implementation.created_at)}</strong></span>
                   <span>Toegewezen aan<strong>{implementation.assigned_consultant_name || "Nog niet toegewezen"}</strong></span>
+                  <ImplementationProgressMeter implementationId={implementation.id} />
                 </div>
 
                 <div className="implementation-controls">

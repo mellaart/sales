@@ -20,3 +20,9 @@ export function validateBudgetRows(value: unknown, budget: number): value is Rec
   }
   return Math.abs(total - budget) < 0.005;
 }
+
+export function weightedProgress(budget: number | null, rows: unknown, approvals: Record<string, unknown>): number | null {
+  if (budget === null || !Number.isFinite(budget) || budget <= 0 || !validateBudgetRows(rows, budget)) return null;
+  const completedDays = Object.entries(rows).reduce((sum, [key, row]) => sum + row.days * (approvals[key] ? 1 : row.started ? 0.5 : 0), 0);
+  return Math.min(100, Math.floor(completedDays / budget * 1000 + 1e-8) / 10);
+}

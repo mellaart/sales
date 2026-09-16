@@ -15,3 +15,15 @@ test('budget totals and settings reject invalid numbers',()=>{
  for(const value of [0,-1,25,NaN,Infinity,'6',null])assert.equal(validHoursPerDay(value),false);
  assert.equal(validHoursPerDay(6),true);assert.equal(validHoursPerDay(7.5),true);
 });
+
+test('weighted progress uses days, half for started and full only for customer approval',()=>{
+ const {weightedProgress}=moduleUnderTest.exports;
+ const rows={small:{days:2,started:true},large:{days:6,started:false}};
+ assert.equal(weightedProgress(8,rows,{}),12.5);
+ assert.equal(weightedProgress(8,rows,{large:{approvedAt:'date'}}),87.5);
+ assert.equal(weightedProgress(8,rows,{large:{},small:{}}),100);
+ assert.equal(weightedProgress(9,rows,{}),null);
+ assert.equal(weightedProgress(null,rows,{}),null);
+ assert.equal(weightedProgress(0,{},{}),null);
+ assert.equal(weightedProgress(8,{small:{days:8,started:false}},{}),0);
+});

@@ -323,6 +323,34 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [implementationTicketBusy, setImplementationTicketBusy] = useState(false);
   const [implementationTicketMessage, setImplementationTicketMessage] = useState("");
   const [implementationTicketId, setImplementationTicketId] = useState("");
+  const [existingImplementationTicketId, setExistingImplementationTicketId] = useState("");
+  const [implementationTicketLoaded, setImplementationTicketLoaded] = useState(false);
+  const [implementationTicketPending, setImplementationTicketPending] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setImplementationTicketId("");
+    setExistingImplementationTicketId("");
+    setImplementationTicketMessage("");
+    setImplementationTicketLoaded(false);
+    setImplementationTicketPending(false);
+    if (!implementation?.id) return () => controller.abort();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/implementations/${encodeURIComponent(implementation.id)}/ticket`, { cache: "no-store", signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Ticket laden mislukt.");
+        if (controller.signal.aborted) return;
+        setImplementationTicketId(data.ticketId || "");
+        setImplementationTicketPending(Boolean(data.pending));
+        setImplementationTicketLoaded(true);
+        if (data.pending) setImplementationTicketMessage("De uitkomst van een eerdere ticketaanmaak is nog onbekend. Controleer het ticket in Troublefree.");
+      } catch (error) {
+        if (!controller.signal.aborted) setImplementationTicketMessage(error instanceof Error ? error.message : "Ticket laden mislukt.");
+      }
+    })();
+    return () => controller.abort();
+  }, [implementation?.id]);
   const [implementationOrderPreview, setImplementationOrderPreview] = useState<ImplementationOrderResponse | null>(null);
   const [implementationOrderMessage, setImplementationOrderMessage] = useState("");
   const [implementationOrderMessageTone, setImplementationOrderMessageTone] = useState<"info" | "success" | "error">("info");
@@ -905,16 +933,20 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     return true;
   }
 
-  async function handleImplementationTicket() {
-    if (!implementation || !canManageImplementation || implementationTicketBusy) return;
+  async function handleImplementationTicket(mode: "create" | "link" = "create") {
+    if (!implementation || !canManageImplementation || !implementationTicketLoaded || implementationTicketPending || implementationTicketBusy) return;
     setImplementationTicketBusy(true);
     setImplementationTicketMessage("");
     try {
-      const response = await fetch(`/api/implementations/${encodeURIComponent(implementation.id)}/ticket`, { method: "POST" });
+      const response = await fetch(`/api/implementations/${encodeURIComponent(implementation.id)}/ticket`, {
+        method: mode === "link" ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        ...(mode === "link" ? { body: JSON.stringify({ ticketId: existingImplementationTicketId.trim() }) } : {}),
+      });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Ticket aanmaken mislukt.");
+      if (!response.ok) throw new Error(data.error || "Ticket verwerken mislukt.");
       setImplementationTicketId(data.ticketId);
-      setImplementationTicketMessage(`Implementatie ticket ${data.ticketId} ${data.alreadyCreated ? "bestaat al" : "aangemaakt"}.`);
+      setImplementationTicketMessage(`Implementatie ticket ${data.ticketId} ${mode === "link" ? "gekoppeld" : data.alreadyCreated ? "bestaat al" : "aangemaakt"}.`);
     } catch (error) {
       setImplementationTicketMessage(error instanceof Error ? error.message : "Ticket aanmaken mislukt.");
     } finally { setImplementationTicketBusy(false); }
@@ -2641,12 +2673,26 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <span>Implementatie ticket</span>
                   <strong>{implementationTicketId ? `Ticket ${implementationTicketId}` : "Consultancy"}</strong>
                   <p>Maak het ticket aan voor de toegewezen implementatieconsultant en team Smart Trade Consultancy.</p>
+                  {!implementationTicketId ? (
+                    <div>
+                      <label>
+                        <span className="input-label">Bestaand open implementatieticket (ticket-ID)</span>
+                        <input className="input" type="text" inputMode="numeric" pattern="[0-9]+" placeholder="Bijvoorbeeld 12345"
+                          value={existingImplementationTicketId} onChange={event => setExistingImplementationTicketId(event.target.value)}
+                          disabled={!canManageImplementation || implementationTicketBusy || !implementationTicketLoaded || implementationTicketPending} />
+                      </label>
+                      <button type="button" className="secondary-button" onClick={() => void handleImplementationTicket("link")}
+                        disabled={!canManageImplementation || implementationTicketBusy || !implementationTicketLoaded || implementationTicketPending || !/^[0-9]+$/.test(existingImplementationTicketId.trim())}>
+                        Bestaand ticket koppelen
+                      </button>
+                    </div>
+                  ) : null}
                   {implementationTicketMessage ? <p role="status">{implementationTicketMessage}</p> : null}
                 </div>
                 <button type="button" className="primary-button"
-                  disabled={!canManageImplementation || !customerIntakeRelationId || implementationTicketBusy || Boolean(implementationTicketId)}
+                  disabled={!canManageImplementation || !customerIntakeRelationId || !implementationTicketLoaded || implementationTicketPending || implementationTicketBusy || Boolean(implementationTicketId)}
                   onClick={() => void handleImplementationTicket()}>
-                  <ClipboardCheck size={16} /> {implementationTicketBusy ? "Aanmaken..." : implementationTicketId ? "Ticket aangemaakt" : "Implementatie ticket aanmaken"}
+                  <ClipboardCheck size={16} /> {implementationTicketBusy ? "Aanmaken..." : implementationTicketId ? "Ticket gekoppeld" : "Implementatie ticket aanmaken"}
                 </button>
               </article>
 

@@ -62,3 +62,53 @@ export async function POST(request: Request, context: { params: Promise<{ implem
     return json({ error: "Ticket aanmaken kon niet worden bevestigd. Controleer eerst in Troublefree of het ticket is aangemaakt voordat je het opnieuw probeert." }, 502);
   }
 }
+
+type TicketContext = { params: Promise<{ implementationId: string }> };
+
+async function ticketAccess(request: Request, context: TicketContext, write: boolean) {
+  const actor = await requireLocalUser(request);
+  if (!actor.ok) return { ok: false, status: 401, error: "Niet ingelogd." } as const;
+  if (write && !isProtectedAdminEmail(actor.user.email)) return { ok: false, status: 403, error: "Je hebt geen rechten om een implementatieticket te koppelen." } as const;
+  const { implementationId } = await context.params;
+  const result = await executeLocalTableQuery({
+    table: "implementations", action: "select", select: "id",
+    filters: [{ column: "id", op: "eq", value: implementationId }], maybeSingle: true,
+  }, { user: actor.user, profile: actor.profile });
+  const implementation = result.data as { id: string } | null;
+  if (!implementation) return { ok: false, status: 404, error: "Implementatie niet gevonden of niet toegankelijk." } as const;
+  return { ok: true, key: `implementation-ticket:${implementation.id}`, actor } as const;
+}
+
+export async function GET(request: Request, context: TicketContext) {
+  try {
+    const access = await ticketAccess(request, context, false);
+    if (!access.ok) return json({ error: access.error }, access.status);
+    const { rows } = await query<{ payload: { ticketId?: string } }>("select payload from public.app_settings where key = $1", [access.key]);
+    return json({ ticketId: rows[0]?.payload.ticketId ?? null, pending: Boolean(rows[0] && !rows[0].payload.ticketId) });
+  } catch {
+    return json({ error: "Gekoppeld implementatieticket laden mislukt." }, 500);
+  }
+}
+
+export async function PUT(request: Request, context: TicketContext) {
+  try {
+    const access = await ticketAccess(request, context, true);
+    if (!access.ok) return json({ error: access.error }, access.status);
+    const body = await request.json().catch(() => null);
+    const input = body?.ticketId;
+    const ticketId = (typeof input === "string" && /^\d+$/.test(input.trim())) || typeof input === "number" ? positiveId(input) : null;
+    if (!ticketId) return json({ error: "Vul een geldig numeriek ticket-ID in." }, 400);
+    // Share the same durable record as automatic creation, so linking and creation cannot race.
+    await query("insert into public.app_settings (key, payload) values ($1, $2::jsonb) on conflict (key) do nothing", [access.key, JSON.stringify({
+      ticketId: String(ticketId), source: "manual", linkedBy: access.actor.user.id, linkedAt: new Date().toISOString(),
+    })]);
+    const { rows } = await query<{ payload: { ticketId?: string } }>("select payload from public.app_settings where key = $1", [access.key]);
+    const savedId = rows[0]?.payload.ticketId;
+    if (savedId !== String(ticketId)) return json({ error: savedId
+      ? `Deze implementatie is al gekoppeld aan ticket ${savedId}.`
+      : "Er loopt al een ticketaanmaak of de uitkomst is onbekend. Controleer dit eerst voordat je een bestaand ticket koppelt." }, 409);
+    return json({ ticketId: savedId });
+  } catch {
+    return json({ error: "Bestaand implementatieticket koppelen mislukt." }, 500);
+  }
+}

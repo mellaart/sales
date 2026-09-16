@@ -14,6 +14,7 @@ test('implementation tickets use server-side IDs, permissions and durable duplic
     let calls = [];
     let fail = false;
     const dependencies = {
+      '@/lib/implementation-ticket-hours': { getImplementationTicketHours: async () => ({ workedHours: 12.5, workedDays: 12.5 / 6, hoursPerDay: 6 }) },
       'next/server': { NextResponse: { json: (body, init) => ({ body, ...init }) } },
       '@/lib/local-auth': { requireLocalUser: async () => actor },
       '@/lib/local-db': { query: (sql, values) => db.query(sql, values) },

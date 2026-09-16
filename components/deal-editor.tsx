@@ -323,6 +323,26 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [implementationTicketBusy, setImplementationTicketBusy] = useState(false);
   const [implementationTicketMessage, setImplementationTicketMessage] = useState("");
   const [implementationTicketId, setImplementationTicketId] = useState("");
+  const [ticketHours, setTicketHours] = useState<{ workedHours: number; workedDays: number } | null>(null);
+  const [ticketHoursError, setTicketHoursError] = useState("");
+  const [ticketHoursRefresh, setTicketHoursRefresh] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    setTicketHours(null);
+    setTicketHoursError("");
+    if (!implementation?.id || !implementationTicketId) return () => controller.abort();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/implementations/${encodeURIComponent(implementation.id)}/ticket?include=workedHours`, { cache: "no-store", signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Gewerkte uren ophalen mislukt.");
+        if (!controller.signal.aborted && data.ticketId === implementationTicketId) setTicketHours(data);
+      } catch (error) {
+        if (!controller.signal.aborted) setTicketHoursError(error instanceof Error ? error.message : "Gewerkte uren ophalen mislukt.");
+      }
+    })();
+    return () => controller.abort();
+  }, [implementation?.id, implementationTicketId, ticketHoursRefresh]);
   const [existingImplementationTicketId, setExistingImplementationTicketId] = useState("");
   const [implementationTicketLoaded, setImplementationTicketLoaded] = useState(false);
   const [implementationTicketPending, setImplementationTicketPending] = useState(false);
@@ -2674,6 +2694,10 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <span>Implementatie ticket</span>
                   <strong>{implementationTicketId ? `Ticket ${implementationTicketId}` : "Consultancy"}</strong>
                   <p>Maak het ticket aan voor de toegewezen implementatieconsultant en team Smart Trade Consultancy.</p>
+                  {implementationTicketId ? <div>
+                    <p>{ticketHours ? `Gewerkt: ${ticketHours.workedHours.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} uur · ${ticketHours.workedDays.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} dagen (6 uur per dag, inclusief subtickets)` : ticketHoursError || "Gewerkte uren laden..."}</p>
+                    <button type="button" className="secondary-button" onClick={() => setTicketHoursRefresh(value => value + 1)}>Uren vernieuwen</button>
+                  </div> : null}
                   <div className="implementation-ticket-actions">
                   {canManageImplementation ? (
                     <>

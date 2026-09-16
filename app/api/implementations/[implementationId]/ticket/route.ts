@@ -1,3 +1,4 @@
+import { getImplementationTicketHours } from "@/lib/implementation-ticket-hours";
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
 import { query } from "@/lib/local-db";
@@ -84,6 +85,12 @@ export async function GET(request: Request, context: TicketContext) {
     const access = await ticketAccess(request, context, false);
     if (!access.ok) return json({ error: access.error }, access.status);
     const { rows } = await query<{ payload: { ticketId?: string } }>("select payload from public.app_settings where key = $1", [access.key]);
+    if (new URL(request.url).searchParams.get("include") === "workedHours") {
+      const ticketId = rows[0]?.payload.ticketId;
+      if (!ticketId) return json({ error: "Koppel eerst een implementatieticket." }, 400);
+      try { return json({ ticketId, ...await getImplementationTicketHours(ticketId) }); }
+      catch { return json({ error: "Gewerkte uren zijn niet beschikbaar. Probeer het later opnieuw." }, 502); }
+    }
     return json({ ticketId: rows[0]?.payload.ticketId ?? null, pending: Boolean(rows[0] && !rows[0].payload.ticketId) });
   } catch {
     return json({ error: "Gekoppeld implementatieticket laden mislukt." }, 500);

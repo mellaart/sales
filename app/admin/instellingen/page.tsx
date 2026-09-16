@@ -8,6 +8,7 @@ import styles from "./settings.module.css";
 export default function SettingsPage() {
   const { role, loading: authLoading } = useAuth();
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [hours, setHours] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -19,6 +20,7 @@ export default function SettingsPage() {
       const data = await response.json();
       if (!response.ok || typeof data.smsRequired !== "boolean") throw new Error(data.error || "Instellingen laden mislukt.");
       setEnabled(data.smsRequired);
+      if (data.hoursPerDay) setHours(String(data.hoursPerDay));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Instellingen laden mislukt.");
     } finally { setBusy(false); }
@@ -38,12 +40,23 @@ export default function SettingsPage() {
       const data = await response.json();
       if (!response.ok || typeof data.smsRequired !== "boolean") throw new Error(data.error || "Opslaan mislukt.");
       setEnabled(data.smsRequired);
+      if (data.hoursPerDay) setHours(String(data.hoursPerDay));
       setMessage("Instelling opgeslagen.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Opslaan mislukt.");
     } finally { setBusy(false); }
   }
 
+  async function saveHours() {
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch("/api/admin/settings", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hoursPerDay:Number(hours.replace(",", "."))})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Opslaan mislukt.");
+      setHours(String(data.hoursPerDay)); setMessage("Uren per implementatiedag opgeslagen.");
+    } catch(error) { setMessage(error instanceof Error ? error.message : "Opslaan mislukt."); }
+    finally { setBusy(false); }
+  }
   return <div className="page-shell"><main className="container stack-4">
     <header><div className="eyebrow">Admin</div><h1 className="headline">Instellingen</h1></header>
     {authLoading ? <p>Instellingen laden...</p> : role !== "admin" ? <p>Geen toegang.</p> : <>
@@ -58,6 +71,12 @@ export default function SettingsPage() {
           aria-describedby="sms-setting-description" checked={enabled === true} disabled={busy || enabled === null}
           onChange={(event) => void save(event.target.checked)} />
         <span className={styles.state}>{busy ? "Bezig..." : enabled === null ? "" : enabled ? "Aan" : "Uit"}</span>
+      </section>
+      <section className={styles.row}>
+        <label className={styles.label}>Aantal uur per implementatie per dag
+          <input className="input" type="number" min="0.01" max="24" step="0.25" value={hours} onChange={event=>setHours(event.target.value)} disabled={busy} />
+        </label>
+        <button className="primary-button" disabled={busy || !hours} onClick={()=>void saveHours()}>Opslaan</button>
       </section>
       <div role="status" aria-live="polite">{message}</div>
       {enabled === null && !busy ? <button type="button" className="secondary-button" onClick={() => void load()}><RefreshCw size={16} /> Opnieuw laden</button> : null}

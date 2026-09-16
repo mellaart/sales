@@ -323,7 +323,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [implementationTicketBusy, setImplementationTicketBusy] = useState(false);
   const [implementationTicketMessage, setImplementationTicketMessage] = useState("");
   const [implementationTicketId, setImplementationTicketId] = useState("");
-  const [ticketHours, setTicketHours] = useState<{ workedHours: number; workedDays: number } | null>(null);
+  const [ticketHours, setTicketHours] = useState<{ workedHours: number; workedDays: number; hoursPerDay: number } | null>(null);
   const [ticketHoursError, setTicketHoursError] = useState("");
   const [ticketHoursRefresh, setTicketHoursRefresh] = useState(0);
   useEffect(() => {
@@ -1255,6 +1255,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       modules: selectedModuleRows,
       notes,
       calculator_inputs: {
+        implementationDays,
         extraUsers,
         chauffeurExtraUsers,
         planningAppUsers,
@@ -2695,7 +2696,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <strong>{implementationTicketId ? `Ticket ${implementationTicketId}` : "Consultancy"}</strong>
                   <p>Maak het ticket aan voor de toegewezen implementatieconsultant en team Smart Trade Consultancy.</p>
                   {implementationTicketId ? <div>
-                    <p>{ticketHours ? `Gewerkt: ${ticketHours.workedHours.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} uur · ${ticketHours.workedDays.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} dagen (6 uur per dag, inclusief subtickets)` : ticketHoursError || "Gewerkte uren laden..."}</p>
+                    <p>{ticketHours ? `Gewerkt: ${ticketHours.workedHours.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} uur · ${ticketHours.workedDays.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} dagen (${ticketHours.hoursPerDay} uur per dag, inclusief subtickets)` : ticketHoursError || "Gewerkte uren laden..."}</p>
                     <button type="button" className="secondary-button" onClick={() => setTicketHoursRefresh(value => value + 1)}>Uren vernieuwen</button>
                   </div> : null}
                   <div className="implementation-ticket-actions">

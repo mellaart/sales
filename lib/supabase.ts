@@ -59,6 +59,7 @@ export type AssetExpansionSummary = {
 };
 
 export type DealCalculatorInputs = {
+  implementationDays?: number;
   extraUsers: number;
   chauffeurExtraUsers?: number;
   planningAppUsers?: number;

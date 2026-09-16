@@ -1,3 +1,4 @@
+import { getImplementationHoursPerDay } from "@/lib/implementation-settings";
 import { fetchWithSmartTradeTimeout, getSmartTradePullHeaders } from "@/lib/smart-trade-pull-test";
 
 export async function getImplementationTicketHours(ticketId: string) {
@@ -12,5 +13,6 @@ export async function getImplementationTicketHours(ticketId: string) {
   if (!((typeof raw === "string" && /^\d+(?:\.\d+)?$/.test(raw.trim())) || typeof raw === "number")) throw new Error("Gewerkte uren ontbreken in de ticketrespons.");
   const workedHours = Number(raw);
   if (!Number.isFinite(workedHours) || workedHours < 0) throw new Error("Ongeldig urentotaal.");
-  return { workedHours, workedDays: workedHours / 6, hoursPerDay: 6 };
+  const hoursPerDay = await getImplementationHoursPerDay();
+  return { workedHours, workedDays: workedHours / hoursPerDay, hoursPerDay };
 }

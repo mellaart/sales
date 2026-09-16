@@ -400,6 +400,7 @@ export default function PriceCalculator() {
         modules: selectedModuleRows,
         notes: notes.trim() || null,
         calculator_inputs: {
+          implementationDays,
           extraUsers,
           chauffeurExtraUsers,
           planningAppUsers,

@@ -78,6 +78,9 @@ test("settings API rejects anonymous and consultant writes and validates admin i
   let actor = { ok: false };
   let saved = true;
   const api = load("app/api/admin/settings/route.ts", {
+    "@/lib/implementation-settings": { getImplementationHoursPerDay: async () => 6 },
+    "@/lib/implementation-planning": { validHoursPerDay: value => typeof value === "number" && value > 0 && value <= 24 },
+    "@/lib/local-db": { query: async () => ({rows:[]}) },
     "next/server": { NextResponse: { json: (body, init) => ({ body, ...init }) } },
     "@/lib/local-auth": { requireLocalUser: async () => actor },
     "@/lib/customer-sms-settings": {

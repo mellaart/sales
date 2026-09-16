@@ -8396,6 +8396,12 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
   width: 100%;
 }
 
+.implementation-ticket-actions .input,
 .implementation-ticket-actions button {
-  min-height: 44px;
+  box-sizing: border-box;
+  height: 48px;
+  min-height: 48px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1.25;
 }

@@ -21,7 +21,7 @@ export const IMPLEMENTATION_STATUS_LABELS: Record<ImplementationStatus, string> 
 };
 
 export function isActiveImplementation(status: ImplementationStatus) {
-  return status !== "completed" && status !== "cancelled";
+  return status === "planned" || status === "in_progress" || status === "waiting_customer";
 }
 
 export const IMPLEMENTATION_PROGRESS_ITEMS = [

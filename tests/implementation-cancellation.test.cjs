@@ -78,6 +78,10 @@ test("cancelled implementations are not active", () => {
   assert.equal(module.exports.isActiveImplementation("cancelled"), false);
   assert.equal(module.exports.isActiveImplementation("completed"), false);
   assert.equal(module.exports.isActiveImplementation("planned"), true);
+  assert.equal(module.exports.isActiveImplementation("new"), false);
+  assert.equal(module.exports.isActiveImplementation("assigned"), false);
+  assert.equal(module.exports.isActiveImplementation("in_progress"), true);
+  assert.equal(module.exports.isActiveImplementation("waiting_customer"), true);
 });
 
 test("overview excludes cancelled results even when searched or filtered explicitly", () => {

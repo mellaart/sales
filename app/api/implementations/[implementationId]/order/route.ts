@@ -138,6 +138,9 @@ export async function POST(
       return jsonResponse({ error: "Implementatie niet gevonden of niet toegankelijk." }, 404);
     }
 
+    const priorDealOrder = await query<{payload:{orderId?:string}}>("select payload from public.app_settings where key=$1", [`deal-order:${implementation.deal_id}`]);
+    if (priorDealOrder.rows.length) return jsonResponse({error:priorDealOrder.rows[0].payload.orderId ? `Deze deal heeft al order ${priorDealOrder.rows[0].payload.orderId}.` : "Een order voor deze deal is al in verwerking. Controleer Smart Trade."},409);
+
     if (implementation.smart_trade_order_id) {
       return jsonResponse({
         error: `Deze implementatie heeft al Smart Trade-order ${implementation.smart_trade_order_id}.`,

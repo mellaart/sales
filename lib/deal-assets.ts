@@ -356,11 +356,35 @@ export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "packa
   const warnings: string[] = [];
 
   if (inputs.quoteLayout === "assets-expansion" || inputs.assetsExpansion) {
-    return {
-      packageKey: null,
-      items: [],
-      warnings: ["Assets vanuit een uitbreidingsdeal worden niet automatisch aangemaakt."],
-    };
+    if (!packageKey) return {packageKey:null,items:[],warnings:["Het pakket van de uitbreiding is niet herkend."]};
+    const classes = PACKAGE_ASSET_CLASSES[packageKey];
+    const expansion = asRecord(inputs.assetsExpansion);
+    const items: DealAssetPlanItem[] = [];
+    for (const [index, raw] of asArray(expansion.lines).entries()) {
+      const line = asRecord(raw);
+      if (line.cadence === "once") continue;
+      const label = String(line.label ?? "");
+      const group = String(line.group ?? "");
+      const quantity = Number(line.quantity);
+      let assetClass: number | undefined;
+      if (group === "Klantenportaal") {
+        const key = Object.keys(PORTAL_LABELS).find(key => label.toLowerCase() === `smart trade - ${PORTAL_LABELS[key]}`.toLowerCase());
+        if (key) assetClass = classes.customerPortal[key];
+      } else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Extra gebruiker`) assetClass = classes.extraUser;
+      else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
+      else if (group === "Chauffeursmodule" && label === "Licentie extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurExtraUser;
+      else if (group === "Chauffeursmodule" && label === "Supportcontract extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurSupportExtraUser;
+      else if (group === "Modules") {
+        const key = Object.keys(MODULE_LABELS).find(key => MODULE_LABELS[key].toLowerCase() === label.toLowerCase());
+        if (key) assetClass = classes.modules[key];
+      }
+      if (!assetClass || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) {
+        warnings.push(`${label}: deze uitbreiding moet handmatig worden verwerkt; er wordt hiervoor geen asset aangemaakt.`);
+        continue;
+      }
+      addRepeated(items, `expansion-${index}`, assetClass, label, quantity, group);
+    }
+    return {packageKey,items,warnings};
   }
 
   if (!packageKey) {

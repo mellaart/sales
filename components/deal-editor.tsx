@@ -1,5 +1,7 @@
 "use client";
 
+import DealFulfillmentPanel from "@/components/deal-fulfillment-panel";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -544,18 +546,11 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         }
       }
 
-      if (inputs.quoteLayout !== "assets-expansion") {
-        try {
-          const { response, json } = await loadDealAssetOverview(dealId);
-          if (response.ok && json.overview) {
-            setAssetOverview(json.overview);
-          }
-        } catch {
-          // De deal blijft bruikbaar als het assetoverzicht tijdelijk niet kan laden.
-        }
-      } else {
-        setAssetOverview(null);
-        setAssetCreationStatus("");
+      try {
+        const { response, json } = await loadDealAssetOverview(dealId);
+        if (response.ok && json.overview) setAssetOverview(json.overview);
+      } catch {
+        // Keep the deal accessible when the asset overview is unavailable.
       }
 
       setLoading(false);
@@ -1136,8 +1131,6 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   }
 
   async function refreshDealAssets(quiet = false) {
-    if (isAssetsExpansionDeal) return;
-
     try {
       const { response, json } = await loadDealAssetOverview(dealId);
 
@@ -2785,7 +2778,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           </section>
         ) : null}
 
-        {!isAssetsExpansionDeal ? (
+        {!implementation ? <DealFulfillmentPanel dealId={dealId} accepted={Boolean(acceptedAt)} amount={implementationTotal} canOrder={canManageImplementation} onSaved={()=>void refreshDealAssets()} /> : null}
+        {(
           <section className="card panel customer-intake-panel">
             <div className="top-row customer-intake-heading">
               <div>
@@ -2878,7 +2872,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
             ) : null}
             {assetCreationStatus ? <div className="save-status">{assetCreationStatus}</div> : null}
           </section>
-        ) : null}
+        )}
         </fieldset>
       </div>
     </div>

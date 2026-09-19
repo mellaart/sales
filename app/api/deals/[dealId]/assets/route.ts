@@ -246,7 +246,11 @@ async function loadContext(request: Request, dealId: string): Promise<
     ),
   ]);
 
-  const implementation = implementationRows[0] ?? null;
+  let implementation = implementationRows[0] ?? null;
+  if (!implementation) {
+    const {rows} = await query<{payload:{administrationName?:string;startDate?:string}}>("select payload from public.app_settings where key=$1", [`deal-fulfillment:${deal.id}`]);
+    implementation = {id:"",administration_name:rows[0]?.payload.administrationName??null,planned_go_live_date:rows[0]?.payload.startDate??null};
+  }
   const plan = buildDealAssetPlan(deal);
   const prerequisiteErrors: string[] = [];
 
@@ -254,12 +258,12 @@ async function loadContext(request: Request, dealId: string): Promise<
   if (!positiveInteger(deal.smart_trade_relation_id)) {
     prerequisiteErrors.push("Koppel eerst de Smart Trade-relatie aan deze deal.");
   }
-  if (!implementation) prerequisiteErrors.push("Start eerst de implementatie voor deze nieuwe klant.");
+
   if (!implementation?.administration_name?.trim()) {
-    prerequisiteErrors.push("Vul bij de implementatie eerst de administratienaam in.");
+    prerequisiteErrors.push("Vul eerst de administratienaam in.");
   }
   if (!implementation?.planned_go_live_date) {
-    prerequisiteErrors.push("Vul bij de implementatie eerst de geplande livegang in.");
+    prerequisiteErrors.push("Vul eerst de startdatum voor de assets in.");
   }
   if (plan.items.length === 0) prerequisiteErrors.push("Er zijn geen assets uit deze deal af te leiden.");
 
@@ -512,4 +516,20 @@ export async function POST(
       error: error instanceof Error ? error.message : "Assets aanmaken mislukt.",
     }, 500);
   }
+}
+
+export async function PUT(request:Request, context:{params:Promise<{dealId:string}>}) {
+  try {
+    const {dealId}=await context.params;
+    const result=await loadContext(request,dealId);
+    if ("error" in result) return jsonResponse({error:result.error},result.status);
+    if (result.context.implementation?.id) return jsonResponse({error:"Wijzig deze gegevens in het implementatiedossier."},409);
+    if (result.context.creations.length) return jsonResponse({error:"De assetverwerking is al gestart. De startgegevens kunnen niet meer worden gewijzigd."},409);
+    const body=await request.json();
+    const name=typeof body.administrationName==="string"?body.administrationName.trim():"";
+    const date=typeof body.startDate==="string"?body.startDate:"";
+    if(!name || name.length>200 || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date) return jsonResponse({error:"Vul een administratienaam en geldige startdatum in."},400);
+    await query("insert into public.app_settings (key,payload) values ($1,$2::jsonb) on conflict (key) do update set payload=excluded.payload,updated_at=now()",[`deal-fulfillment:${dealId}`,JSON.stringify({administrationName:name,startDate:date})]);
+    return jsonResponse({ok:true});
+  } catch {return jsonResponse({error:"Startgegevens opslaan mislukt."},500);}
 }

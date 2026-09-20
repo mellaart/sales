@@ -8410,3 +8410,14 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 .implementation-overview-progress .implementation-progress-track { display: block; width: 100%; height: 8px; margin-top: 8px; padding: 0; overflow: hidden; border: 0; border-radius: 99px; background: var(--line); }
 .implementation-overview-progress .implementation-progress-track > span { display: block; height: 100%; padding: 0; border: 0; border-radius: inherit; background: var(--success); transition: width 200ms ease; }
 .implementation-overview-progress small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+
+.deal-fulfillment-panel { margin-top: 24px; margin-bottom: 24px; display: grid; gap: 24px; }
+.deal-fulfillment-heading { display: grid; gap: 10px; }
+.deal-fulfillment-panel h2, .deal-fulfillment-panel h3, .deal-fulfillment-panel p { margin: 0; }
+.deal-fulfillment-heading p, .deal-fulfillment-order p { color: var(--muted); line-height: 1.5; }
+.deal-fulfillment-fields { display: grid; grid-template-columns: minmax(180px, 340px) minmax(160px, 220px) max-content; align-items: end; gap: 16px; }
+.deal-fulfillment-fields label { display: grid; min-width: 0; gap: 8px; font-size: 14px; font-weight: 600; }
+.deal-fulfillment-fields .input, .deal-fulfillment-fields button { box-sizing: border-box; height: 48px; min-height: 48px; padding-top: 0; padding-bottom: 0; line-height: 1.25; }
+.deal-fulfillment-order { display: grid; gap: 12px; justify-items: start; border-top: 1px solid var(--line); padding-top: 24px; }
+@media (max-width: 800px) { .deal-fulfillment-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .deal-fulfillment-fields button { grid-column: 1 / -1; justify-self: start; } }
+@media (max-width: 480px) { .deal-fulfillment-fields { grid-template-columns: minmax(0, 1fr); } .deal-fulfillment-fields button { width: 100%; } }

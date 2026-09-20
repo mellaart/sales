@@ -8421,3 +8421,6 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 .deal-fulfillment-order { display: grid; gap: 12px; justify-items: start; border-top: 1px solid var(--line); padding-top: 24px; }
 @media (max-width: 800px) { .deal-fulfillment-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .deal-fulfillment-fields button { grid-column: 1 / -1; justify-self: start; } }
 @media (max-width: 480px) { .deal-fulfillment-fields { grid-template-columns: minmax(0, 1fr); } .deal-fulfillment-fields button { width: 100%; } }
+
+.customer-intake-actions .asset-creation-button:disabled { cursor: default; }
+.customer-intake-actions .asset-creation-button[aria-busy="true"] { cursor: wait; }

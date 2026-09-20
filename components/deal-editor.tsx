@@ -2835,7 +2835,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                 </button>
                 <button
                   type="button"
-                  className="primary-button"
+                  className="primary-button asset-creation-button"
+                  aria-busy={assetCreationBusy}
                   disabled={assetCreationBusy || !assetOverview?.ready || assetsPending || assetOverview.missingCount === 0}
                   onClick={() => void handleCreateAssets()}
                 >

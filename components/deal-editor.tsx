@@ -1,5 +1,6 @@
 "use client";
 
+import { getDealRelationId } from "@/lib/deal-relation";
 import DealFulfillmentPanel from "@/components/deal-fulfillment-panel";
 
 import Link from "next/link";
@@ -486,8 +487,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setCustomerName(deal.customer_name || "");
       setQuoteTitle(deal.quote_title || "Prijsvoorstel Smart Trade");
       setContactName(deal.contact_name || "");
-      setCustomerIntakeRelationId(deal.smart_trade_relation_id
-        ? String(deal.smart_trade_relation_id)
+      setCustomerIntakeRelationId(getDealRelationId(deal)
+        ? String(getDealRelationId(deal))
         : "");
       setCustomerIntakeEmail(savedCustomerEmail);
       setSalesName(deal.user_id === user.id && currentSalesName ? currentSalesName : deal.sales_name || "");

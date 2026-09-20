@@ -1,3 +1,4 @@
+import { getDealRelationId } from "@/lib/deal-relation";
 import {NextResponse} from "next/server";
 import {requireLocalUser} from "@/lib/local-auth";
 import {executeLocalTableQuery} from "@/lib/local-table";
@@ -15,6 +16,7 @@ async function load(request:Request,context:Context){
  const result=await executeLocalTableQuery({table:"deals",action:"select",select:"id,accepted_at,smart_trade_relation_id,package_name,implementation_total,calculator_inputs",filters:[{column:"id",op:"eq",value:dealId}],maybeSingle:true},{user:actor.user,profile:actor.profile});
  const deal=result.data as {id:string;accepted_at:string|null;smart_trade_relation_id:number|null;package_name:string;implementation_total:number;calculator_inputs:unknown}|null;
  if(!deal)return {error:json({error:"Deal niet toegankelijk."},404)};
+ deal.smart_trade_relation_id=getDealRelationId(deal);
  const existing=await query<{id:string;smart_trade_order_id:string|null}>("select id,smart_trade_order_id from public.implementations where deal_id=$1 limit 1",[dealId]);
  const saved=await query<{payload:{orderId?:string;status?:string}}>("select payload from public.app_settings where key=$1",[`deal-order:${dealId}`]);
  return {actor,deal,implementation:existing.rows[0] as {id:string;smart_trade_order_id:string|null}|undefined,saved:(saved.rows[0]?.payload as {orderId?:string;status?:string}|undefined),key:`deal-order:${dealId}`};

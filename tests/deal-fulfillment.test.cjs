@@ -12,6 +12,7 @@ test('deal order requires acceptance, preview is read-only and ambiguous creatio
  await db.exec('create table app_settings(key text primary key,payload jsonb,updated_at timestamptz);create table implementations(id text,deal_id text,smart_trade_order_id text);create table profiles(id text,employee_relation_id int);insert into profiles values (\'actor\',21)');
  let accepted=null,calls=0,fail=false,amount=100;
  const api=load('app/api/deals/[dealId]/order/route.ts',{
+ '@/lib/deal-relation':load('lib/deal-relation.ts'),
  'next/server':{NextResponse:{json:(body,init)=>({body,...init})}},'@/lib/local-auth':{requireLocalUser:async()=>({ok:true,user:{id:'actor',email:'admin'},profile:{}})},'@/lib/local-db':{query:(s,v)=>db.query(s,v)},'@/lib/local-table':{executeLocalTableQuery:async()=>({data:{id:'deal',accepted_at:accepted,smart_trade_relation_id:123,implementation_total:amount,calculator_inputs:{},package_name:'Basic'}})},'@/lib/protected-admin':{isProtectedAdminEmail:()=>true},'@/lib/implementation-order':load('lib/implementation-order.ts'),'@/lib/smart-trade-pull-test':{getSmartTradePullConfig:()=>({baseUrl:'https://example.test'}),getSmartTradePullHeaders:()=>({}),fetchWithSmartTradeTimeout:async()=>{calls++;if(fail)throw new Error('timeout');return new Response(JSON.stringify({data:{id:444}}));}}});
  const context={params:Promise.resolve({dealId:'deal'})};const post=mode=>api.POST(new Request('https://example.test',{method:'POST',body:JSON.stringify({mode})}),context);
  assert.equal((await post('create')).status,409);accepted='date';amount=0;assert.equal((await post('create')).status,409);amount=100;
@@ -20,4 +21,13 @@ test('deal order requires acceptance, preview is read-only and ambiguous creatio
  assert.equal((await post('create')).status,409);
  await db.exec('delete from app_settings');fail=true;assert.equal((await post('create')).status,502);assert.equal((await post('create')).status,409);assert.equal(calls,2);
  }finally{await db.close();}
+});
+
+test('existing expansion relation is reused; explicit links win and invalid IDs are rejected',()=>{
+ const {getDealRelationId}=load('lib/deal-relation.ts');
+ const deal={smart_trade_relation_id:null,calculator_inputs:{assetsExpansion:{relationId:'2506'}}};
+ assert.equal(getDealRelationId(deal),2506);
+ assert.equal(getDealRelationId({...deal,smart_trade_relation_id:77}),77);
+ for(const invalid of ['',0,-1,true,'abc','12.5',null])assert.equal(getDealRelationId({calculator_inputs:{assetsExpansion:{relationId:invalid}}}),null);
+ assert.equal(getDealRelationId({}),null);
 });

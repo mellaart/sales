@@ -1,3 +1,4 @@
+import { getDealRelationId } from "@/lib/deal-relation";
 import { NextResponse } from "next/server";
 import { buildDealAssetPlan, type DealAssetPlanItem } from "@/lib/deal-assets";
 import { requireLocalUser } from "@/lib/local-auth";
@@ -229,6 +230,7 @@ async function loadContext(request: Request, dealId: string): Promise<
   }
 
   const deal = access.data as DealRow;
+  deal.smart_trade_relation_id = getDealRelationId(deal);
   const [{ rows: implementationRows }, { rows: creations }] = await Promise.all([
     query<ImplementationRow>(
       `select id, administration_name, planned_go_live_date

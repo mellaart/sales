@@ -1053,6 +1053,7 @@ export default function AssetsDashboardCurrent() {
       const payload = {
         user_id: user.id,
         customer_name: selectedRelation.name,
+        smart_trade_relation_id: Number(selectedRelation.id),
         quote_title: `Uitbreidingen ${selectedRelation.name}`,
         contact_name: dealContactName.trim() || null,
         sales_name: getUserDisplayName(user, profile),

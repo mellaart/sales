@@ -360,16 +360,13 @@ function AppointmentWorkSelector({
   }, []);
 
   function changeOption(option: AppointmentWorkOption, checked: boolean) {
-    if (checked && otherAssignment(option.key)) return;
     onSelectionChange(toggleAppointmentWorkItem(selected, option, checked));
   }
 
   function changeGroup(groupKey: string) {
     const group = groups.find((candidate) => candidate.key === groupKey);
     if (!group) return;
-    const selectableItems = group.items.filter((option) => (
-      selectedKeys.has(option.key) || !otherAssignment(option.key)
-    ));
+    const selectableItems = group.items;
     const allSelected = selectableItems.length > 0 && selectableItems.every((option) => (
       selectedKeys.has(option.key)
     ));
@@ -398,7 +395,7 @@ function AppointmentWorkSelector({
           <div>
             <span>Afspraak</span>
             <h3 id="implementation-work-picker-title">Werkzaamheden plannen</h3>
-            <p>Kies precies wat tijdens deze afspraak wordt uitgevoerd.</p>
+            <p>Kies wat tijdens deze afspraak wordt uitgevoerd. Werkzaamheden uit eerdere afspraken kun je opnieuw inplannen.</p>
           </div>
           <button
             type="button"
@@ -459,9 +456,7 @@ function AppointmentWorkSelector({
               </div>
             ) : visibleGroups.map((group) => {
               const sourceGroup = groups.find((candidate) => candidate.key === group.key) ?? group;
-              const selectableItems = sourceGroup.items.filter((option) => (
-                selectedKeys.has(option.key) || !otherAssignment(option.key)
-              ));
+              const selectableItems = sourceGroup.items;
               const allSelected = selectableItems.length > 0 && selectableItems.every((option) => (
                 selectedKeys.has(option.key)
               ));
@@ -490,11 +485,7 @@ function AppointmentWorkSelector({
                         aria-label={`Volledige groep ${group.label} selecteren`}
                         onChange={() => changeGroup(group.key)}
                       />
-                      <span>{allSelected
-                        ? assignedElsewhereCount > 0
-                          ? "Alle beschikbare regels geselecteerd"
-                          : "Volledige groep geselecteerd"
-                        : "Volledige groep selecteren"}</span>
+                      <span>{allSelected ? "Volledige groep geselecteerd" : "Volledige groep selecteren"}</span>
                     </label>
                     <small className="implementation-work-picker-group-count">
                       {selectedCount}/{sourceGroup.items.length} geselecteerd
@@ -516,7 +507,7 @@ function AppointmentWorkSelector({
                             <input
                               type="checkbox"
                               checked={selectedHere}
-                              disabled={disabled || Boolean(assignedElsewhere && !selectedHere)}
+                              disabled={disabled}
                               onChange={(event) => changeOption(option, event.target.checked)}
                             />
                             <span>{option.label}</span>
@@ -528,7 +519,7 @@ function AppointmentWorkSelector({
                             {selectedHere ? <span>Deze afspraak</span> : null}
                             {assignedElsewhere ? (
                               <span>
-                                <CalendarDays size={14} /> {formatDate(assignedElsewhere.appointmentDate)}
+                                <CalendarDays size={14} /> Ook ingepland: {formatDate(assignedElsewhere.appointmentDate)}
                               </span>
                             ) : null}
                           </div>

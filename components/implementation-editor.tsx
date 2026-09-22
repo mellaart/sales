@@ -47,6 +47,8 @@ import {
   IMPLEMENTATION_STATUSES,
   IMPLEMENTATION_STATUS_LABELS,
   normalizeImplementationCustomWorkItems,
+  customWorkItemLabel,
+  type ImplementationCustomWorkItem,
   normalizeImplementationCustomerWorkApprovals,
   normalizeImplementationItemProgress,
   normalizeImplementationProgress,
@@ -56,7 +58,7 @@ import {
   type ImplementationStatus,
 } from "@/lib/implementations";
 import type { ImplementationItem } from "@/lib/implementation-items";
-import { IMPLEMENTATION_TASK_OWNER_LABELS } from "@/lib/price-config";
+import { IMPLEMENTATION_TASK_OWNER_LABELS, type ImplementationTaskOwner } from "@/lib/price-config";
 import {
   IMPLEMENTATION_CUSTOM_TASKS_KEY,
   getConfiguredImplementationTasks,
@@ -234,8 +236,8 @@ function toggleAppointmentWorkItem(
   }];
 }
 
-function normalizedImplementationWorkLabel(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
+function normalizedImplementationWorkLabel(value: ImplementationCustomWorkItem) {
+  return customWorkItemLabel(value).trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
 }
 
 function getAppointmentLocation(
@@ -781,6 +783,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
   const [appointmentDraft, setAppointmentDraft] = useState<AppointmentDraft>(EMPTY_APPOINTMENT_DRAFT);
   const [customWorkEditorKey, setCustomWorkEditorKey] = useState<string | null>(null);
   const [customWorkDraft, setCustomWorkDraft] = useState("");
+  const [customWorkOwner, setCustomWorkOwner] = useState<ImplementationTaskOwner>("consultant");
   const [customTaskEditorOpen, setCustomTaskEditorOpen] = useState(false);
   const [customTaskDraft, setCustomTaskDraft] = useState("");
   const [calendarStatusLoaded, setCalendarStatusLoaded] = useState(false);
@@ -1318,7 +1321,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
 
     const nextCustomWorkItems = {
       ...implementationCustomWorkItems,
-      [item.key]: [...(implementationCustomWorkItems[item.key] ?? []), label],
+      [item.key]: [...(implementationCustomWorkItems[item.key] ?? []), {label, owner: customWorkOwner}],
     };
     const implementationItemProgress = {
       ...normalizeImplementationItemProgress(implementation.implementation_item_progress),
@@ -2379,7 +2382,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
         {canEdit ? (
           editorOpen ? (
             <form
-              className="implementation-custom-work-form"
+              className="implementation-custom-work-form with-owner"
               onSubmit={(event) => {
                 event.preventDefault();
                 void addImplementationCustomWorkItem(item);
@@ -2395,6 +2398,10 @@ export default function ImplementationEditor({ implementationId }: { implementat
                 aria-label={`Werkzaamheid toevoegen aan ${item.label}`}
                 onChange={(event) => setCustomWorkDraft(event.target.value)}
               />
+              <select aria-label="Wie voert deze werkzaamheid uit?" value={customWorkOwner} disabled={saving}
+                onChange={(event) => setCustomWorkOwner(event.target.value as ImplementationTaskOwner)}>
+                {Object.entries(IMPLEMENTATION_TASK_OWNER_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
               <button
                 type="submit"
                 disabled={saving || !customWorkDraft.trim()}
@@ -2423,6 +2430,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
               disabled={saving}
               onClick={() => {
                 setCustomWorkDraft("");
+                setCustomWorkOwner("consultant");
                 setCustomWorkEditorKey(item.key);
               }}
             >

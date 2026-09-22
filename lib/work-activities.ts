@@ -1,5 +1,5 @@
 import type { ImplementationItem } from "@/lib/implementation-items";
-import type { ImplementationCustomWorkItems } from "@/lib/implementations";
+import { customWorkItemLabel, type ImplementationCustomWorkItem, type ImplementationCustomWorkItems } from "@/lib/implementations";
 import type {
   EditablePricingConfig,
   ExpansionWorkItemKey,
@@ -8,8 +8,8 @@ import type {
 
 export const IMPLEMENTATION_CUSTOM_TASKS_KEY = "__implementation_tasks__";
 
-function normalizedWorkItems(items: string[] | undefined) {
-  return (items ?? []).map((item) => item.trim()).filter(Boolean);
+function normalizedWorkItems(items: ImplementationCustomWorkItem[] | undefined) {
+  return (items ?? []).map((item) => customWorkItemLabel(item).trim()).filter(Boolean);
 }
 
 function normalizedProgressText(value: string) {
@@ -156,8 +156,16 @@ export function withImplementationCustomWorkItems(
     return true;
   });
 
+  const workItemOwners = {...item.workItemOwners};
+  for (const custom of customWorkItems[item.key] ?? []) {
+    const label = customWorkItemLabel(custom);
+    if (implementationItems.includes(label)) {
+      workItemOwners[getImplementationWorkItemProgressKey(item.key, label)] = typeof custom === "string" ? "consultant" : custom.owner;
+    }
+  }
   return {
     ...item,
+    workItemOwners,
     workItems: [...configuredItems, ...implementationItems],
   };
 }

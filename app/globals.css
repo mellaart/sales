@@ -8435,3 +8435,22 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 .dashboard-forecast-list { margin-top: 24px; }
 .dashboard-forecast-row { display: grid; grid-template-columns: minmax(180px, 1fr) 2fr; gap: 20px; padding: 16px 0; border-top: 1px solid var(--line); }
 @media(max-width:600px) { .dashboard-forecast-row { grid-template-columns: 1fr; gap: 4px; } }
+
+.implementation-custom-work-form.with-owner {
+  grid-template-columns: minmax(0, 1fr) 140px 28px 28px;
+}
+.implementation-custom-work-form.with-owner select {
+  min-width: 0;
+  height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-deep);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .implementation-custom-work-form.with-owner { grid-template-columns: minmax(0, 1fr) 28px 28px; }
+  .implementation-custom-work-form.with-owner input { grid-column: 1 / -1; }
+}

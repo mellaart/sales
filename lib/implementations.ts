@@ -1,3 +1,4 @@
+import type { ImplementationTaskOwner } from "@/lib/price-config";
 export const IMPLEMENTATION_STATUSES = [
   "new",
   "assigned",
@@ -42,7 +43,11 @@ export const IMPLEMENTATION_PROGRESS_ITEMS = [
 export type ImplementationProgressKey = typeof IMPLEMENTATION_PROGRESS_ITEMS[number]["key"];
 export type ImplementationProgress = Partial<Record<ImplementationProgressKey, boolean>>;
 export type ImplementationItemProgress = Record<string, boolean>;
-export type ImplementationCustomWorkItems = Record<string, string[]>;
+export type ImplementationCustomWorkItem = string | { label: string; owner: ImplementationTaskOwner };
+export type ImplementationCustomWorkItems = Record<string, ImplementationCustomWorkItem[]>;
+export function customWorkItemLabel(item: ImplementationCustomWorkItem): string {
+  return typeof item === "string" ? item : item.label;
+}
 export type ImplementationCustomerWorkApproval = {
   workItemKey: string;
   itemKey: string;
@@ -107,13 +112,14 @@ export function normalizeImplementationCustomWorkItems(
       if (!key || !Array.isArray(rawItems)) return result;
 
       const seen = new Set<string>();
-      const items = rawItems.reduce<string[]>((labels, rawItem) => {
-        if (typeof rawItem !== "string") return labels;
-        const label = rawItem.trim().replace(/\s+/g, " ").slice(0, 300);
+      const items = rawItems.reduce<ImplementationCustomWorkItem[]>((labels, rawItem) => {
+        const text = typeof rawItem === "string" ? rawItem : rawItem?.label;
+        if (typeof text !== "string") return labels;
+        const label = text.trim().replace(/\s+/g, " ").slice(0, 300);
         const normalizedLabel = label.toLocaleLowerCase("nl-NL");
         if (!label || seen.has(normalizedLabel) || labels.length >= 50) return labels;
         seen.add(normalizedLabel);
-        labels.push(label);
+        labels.push(typeof rawItem === "string" ? label : {label, owner: ["customer", "together"].includes(rawItem.owner) ? rawItem.owner : "consultant"});
         return labels;
       }, []);
 

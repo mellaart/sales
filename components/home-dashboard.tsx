@@ -603,7 +603,7 @@ export default function HomeDashboard() {
               <h3>Voortgang en prognose</h3>
               {implementations.filter(item=>isActiveImplementation(item.status)).map(item=><div className="dashboard-forecast-row" key={item.id}>
                 <Link href={`/implementatie/${item.id}`}>{item.customer_name}</Link>
-                <ImplementationForecastCard implementationId={item.id}/>
+                <ImplementationForecastCard implementationId={item.id} showProgress/>
               </div>)}
             </div>
           </ImplementationSection>

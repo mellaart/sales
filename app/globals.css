@@ -8432,8 +8432,11 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 .forecast-on_track > strong { color: var(--success, #168052); }
 .forecast-discuss > strong { color: var(--warning, #b7791f); }
 .forecast-notify > strong { color: var(--danger, #dc2626); }
-.dashboard-forecast-list { margin-top: 24px; }
-.dashboard-forecast-row { display: grid; grid-template-columns: minmax(180px, 1fr) 2fr; gap: 20px; padding: 16px 0; border-top: 1px solid var(--line); }
+.dashboard-forecast-list { margin-top: 8px; min-width: 0; }
+.dashboard-forecast-header { display: grid; gap: 8px; padding-bottom: 24px; }
+.dashboard-forecast-header h3 { margin: 0; font-size: 24px; line-height: 1.3; letter-spacing: -.5px; }
+.dashboard-forecast-header p, .dashboard-forecast-empty { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.dashboard-forecast-row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr); gap: 28px; padding: 24px 0; border-top: 1px solid var(--line); }
 @media(max-width:600px) { .dashboard-forecast-row { grid-template-columns: 1fr; gap: 4px; } }
 
 .implementation-custom-work-form.with-owner {
@@ -8468,3 +8471,9 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 .dashboard-progress-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .dashboard-forecast-row > a { align-self: start; padding-top: 5px; font-weight: 650; }
 @media(prefers-reduced-motion:reduce) { .dashboard-progress-fill { transition: none; } }
+
+.dashboard-forecast-row:last-child { padding-bottom: 0; }
+.dashboard-forecast-row > a { color: var(--text); font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.dashboard-forecast-row > a:hover { color: var(--primary); }
+.dashboard-progress-forecast > small { color: var(--muted); }
+@media(max-width:600px) { .dashboard-forecast-row { gap: 16px; } .dashboard-forecast-header h3 { font-size: 21px; } }

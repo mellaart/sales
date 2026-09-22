@@ -1,3 +1,4 @@
+import { ImplementationForecastView } from "@/components/implementation-forecast";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Image from "next/image";
@@ -210,11 +211,11 @@ export default async function ImplementationProgressPage({
           <div className={styles.progressHeading}>
             <div>
               <span>Totale voortgang</span>
-              <strong>{portal.progressPercentage}% afgerond</strong>
+              <strong>{portal.forecast?.progressPercent != null ? `${portal.progressPercentage.toLocaleString("nl-NL",{maximumFractionDigits:1})}% afgerond` : "Voortgang nog niet beschikbaar"}</strong>
             </div>
             <span>Planning en uitvoering</span>
           </div>
-          <div
+          {portal.forecast?.progressPercent != null ? <div
             className={styles.progressTrack}
             role="progressbar"
             aria-label="Voortgang implementatie"
@@ -223,7 +224,8 @@ export default async function ImplementationProgressPage({
             aria-valuenow={portal.progressPercentage}
           >
             <span style={{ width: `${portal.progressPercentage}%` }} />
-          </div>
+          </div> : null}
+          {portal.forecast ? <ImplementationForecastView data={portal.forecast} customer/> : null}
 
           <dl className={styles.summaryGrid}>
             <div><dt><PackageCheck size={18} /> Pakket</dt><dd>{portal.packageName}</dd></div>

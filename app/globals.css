@@ -8424,3 +8424,14 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 
 .customer-intake-actions .asset-creation-button:disabled { cursor: default; }
 .customer-intake-actions .asset-creation-button[aria-busy="true"] { cursor: wait; }
+
+.implementation-forecast { display: grid; gap: 6px; padding: 12px 0; }
+.implementation-meta-grid .implementation-forecast { padding: 8px 0 0; background: transparent; }
+.implementation-forecast strong { white-space: normal; }
+.implementation-forecast small { font-size: 13px; line-height: 1.5; }
+.forecast-on_track > strong { color: var(--success, #168052); }
+.forecast-discuss > strong { color: var(--warning, #b7791f); }
+.forecast-notify > strong { color: var(--danger, #dc2626); }
+.dashboard-forecast-list { margin-top: 24px; }
+.dashboard-forecast-row { display: grid; grid-template-columns: minmax(180px, 1fr) 2fr; gap: 20px; padding: 16px 0; border-top: 1px solid var(--line); }
+@media(max-width:600px) { .dashboard-forecast-row { grid-template-columns: 1fr; gap: 4px; } }

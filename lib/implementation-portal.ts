@@ -1,3 +1,4 @@
+import type { ImplementationForecast } from "@/lib/implementation-forecast";
 import type { ImplementationDnsCheck } from "@/lib/implementation-dns";
 import type { ImplementationCustomerFile } from "@/lib/implementation-files";
 import type { ImplementationTaskOwner } from "@/lib/price-config";
@@ -75,6 +76,7 @@ export type PublicImplementationPortal = {
   actualGoLiveDate: string | null;
   updatedAt: string;
   progressPercentage: number;
+  forecast?: ImplementationForecast;
   dnsDomain: string;
   dnsCheck: ImplementationDnsCheck | null;
   dnsCheckMessage: string;

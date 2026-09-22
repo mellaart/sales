@@ -1,4 +1,5 @@
 "use client";
+import ImplementationForecastCard from "@/components/implementation-forecast";
 import { useEffect, useState } from "react";
 import type { BudgetRow } from "@/lib/implementation-planning";
 type Item={key:string;label:string};
@@ -33,6 +34,7 @@ export default function ImplementationBudgetPanel({implementationId,items,canEdi
  const number=(n:number)=>n.toLocaleString("nl-NL",{maximumFractionDigits:2});
  return <section className="card panel" style={{marginTop:24,marginBottom:24}}>
   <h2>Dagenbudget en voortgang</h2>
+  <ImplementationForecastCard implementationId={implementationId} refreshKey={version}/>
   <p>{!loaded?"Dagenbudget laden...":budget===null?"Het dagenbudget uit de goedgekeurde offerte is niet beschikbaar. Controleer de oorspronkelijke offerte; er wordt geen budget geschat.":`Goedgekeurde offerte: ${number(budget)} dagen · ${number(hours)} uur per dag`}</p>
   <p>Verdeel het totale dagenbudget over de geselecteerde werkzaamheden. Alleen akkoord van de klant telt als 100% afgerond.</p>
   <div style={{overflowX:"auto"}}><table style={{width:"100%",textAlign:"left"}}><thead><tr><th>Onderdeel</th><th>Begrote dagen</th><th>Status</th></tr></thead><tbody>

@@ -1,4 +1,5 @@
 "use client";
+import ImplementationForecastCard from "@/components/implementation-forecast";
 
 import Link from "next/link";
 import ImplementationSection from "@/components/implementation-section";
@@ -597,6 +598,13 @@ export default function HomeDashboard() {
                   <CheckCircle2 size={18} /> Geen actieve implementaties met een verstreken livegang.
                 </div>
               ) : null}
+            </div>
+            <div className="dashboard-forecast-list">
+              <h3>Voortgang en prognose</h3>
+              {implementations.filter(item=>isActiveImplementation(item.status)).map(item=><div className="dashboard-forecast-row" key={item.id}>
+                <Link href={`/implementatie/${item.id}`}>{item.customer_name}</Link>
+                <ImplementationForecastCard implementationId={item.id}/>
+              </div>)}
             </div>
           </ImplementationSection>
         ) : null}

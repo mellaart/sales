@@ -1,3 +1,4 @@
+import { getImplementationForecast } from "@/lib/implementation-forecast-server";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { isCustomerSmsRequired } from "@/lib/customer-sms-settings";
 import {
@@ -1057,10 +1058,8 @@ export async function getPublicImplementationPortal(
       appointment.workItems.map((workItem) => workItem.key)
     ))),
   );
-  const implementationSteps = [...tasks, ...items].flatMap((item) => (
-    item.workItems.length > 0 ? item.workItems : [{ completed: item.completed }]
-  ));
-  const completedSteps = implementationSteps.filter((step) => step.completed).length;
+
+
   const dnsDomain = implementationWebsiteDomain(implementation.dns_domain ?? "") || (
     intake?.submitted_at
       ? implementationWebsiteDomain(normalizeCustomerIntakeData(intake.form_data).website)
@@ -1083,6 +1082,7 @@ export async function getPublicImplementationPortal(
     [access.id],
   );
 
+  const forecast = await getImplementationForecast(access.implementation_id).catch(()=>null);
   const portal: PublicImplementationPortal = {
     customerName: implementation.customer_name,
     quoteTitle: implementation.quote_title ?? "Smart Trade implementatie",
@@ -1094,9 +1094,8 @@ export async function getPublicImplementationPortal(
     plannedGoLiveDate: implementation.planned_go_live_date,
     actualGoLiveDate: implementation.actual_go_live_date,
     updatedAt: implementation.updated_at,
-    progressPercentage: implementationSteps.length > 0
-      ? Math.round((completedSteps / implementationSteps.length) * 100)
-      : 0,
+    progressPercentage: forecast?.progressPercent ?? 0,
+    ...(forecast ? {forecast} : {}),
     dnsDomain,
     dnsCheck,
     dnsCheckMessage,

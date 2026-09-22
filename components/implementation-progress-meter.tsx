@@ -1,4 +1,5 @@
 "use client";
+import ImplementationForecastCard from "@/components/implementation-forecast";
 import { useEffect, useState } from "react";
 import { weightedProgress } from "@/lib/implementation-planning";
 export default function ImplementationProgressMeter({implementationId}:{implementationId:string}) {
@@ -28,5 +29,6 @@ export default function ImplementationProgressMeter({implementationId}:{implemen
      </span>
      <small>Gewogen op begrote dagen</small>
    </>}
+ <ImplementationForecastCard implementationId={implementationId}/>
  </span>;
 }

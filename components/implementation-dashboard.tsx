@@ -1,5 +1,6 @@
 "use client";
 
+import ImplementationSection from "@/components/implementation-section";
 import ImplementationForecastCard from "@/components/implementation-forecast";
 import ImplementationProgressMeter from "@/components/implementation-progress-meter";
 import { ImplementationSelect } from "@/components/implementation-select";
@@ -335,18 +336,16 @@ export default function ImplementationDashboard() {
           </div>
         </header>
 
-        <section className="kpi-grid">
+        <ImplementationSection key={`overviewStatsOpen:${user?.id}`} preference="overviewStatsOpen" title="Overzicht" contentClassName="implementation-overview-kpis">
+          <div className="kpi-grid">
           <StatCard title="Implementaties" value={String(stats.total)} icon={ClipboardCheck} sublabel="In jouw overzicht" />
           <StatCard title="Niet toegewezen" value={String(stats.unassigned)} icon={Users} sublabel="Wacht op gebruiker" />
           <StatCard title="Actief" value={String(stats.active)} icon={UserRoundCheck} sublabel="Nog niet afgerond" />
           <StatCard title="Afgerond" value={String(stats.completed)} icon={CheckCircle2} sublabel="Voltooid" />
-        </section>
+        </div>
+        </ImplementationSection>
 
-        <section className="card panel implementation-filters">
-          <div>
-            <div className="eyebrow">Zoeken en filteren</div>
-            <h2 className="headline">Implementaties vinden</h2>
-          </div>
+        <ImplementationSection key={`overviewFiltersOpen:${user?.id}`} preference="overviewFiltersOpen" title="Implementaties vinden" eyebrow="Zoeken en filteren">
           <div className={`implementation-filter-grid ${seesAllImplementations ? "with-user-filter" : ""}`}>
             <label className="input-wrap">
               <span className="input-label">Zoeken</span>
@@ -396,25 +395,18 @@ export default function ImplementationDashboard() {
               </label>
             ) : null}
           </div>
-        </section>
+        </ImplementationSection>
 
-        <section className="dashboard-forecast-list card panel" aria-labelledby="dashboard-forecast-title">
-          <div className="dashboard-forecast-header"><h3 id="dashboard-forecast-title">Voortgang en prognose</h3><p>Voortgang, dagenverbruik en verwachte implementatieduur.</p></div>
+        <ImplementationSection key={`overviewForecastOpen:${user?.id}`} preference="overviewForecastOpen" title="Voortgang en prognose">
+          <p>Voortgang, dagenverbruik en verwachte implementatieduur.</p>
           {filteredImplementations.filter(item=>isActiveImplementation(item.status)).map(item=><div className="dashboard-forecast-row" key={item.id}>
             <Link href={`/implementatie/${item.id}`}>{item.customer_name}</Link>
             <ImplementationForecastCard implementationId={item.id} showProgress/>
           </div>)}
           {!filteredImplementations.some(item=>isActiveImplementation(item.status)) ? <p className="dashboard-forecast-empty">Geen actieve implementaties binnen de gekozen filters.</p> : null}
-        </section>
+        </ImplementationSection>
 
-        <section className="card panel">
-          <div className="top-row">
-            <div>
-              <div className="eyebrow">Resultaten</div>
-              <h2 className="headline">{filteredImplementations.length} implementaties</h2>
-            </div>
-          </div>
-
+        <ImplementationSection key={`overviewResultsOpen:${user?.id}`} preference="overviewResultsOpen" title={`${filteredImplementations.length} implementaties`} eyebrow="Resultaten">
           {message ? <div className="save-status">{message}</div> : null}
 
           <div className="implementation-list">
@@ -505,7 +497,7 @@ export default function ImplementationDashboard() {
               <div className="save-status">Geen implementaties gevonden.</div>
             ) : null}
           </div>
-        </section>
+        </ImplementationSection>
       </div>
     </div>
   );

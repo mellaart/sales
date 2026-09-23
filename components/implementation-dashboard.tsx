@@ -1,5 +1,6 @@
 "use client";
 
+import ImplementationForecastCard from "@/components/implementation-forecast";
 import ImplementationProgressMeter from "@/components/implementation-progress-meter";
 import { ImplementationSelect } from "@/components/implementation-select";
 
@@ -395,6 +396,15 @@ export default function ImplementationDashboard() {
               </label>
             ) : null}
           </div>
+        </section>
+
+        <section className="dashboard-forecast-list card panel" aria-labelledby="dashboard-forecast-title">
+          <div className="dashboard-forecast-header"><h3 id="dashboard-forecast-title">Voortgang en prognose</h3><p>Voortgang, dagenverbruik en verwachte implementatieduur.</p></div>
+          {filteredImplementations.filter(item=>isActiveImplementation(item.status)).map(item=><div className="dashboard-forecast-row" key={item.id}>
+            <Link href={`/implementatie/${item.id}`}>{item.customer_name}</Link>
+            <ImplementationForecastCard implementationId={item.id} showProgress/>
+          </div>)}
+          {!filteredImplementations.some(item=>isActiveImplementation(item.status)) ? <p className="dashboard-forecast-empty">Geen actieve implementaties binnen de gekozen filters.</p> : null}
         </section>
 
         <section className="card panel">

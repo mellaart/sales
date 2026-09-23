@@ -1,5 +1,4 @@
 "use client";
-import ImplementationForecastCard from "@/components/implementation-forecast";
 
 import Link from "next/link";
 import ImplementationSection from "@/components/implementation-section";
@@ -599,14 +598,7 @@ export default function HomeDashboard() {
                 </div>
               ) : null}
             </div>
-            <section className="dashboard-forecast-list card panel" aria-labelledby="dashboard-forecast-title">
-              <div className="dashboard-forecast-header"><h3 id="dashboard-forecast-title">Voortgang en prognose</h3><p>Voortgang, dagenverbruik en verwachte implementatieduur.</p></div>
-              {implementations.filter(item=>isActiveImplementation(item.status)).map(item=><div className="dashboard-forecast-row" key={item.id}>
-                <Link href={`/implementatie/${item.id}`}>{item.customer_name}</Link>
-                <ImplementationForecastCard implementationId={item.id} showProgress/>
-              </div>)}
-              {!implementations.some(item=>isActiveImplementation(item.status)) ? <p className="dashboard-forecast-empty">Er zijn geen actieve implementaties.</p> : null}
-            </section>
+
           </ImplementationSection>
         ) : null}
 

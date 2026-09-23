@@ -658,3 +658,36 @@ export async function getDealApprovalForActor(
 
   return { approval: toSummary(request, approval) } as const;
 }
+
+export async function recordTelephoneDealApproval(dealId: string, actor: Actor) {
+  return withTransaction(async client => {
+    // Same lock order as online approval: approval first, then deal.
+    const current = await client.query<DealApprovalRow>("select * from public.deal_approvals where deal_id = $1 for update", [dealId]);
+    const result = await client.query<DealRow & {accepted_at: string | null; accepted_by_name: string | null; accepted_by_email: string | null; contact_email: string | null}>("select * from public.deals where id = $1 for update", [dealId]);
+    const deal = result.rows[0];
+    if (!deal || !canManageDeal(actor, deal)) throw new Error("Deal niet toegankelijk.");
+    if (deal.accepted_at) return deal;
+    const recorder = actor.profile.full_name || actor.user.email || "Beheerder";
+    const name = `Telefonisch akkoord, vastgelegd door ${recorder}`;
+    const approved = await client.query<DealApprovalRow>(
+      `insert into public.deal_approvals (id, deal_id, created_by, status, recipient_email, contact_name, quote_snapshot, snapshot_hash, accepted_at, accepted_by_name, accepted_by_email)
+       values ($1,$2,$3,'accepted',$4,$5,$6::jsonb,$7,now(),$8,$9)
+       on conflict (deal_id) do update set status='accepted', quote_snapshot=excluded.quote_snapshot, snapshot_hash=excluded.snapshot_hash,
+         accepted_at=now(), accepted_by_name=excluded.accepted_by_name, accepted_by_email=excluded.accepted_by_email,
+         accepted_ip=null, accepted_user_agent=null, updated_at=now()
+       returning *`,
+      [current.rows[0]?.id || createId(), dealId, actor.user.id, deal.contact_email || "", deal.contact_name,
+        JSON.stringify(quoteSnapshotFromDeal(deal)), snapshotHashFromDeal(deal), name, actor.user.email],
+    );
+    const approval = approved.rows[0];
+    const updated = await client.query(
+      "update public.deals set accepted_at=$2, accepted_by_name=$3, accepted_by_email=$4 where id=$1 returning *",
+      [dealId, approval.accepted_at, name, actor.user.email],
+    );
+    await client.query(
+      "insert into public.app_settings (key,payload) values ($1,$2::jsonb) on conflict (key) do nothing",
+      [`deal-telephone-approval:${approval.id}:${approval.token_version}`, JSON.stringify({method:"telephone",dealId,recordedBy:actor.user.id,recordedByName:recorder,recordedAt:approval.accepted_at,snapshotHash:approval.snapshot_hash})],
+    );
+    return updated.rows[0];
+  });
+}

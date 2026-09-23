@@ -836,6 +836,26 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  async function handleTelephoneApproval() {
+    if (!canManageImplementation || manualApprovalBusy || acceptedAt) return;
+    if (!window.confirm(`Heeft ${customerName || "de klant"} telefonisch akkoord gegeven op deze opgeslagen offerte? Het akkoord wordt op jouw naam vastgelegd.`)) return;
+    setManualApprovalBusy(true);
+    try {
+      const response = await fetch(`/api/deals/${dealId}/telephone-approval`, {
+        method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({confirmed:true}),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Akkoord opslaan mislukt.");
+      setAcceptedAt(result.deal.accepted_at);
+      setAcceptedByName(result.deal.accepted_by_name || "");
+      setAcceptedByEmail(result.deal.accepted_by_email || "");
+      setApprovalStatus("accepted");
+      setStatus("Telefonisch akkoord is vastgelegd. De deal kan verder worden verwerkt.");
+      void refreshDealAssets(true);
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Akkoord opslaan mislukt."); }
+    finally { setManualApprovalBusy(false); }
+  }
+
   async function handleManualCustomerApproval(checked: boolean) {
     if (!checked || !user || manualApprovalBusy || acceptedAt || !isNewCustomerDeal) return;
 
@@ -2546,7 +2566,13 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     </button>
                   ) : null}
                 </div>
-                {isNewCustomerDeal && !acceptedAt ? (
+                {canManageImplementation && !acceptedAt ? (
+                  <button type="button" className="primary-button" disabled={manualApprovalBusy}
+                    onClick={() => void handleTelephoneApproval()}>
+                    <CheckCircle2 size={16} /> {manualApprovalBusy ? "Akkoord vastleggen..." : "Telefonisch akkoord vastleggen"}
+                  </button>
+                ) : null}
+                {isNewCustomerDeal && !canManageImplementation && !acceptedAt ? (
                   <label className="deal-manual-approval">
                     <input
                       type="checkbox"

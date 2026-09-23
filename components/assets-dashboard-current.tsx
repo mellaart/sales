@@ -549,7 +549,7 @@ function buildAssetDealNotes(relation: RelationOption, lines: AssetExpansionLine
   ].join("\n");
 }
 
-export default function AssetsDashboardCurrent() {
+export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?: boolean }) {
   const router = useRouter();
   const { user, profile } = useAuth();
   const { pricingConfig } = usePricingConfig();
@@ -900,8 +900,9 @@ export default function AssetsDashboardCurrent() {
       });
     }
 
-    return lines;
+    return pinQuote ? lines.filter(line => line.group === "Servicekosten") : lines;
   }, [
+    pinQuote,
     addedModules,
     chauffeurExtraUserLicenseTotal,
     chauffeurExtraUserSupportTotal,
@@ -937,7 +938,7 @@ export default function AssetsDashboardCurrent() {
     ? Math.max(0, travelImplementationTotal / pricingConfig.implementationDayRate)
     : 0;
   const canCalculateTravelCosts = travelImplementationDays > 0;
-  const effectiveIncludeTravelCosts = includeTravelCosts && canCalculateTravelCosts;
+  const effectiveIncludeTravelCosts = !pinQuote && includeTravelCosts && canCalculateTravelCosts;
   const travelCostQuote = useMemo(
     () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
     [pricingConfig, travelPostcodePrefix],
@@ -1032,7 +1033,7 @@ export default function AssetsDashboardCurrent() {
           ? ["digitaleOndertekening"]
           : []),
       ]);
-      const selectedModuleRows = modules
+      const selectedModuleRows = (pinQuote ? [] : modules)
         .filter((moduleConfig) => addedModuleKeys.has(moduleConfig.key))
         .map((moduleConfig) => {
           const effectiveModule = getEffectiveModuleConfig(
@@ -1054,7 +1055,7 @@ export default function AssetsDashboardCurrent() {
         user_id: user.id,
         customer_name: selectedRelation.name,
         smart_trade_relation_id: Number(selectedRelation.id),
-        quote_title: `Uitbreidingen ${selectedRelation.name}`,
+        quote_title: `${pinQuote ? "Offerte CCV / Worldline" : "Uitbreidingen"} ${selectedRelation.name}`,
         contact_name: dealContactName.trim() || null,
         sales_name: getUserDisplayName(user, profile),
         package_key: activeResult.key,
@@ -1094,7 +1095,7 @@ export default function AssetsDashboardCurrent() {
             relationName: selectedRelation.name,
             currentPackageName: selectedPackageName,
             targetPackageName: activeResult.name,
-            priceComparison: {
+            priceComparison: pinQuote ? undefined : {
               currentMonthly: currentCompleteMonthly,
               newMonthly: newCompleteMonthly,
               currentAnnual: currentCompleteAnnual,
@@ -1285,8 +1286,8 @@ export default function AssetsDashboardCurrent() {
         <div className={styles.transferPanelTop}>
           <div>
             <div className="eyebrow">Deals</div>
-            <h2 className="headline">Uitbreidingen doorzetten</h2>
-            <p className="subtext">{transferHint}</p>
+            <h2 className="headline">{pinQuote ? "Offerte voorbereiden" : "Uitbreidingen doorzetten"}</h2>
+            <p className="subtext">{pinQuote ? "Selecteer een relatie en vul de gewenste servicekosten in om een offerte als deal op te slaan." : transferHint}</p>
           </div>
 
           <div className="brand-actions">
@@ -1300,7 +1301,7 @@ export default function AssetsDashboardCurrent() {
               onClick={() => void handleSendExpansionsToDeals()}
             >
               <FileText size={16} />
-              {transferBusy ? "Deal wordt gemaakt..." : "Maak deal van uitbreidingen"}
+              {transferBusy ? "Deal wordt gemaakt..." : pinQuote ? "Offerte als deal opslaan" : "Maak deal van uitbreidingen"}
             </button>
           </div>
         </div>
@@ -1332,17 +1333,17 @@ export default function AssetsDashboardCurrent() {
       <div className="container stack-4">
         <header className="brand-hero card">
           <div>
-            <div className="brand-mark">Assets</div>
-            <h1>Assets en upsell-kansen</h1>
-            <p>Zoek een debiteur en bekijk Smart Trade assets, Worldline servicekosten en CCV servicekosten.</p>
+            <div className="brand-mark">{pinQuote ? "Worldline · CCV" : "Assets"}</div>
+            <h1>{pinQuote ? "Offerte" : "Assets en upsell-kansen"}</h1>
+            <p>{pinQuote ? "Bereid een offerte voor CCV en Worldline voor. Zoek een relatie en voeg servicekosten en een toelichting toe." : "Zoek een debiteur en bekijk Smart Trade assets, Worldline servicekosten en CCV servicekosten."}</p>
           </div>
           <div className="brand-actions">
-            <StatusPill tone="success">{assetClassTotals.length} assetclass totalen</StatusPill>
-            <StatusPill tone="warning">{assets.length} ontvangen assets</StatusPill>
+            {!pinQuote ? <StatusPill tone="success">{assetClassTotals.length} assetclass totalen</StatusPill> : null}
+            {!pinQuote ? <StatusPill tone="warning">{assets.length} ontvangen assets</StatusPill> : null}
           </div>
         </header>
 
-        {renderTransferActionPanel()}
+        {!pinQuote ? renderTransferActionPanel() : null}
 
         <section className={`card panel ${styles.assetsSearchPanel}`}>
           <div className="top-row">
@@ -1412,7 +1413,7 @@ export default function AssetsDashboardCurrent() {
               </div>
 
               <label className="input-wrap">
-                <span className="input-label">Contactpersoon voor de deal</span>
+                <span className="input-label">{pinQuote ? "Contactpersoon voor de offerte" : "Contactpersoon voor de deal"}</span>
                 <input
                   className="input"
                   type="text"
@@ -1435,6 +1436,7 @@ export default function AssetsDashboardCurrent() {
           {searchStatus ? <div className={`save-status ${styles.assetsStatus}`}>{searchStatus}</div> : null}
         </section>
 
+        {!pinQuote ? <>
         <section className="card panel">
           <div className="top-row">
             <div>
@@ -1773,8 +1775,10 @@ export default function AssetsDashboardCurrent() {
           )}
         </section>
 
+        </> : null}
+
         <section className="card panel">
-          <div className="top-row"><div><div className="eyebrow">Stap 7</div><h2 className="headline">Servicekosten</h2><p className="subtext">CCV en Worldline worden herkend op assetclass. Offerte-aantallen starten op 0.</p></div><div className="icon-badge"><Boxes size={26} /></div></div>
+          <div className="top-row"><div><div className="eyebrow">{pinQuote ? "Offerte" : "Stap 7"}</div><h2 className="headline">Servicekosten</h2><p className="subtext">CCV en Worldline worden herkend op assetclass. Offerte-aantallen starten op 0.</p></div><div className="icon-badge"><Boxes size={26} /></div></div>
           {!selectedRelation ? <div className="empty-state">Kies eerst een relatie om servicekosten te bekijken.</div> : (
             <div className={styles.upsellPanel}>
               <div className={styles.upsellSummary}><div><div className={styles.assetTitle}>Servicekosten offerte</div><div className={styles.assetMeta}>{serviceCostPriceLabel}</div></div><StatusPill tone={existingServiceCostTotal > 0 ? "success" : "warning"}>{existingServiceCostTotal > 0 ? `${existingServiceCostTotal} huidig` : "geen huidige servicekosten"}</StatusPill></div>
@@ -1787,6 +1791,7 @@ export default function AssetsDashboardCurrent() {
           )}
         </section>
 
+        {!pinQuote ? <>
         <section className="card panel">
           <div className="top-row">
             <div>
@@ -1965,12 +1970,14 @@ export default function AssetsDashboardCurrent() {
           )}
         </section>
 
+        </> : null}
+
         <section className="card panel">
           <div className="top-row">
             <div>
               <div className="eyebrow">Offerte</div>
               <h2 className="headline">Toelichting offerte</h2>
-              <p className="subtext">Schrijf hier de begeleidende tekst die de klant op de uitbreidingen-offerte leest.</p>
+              <p className="subtext">Schrijf hier de begeleidende tekst die de klant op de offerte leest.</p>
             </div>
             <div className="icon-badge"><FileText size={26} /></div>
           </div>

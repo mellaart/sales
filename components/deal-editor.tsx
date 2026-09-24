@@ -597,7 +597,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     const url = new URL(window.location.href);
     if (url.searchParams.get("outlook") !== "connected") return;
 
-    setStatus("Outlook is verbonden. Klik nogmaals op 'Klaarzetten in Outlook' om het concept te maken.");
+    setStatus("Outlook is verbonden. Klik nogmaals op 'Direct verzenden via Outlook' om de mail te verzenden.");
     url.searchParams.delete("outlook");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }, [loading]);
@@ -997,7 +997,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     showOutlookPopupStatus(
       outlookWindow,
       "Nieuwe klantmail voorbereiden",
-      "Het Outlook-concept met alle klant- en implementatiegegevens wordt gemaakt.",
+      "De e-mail met alle klant- en implementatiegegevens wordt verzonden.",
     );
     setNewCustomerOutlookBusy(true);
     setStatus("Outlook-verbinding wordt gecontroleerd...");
@@ -1024,9 +1024,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         return;
       }
 
-      setStatus("Nieuwe klantmail wordt gemaakt...");
+      setStatus("Nieuwe klantmail wordt verzonden...");
       const response = await fetch(
-        `/api/implementations/${encodeURIComponent(implementation.id)}/new-customer-draft?returnTo=${encodeURIComponent(returnTo)}`,
+        `/api/implementations/${encodeURIComponent(implementation.id)}/new-customer-send?returnTo=${encodeURIComponent(returnTo)}`,
         { method: "POST" },
       );
       const json = await response.json().catch(() => ({})) as {
@@ -1042,17 +1042,17 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         return;
       }
       if (!response.ok || !json.webLink) {
-        throw new Error(json.error || "Nieuwe klantmail maken mislukt.");
+        throw new Error(json.error || "Nieuwe klantmail verzenden mislukt.");
       }
 
       const progressSaved = await completeImplementationProgress("newCustomerEmail");
       if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
       setStatus(progressSaved
-        ? "Nieuwe klantmail is in Outlook klaargezet en afgevinkt bij de implementatie."
-        : "Nieuwe klantmail is in Outlook klaargezet, maar de voortgang kon niet worden afgevinkt.");
+        ? "Nieuwe klantmail is via Outlook verzonden en afgevinkt bij de implementatie."
+        : "Nieuwe klantmail is via Outlook verzonden, maar de voortgang kon niet worden afgevinkt.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Nieuwe klantmail maken mislukt.";
-      showOutlookPopupStatus(outlookWindow, "Nieuwe klantmail niet gemaakt", message, "error");
+      const message = error instanceof Error ? error.message : "Nieuwe klantmail verzenden mislukt.";
+      showOutlookPopupStatus(outlookWindow, "Nieuwe klantmail niet verzonden", message, "error");
       setStatus(message);
     } finally {
       setNewCustomerOutlookBusy(false);
@@ -1384,8 +1384,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     if (outlookWindow) outlookWindow.opener = null;
     showOutlookPopupStatus(
       outlookWindow,
-      "Outlook-concept voorbereiden",
-      "De offerte-PDF wordt gemaakt en aan het Outlook-concept toegevoegd.",
+      "E-mail voorbereiden",
+      "De offerte-PDF wordt gemaakt en aan de e-mail toegevoegd.",
     );
     setQuoteOutlookLink("");
     setQuoteOutlookBusy(true);
@@ -1403,7 +1403,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       };
       if (!statusResponse.ok) {
         const message = statusJson.error || "Outlook-verbinding controleren mislukt.";
-        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        showOutlookPopupStatus(outlookWindow, "E-mail niet verzonden", message, "error");
         throw new Error(message);
       }
       if (!statusJson.connected) {
@@ -1417,7 +1417,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
       setStatus("Deal wordt opgeslagen voor de akkoordlink...");
       const saved = await handleSave();
-      if (!saved) throw new Error("De deal kon niet worden opgeslagen. Het Outlook-concept is niet gemaakt.");
+      if (!saved) throw new Error("De deal kon niet worden opgeslagen. De e-mail is niet gemaakt.");
 
       setStatus("Beveiligde akkoordlink wordt gemaakt...");
       const approvalResponse = await fetch("/api/deal-approvals", {
@@ -1439,11 +1439,11 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       const approval = approvalJson.approval;
       applyDealApproval(approval);
 
-      setStatus("Offerte-PDF en Outlook-concept worden gemaakt...");
+      setStatus("Offerte-PDF en E-mail worden verzonden...");
       const attachment = await createQuotePdfFile(getQuotePdfInput());
       showOutlookPopupStatus(
         outlookWindow,
-        "Outlook-concept voorbereiden",
+        "E-mail voorbereiden",
         "De offerte is gemaakt. Outlook voegt de PDF nu als bijlage toe.",
       );
       const formData = new FormData();
@@ -1454,7 +1454,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       formData.set("attachment", attachment);
 
       const response = await fetch(
-        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        `/api/outlook/send?returnTo=${encodeURIComponent(returnTo)}`,
         { method: "POST", body: formData },
       );
       const json = await response.json().catch(() => ({})) as {
@@ -1472,8 +1472,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         return;
       }
       if (!response.ok || !json.webLink) {
-        const message = json.error || "Outlook-concept maken mislukt.";
-        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        const message = json.error || "E-mail verzenden mislukt.";
+        showOutlookPopupStatus(outlookWindow, "E-mail niet verzonden", message, "error");
         throw new Error(message);
       }
 
@@ -1503,12 +1503,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setQuoteOutlookLink(json.webLink);
       setStatus(
         trackingWarning
-          ? `Outlook-concept is aangemaakt. ${trackingWarning}`
-          : "Outlook-concept met offerte-PDF en akkoordlink is aangemaakt.",
+          ? `E-mail is verzonden. ${trackingWarning}`
+          : "E-mail met offerte-PDF en akkoordlink is verzonden.",
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Outlook-concept maken mislukt.";
-      showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+      const message = error instanceof Error ? error.message : "E-mail verzenden mislukt.";
+      showOutlookPopupStatus(outlookWindow, "E-mail niet verzonden", message, "error");
       setStatus(message);
     } finally {
       setQuoteOutlookBusy(false);
@@ -1757,9 +1757,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       return;
     }
 
-    setCustomerIntakeStatus("Outlook-concept wordt gemaakt...");
+    setCustomerIntakeStatus("E-mail wordt verzonden...");
     const response = await fetch(
-      `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+      `/api/outlook/send?returnTo=${encodeURIComponent(returnTo)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1780,7 +1780,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       return;
     }
     if (!response.ok || !json.webLink) {
-      throw new Error(json.error || "Outlook-concept maken mislukt.");
+      throw new Error(json.error || "E-mail verzenden mislukt.");
     }
 
     if (outlookWindow) {
@@ -1823,12 +1823,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           contactName,
           publicUrl: intake.publicUrl,
         },
-        "Outlook-concept met klantlink is aangemaakt.",
+        "E-mail met klantlink is verzonden.",
       );
     } catch (error) {
       outlookWindow?.close();
       setCustomerIntakeStatus(
-        error instanceof Error ? error.message : "Outlook-concept maken mislukt.",
+        error instanceof Error ? error.message : "E-mail verzenden mislukt.",
       );
     } finally {
       setCustomerOutlookBusy(false);
@@ -2516,7 +2516,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     onClick={() => void handleQuoteOutlookDraft()}
                   >
                     <Mail size={16} />
-                    {quoteOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                    {quoteOutlookBusy ? "Verzenden..." : "Direct verzenden via Outlook"}
                   </button>
                 </div>
                 {quoteOutlookLink ? (
@@ -2528,7 +2528,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                       rel="noreferrer"
                     >
                       <ExternalLink size={16} />
-                      Outlook-concept openen
+                      Verzonden items openen
                     </a>
                   </div>
                 ) : null}
@@ -2553,8 +2553,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                       : approvalRequestedAt
                         ? `Klaargezet op ${formatApprovalDate(approvalRequestedAt)}${approvalExpiresAt ? ` · geldig tot ${formatApprovalDate(approvalExpiresAt)}` : ""}`
                         : approvalStatus === "revoked"
-                          ? "De offertegegevens zijn gewijzigd. Maak via Outlook een nieuw concept met een nieuwe akkoordlink."
-                          : "Bij het klaarzetten in Outlook wordt automatisch een beveiligde akkoordlink toegevoegd."}
+                          ? "De offertegegevens zijn gewijzigd. Maak via Outlook een nieuwe mail met een nieuwe akkoordlink."
+                          : "Bij het verzenden via Outlook wordt automatisch een beveiligde akkoordlink toegevoegd."}
                   </p>
                   {approvalStatus ? (
                     <button
@@ -2667,7 +2667,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <p>
                     {customerIntake?.submittedAt
                       ? "De ingevulde gegevens zijn ontvangen en staan klaar voor de implementatie."
-                      : "Zet een e-mail met het klantformulier klaar in Outlook. Het e-mailadres uit Offerte layout wordt gebruikt."}
+                      : "Verzend het klantformulier direct via Outlook. Het e-mailadres uit Offerte layout wordt gebruikt."}
                   </p>
                 </div>
                 <button
@@ -2675,13 +2675,13 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   className="primary-button"
                   disabled={customerIntakeBusy || customerOutlookBusy}
                   title={customerIntakeEmail.trim()
-                    ? "Maak een Outlook-concept met het klantformulier"
+                    ? "Maak een e-mail met het klantformulier"
                     : "Vul eerst het e-mailadres van de klant in bij Offerte layout"}
                   onClick={() => void handleOutlookDraft()}
                 >
                   <Mail size={16} /> {customerOutlookBusy
-                    ? "Concept maken..."
-                    : "Klaarzetten in Outlook"}
+                    ? "Verzenden..."
+                    : "Direct verzenden via Outlook"}
                 </button>
               </article>
 
@@ -2705,7 +2705,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     : `Nog nodig: ${newCustomerMailMissingFields.join(", ")}`}
                   onClick={() => void handleNewCustomerOutlookDraft()}
                 >
-                  <Mail size={16} /> {newCustomerOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                  <Mail size={16} /> {newCustomerOutlookBusy ? "Verzenden..." : "Direct verzenden via Outlook"}
                 </button>
               </article>
 

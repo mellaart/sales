@@ -15,6 +15,7 @@ const OUTLOOK_SCOPE = [
   "email",
   "offline_access",
   "https://graph.microsoft.com/Mail.ReadWrite",
+  "https://graph.microsoft.com/Mail.Send",
   OUTLOOK_CALENDAR_SCOPE,
 ].join(" ");
 const TOKEN_PREFIX = "v1";
@@ -447,6 +448,7 @@ async function getOutlookAccessToken(request: Request, userId: string) {
     const tokens = await requestTokens(request, {
       grant_type: "refresh_token",
       refresh_token: refreshToken,
+      scope: connection.scope || OUTLOOK_SCOPE.replace("https://graph.microsoft.com/Mail.Send", "").trim(),
     });
 
     if (tokens.refresh_token) {
@@ -456,7 +458,7 @@ async function getOutlookAccessToken(request: Request, userId: string) {
              scope = $3,
              updated_at = now()
          where user_id = $1`,
-        [userId, encryptRefreshToken(tokens.refresh_token), tokens.scope ?? OUTLOOK_SCOPE],
+        [userId, encryptRefreshToken(tokens.refresh_token), tokens.scope ?? connection.scope],
       );
     }
 
@@ -720,6 +722,7 @@ export async function createOutlookDraft(
   request: Request,
   userId: string,
   input: {
+    sendImmediately?: boolean;
     recipientEmail: string;
     ccRecipientEmails?: string[];
     subject: string;
@@ -730,6 +733,12 @@ export async function createOutlookDraft(
     fileContent?: Buffer;
   },
 ) {
+  if (input.sendImmediately) {
+    const {rows} = await query<{scope:string|null}>("select scope from public.outlook_connections where user_id=$1", [userId]);
+    if (!(rows[0]?.scope ?? "").split(/\s+/).some(scope => scope.toLowerCase().split("/").pop() === "mail.send")) {
+      throw new OutlookReconnectRequiredError("Verbind Outlook opnieuw en geef toestemming om e-mails rechtstreeks te verzenden.");
+    }
+  }
   const accessToken = await getOutlookAccessToken(request, userId);
   const authorizationHeaders = {
     Authorization: `Bearer ${accessToken}`,
@@ -790,7 +799,7 @@ export async function createOutlookDraft(
     });
   }
 
-  if (attachments.length === 0) {
+  if (attachments.length === 0 && !input.sendImmediately) {
     return composeLink;
   }
 
@@ -811,6 +820,23 @@ export async function createOutlookDraft(
     }
   }
 
+  if (input.sendImmediately) {
+    let response: Response;
+    try {
+      response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(draft.id)}/send`, {
+        method: "POST", headers: authorizationHeaders, cache: "no-store",
+      });
+    } catch {
+      throw new Error("De verzendstatus is onbekend. Controleer Verzonden items in Outlook voordat je opnieuw verzendt.");
+    }
+    if (response.status !== 202) {
+      if (response.status >= 500) throw new Error("De verzendstatus is onbekend. Controleer Verzonden items in Outlook voordat je opnieuw verzendt.");
+      await deleteOutlookDraft(accessToken, draft.id);
+      if (response.status === 401 || response.status === 403) throw new OutlookReconnectRequiredError("Verbind Outlook opnieuw en geef toestemming om e-mails te verzenden.");
+      throw new Error("Outlook heeft het verzenden geweigerd. De mail is niet verzonden.");
+    }
+    return "https://outlook.office.com/mail/sentitems";
+  }
   return composeLink;
 }
 

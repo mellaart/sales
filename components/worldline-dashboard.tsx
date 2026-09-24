@@ -1341,7 +1341,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
     const url = new URL(window.location.href);
     if (url.searchParams.get("outlook") !== "connected") return;
 
-    setStatus("Outlook is verbonden. Klik nogmaals op 'Klaarzetten in Outlook' om het concept te maken.");
+    setStatus("Outlook is verbonden. Klik nogmaals op 'Direct verzenden via Outlook' om de mail te verzenden.");
     url.searchParams.delete("outlook");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }, [authLoading]);
@@ -2586,7 +2586,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
     showOutlookPopupStatus(
       outlookWindow,
       "Worldline-mail voorbereiden",
-      "De documenten worden ingevuld en aan een nieuw Outlook-concept toegevoegd.",
+      "De documenten worden ingevuld en aan een nieuw E-mail toegevoegd.",
     );
     setOutlookBusy(true);
     setStatus("Outlook-verbinding wordt gecontroleerd...");
@@ -2604,7 +2604,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
 
       if (!statusResponse.ok) {
         const message = statusJson.error || "Outlook-verbinding controleren mislukt.";
-        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        showOutlookPopupStatus(outlookWindow, "E-mail niet verzonden", message, "error");
         throw new Error(message);
       }
 
@@ -2623,7 +2623,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
       await flushAgreementFields({ savedMessage: "Aansluitgegevens automatisch opgeslagen." });
       const fields = agreementFieldsRef.current;
       const refundSelected = isYesValue(fields.refund);
-      setStatus("Worldline-documenten en Outlook-concept worden gemaakt...");
+      setStatus("Worldline-documenten en E-mail worden verzonden...");
       showOutlookPopupStatus(
         outlookWindow,
         "Worldline-mail voorbereiden",
@@ -2655,7 +2655,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
       });
 
       const response = await fetch(
-        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        `/api/outlook/send?returnTo=${encodeURIComponent(returnTo)}`,
         { method: "POST", body: formData },
       );
       const json = await response.json().catch(() => ({})) as {
@@ -2674,8 +2674,8 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
       }
 
       if (!response.ok || !json.webLink) {
-        const message = json.error || "Outlook-concept maken mislukt.";
-        showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+        const message = json.error || "E-mail verzenden mislukt.";
+        showOutlookPopupStatus(outlookWindow, "E-mail niet verzonden", message, "error");
         throw new Error(message);
       }
 
@@ -2684,12 +2684,12 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
       }
       setStatus(
         refundSelected
-          ? "Outlook-concept met vier Worldline-documenten is aangemaakt."
-          : "Outlook-concept met drie Worldline-documenten is aangemaakt.",
+          ? "E-mail met vier Worldline-documenten is verzonden."
+          : "E-mail met drie Worldline-documenten is verzonden.",
       );
     } catch (error) {
-      const message = getErrorMessage(error, "Outlook-concept maken mislukt.");
-      showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", message, "error");
+      const message = getErrorMessage(error, "E-mail verzenden mislukt.");
+      showOutlookPopupStatus(outlookWindow, "E-mail niet verzonden", message, "error");
       setStatus(message);
     } finally {
       setOutlookBusy(false);
@@ -2862,7 +2862,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
           <div>
             <div className="brand-mark">Smart Trade</div>
             <h1>{pageTitle}</h1>
-            <p>{returnPinOnly ? "Bereid het acceptatieformulier retourpinnen voor en zet de klantlink klaar in Outlook." : "Beheer aansluitovereenkomsten, KvK, ID, bankafschrift en refund-documenten per relatie."}</p>
+            <p>{returnPinOnly ? "Bereid het acceptatieformulier retourpinnen voor en verzend de klantlink via Outlook." : "Beheer aansluitovereenkomsten, KvK, ID, bankafschrift en refund-documenten per relatie."}</p>
           </div>
           <div className="brand-actions">
             {!canWriteWorldline ? <StatusPill tone="warning">Alleen lezen</StatusPill> : null}
@@ -3066,7 +3066,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
                   <div>
                     <div className="eyebrow">Retourpinnen</div>
                     <h2 className="headline">Gegevens voor het acceptatieformulier</h2>
-                    <p className="subtext">Vul de klant- en ondertekengegevens in. Wijzigingen worden automatisch opgeslagen. Maak daarna de klantlink en zet deze klaar in Outlook.</p>
+                    <p className="subtext">Vul de klant- en ondertekengegevens in. Wijzigingen worden automatisch opgeslagen. Maak daarna de klantlink en verzend deze via Outlook.</p>
                   </div>
                   <button type="button" className="secondary-button" onClick={() => void saveAgreementFields()} disabled={busy || savingAgreementFields || !canWriteWorldline}>
                     <RefreshCw size={16} /> {savingAgreementFields ? "Opslaan..." : "Opslaan"}
@@ -3140,7 +3140,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
                     disabled={busy || savingAgreementFields || outlookBusy}
                   >
                     <Mail size={16} />
-                    {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                    {outlookBusy ? "Verzenden..." : "Direct verzenden via Outlook"}
                   </button>
                   <button
                     type="button"

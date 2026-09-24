@@ -183,9 +183,9 @@ export default function WorldlineReturnPinPanel({
         return;
       }
 
-      setMessage("Outlook-concept wordt gemaakt...");
+      setMessage("E-mail wordt verzonden...");
       const response = await fetch(
-        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        `/api/outlook/send?returnTo=${encodeURIComponent(returnTo)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -212,15 +212,15 @@ export default function WorldlineReturnPinPanel({
         return;
       }
       if (!response.ok || !json.webLink) {
-        throw new Error(json.error || "Outlook-concept maken mislukt.");
+        throw new Error(json.error || "E-mail verzenden mislukt.");
       }
 
       if (outlookWindow) outlookWindow.location.href = json.webLink;
       else window.location.assign(json.webLink);
-      setMessage("Outlook-concept met acceptatieformulierlink is aangemaakt.");
+      setMessage("E-mail met acceptatieformulierlink is verzonden.");
     } catch (error) {
       outlookWindow?.close();
-      setMessage(error instanceof Error ? error.message : "Outlook-concept maken mislukt.");
+      setMessage(error instanceof Error ? error.message : "E-mail verzenden mislukt.");
     } finally {
       setOutlookBusy(false);
     }
@@ -255,7 +255,7 @@ export default function WorldlineReturnPinPanel({
             </button>
             {canWrite ? (
               <button type="button" className="primary-button" disabled={busy || outlookBusy} onClick={() => void prepareOutlookDraft()}>
-                <Mail size={16} /> {outlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                <Mail size={16} /> {outlookBusy ? "Verzenden..." : "Direct verzenden via Outlook"}
               </button>
             ) : null}
             <button type="button" className="secondary-button" disabled={busy} onClick={() => void loadForms(true)}>

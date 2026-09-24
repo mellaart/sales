@@ -548,6 +548,7 @@ export async function POST(request: Request) {
       }
 
       const webLink = await createOutlookDraft(request, verified.user.id, {
+        sendImmediately: new URL(request.url).pathname === "/api/outlook/send",
         recipientEmail,
         subject,
         htmlBody,
@@ -625,6 +626,7 @@ export async function POST(request: Request) {
       }
 
       const webLink = await createOutlookDraft(request, verified.user.id, {
+        sendImmediately: new URL(request.url).pathname === "/api/outlook/send",
         recipientEmail,
         subject: "Worldline Transactiecontract",
         htmlBody: worldlineContractEmail({ contactName, refundEnabled }),
@@ -655,6 +657,7 @@ export async function POST(request: Request) {
 
     const subject = `Offerte Smart Trade - ${customerName || "prijsvoorstel"}`;
     const webLink = await createOutlookDraft(request, verified.user.id, {
+        sendImmediately: new URL(request.url).pathname === "/api/outlook/send",
       recipientEmail,
       subject,
       htmlBody: quoteEmail({ contactName, customerName, approvalUrl }),

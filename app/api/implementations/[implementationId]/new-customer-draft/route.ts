@@ -168,6 +168,7 @@ export async function POST(
     };
 
     const webLink = await createOutlookDraft(request, verified.user.id, {
+      sendImmediately: new URL(request.url).pathname.endsWith("/new-customer-send"),
       recipientEmail: RECIPIENT_EMAIL,
       ccRecipientEmails,
       subject,

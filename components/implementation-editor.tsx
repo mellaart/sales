@@ -1771,9 +1771,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
         setPortalAccess(activePortal);
       }
 
-      setMessage("Outlook-concept wordt gemaakt...");
+      setMessage("E-mail wordt verzonden...");
       const response = await fetch(
-        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        `/api/outlook/send?returnTo=${encodeURIComponent(returnTo)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1802,14 +1802,14 @@ export default function ImplementationEditor({ implementationId }: { implementat
         return;
       }
       if (!response.ok || !json.webLink) {
-        throw new Error(json.error || "Outlook-concept maken mislukt.");
+        throw new Error(json.error || "E-mail verzenden mislukt.");
       }
 
       if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
       setMessage(input.successMessage);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Outlook-concept maken mislukt.";
-      showOutlookPopupStatus(outlookWindow, "Outlook-concept niet gemaakt", errorMessage, "error");
+      const errorMessage = error instanceof Error ? error.message : "E-mail verzenden mislukt.";
+      showOutlookPopupStatus(outlookWindow, "E-mail niet verzonden", errorMessage, "error");
       setMessage(errorMessage);
     } finally {
       setPortalBusy(false);
@@ -1823,8 +1823,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
     void createCustomerOutlookDraft({
       busyKey: `appointment:${appointment.id}`,
       popupTitle: "Implementatieafspraak voorbereiden",
-      popupDescription: "De klantmail en het agenda-bestand worden klaargezet in Outlook.",
-      successMessage: "Implementatieafspraak is met agenda-bestand in Outlook klaargezet.",
+      popupDescription: "De klantmail en het agenda-bestand worden via Outlook verzonden.",
+      successMessage: "Implementatieafspraak is met agenda-bestand via Outlook verzonden.",
       payload: {
         template: "implementation-appointment",
         appointmentId: appointment.id,
@@ -1848,8 +1848,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
     void createCustomerOutlookDraft({
       busyKey: "implementation-progress",
       popupTitle: "Klantpagina voorbereiden",
-      popupDescription: "De klantmail met de beveiligde voortgangslink wordt klaargezet in Outlook.",
-      successMessage: "Klantpagina is in Outlook klaargezet.",
+      popupDescription: "De klantmail met de beveiligde voortgangslink wordt via Outlook verzonden.",
+      successMessage: "Klantpagina is via Outlook verzonden.",
       payload: { template: "implementation-progress" },
     });
   }
@@ -2042,7 +2042,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
       customerIntake?.recipientEmail || customerIntake?.formData.contactEmail || ""
     ).trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
-      setMessage("Er ontbreekt een geldig klant-e-mailadres voor het Outlook-concept.");
+      setMessage("Er ontbreekt een geldig klant-e-mailadres voor de e-mail.");
       return;
     }
 
@@ -2057,7 +2057,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
     showOutlookPopupStatus(
       outlookWindow,
       "DNS-instructies voorbereiden",
-      "Het Outlook-concept met de SPF- en DKIM-instructies wordt gemaakt.",
+      "De e-mail met de SPF- en DKIM-instructies wordt verzonden.",
     );
     setDnsOutlookBusy(true);
     setMessage("Outlook-verbinding wordt gecontroleerd...");
@@ -2084,9 +2084,9 @@ export default function ImplementationEditor({ implementationId }: { implementat
         return;
       }
 
-      setMessage("DNS-concept wordt gemaakt...");
+      setMessage("DNS-mail wordt verzonden...");
       const response = await fetch(
-        `/api/outlook/drafts?returnTo=${encodeURIComponent(returnTo)}`,
+        `/api/outlook/send?returnTo=${encodeURIComponent(returnTo)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2113,16 +2113,16 @@ export default function ImplementationEditor({ implementationId }: { implementat
         return;
       }
       if (!response.ok || !json.webLink) {
-        throw new Error(json.error || "DNS-concept maken mislukt.");
+        throw new Error(json.error || "DNS-mail verzenden mislukt.");
       }
       const progressSaved = await completeOutlookProgress("dnsInstructions");
       if (!navigateOutlookPopup(outlookWindow, json.webLink)) window.location.assign(json.webLink);
       setMessage(progressSaved
-        ? `DNS-concept voor ${domain} is aangemaakt en DNS-instructies is afgevinkt.`
-        : `DNS-concept voor ${domain} is aangemaakt, maar DNS-instructies kon niet worden afgevinkt.`);
+        ? `DNS-mail voor ${domain} is verzonden en DNS-instructies is afgevinkt.`
+        : `DNS-mail voor ${domain} is verzonden, maar DNS-instructies kon niet worden afgevinkt.`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "DNS-concept maken mislukt.";
-      showOutlookPopupStatus(outlookWindow, "DNS-concept niet gemaakt", errorMessage, "error");
+      const errorMessage = error instanceof Error ? error.message : "DNS-mail verzenden mislukt.";
+      showOutlookPopupStatus(outlookWindow, "DNS-mail niet verzonden", errorMessage, "error");
       setMessage(errorMessage);
     } finally {
       setDnsOutlookBusy(false);
@@ -2635,8 +2635,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     ? <LoaderCircle className="implementation-dns-spinner" size={16} />
                     : <Mail size={16} />}
                   {customerOutlookBusyKey === "implementation-progress"
-                    ? "Concept maken..."
-                    : "Klaarzetten in Outlook"}
+                    ? "Verzenden..."
+                    : "Direct verzenden via Outlook"}
                 </button>
               ) : <Link2 size={28} aria-hidden="true" />}
             </div>
@@ -3047,8 +3047,8 @@ export default function ImplementationEditor({ implementationId }: { implementat
                           ? <LoaderCircle className="implementation-dns-spinner" size={16} />
                           : <Mail size={16} />}
                         {customerOutlookBusyKey === `appointment:${appointment.id}`
-                          ? "Concept maken..."
-                          : "Klaarzetten in Outlook"}
+                          ? "Verzenden..."
+                          : "Direct verzenden via Outlook"}
                       </button>
                     </div>
                   ) : null}
@@ -3231,11 +3231,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   className="primary-button"
                   disabled={!canManageImplementation || !customerDomain || !hasCustomerEmail || dnsOutlookBusy || saving}
                   title={hasCustomerEmail
-                    ? "DNS-instructies in Outlook klaarzetten"
-                    : "Een klant-e-mailadres is nodig voor een Outlook-concept"}
+                    ? "DNS-instructies via Outlook verzenden"
+                    : "Een klant-e-mailadres is nodig voor een e-mail"}
                   onClick={() => void handleDnsOutlookDraft()}
                 >
-                  <Mail size={16} /> {dnsOutlookBusy ? "Concept maken..." : "Klaarzetten in Outlook"}
+                  <Mail size={16} /> {dnsOutlookBusy ? "Verzenden..." : "Direct verzenden via Outlook"}
                 </button>
               </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import ImplementationBudgetPanel from "@/components/implementation-budget-panel";
+import { selectedEstimateItems } from "@/lib/implementation-estimates";
 import { ImplementationSelect } from "@/components/implementation-select";
 
 import Link from "next/link";
@@ -2456,10 +2457,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
         </header>
 
         <ImplementationBudgetPanel implementationId={implementation.id} canEdit={canEdit} approvals={implementationCustomerWorkApprovals}
-          items={[...configuredImplementationTasks, ...configuredImplementationItems].filter(item=>isImplementationItemSelected(item, implementationItemProgress)).flatMap(item=>{
-            const work = getImplementationWorkItemStatuses(item, implementationItemProgress).filter(row=>row.selected);
-            return work.length ? work.map(row=>({key:row.key,label:`${item.label} — ${row.label}`})) : [{key:item.key,label:item.label}];
-          })} />
+          items={selectedEstimateItems([...configuredImplementationTasks, ...configuredImplementationItems], implementationItemProgress, pricingConfig)} />
         <section className="kpi-grid">
           <StatCard title="Pakket" value={implementation.package_name || "-"} icon={Package} sublabel="Gekozen pakket" />
           <StatCard

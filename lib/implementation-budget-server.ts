@@ -33,11 +33,17 @@ export async function getImplementationBudgetState(implementationId: string) {
   const items = selectedEstimateItems(configured, progress, pricingConfig);
   const saved = settings.rows.find(row => row.key === `implementation-budget:${implementationId}`)?.payload;
   const estimate = estimateImplementation(items, budget, saved?.rows, hoursPerDay);
-  // Existing manual allocations are never silently replaced by new standards.
-  const rows = saved?.rows ?? estimate.rows ?? {};
+  const keys = new Set(items.map(item => item.key));
+  const savedRows = Object.fromEntries(Object.entries(saved?.rows ?? {}).filter(([key]) => keys.has(key)));
+  const removedRows = Object.keys(saved?.rows ?? {}).some(key => !keys.has(key));
+  // Preserve valid manual budgets. Reallocate if old rows contained extra
+  // text activities, which are no longer part of the hours budget.
+  const hasSavedHours = !removedRows && items.every(item => Object.hasOwn(savedRows, item.key))
+    && Object.values(savedRows).some(row => row.days > 0);
+  const rows = hasSavedHours ? savedRows : estimate.rows ?? savedRows;
   const allocationComplete = budget !== null && validateBudgetRows(rows, budget)
     && items.length === Object.keys(rows).length && items.every(item => Object.hasOwn(rows, item.key));
-  return { budget, rows, items, version: saved?.version ?? null, automatic: !saved?.rows,
+  return { budget, rows, items, version: saved?.version ?? null, automatic: !hasSavedHours,
     allocationComplete,
     hoursPerDay, approvals: normalizeImplementationCustomerWorkApprovals(record?.implementation_customer_work_approvals),
     estimateDays: estimate.rawDays, missingStandards: estimate.missing,

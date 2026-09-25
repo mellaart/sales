@@ -44,10 +44,21 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
     setRows(previous => ({ ...previous, [key]: { ...(previous[key] ?? { days: 0, started: false }), ...patch } }));
     setDirty(true); setMessage("");
   }
-  function applyStandards() {
-    if (!estimate.rows) return;
-    setRows(estimate.rows); setDirty(true);
-    setMessage("Verdeling opnieuw berekend. Sla op om deze te gebruiken voor de voortgang en prognose.");
+  async function applyStandards() {
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch(`/api/implementations/${implementationId}/budget`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      if (data.version !== version || data.items.map((item: Item) => item.key).sort().join("|") !== selection) throw new Error("De begroting of werkzaamheden zijn intussen gewijzigd. Vernieuw de pagina.");
+      const next = estimateImplementation(data.items, data.budget, rows, data.hoursPerDay);
+      setStandards(data.items); setBudget(data.budget); setHours(data.hoursPerDay);
+      if (!next.rows || !Object.keys(next.rows).length) throw new Error("Geen verdeling mogelijk. Controleer de standaarduren, aantallen en eventuele handmatig ingevulde uren.");
+      setRows(next.rows); setDirty(true);
+      setMessage(data.budget === null ? "Standaarduren ingevuld. Het goedgekeurde offertebudget ontbreekt nog; opslaan en budgetcontrole zijn daarom nog niet mogelijk."
+        : "Standaarduren verdeeld. Controleer de uren en sla de verdeling op. Extra activiteiten tellen niet mee.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Verdelen mislukt."); }
+    finally { setBusy(false); }
   }
   function changeQuantity(key: string, quantity: number) {
     const next = { ...rows, [key]: { ...(rows[key] ?? { days: 0, started: false }), quantity } };
@@ -73,7 +84,9 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
       ? "Het dagenbudget uit de goedgekeurde offerte is niet beschikbaar. Controleer de oorspronkelijke offerte; er wordt geen budget geschat."
       : `Goedgekeurde offerte: ${number(budget)} dagen · ${number(budget * hours)} uur · ${number(hours)} uur per dag`}</p>
     <p>De standaarduren uit Admin → Werkzaamheden bepalen de verdeling van het offertebudget. Bij herhaalwerk vul je het aantal in (standaard 1). Je kunt de uren aanpassen zolang het totaal gelijk blijft aan de deal. Alleen akkoord van de klant telt als 100% afgerond.</p>
-    {loaded && estimate.missing.length > 0 ? <p className="save-status">Voor {estimate.missing.length} werkzaamheden ontbreekt een standaardbegroting. Laat deze invullen bij Admin → Werkzaamheden. Voor eigen toegevoegde taken kun je hier zelf uren verdelen.</p> : null}
+    <p>Extra activiteiten zijn tekstregels en tellen niet mee in de urenbegroting of gewogen voortgang.</p>
+    {loaded && estimate.missing.length > 0 ? <p className="save-status">De bekende standaarduren zijn ingevuld. Voor {estimate.missing.length} werkzaamheden ontbreekt nog een standaardbegroting in Admin → Werkzaamheden.</p> : null}
+    {loaded && budget === null ? <p className="save-status">Standaarduren worden alvast getoond. Controle tegen het offertebudget en opslaan zijn pas mogelijk zodra het goedgekeurde dagenbudget beschikbaar is.</p> : null}
     {loaded && estimate.rawDays !== null && items.length > 0 ? <p className="save-status">
       Standaardschatting op basis van de aantallen: <strong>{number(estimate.rawDays * hours)} uur ({number(estimate.rawDays)} dagen)</strong>.
       {budget !== null && estimate.rawDays > budget + 0.0001 ? ` Dit is ${number((estimate.rawDays - budget) * hours)} uur meer dan geoffreerd. Bespreek dit verschil; de verdeling hieronder vergroot het offertebudget niet.` : " De uren worden naar verhouding verdeeld over het offertebudget."}
@@ -90,7 +103,7 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
           <td>{standard?.days !== null && standard?.days !== undefined ? `${number(standard.days * hours)} uur${standard.unit ? ` / ${standard.unit}` : ""}` : "Niet ingesteld"}</td>
           <td>{standard?.unit ? <label className="budget-quantity"><input className="input" type="number" min="0" max="100000" step="1" value={row.quantity ?? 1}
             aria-label={`Aantal ${standard.unit} — ${item.label}`} disabled={!ready} onChange={event => changeQuantity(item.key, Number(event.target.value))} /><small>{standard.unit}</small></label> : "Eenmalig"}</td>
-          <td><input className="input" aria-label={`Begrote uren ${item.label}`} type="number" min="0" step="0.01" value={Number((row.days * hours).toFixed(2))}
+          <td><input className="input" aria-label={`Begrote uren ${item.label}`} type="number" min="0" step="0.01" placeholder="Nog invullen" value={rows[item.key] ? Number((row.days * hours).toFixed(2)) : ""}
             disabled={!ready} onChange={event => change(item.key, { days: Number(event.target.value) / hours })} /></td>
           <td><select aria-label={`Status ${item.label}`} value={approved ? "approved" : row.started ? "started" : "todo"}
             disabled={!ready || approved} onChange={event => change(item.key, { started: event.target.value === "started" })}>
@@ -102,7 +115,7 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
     {loaded && items.length === 0 ? <p>Selecteer eerst de werkzaamheden voor deze implementatie.</p> : null}
     {budget !== null ? <p>Verdeeld: <strong>{number(total * hours)} van {number(budget * hours)} uur</strong> ({number(total)} van {number(budget)} dagen). {balanced ? "De verdeling klopt." : `Verschil: ${number((budget - total) * hours)} uur.`}</p> : null}
     <div className="button-row">
-      <button type="button" className="secondary-button" disabled={!ready || !estimate.rows} onClick={applyStandards}>Verdelen volgens standaarden</button>
+      <button type="button" className="secondary-button" disabled={!loaded || !canEdit || busy || !items.length} onClick={() => void applyStandards()}>{busy ? "Bezig…" : "Verdelen volgens standaarden"}</button>
       <button type="button" className="primary-button" disabled={!ready || !balanced || !valid || !items.length} onClick={() => void save()}>Urenverdeling opslaan</button>
     </div>
     <p role="status">{message || (dirty ? "Wijzigingen nog niet opgeslagen." : "")}</p>

@@ -39,7 +39,7 @@ import {
 } from "@/lib/role-tabs";
 import { getSupabaseClient, type ProfileRecord } from "@/lib/supabase";
 
-type StatusFilter = "all" | ImplementationStatus;
+type StatusFilter = "all" | "not_completed" | ImplementationStatus;
 type ConsultantFilter = "all" | "unassigned" | string;
 type PlanningFilter = "all" | "active" | "overdue" | "upcoming" | "missing";
 
@@ -80,7 +80,7 @@ export default function ImplementationDashboard() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("not_completed");
   const [consultantFilter, setConsultantFilter] = useState<ConsultantFilter>("all");
   const [planningFilter, setPlanningFilter] = useState<PlanningFilter>("all");
 
@@ -165,7 +165,8 @@ export default function ImplementationDashboard() {
 
     return implementations.filter((implementation) => {
       if (implementation.status === "cancelled") return false;
-      if (statusFilter !== "all" && implementation.status !== statusFilter) return false;
+      if (statusFilter === "not_completed" && implementation.status === "completed") return false;
+      if (statusFilter !== "all" && statusFilter !== "not_completed" && implementation.status !== statusFilter) return false;
       if (consultantFilter === "unassigned" && implementation.assigned_consultant_id) return false;
       if (
         consultantFilter !== "all" &&
@@ -362,6 +363,7 @@ export default function ImplementationDashboard() {
             <label className="input-wrap">
               <span className="input-label">Status</span>
               <ImplementationSelect className="input implementation-dark-select" value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+                <option value="not_completed">Niet afgerond</option>
                 <option value="all">Alle statussen</option>
                 {IMPLEMENTATION_STATUSES.filter((status) => status !== "cancelled").map((status) => (
                   <option key={status} value={status}>{IMPLEMENTATION_STATUS_LABELS[status]}</option>

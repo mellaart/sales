@@ -25,7 +25,7 @@ test('budget API requires access, preserves exact totals and protects concurrent
  visible=false;assert.equal((await put(rows)).status,404);visible=true;
  write=false;assert.equal((await put(rows)).status,403);write=true;
  assert.equal((await get()).body.hoursPerDay,7.5);
- assert.equal((await put({one:{days:5,started:false}})).status,400);
+ assert.equal((await put({one:{days:5,started:false}})).status,409);
  assert.equal((await put({one:{days:2,started:false,quantity:-1},two:{days:4,started:true}})).status,400);
  assert.equal((await put({one:{days:2,started:false},two:{days:4.001,started:true}})).status,400);
  assert.equal((await put({unknown:{days:6,started:false}})).status,409);
@@ -35,7 +35,7 @@ test('budget API requires access, preserves exact totals and protects concurrent
  const updated=await put(rows,saved.body.version);assert.equal(updated.status,200);
  assert.equal((await put(rows,saved.body.version)).status,409);
  const draftRows={one:{days:0.25/7.5,started:false},two:{days:2,started:true}};
- const draft=await put(draftRows,updated.body.version,true);assert.equal(draft.status,200);
+ const draft=await put(draftRows,updated.body.version);assert.equal(draft.status,200);
  assert.deepEqual((await get()).body.rows,draftRows);
  assert.equal((await put({one:{days:-1,started:false},two:{days:2,started:true}},draft.body.version,true)).status,400);
  assert.equal((await put({unknown:{days:1,started:false}},draft.body.version,true)).status,409);

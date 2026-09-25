@@ -16,7 +16,7 @@ function loader(overrides = {}) {
  return load;
 }
 const load = loader();
-const { estimateImplementation:estimate, activityBudgetKey:key, selectedEstimateItems } = load('@/lib/implementation-estimates');
+const { estimateImplementation:estimate, activityBudgetKey:key, selectedEstimateItems, withEstimateQuantity } = load('@/lib/implementation-estimates');
 const { normalizePricingConfig, normalizeActivityBudgets } = load('@/lib/price-config');
 const { getConfiguredImplementationTasks } = load('@/lib/work-activities');
 const { validateBudgetRows, weightedProgress } = load('@/lib/implementation-planning');
@@ -83,7 +83,7 @@ test('budget state provides automatic rows everywhere, preserves manual snapshot
   '@/lib/local-db':{query:async sql=>({rows:sql.includes('join public.deals')?[{accepted_at:'date',calculator_inputs:{implementationDays:8},modules:[],implementation_item_progress:selected}]:saved?[{key:'implementation-budget:impl',payload:saved}]:[]})},
  })('@/lib/implementation-budget-server');
  let result=await server.getImplementationBudgetState('impl');
- assert.equal(result.automatic,true); assert.equal(result.allocationComplete,false); assert.equal(result.rows[taskKey].days,2);
+ assert.equal(result.automatic,true); assert.equal(result.allocationComplete,true); assert.equal(result.remainingDays,6); assert.equal(result.rows[taskKey].days,2);
  saved={version:'v1',rows:{[taskKey]:{days:8,started:true,quantity:3}}};
  config={...config,implementationActivityBudgets:{}};
  result=await server.getImplementationBudgetState('impl');
@@ -108,4 +108,15 @@ test('one missing configured standard does not leave every known activity blank'
  assert.ok(result.rows.fixed.days>0);assert.ok(result.rows.lists.days>0);
  assert.equal(result.rows.missing,undefined);assert.deepEqual(result.missing,['missing']);
  assert.ok(Math.abs(result.rows.fixed.days+result.rows.lists.days-1.1)<1e-10);
+});
+
+test('changing quantity immediately recalculates only the selected activity',()=>{
+ const before={lists:{days:0.25/6,started:true,quantity:1},fixed:{days:3,started:false}};
+ const next=withEstimateQuantity(before,{...items[1],days:0.25/6},10);
+ assert.equal(next.lists.days*6,2.5);
+ assert.equal(next.lists.quantity,10); assert.equal(next.lists.started,true);
+ assert.deepEqual(next.fixed,before.fixed);
+ assert.equal(before.lists.quantity,1);
+ assert.equal(withEstimateQuantity(next,{...items[1],days:0.25/6},0).lists.days,0);
+ assert.equal(withEstimateQuantity(next,{...items[1],days:null},20).lists.days,next.lists.days);
 });

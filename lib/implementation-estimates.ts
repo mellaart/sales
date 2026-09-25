@@ -52,3 +52,11 @@ export function estimateImplementation(items: EstimateItem[], budget: number | n
   }
   return { rows: items.length ? rows : null, rawDays, missing };
 }
+
+// Quantity edits recalculate only this activity and preserve manual edits elsewhere.
+export function withEstimateQuantity(rows: Record<string, BudgetRow>, item: EstimateItem, quantity: number) {
+  const current = rows[item.key] ?? { days: 0, started: item.started };
+  const days = item.days !== null && Number.isFinite(quantity) && quantity >= 0
+    ? item.days * quantity : current.days;
+  return { ...rows, [item.key]: { ...current, quantity, days } };
+}

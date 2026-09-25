@@ -1,8 +1,8 @@
 "use client";
 import ImplementationForecastCard from "@/components/implementation-forecast";
 import { useEffect, useState } from "react";
-import { estimateImplementation, type EstimateItem } from "@/lib/implementation-estimates";
-import type { BudgetRow } from "@/lib/implementation-planning";
+import { estimateImplementation, withEstimateQuantity, type EstimateItem } from "@/lib/implementation-estimates";
+import { budgetWithRemainder, type BudgetRow } from "@/lib/implementation-planning";
 type Item = { key: string; label: string };
 const number = (n: number) => n.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
 
@@ -34,7 +34,9 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
 
   const estimate = estimateImplementation(standards, budget, rows, hours);
   const total = items.reduce((sum, item) => sum + (rows[item.key]?.days ?? 0), 0);
-  const balanced = budget !== null && Math.abs((total - budget) * hours) < 0.005;
+  const balance = budgetWithRemainder(budget, rows, hours);
+  const remaining = balance?.remainingDays ?? 0;
+  const balanced = balance !== null && !balance.overBudget;
   const valid = items.every(item => {
     const row = rows[item.key];
     return row && Number.isFinite(row.days) && row.days >= 0 && (row.quantity === undefined || (Number.isInteger(row.quantity) && row.quantity >= 0 && row.quantity <= 100000));
@@ -61,9 +63,11 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
     finally { setBusy(false); }
   }
   function changeQuantity(key: string, quantity: number) {
-    const next = { ...rows, [key]: { ...(rows[key] ?? { days: 0, started: false }), quantity } };
-    setRows(next); setDirty(true);
-    setMessage("Aantal aangepast. Klik op ‘Verdelen volgens standaarden’ om de uren opnieuw te berekenen, of pas de uren zelf aan.");
+    const standard = standards.find(item => item.key === key);
+    if (!standard) return;
+    setRows(previous => withEstimateQuantity(previous, standard, quantity));
+    setDirty(true);
+    setMessage(standard.days === null ? "Standaarduren ontbreken voor deze activiteit. Vul de begrote uren zelf in." : "");
   }
   async function save() {
     setBusy(true); setMessage("");
@@ -73,7 +77,7 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ budget, version, rows: current, draft: !balanced }),
       });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
-      setRows(current); setVersion(data.version); setAutomatic(false); setDirty(false); setMessage(balanced ? "Urenverdeling opgeslagen." : "Begroting als concept opgeslagen. Het verschil met de offerte blijft nog te verdelen; de prognose wacht op een sluitende begroting.");
+      setRows(current); setVersion(data.version); setAutomatic(false); setDirty(false); setMessage(balanced ? "Urenverdeling opgeslagen." : "Begroting als concept opgeslagen. De begrote uren zijn hoger dan het offertebudget; de prognose wacht op een sluitende begroting.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Opslaan mislukt."); }
     finally { setBusy(false); }
   }
@@ -83,7 +87,7 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
     <p>{!loaded ? "Dagenbudget laden..." : budget === null
       ? "Het dagenbudget uit de goedgekeurde offerte is niet beschikbaar. Controleer de oorspronkelijke offerte; er wordt geen budget geschat."
       : `Goedgekeurde offerte: ${number(budget)} dagen · ${number(budget * hours)} uur · ${number(hours)} uur per dag`}</p>
-    <p>Begrote uren zijn de standaarduren uit Admin → Werkzaamheden maal het aantal. Ze worden niet automatisch verhoogd of verlaagd om op het offertebudget uit te komen. Bij herhaalwerk vul je het aantal in (standaard 1). Je kunt de uren aanpassen en als concept bewaren. De begroting is compleet zodra het totaal gelijk is aan de deal. Alleen akkoord van de klant telt als 100% afgerond.</p>
+    <p>Begrote uren zijn de standaarduren uit Admin → Werkzaamheden maal het aantal. Ze worden niet automatisch verhoogd of verlaagd om op het offertebudget uit te komen. Bij herhaalwerk vul je het aantal in (standaard 1). Je kunt de uren aanpassen en als concept bewaren. De regel ‘Nog te verdelen’ vult het resterende offertebudget automatisch aan. Bij een wijziging van het aantal worden de begrote uren direct herberekend. Alleen akkoord van de klant telt als 100% afgerond.</p>
     <p>Extra activiteiten zijn tekstregels en tellen niet mee in de urenbegroting of gewogen voortgang.</p>
     {loaded && estimate.missing.length > 0 ? <p className="save-status">De bekende standaarduren zijn ingevuld. Voor {estimate.missing.length} werkzaamheden ontbreekt nog een standaardbegroting in Admin → Werkzaamheden.</p> : null}
     {loaded && budget === null ? <p className="save-status">Standaarduren worden alvast getoond. Controle tegen het offertebudget en opslaan zijn pas mogelijk zodra het goedgekeurde dagenbudget beschikbaar is.</p> : null}
@@ -111,9 +115,18 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
           </select></td>
         </tr>;
       })}
+      {loaded && budget !== null ? <tr className="budget-remainder">
+        <td><strong>Nog te verdelen</strong><br /><small>Neemt automatisch af als je meer uren begroot.</small></td>
+        <td>—</td><td>—</td>
+        <td><output aria-label="Nog te verdelen uren"><strong>{number(remaining * hours)} uur</strong></output></td>
+        <td>Reserve · telt niet als afgerond werk</td>
+      </tr> : null}
     </tbody></table></div>
     {loaded && items.length === 0 ? <p>Selecteer eerst de werkzaamheden voor deze implementatie.</p> : null}
-    {budget !== null ? <p>Verdeeld: <strong>{number(total * hours)} van {number(budget * hours)} uur</strong> ({number(total)} van {number(budget)} dagen). {balanced ? "De verdeling klopt." : total < budget ? `Nog te verdelen: ${number((budget - total) * hours)} uur. Begroting nog niet compleet.` : `${number((total - budget) * hours)} uur boven het offertebudget. Begroting nog niet compleet.`}</p> : null}
+    {budget !== null ? <p>Begrote werkzaamheden: <strong>{number(total * hours)} uur</strong> · Nog te verdelen: <strong>{number(remaining * hours)} uur</strong><br />
+      Totaal inclusief reserve: <strong>{number((total + remaining) * hours)} van {number(budget * hours)} uur</strong>.
+      {balanced && valid ? " Het budget sluit aan (100%)." : balance?.overBudget ? ` ${number((total - budget) * hours)} uur boven het offertebudget.` : " Vul de ontbrekende begrote uren in."}
+    </p> : null}
     <div className="button-row">
       <button type="button" className="secondary-button" disabled={!loaded || !canEdit || busy || !items.length} onClick={() => void applyStandards()}>{busy ? "Bezig…" : "Verdelen volgens standaarden"}</button>
       <button type="button" className="primary-button" disabled={!ready || !valid || !items.length} onClick={() => void save()}>{balanced ? "Urenverdeling opslaan" : "Begroting als concept opslaan"}</button>

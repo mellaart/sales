@@ -22,8 +22,27 @@ test('weighted progress uses days, half for started and full only for customer a
  assert.equal(weightedProgress(8,rows,{}),12.5);
  assert.equal(weightedProgress(8,rows,{large:{approvedAt:'date'}}),87.5);
  assert.equal(weightedProgress(8,rows,{large:{},small:{}}),100);
- assert.equal(weightedProgress(9,rows,{}),null);
+ assert.equal(weightedProgress(9,rows,{}),11.1);
  assert.equal(weightedProgress(null,rows,{}),null);
  assert.equal(weightedProgress(0,{},{}),null);
  assert.equal(weightedProgress(8,{small:{days:8,started:false}},{}),0);
+});
+
+test('reserve balances 84 hours, decreases with edits and never counts as completed work',()=>{
+ const {budgetWithRemainder,weightedProgress}=moduleUnderTest.exports;
+ const rows={work:{days:65.05/6,started:false}};
+ const balance=budgetWithRemainder(14,rows,6);
+ assert.ok(Math.abs(balance.remainingDays*6-18.95)<1e-10);
+ assert.equal(balance.totalDays,14);assert.equal(balance.overBudget,false);
+ assert.equal(weightedProgress(14,rows,{work:{approvedAt:'date'}}),77.4);
+ rows.work.days+=2/6;
+ assert.ok(Math.abs(budgetWithRemainder(14,rows,6).remainingDays*6-16.95)<1e-10);
+ rows.work.days=14;
+ assert.equal(budgetWithRemainder(14,rows,6).remainingDays,0);
+ assert.equal(weightedProgress(14,rows,{work:{}}),100);
+ rows.work.days=15;
+ assert.equal(budgetWithRemainder(14,rows,6).remainingDays,0);
+ assert.equal(budgetWithRemainder(14,rows,6).overBudget,true);
+ assert.equal(weightedProgress(14,rows,{work:{}}),null);
+ assert.equal(budgetWithRemainder(null,rows,6),null);
 });

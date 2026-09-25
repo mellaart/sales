@@ -13,7 +13,7 @@ export default function ImplementationProgressMeter({implementationId}:{implemen
     const response=await fetch(`/api/implementations/${implementationId}/budget`,{cache:"no-store",signal:current.signal});
     const data=await response.json();if(!response.ok)throw new Error();
     if(current.signal.aborted)return;
-    setValue(data.allocationComplete ? weightedProgress(data.budget,data.rows,data.approvals??{}) : null);
+    setValue(data.allocationComplete ? weightedProgress(data.budget,data.rows,data.approvals??{},data.hoursPerDay) : null);
     setMessage(data.budget===null?"Dagenbudget ontbreekt":data.budget===0?"Geen implementatiedagen":"Dagenverdeling nog niet compleet");
    }catch {if(!current.signal.aborted){setValue(null);setMessage("Voortgang niet beschikbaar");}}
   }
@@ -27,7 +27,7 @@ export default function ImplementationProgressMeter({implementationId}:{implemen
      <span className="implementation-progress-track" role="progressbar" aria-label="Gewogen implementatievoortgang" aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
        <span style={{width:`${value}%`}} />
      </span>
-     <small>Gewogen op begrote dagen</small>
+     <small>Gewogen op begrote uren</small>
    </>}
  <ImplementationForecastCard implementationId={implementationId}/>
  </span>;

@@ -46,7 +46,7 @@ test('server uses approved budget, day weights, customer approval and booked tic
  assert.equal(seenTicket,'123');assert.equal(result.progressPercent,87.5);assert.equal(result.usedPercent,50);
  approvals={};result=await server.getImplementationForecast('abc');assert.equal(result.progressPercent,12.5);
  failHours=true;result=await server.getImplementationForecast('abc');assert.equal(result.usedDays,null);assert.equal(result.expectedDays,null);
- failHours=false;budget=10;result=await server.getImplementationForecast('abc');assert.equal(result.progressPercent,null);assert.equal(result.signal,'unavailable');
+ failHours=false;budget=10;result=await server.getImplementationForecast('abc');assert.equal(result.progressPercent,10);assert.equal(result.signal,'notify');
 });
 test('forecast API rejects unauthenticated and inaccessible implementations before fetching hours',async()=>{
  let loggedIn=false;let accessible=false;let calls=0;

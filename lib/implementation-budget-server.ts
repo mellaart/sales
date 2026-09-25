@@ -4,7 +4,7 @@ import { readStoredPricingConfig } from "@/lib/price-settings-storage";
 import { getImplementationItems } from "@/lib/implementation-items";
 import { normalizeImplementationCustomWorkItems, normalizeImplementationItemProgress, normalizeImplementationCustomerWorkApprovals } from "@/lib/implementations";
 import { getConfiguredImplementationTasks, withConfiguredWorkItems, withImplementationCustomWorkItems } from "@/lib/work-activities";
-import { approvedDays, validateBudgetRows, type BudgetRow } from "@/lib/implementation-planning";
+import { approvedDays, budgetWithRemainder, type BudgetRow } from "@/lib/implementation-planning";
 import { estimateImplementation, selectedEstimateItems } from "@/lib/implementation-estimates";
 import { getImplementationHoursPerDay } from "@/lib/implementation-settings";
 
@@ -41,10 +41,11 @@ export async function getImplementationBudgetState(implementationId: string) {
   const hasSavedHours = !removedRows && items.every(item => Object.hasOwn(savedRows, item.key))
     && Object.values(savedRows).some(row => row.days > 0);
   const rows = hasSavedHours ? savedRows : estimate.rows ?? savedRows;
-  const allocationComplete = budget !== null && validateBudgetRows(rows, budget)
+  const balance = budgetWithRemainder(budget, rows, hoursPerDay);
+  const allocationComplete = balance !== null && !balance.overBudget && items.length > 0
     && items.length === Object.keys(rows).length && items.every(item => Object.hasOwn(rows, item.key));
   return { budget, rows, items, version: saved?.version ?? null, automatic: !hasSavedHours,
-    allocationComplete,
+    allocationComplete, remainingDays: balance?.remainingDays ?? null,
     hoursPerDay, approvals: normalizeImplementationCustomerWorkApprovals(record?.implementation_customer_work_approvals),
     estimateDays: estimate.rawDays, missingStandards: estimate.missing,
     ticketId: settings.rows.find(row => row.key === `implementation-ticket:${implementationId}`)?.payload.ticketId };

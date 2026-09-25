@@ -22,8 +22,20 @@ export function validateBudgetRows(value: unknown, budget: number | null): value
   return budget === null || Math.abs(total - budget) < 0.005;
 }
 
-export function weightedProgress(budget: number | null, rows: unknown, approvals: Record<string, unknown>): number | null {
-  if (budget === null || !Number.isFinite(budget) || budget <= 0 || !validateBudgetRows(rows, budget)) return null;
+// The remainder is an automatic reserve, not an activity or completed work.
+// It is derived on every read/edit so it cannot become stale or be approved.
+export function budgetWithRemainder(budget: number | null, rows: unknown, hoursPerDay = 6) {
+  if (budget === null || !Number.isFinite(budget) || budget < 0 || !validHoursPerDay(hoursPerDay) || !validateBudgetRows(rows, null)) return null;
+  const allocatedDays = Object.values(rows).reduce((sum, row) => sum + row.days, 0);
+  const remainingDays = Math.max(0, budget - allocatedDays);
+  const overBudget = (allocatedDays - budget) * hoursPerDay >= 0.005;
+  return { allocatedDays, remainingDays, totalDays: allocatedDays + remainingDays, overBudget };
+}
+
+export function weightedProgress(budget: number | null, rows: unknown, approvals: Record<string, unknown>, hoursPerDay = 6): number | null {
+  if (budget === null || !Number.isFinite(budget) || budget <= 0 || !validateBudgetRows(rows, null)) return null;
+  const balance = budgetWithRemainder(budget, rows, hoursPerDay);
+  if (!balance || balance.overBudget) return null;
   const completedDays = Object.entries(rows).reduce((sum, [key, row]) => sum + row.days * (approvals[key] ? 1 : row.started ? 0.5 : 0), 0);
   return Math.min(100, Math.floor(completedDays / budget * 1000 + 1e-8) / 10);
 }

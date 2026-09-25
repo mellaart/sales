@@ -8,6 +8,7 @@ import { canWriteTab } from "@/lib/role-tabs";
 import type { AppTabKey } from "@/lib/role-tabs";
 import { readRoleTabAccess } from "@/lib/role-tab-access-storage";
 import type { UserRole } from "@/lib/supabase";
+import { getImplementationHoursPerDay } from "@/lib/implementation-settings";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -70,7 +71,7 @@ async function verifyCanWritePriceSettings(request: Request, service: ServiceCli
 
 export async function GET() {
   const result = await readStoredPricingConfig(getServiceClient());
-  return jsonResponse(result);
+  return jsonResponse({ ...result, hoursPerDay: await getImplementationHoursPerDay() });
 }
 
 export async function POST(request: Request) {

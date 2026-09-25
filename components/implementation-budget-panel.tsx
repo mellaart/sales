@@ -72,12 +72,12 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
     <p>{!loaded ? "Dagenbudget laden..." : budget === null
       ? "Het dagenbudget uit de goedgekeurde offerte is niet beschikbaar. Controleer de oorspronkelijke offerte; er wordt geen budget geschat."
       : `Goedgekeurde offerte: ${number(budget)} dagen · ${number(budget * hours)} uur · ${number(hours)} uur per dag`}</p>
-    <p>De standaarddagen uit Admin → Werkzaamheden bepalen de verdeling van het offertebudget. Bij herhaalwerk vul je het aantal in (standaard 1). Je kunt de uren aanpassen zolang het totaal gelijk blijft aan de deal. Alleen akkoord van de klant telt als 100% afgerond.</p>
+    <p>De standaarduren uit Admin → Werkzaamheden bepalen de verdeling van het offertebudget. Bij herhaalwerk vul je het aantal in (standaard 1). Je kunt de uren aanpassen zolang het totaal gelijk blijft aan de deal. Alleen akkoord van de klant telt als 100% afgerond.</p>
     {loaded && estimate.missing.length > 0 ? <p className="save-status">Voor {estimate.missing.length} werkzaamheden ontbreekt een standaardbegroting. Laat deze invullen bij Admin → Werkzaamheden. Voor eigen toegevoegde taken kun je hier zelf uren verdelen.</p> : null}
     {loaded && estimate.rawDays !== null && items.length > 0 ? <p className="save-status">
       Standaardschatting op basis van de aantallen: <strong>{number(estimate.rawDays * hours)} uur ({number(estimate.rawDays)} dagen)</strong>.
       {budget !== null && estimate.rawDays > budget + 0.0001 ? ` Dit is ${number((estimate.rawDays - budget) * hours)} uur meer dan geoffreerd. Bespreek dit verschil; de verdeling hieronder vergroot het offertebudget niet.` : " De uren worden naar verhouding verdeeld over het offertebudget."}
-      {estimate.rawDays === 0 && budget !== null && budget > 0 ? " Stel eerst positieve standaarddagen in voor de werkzaamheden die consultancytijd kosten." : ""}
+      {estimate.rawDays === 0 && budget !== null && budget > 0 ? " Stel eerst positieve standaarduren in voor de werkzaamheden die consultancytijd kosten." : ""}
     </p> : null}
     {loaded && automatic && !dirty && estimate.rows ? <p>Automatisch berekend uit de actuele standaarden. Na opslaan blijft deze verdeling bewaard.</p> : null}
     <div className="implementation-budget-table"><table><thead><tr><th>Onderdeel</th><th>Standaard</th><th>Aantal</th><th>Begrote uren</th><th>Status</th></tr></thead><tbody>
@@ -87,7 +87,7 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
         const approved = Boolean(approvals[item.key]);
         return <tr key={item.key}>
           <td>{item.label}</td>
-          <td>{standard?.days !== null && standard?.days !== undefined ? `${number(standard.days)} d${standard.unit ? ` / ${standard.unit}` : ""}` : "Niet ingesteld"}</td>
+          <td>{standard?.days !== null && standard?.days !== undefined ? `${number(standard.days * hours)} uur${standard.unit ? ` / ${standard.unit}` : ""}` : "Niet ingesteld"}</td>
           <td>{standard?.unit ? <label className="budget-quantity"><input className="input" type="number" min="0" max="100000" step="1" value={row.quantity ?? 1}
             aria-label={`Aantal ${standard.unit} — ${item.label}`} disabled={!ready} onChange={event => changeQuantity(item.key, Number(event.target.value))} /><small>{standard.unit}</small></label> : "Eenmalig"}</td>
           <td><input className="input" aria-label={`Begrote uren ${item.label}`} type="number" min="0" step="0.01" value={Number((row.days * hours).toFixed(2))}

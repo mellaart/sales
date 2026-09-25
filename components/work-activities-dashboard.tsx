@@ -33,6 +33,7 @@ import {
 } from "@/lib/role-tabs";
 import { getSupabaseClient } from "@/lib/supabase";
 import { activityBudgetKey } from "@/lib/implementation-estimates";
+import { validHoursPerDay } from "@/lib/implementation-planning";
 
 type WorkActivitiesResponse = {
   error?: string;
@@ -275,6 +276,7 @@ export default function WorkActivitiesDashboard() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const [hoursPerDay, setHoursPerDay] = useState<number | null>(null);
   const toggleGroup = (key: string) => setOpenGroups(current => current.includes(key) ? current.filter(item => item !== key) : [...current, key]);
 
   const canView = canAccessTab(role, "workActivities", roleTabAccess);
@@ -290,6 +292,16 @@ export default function WorkActivitiesDashboard() {
     setDraftConfig(clonePricingConfig(pricingConfig));
     setLoading(false);
   }, [pricingConfig]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/admin/prices", { cache: "no-store", signal: controller.signal }).then(async response => {
+      const data = await response.json();
+      if (!response.ok || !validHoursPerDay(data.hoursPerDay)) throw new Error("Uren per implementatiedag konden niet worden geladen. Vernieuw de pagina.");
+      setHoursPerDay(data.hoursPerDay);
+    }).catch(error => { if (!controller.signal.aborted) setStatus(error.message); });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!role) return;
@@ -466,9 +478,9 @@ export default function WorkActivitiesDashboard() {
       ...current, implementationActivityBudgets: { ...current.implementationActivityBudgets, [key]: { ...value, ...patch } },
     }));
     return <div className="work-budget-fields">
-      <label><span>Begrote dagen</span><input type="number" min="0" max="10000" step="0.0001" value={value.days ?? ""} placeholder="Niet ingesteld"
-        aria-label={`Begrote dagen ${label}`} disabled={!canEdit || saving || !label.trim()}
-        onChange={event => change({ days: event.target.value === "" ? null : Number(event.target.value) })} /></label>
+      <label><span>Begrote uren</span><input type="number" min="0" max={10000 * (hoursPerDay ?? 1)} step="0.01" value={value.days === null || hoursPerDay === null ? "" : Number((value.days * hoursPerDay).toFixed(4))} placeholder="Nog leeg"
+        aria-label={`Begrote uren ${label}`} disabled={!canEdit || saving || !label.trim() || hoursPerDay === null}
+        onChange={event => change({ days: event.target.value === "" || hoursPerDay === null ? null : Number(event.target.value) / hoursPerDay })} /></label>
       <label><span>Per (optioneel)</span><input value={value.unit} maxLength={50} placeholder="Eenmalig"
         aria-label={`Eenheid ${label}`} disabled={!canEdit || saving || !label.trim()} onChange={event => change({ unit: event.target.value })} /></label>
     </div>;
@@ -501,7 +513,8 @@ export default function WorkActivitiesDashboard() {
             <div className="brand-mark">Admin</div>
             <h1>Werkzaamheden</h1>
             <p>Beheer per onderdeel de klantomschrijving en werkzaamheden voor offertes en implementaties.</p>
-            <p>Vul de standaard begrote dagen in. Gebruik 0 voor activiteiten zonder consultancytijd. Vul bij herhaalwerk een eenheid in, bijvoorbeeld prijslijst; op de implementatie geef je het aantal aan. De app verdeelt hiermee het offertebudget automatisch.</p>
+            <p>Vul de standaard begrote uren in. Gebruik 0 voor activiteiten zonder consultancytijd. Vul bij herhaalwerk een eenheid in, bijvoorbeeld prijslijst; op de implementatie geef je het aantal aan. De app verdeelt hiermee het offertebudget automatisch.</p>
+            <p>{hoursPerDay === null ? "Uren per implementatiedag laden…" : `Volgens Instellingen: 1 implementatiedag = ${hoursPerDay.toLocaleString("nl-NL")} uur.`}</p>
           </div>
           <div className="brand-actions">
             <StatusPill tone={loading ? "warning" : "success"}>{loading ? "Laden" : canEdit ? "Schrijven" : "Lezen"}</StatusPill>

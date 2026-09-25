@@ -58,6 +58,18 @@ export type ImplementationTaskWorkItemConfig = {
   owner: ImplementationTaskOwner;
 };
 
+export type ActivityBudget = { days: number | null; unit: string };
+export function normalizeActivityBudgets(value: unknown): Record<string, ActivityBudget> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).slice(0, 10000).flatMap(([key, row]) => {
+    if (!key || key.length > 250 || !row || typeof row !== "object") return [];
+    const source = row as Partial<ActivityBudget>;
+    const days = typeof source.days === "number" && Number.isFinite(source.days) && source.days >= 0 && source.days <= 10000
+      ? source.days : null;
+    return [[key, { days, unit: typeof source.unit === "string" ? source.unit.trim().slice(0, 50) : "" }]];
+  }));
+}
+
 export type ImplementationTaskConfig = {
   key: string;
   name: string;
@@ -86,6 +98,7 @@ export type EditablePricingConfig = PricingCatalog & {
   travelCostRegions: TravelCostRegion[];
   postcodeRegions: PostcodeRegion[];
   implementationTasks: ImplementationTaskConfig[];
+  implementationActivityBudgets: Record<string, ActivityBudget>;
   expansionWorkItems: ExpansionWorkItemConfig[];
   updatedAt?: string | null;
 };
@@ -185,6 +198,7 @@ export const DEFAULT_PRICE_CONFIG: EditablePricingConfig = {
     { key: "worldline", name: "Worldline", annualPrice: 175.8 },
   ],
   implementationTasks: [],
+  implementationActivityBudgets: {},
   expansionWorkItems: [
     {
       key: "customerPortal",
@@ -665,6 +679,7 @@ export function normalizePricingConfig(input: unknown): EditablePricingConfig {
       normalizeServiceCostOption(serviceCostByKey.get(fallback.key), fallback),
     ),
     implementationTasks: normalizeImplementationTasks(source.implementationTasks),
+    implementationActivityBudgets: normalizeActivityBudgets(source.implementationActivityBudgets),
     expansionWorkItems: DEFAULT_PRICE_CONFIG.expansionWorkItems.map((fallback) =>
       normalizeExpansionWorkItems(expansionWorkItemsByKey.get(fallback.key), fallback),
     ),

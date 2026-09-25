@@ -8477,3 +8477,42 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 .dashboard-forecast-row > a:hover { color: var(--primary); }
 .dashboard-progress-forecast > small { color: var(--muted); }
 @media(max-width:600px) { .dashboard-forecast-row { gap: 16px; } .dashboard-forecast-header h3 { font-size: 21px; } }
+
+/* Standard activity estimates and editable implementation hours. */
+.work-task-items-heading,
+.work-task-item {
+  grid-template-columns: 30px minmax(160px, 1fr) 120px minmax(180px, 230px) 116px;
+}
+.work-line-budget { grid-template-columns: 30px minmax(140px, 1fr) minmax(180px, 230px) 38px; }
+.work-budget-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; }
+.work-budget-fields label { display: grid; gap: 4px; min-width: 0; }
+.work-budget-fields span { font-size: 11px; color: var(--muted); }
+.work-budget-fields input {
+  width: 100%; min-width: 0; height: 40px; padding: 8px; border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2); background: var(--surface-control); color: var(--text-strong);
+}
+.work-budget-fields input::placeholder { color: var(--text-soft); opacity: 1; }
+.work-task-item, .work-line-budget { align-items: end; }
+.work-task-item > .work-line-number { align-self: center; }
+.implementation-budget-panel { margin-block: 24px; }
+.implementation-budget-table { overflow-x: auto; }
+.implementation-budget-table table { width: 100%; text-align: left; }
+.implementation-budget-table th, .implementation-budget-table td { padding: 12px; vertical-align: middle; }
+.implementation-budget-table td:first-child { min-width: 220px; }
+.implementation-budget-table input { width: 110px; }
+.implementation-budget-table input, .implementation-budget-table select { height: 44px; padding: 8px 12px; }
+.budget-quantity { display: grid; gap: 4px; }
+.budget-quantity small { color: var(--muted); }
+@media (max-width: 1100px) {
+  .work-task-items-heading { display: none; }
+  .work-task-item { grid-template-columns: 30px minmax(0, 1fr) 116px; align-items: center; }
+  .work-task-item > input { grid-column: 2 / -1; }
+  .work-task-item > select { grid-column: 2; }
+  .work-task-item > .work-budget-fields { grid-column: 2 / -1; grid-row: 3; }
+  .work-task-item-actions { grid-column: 3; grid-row: 2; }
+}
+@media (max-width: 640px) {
+  .work-line-budget { grid-template-columns: 30px minmax(0, 1fr) 38px; }
+  .work-line-budget > .work-budget-fields { grid-column: 2 / -1; grid-row: 2; }
+  .work-line-budget > .work-line-delete { grid-column: 3; grid-row: 1; }
+}

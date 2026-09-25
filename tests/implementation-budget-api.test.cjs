@@ -12,7 +12,10 @@ test('budget API requires access, preserves exact totals and protects concurrent
  '@/lib/role-tab-access-storage':{readLocalRoleTabAccess:async()=>({})},
  '@/lib/role-tabs':{canWriteTab:()=>write},
  '@/lib/protected-admin':{isProtectedAdminEmail:()=>false},
- '@/lib/implementation-settings':{getImplementationHoursPerDay:async()=>7.5},
+ '@/lib/implementation-budget-server':{getImplementationBudgetState:async()=>{
+  const result=await db.query("select payload from app_settings where key='implementation-budget:impl'");
+  return {budget:6,rows:result.rows[0]?.payload.rows??{},version:result.rows[0]?.payload.version??null,hoursPerDay:7.5,items:[{key:'one'},{key:'two'}]};
+ }},
  '@/lib/implementation-planning':load('lib/implementation-planning.ts')});
  const context={params:Promise.resolve({implementationId:'impl'})};
  const get=()=>api.GET(new Request('https://test.test'),context);
@@ -23,6 +26,9 @@ test('budget API requires access, preserves exact totals and protects concurrent
  write=false;assert.equal((await put(rows)).status,403);write=true;
  assert.equal((await get()).body.hoursPerDay,7.5);
  assert.equal((await put({one:{days:5,started:false}})).status,400);
+ assert.equal((await put({one:{days:2,started:false,quantity:-1},two:{days:4,started:true}})).status,400);
+ assert.equal((await put({one:{days:2,started:false},two:{days:4.001,started:true}})).status,400);
+ assert.equal((await put({unknown:{days:6,started:false}})).status,409);
  const saved=await put(rows);assert.equal(saved.status,200);
  assert.equal((await put(rows)).status,409);
  assert.deepEqual((await get()).body.rows,rows);

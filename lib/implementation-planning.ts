@@ -1,4 +1,4 @@
-export type BudgetRow = { days: number; started: boolean };
+export type BudgetRow = { days: number; started: boolean; quantity?: number };
 export function validHoursPerDay(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 24;
 }
@@ -16,6 +16,7 @@ export function validateBudgetRows(value: unknown, budget: number): value is Rec
   let total = 0;
   for (const [key, row] of entries) {
     if (!key || key.length > 250 || !row || typeof row.days !== "number" || !Number.isFinite(row.days) || row.days < 0 || typeof row.started !== "boolean") return false;
+    if (row.quantity !== undefined && (typeof row.quantity !== "number" || !Number.isInteger(row.quantity) || row.quantity < 0 || row.quantity > 100000)) return false;
     total += row.days;
   }
   return Math.abs(total - budget) < 0.005;

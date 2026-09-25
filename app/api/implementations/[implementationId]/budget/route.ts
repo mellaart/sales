@@ -6,7 +6,7 @@ import { readLocalRoleTabAccess } from "@/lib/role-tab-access-storage";
 import { canWriteTab } from "@/lib/role-tabs";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
 import { approvedDays, validateBudgetRows } from "@/lib/implementation-planning";
-import { getImplementationHoursPerDay } from "@/lib/implementation-settings";
+import { getImplementationBudgetState } from "@/lib/implementation-budget-server";
 export const dynamic = "force-dynamic";
 const json = (body: unknown, status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"no-store"}});
 type Context = {params: Promise<{implementationId:string}>};
@@ -24,8 +24,8 @@ async function access(request:Request, context:Context, write=false) {
 export async function GET(request:Request,context:Context) {
  try {
   const state=await access(request,context);if(state.error)return state.error;
-  const {rows}=await query<{payload:Record<string,unknown>}>("select payload from public.app_settings where key=$1",[state.key]);
-  return json({budget:state.budget,rows:rows[0]?.payload.rows??{},version:rows[0]?.payload.version??null,hoursPerDay:await getImplementationHoursPerDay(),approvals:state.implementation!.implementation_customer_work_approvals??{}});
+  const budgetState = await getImplementationBudgetState(state.implementation!.id);
+  return json(budgetState);
  } catch {return json({error:"Dagenbegroting laden mislukt."},500);}
 }
 export async function PUT(request:Request,context:Context) {
@@ -34,6 +34,13 @@ export async function PUT(request:Request,context:Context) {
   const body=await request.json();
   if(state.budget===null || state.budget===undefined) return json({error:"Geen controleerbaar dagenbudget uit een goedgekeurde offerte beschikbaar."},400);
   if(body.budget!==state.budget || !validateBudgetRows(body.rows,state.budget)) return json({error:"De som van de begrote dagen moet gelijk zijn aan het goedgekeurde dagenbudget. Vernieuw bij een gewijzigde offerte."},400);
+  const current = await getImplementationBudgetState(state.implementation!.id);
+  const totalDays = Object.values(body.rows as Record<string, {days:number}>).reduce((sum, row) => sum + row.days, 0);
+  if (Math.abs((totalDays - state.budget) * current.hoursPerDay) >= 0.005) return json({error:"Het totaal aantal uren moet overeenkomen met de goedgekeurde offerte."},400);
+  const selected = new Set(current.items.map(item => item.key));
+  if (current.budget !== body.budget || selected.size !== Object.keys(body.rows).length || Object.keys(body.rows).some(key => !selected.has(key))) {
+    return json({error:"De geselecteerde werkzaamheden of offerte zijn gewijzigd. Vernieuw de pagina en controleer de verdeling."},409);
+  }
   const version=crypto.randomUUID();
   const payload=JSON.stringify({rows:body.rows,version,budget:state.budget});
   const result=body.version===null

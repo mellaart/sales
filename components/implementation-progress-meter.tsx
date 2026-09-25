@@ -13,7 +13,7 @@ export default function ImplementationProgressMeter({implementationId}:{implemen
     const response=await fetch(`/api/implementations/${implementationId}/budget`,{cache:"no-store",signal:current.signal});
     const data=await response.json();if(!response.ok)throw new Error();
     if(current.signal.aborted)return;
-    setValue(weightedProgress(data.budget,data.rows,data.approvals??{}));
+    setValue(data.allocationComplete ? weightedProgress(data.budget,data.rows,data.approvals??{}) : null);
     setMessage(data.budget===null?"Dagenbudget ontbreekt":data.budget===0?"Geen implementatiedagen":"Dagenverdeling nog niet compleet");
    }catch {if(!current.signal.aborted){setValue(null);setMessage("Voortgang niet beschikbaar");}}
   }

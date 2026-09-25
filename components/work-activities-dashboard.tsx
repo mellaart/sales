@@ -32,6 +32,7 @@ import {
   type RoleTabAccessMap,
 } from "@/lib/role-tabs";
 import { getSupabaseClient } from "@/lib/supabase";
+import { activityBudgetKey } from "@/lib/implementation-estimates";
 
 type WorkActivitiesResponse = {
   error?: string;
@@ -43,6 +44,8 @@ type WorkLinesEditorProps = {
   value: string[];
   disabled: boolean;
   onChange: (value: string[]) => void;
+  renderBudget: (label: string) => ReactNode;
+  onRename: (before: string, after: string) => void;
 };
 
 type DescriptionEditorProps = {
@@ -72,8 +75,9 @@ function moveArrayItem<T>(items: T[], index: number, direction: -1 | 1) {
   return next;
 }
 
-function WorkLinesEditor({ label, value, disabled, onChange }: WorkLinesEditorProps) {
+function WorkLinesEditor({ label, value, disabled, onChange, renderBudget, onRename }: WorkLinesEditorProps) {
   function updateLine(index: number, nextValue: string) {
+    onRename(value[index], nextValue);
     onChange(value.map((line, lineIndex) => lineIndex === index ? nextValue : line));
   }
 
@@ -86,7 +90,7 @@ function WorkLinesEditor({ label, value, disabled, onChange }: WorkLinesEditorPr
       {value.length > 0 ? (
         <div className="work-lines-list">
           {value.map((line, index) => (
-            <div className="work-line" key={`${label}-${index}`}>
+            <div className="work-line work-line-budget" key={`${label}-${index}`}>
               <span className="work-line-number">{index + 1}</span>
               <input
                 aria-label={`${label}, regel ${index + 1}`}
@@ -95,6 +99,7 @@ function WorkLinesEditor({ label, value, disabled, onChange }: WorkLinesEditorPr
                 placeholder="Vul een werkzaamheid in"
                 onChange={(event) => updateLine(index, event.target.value)}
               />
+              {renderBudget(line)}
               <button
                 type="button"
                 className="work-line-delete"
@@ -128,13 +133,18 @@ function TaskWorkItemsEditor({
   value,
   disabled,
   onChange,
+  renderBudget,
+  onRename,
 }: {
   groupName: string;
   value: ImplementationTaskWorkItemConfig[];
   disabled: boolean;
   onChange: (value: ImplementationTaskWorkItemConfig[]) => void;
+  renderBudget: (label: string) => ReactNode;
+  onRename: (before: string, after: string) => void;
 }) {
   function updateItem(index: number, changes: Partial<ImplementationTaskWorkItemConfig>) {
+    if (changes.label !== undefined) onRename(value[index].label, changes.label);
     onChange(value.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
   }
 
@@ -145,7 +155,7 @@ function TaskWorkItemsEditor({
   return (
     <div className="work-task-items-editor">
       <div className="work-task-items-heading" aria-hidden="true">
-        <span>Nr.</span><span>Activiteit</span><span>Wie</span><span>Acties</span>
+        <span>Nr.</span><span>Activiteit</span><span>Wie</span><span>Begroting</span><span>Acties</span>
       </div>
       {value.length > 0 ? (
         <div className="work-task-items-list">
@@ -171,6 +181,7 @@ function TaskWorkItemsEditor({
                   <option key={owner} value={owner}>{IMPLEMENTATION_TASK_OWNER_LABELS[owner]}</option>
                 ))}
               </select>
+              {renderBudget(item.label)}
               <span className="work-task-item-actions">
                 <button
                   type="button"
@@ -438,6 +449,31 @@ export default function WorkActivitiesDashboard() {
     }
   }
 
+  function renameBudget(itemKey: string, before: string, after: string) {
+    const oldKey = activityBudgetKey(itemKey, before), newKey = activityBudgetKey(itemKey, after);
+    if (oldKey === newKey) return;
+    setDraftConfig(current => {
+      const budgets = { ...current.implementationActivityBudgets };
+      if (budgets[oldKey]) { budgets[newKey] = budgets[oldKey]; delete budgets[oldKey]; }
+      return { ...current, implementationActivityBudgets: budgets };
+    });
+  }
+
+  function budgetFields(itemKey: string, label: string) {
+    const key = activityBudgetKey(itemKey, label);
+    const value = draftConfig.implementationActivityBudgets[key] ?? { days: null, unit: "" };
+    const change = (patch: Partial<typeof value>) => setDraftConfig(current => ({
+      ...current, implementationActivityBudgets: { ...current.implementationActivityBudgets, [key]: { ...value, ...patch } },
+    }));
+    return <div className="work-budget-fields">
+      <label><span>Begrote dagen</span><input type="number" min="0" max="10000" step="0.0001" value={value.days ?? ""} placeholder="Niet ingesteld"
+        aria-label={`Begrote dagen ${label}`} disabled={!canEdit || saving || !label.trim()}
+        onChange={event => change({ days: event.target.value === "" ? null : Number(event.target.value) })} /></label>
+      <label><span>Per (optioneel)</span><input value={value.unit} maxLength={50} placeholder="Eenmalig"
+        aria-label={`Eenheid ${label}`} disabled={!canEdit || saving || !label.trim()} onChange={event => change({ unit: event.target.value })} /></label>
+    </div>;
+  }
+
   if (roleAccessLoading) {
     return (
       <div className="page-shell"><div className="container"><section className="card panel">
@@ -465,6 +501,7 @@ export default function WorkActivitiesDashboard() {
             <div className="brand-mark">Admin</div>
             <h1>Werkzaamheden</h1>
             <p>Beheer per onderdeel de klantomschrijving en werkzaamheden voor offertes en implementaties.</p>
+            <p>Vul de standaard begrote dagen in. Gebruik 0 voor activiteiten zonder consultancytijd. Vul bij herhaalwerk een eenheid in, bijvoorbeeld prijslijst; op de implementatie geef je het aantal aan. De app verdeelt hiermee het offertebudget automatisch.</p>
           </div>
           <div className="brand-actions">
             <StatusPill tone={loading ? "warning" : "success"}>{loading ? "Laden" : canEdit ? "Schrijven" : "Lezen"}</StatusPill>
@@ -548,6 +585,8 @@ export default function WorkActivitiesDashboard() {
                       onChange={(description) => updateImplementationTask(task.key, { description })}
                     />
                     <TaskWorkItemsEditor
+                      renderBudget={label => budgetFields(`task:${task.key}`, label)}
+                      onRename={(before, after) => renameBudget(`task:${task.key}`, before, after)}
                       groupName={task.name || `Groep ${index + 1}`}
                       value={task.workItems}
                       disabled={!canEdit || saving}
@@ -622,6 +661,8 @@ export default function WorkActivitiesDashboard() {
                   <WorkLinesEditor
                     label={item.name}
                     value={item.workItems}
+                    renderBudget={label => budgetFields(item.key === "customerPortal" ? "customer-portal" : item.key === "smartConnect" ? "smart-connect" : "planning-app", label)}
+                    onRename={(before, after) => renameBudget(item.key === "customerPortal" ? "customer-portal" : item.key === "smartConnect" ? "smart-connect" : "planning-app", before, after)}
                     disabled={!canEdit || saving}
                     onChange={(workItems) => updateExpansionWorkItems(item.key, workItems)}
                   />
@@ -643,6 +684,8 @@ export default function WorkActivitiesDashboard() {
                   <WorkLinesEditor
                     label={item.name}
                     value={item.workItems ?? []}
+                    renderBudget={label => budgetFields(`module:${item.key}`, label)}
+                    onRename={(before, after) => renameBudget(`module:${item.key}`, before, after)}
                     disabled={!canEdit || saving}
                     onChange={(workItems) => updateModuleWorkItems(item.key, workItems)}
                   />

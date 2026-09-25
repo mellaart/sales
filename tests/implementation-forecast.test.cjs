@@ -37,7 +37,7 @@ test('server uses approved budget, day weights, customer approval and booked tic
  let approvals={large:{approvedAt:'date'}};
  let failHours=false;let budget=8;let seenTicket;
  const server=load('lib/implementation-forecast-server.ts',{
-  '@/lib/local-db':{query:async sql=>({rows:sql.includes('join public.deals')?[{accepted_at:'date',calculator_inputs:{implementationDays:budget},approvals}]:[{key:'implementation-budget:abc',payload:{rows:{small:{days:2,started:true},large:{days:6,started:false}}}},{key:'implementation-ticket:abc',payload:{ticketId:'123'}}]})},
+  '@/lib/implementation-budget-server':{getImplementationBudgetState:async()=>({budget,allocationComplete:true,approvals,ticketId:'123',rows:{small:{days:2,started:true},large:{days:6,started:false}}})},
   '@/lib/implementation-planning':load('lib/implementation-planning.ts'),
   '@/lib/implementation-ticket-hours':{getImplementationTicketHours:async id=>{seenTicket=id;if(failHours)throw new Error('down');return {workedDays:4}}},
   '@/lib/implementation-forecast':calc,

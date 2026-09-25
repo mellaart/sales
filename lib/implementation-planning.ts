@@ -9,7 +9,7 @@ export function approvedDays(deal: { accepted_at?: unknown; calculator_inputs?: 
   const cost = Number(input?.travelCostTotal), rate = Number(input?.travelCostPerDay);
   return Number.isFinite(cost) && Number.isFinite(rate) && cost > 0 && rate > 0 ? Math.round(cost / rate * 100) / 100 : null;
 }
-export function validateBudgetRows(value: unknown, budget: number): value is Record<string, BudgetRow> {
+export function validateBudgetRows(value: unknown, budget: number | null): value is Record<string, BudgetRow> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const entries = Object.entries(value);
   if (entries.length > 1000) return false;
@@ -19,7 +19,7 @@ export function validateBudgetRows(value: unknown, budget: number): value is Rec
     if (row.quantity !== undefined && (typeof row.quantity !== "number" || !Number.isInteger(row.quantity) || row.quantity < 0 || row.quantity > 100000)) return false;
     total += row.days;
   }
-  return Math.abs(total - budget) < 0.005;
+  return budget === null || Math.abs(total - budget) < 0.005;
 }
 
 export function weightedProgress(budget: number | null, rows: unknown, approvals: Record<string, unknown>): number | null {

@@ -19,7 +19,7 @@ test('budget API requires access, preserves exact totals and protects concurrent
  '@/lib/implementation-planning':load('lib/implementation-planning.ts')});
  const context={params:Promise.resolve({implementationId:'impl'})};
  const get=()=>api.GET(new Request('https://test.test'),context);
- const put=(rows,version=null)=>api.PUT(new Request('https://test.test',{method:'PUT',body:JSON.stringify({rows,budget:6,version})}),context);
+ const put=(rows,version=null,draft=false)=>api.PUT(new Request('https://test.test',{method:'PUT',body:JSON.stringify({rows,budget:6,version,draft})}),context);
  const rows={one:{days:2,started:false},two:{days:4,started:true}};
  logged=false;assert.equal((await get()).status,401);logged=true;
  visible=false;assert.equal((await put(rows)).status,404);visible=true;
@@ -34,6 +34,11 @@ test('budget API requires access, preserves exact totals and protects concurrent
  assert.deepEqual((await get()).body.rows,rows);
  const updated=await put(rows,saved.body.version);assert.equal(updated.status,200);
  assert.equal((await put(rows,saved.body.version)).status,409);
+ const draftRows={one:{days:0.25/7.5,started:false},two:{days:2,started:true}};
+ const draft=await put(draftRows,updated.body.version,true);assert.equal(draft.status,200);
+ assert.deepEqual((await get()).body.rows,draftRows);
+ assert.equal((await put({one:{days:-1,started:false},two:{days:2,started:true}},draft.body.version,true)).status,400);
+ assert.equal((await put({unknown:{days:1,started:false}},draft.body.version,true)).status,409);
  await db.exec('update deals set accepted_at=null');assert.equal((await put(rows,updated.body.version)).status,400);
  }finally{await db.close();}
 });

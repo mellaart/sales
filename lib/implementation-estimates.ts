@@ -40,41 +40,15 @@ export function estimateImplementation(items: EstimateItem[], budget: number | n
   const known = weights.filter(row => row.item.days !== null);
   const knownDays = known.reduce((sum, row) => sum + row.days, 0);
   const rawDays = missing.length ? null : knownDays;
-  // Fill known activities even when one custom activity has no standard, or
-  // an old offer lacks a verifiable budget. Missing is never a confirmed zero.
-  if (budget === null) return { rows: Object.fromEntries(known.map(({item,quantity,days}) => [item.key, {
+  // Standards are absolute hours (stored as days), never weights to scale
+  // to the offer. Any remaining offer budget stays visibly unallocated.
+  if (budget !== null && (!Number.isFinite(budget) || budget < 0)) return { rows: null, rawDays, missing };
+  const rows: Record<string, BudgetRow> = Object.fromEntries(known.map(({ item, quantity, days }) => [item.key, {
     days, quantity, started: previous[item.key]?.started ?? item.started,
-  }])), rawDays, missing };
-  if (!Number.isFinite(budget) || budget < 0 || !items.length || (knownDays === 0 && budget > 0)) {
-    return { rows: null, rawDays, missing };
-  }
-  const manual = weights.filter(row => row.item.days === null && previous[row.item.key] !== undefined);
-  const reservedDays = manual.reduce((sum, row) => sum + previous[row.item.key].days, 0);
-  if (!Number.isFinite(reservedDays) || reservedDays < 0 || reservedDays > budget) return { rows: null, rawDays, missing };
-  const remainingBudget = budget - reservedDays;
-  // Allocate in hundredths of an hour, so displayed/editable hours reconcile.
-  const units = Math.round(remainingBudget * hoursPerDay * 100);
-  const shares = known.map(row => knownDays ? units * row.days / knownDays : 0);
-  const rounded = shares.map(Math.floor);
-  const order = shares.map((value, index) => ({ index, fraction: value - rounded[index] }))
-    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
-  const remainder = units - rounded.reduce((sum, value) => sum + value, 0);
-  for (let i = 0; i < remainder; i++) rounded[order[i % order.length].index]++;
-  const rows: Record<string, BudgetRow> = Object.fromEntries(known.map(({ item, quantity }, index) => [item.key, {
-    days: rounded[index] / 100 / hoursPerDay,
-    started: previous[item.key]?.started ?? item.started,
-    quantity,
   }]));
-  // Some day budgets equal a fractional hundredth of an hour. Keep that
-  // precision without concentrating the rounding correction in one activity.
-  const positive = known.filter(row => rows[row.item.key].days > 0);
-  const difference = remainingBudget - Object.values(rows).reduce((sum, row) => sum + row.days, 0);
-  if (positive.length) {
-    for (const row of positive) rows[row.item.key].days += difference / positive.length;
-  } else if (remainingBudget > 0) {
-    const first = known.find(row => row.days > 0);
-    if (first) rows[first.item.key].days = remainingBudget;
+  for (const { item } of weights.filter(row => row.item.days === null)) {
+    const manual = previous[item.key];
+    if (manual && Number.isFinite(manual.days) && manual.days >= 0) rows[item.key] = manual;
   }
-  for (const row of manual) rows[row.item.key] = previous[row.item.key];
-  return { rows, rawDays, missing };
+  return { rows: items.length ? rows : null, rawDays, missing };
 }

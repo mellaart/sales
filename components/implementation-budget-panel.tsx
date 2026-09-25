@@ -56,7 +56,7 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
       if (!next.rows || !Object.keys(next.rows).length) throw new Error("Geen verdeling mogelijk. Controleer de standaarduren, aantallen en eventuele handmatig ingevulde uren.");
       setRows(next.rows); setDirty(true);
       setMessage(data.budget === null ? "Standaarduren ingevuld. Het goedgekeurde offertebudget ontbreekt nog; opslaan en budgetcontrole zijn daarom nog niet mogelijk."
-        : "Standaarduren verdeeld. Controleer de uren en sla de verdeling op. Extra activiteiten tellen niet mee.");
+        : "Standaarduren ongewijzigd ingevuld. Controleer het verschil met de offerte en sla de begroting op. Extra activiteiten tellen niet mee.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Verdelen mislukt."); }
     finally { setBusy(false); }
   }
@@ -70,26 +70,26 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
     try {
       const current = Object.fromEntries(items.map(item => [item.key, rows[item.key]]));
       const response = await fetch(`/api/implementations/${implementationId}/budget`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ budget, version, rows: current }),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ budget, version, rows: current, draft: !balanced }),
       });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
-      setRows(current); setVersion(data.version); setAutomatic(false); setDirty(false); setMessage("Urenverdeling opgeslagen.");
+      setRows(current); setVersion(data.version); setAutomatic(false); setDirty(false); setMessage(balanced ? "Urenverdeling opgeslagen." : "Begroting als concept opgeslagen. Het verschil met de offerte blijft nog te verdelen; de prognose wacht op een sluitende begroting.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Opslaan mislukt."); }
     finally { setBusy(false); }
   }
   return <section className="card panel implementation-budget-panel">
-    <h2>Dagenbudget en voortgang</h2>
+    <h2>Urenbudget en voortgang</h2>
     <ImplementationForecastCard implementationId={implementationId} refreshKey={version} />
     <p>{!loaded ? "Dagenbudget laden..." : budget === null
       ? "Het dagenbudget uit de goedgekeurde offerte is niet beschikbaar. Controleer de oorspronkelijke offerte; er wordt geen budget geschat."
       : `Goedgekeurde offerte: ${number(budget)} dagen · ${number(budget * hours)} uur · ${number(hours)} uur per dag`}</p>
-    <p>De standaarduren uit Admin → Werkzaamheden bepalen de verdeling van het offertebudget. Bij herhaalwerk vul je het aantal in (standaard 1). Je kunt de uren aanpassen zolang het totaal gelijk blijft aan de deal. Alleen akkoord van de klant telt als 100% afgerond.</p>
+    <p>Begrote uren zijn de standaarduren uit Admin → Werkzaamheden maal het aantal. Ze worden niet automatisch verhoogd of verlaagd om op het offertebudget uit te komen. Bij herhaalwerk vul je het aantal in (standaard 1). Je kunt de uren aanpassen en als concept bewaren. De begroting is compleet zodra het totaal gelijk is aan de deal. Alleen akkoord van de klant telt als 100% afgerond.</p>
     <p>Extra activiteiten zijn tekstregels en tellen niet mee in de urenbegroting of gewogen voortgang.</p>
     {loaded && estimate.missing.length > 0 ? <p className="save-status">De bekende standaarduren zijn ingevuld. Voor {estimate.missing.length} werkzaamheden ontbreekt nog een standaardbegroting in Admin → Werkzaamheden.</p> : null}
     {loaded && budget === null ? <p className="save-status">Standaarduren worden alvast getoond. Controle tegen het offertebudget en opslaan zijn pas mogelijk zodra het goedgekeurde dagenbudget beschikbaar is.</p> : null}
     {loaded && estimate.rawDays !== null && items.length > 0 ? <p className="save-status">
       Standaardschatting op basis van de aantallen: <strong>{number(estimate.rawDays * hours)} uur ({number(estimate.rawDays)} dagen)</strong>.
-      {budget !== null && estimate.rawDays > budget + 0.0001 ? ` Dit is ${number((estimate.rawDays - budget) * hours)} uur meer dan geoffreerd. Bespreek dit verschil; de verdeling hieronder vergroot het offertebudget niet.` : " De uren worden naar verhouding verdeeld over het offertebudget."}
+      {budget !== null && estimate.rawDays > budget + 0.0001 ? ` Dit is ${number((estimate.rawDays - budget) * hours)} uur meer dan geoffreerd. Bespreek dit verschil; de verdeling hieronder vergroot het offertebudget niet.` : " De standaarduren worden ongewijzigd overgenomen."}
       {estimate.rawDays === 0 && budget !== null && budget > 0 ? " Stel eerst positieve standaarduren in voor de werkzaamheden die consultancytijd kosten." : ""}
     </p> : null}
     {loaded && automatic && !dirty && estimate.rows ? <p>Automatisch berekend uit de actuele standaarden. Na opslaan blijft deze verdeling bewaard.</p> : null}
@@ -113,10 +113,10 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
       })}
     </tbody></table></div>
     {loaded && items.length === 0 ? <p>Selecteer eerst de werkzaamheden voor deze implementatie.</p> : null}
-    {budget !== null ? <p>Verdeeld: <strong>{number(total * hours)} van {number(budget * hours)} uur</strong> ({number(total)} van {number(budget)} dagen). {balanced ? "De verdeling klopt." : `Verschil: ${number((budget - total) * hours)} uur.`}</p> : null}
+    {budget !== null ? <p>Verdeeld: <strong>{number(total * hours)} van {number(budget * hours)} uur</strong> ({number(total)} van {number(budget)} dagen). {balanced ? "De verdeling klopt." : total < budget ? `Nog te verdelen: ${number((budget - total) * hours)} uur. Begroting nog niet compleet.` : `${number((total - budget) * hours)} uur boven het offertebudget. Begroting nog niet compleet.`}</p> : null}
     <div className="button-row">
       <button type="button" className="secondary-button" disabled={!loaded || !canEdit || busy || !items.length} onClick={() => void applyStandards()}>{busy ? "Bezig…" : "Verdelen volgens standaarden"}</button>
-      <button type="button" className="primary-button" disabled={!ready || !balanced || !valid || !items.length} onClick={() => void save()}>Urenverdeling opslaan</button>
+      <button type="button" className="primary-button" disabled={!ready || !valid || !items.length} onClick={() => void save()}>{balanced ? "Urenverdeling opslaan" : "Begroting als concept opslaan"}</button>
     </div>
     <p role="status">{message || (dirty ? "Wijzigingen nog niet opgeslagen." : "")}</p>
   </section>;

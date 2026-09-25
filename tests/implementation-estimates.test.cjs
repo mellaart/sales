@@ -24,36 +24,34 @@ const items = [
  {key:'fixed',label:'Inrichten',days:1,unit:'',started:false},
  {key:'lists',label:'Prijslijsten',days:0.1,unit:'prijslijst',started:false},
 ];
-test('1 versus 40 price lists changes estimate and allocation but preserves approved days', () => {
+test('1 versus 40 price lists changes hours without inflating them to the offer budget', () => {
  const small = estimate(items,8,{},6);
  const large = estimate(items,8,{lists:{days:0,started:true,quantity:40}},6);
  assert.equal(small.rawDays,1.1); assert.equal(large.rawDays,5);
  assert.ok(large.rows.lists.days > small.rows.lists.days);
  assert.equal(large.rows.lists.quantity,40); assert.equal(large.rows.lists.started,true);
- assert.equal(validateBudgetRows(large.rows,8),true);
- assert.ok(Math.abs(large.rows.fixed.days+large.rows.lists.days-8)<1e-10);
- assert.ok(Math.abs(large.rows.lists.days*6-38.4)<1e-10);
+ assert.equal(validateBudgetRows(large.rows,8),false);
+ assert.ok(Math.abs(large.rows.fixed.days+large.rows.lists.days-5)<1e-10);
+ assert.ok(Math.abs(large.rows.lists.days*6-24)<1e-10);
 });
-test('hour rounding reconciles for many activities, fractional budgets and configurable day length', () => {
- for(const hours of [6,7.5,8]) for(const budget of [0,0.5,1,8.25,37.7]) {
-  const sample = Array.from({length:106},(_,i)=>({key:String(i),days:i/100,unit:'',started:false,label:'Task'}));
-  const result = estimate(sample,budget,{},hours);
-  assert.ok(validateBudgetRows(result.rows,budget));
-  const displayedCents = Object.values(result.rows).reduce((sum,row)=>sum+Math.round(row.days*hours*100),0);
-  assert.equal(displayedCents,Math.round(budget*hours*100));
-  assert.ok(Object.values(result.rows).every(row=>row.days>=0));
+test('a quarter hour stays a quarter hour regardless of offer budget, day length or status', () => {
+ for(const hours of [6,7.5,8]) for(const budget of [0,0.5,8.25,37.7]) {
+  const sample=[{key:'a',label:'Task',days:0.25/hours,unit:'',started:false}];
+  const result=estimate(sample,budget,{a:{days:99,started:true}},hours);
+  assert.equal(result.rows.a.days*hours,0.25);
+  assert.equal(result.rows.a.started,true);
  }
 });
 test('missing standards, zero weights and malformed quantities never invent estimates', () => {
- assert.equal(estimate([{...items[0],days:null}],8).rows,null);
+ assert.deepEqual(estimate([{...items[0],days:null}],8).rows,{});
  assert.equal(estimate([{...items[0],days:null}],8).rawDays,null);
- assert.equal(estimate([{...items[0],days:0}],8).rows,null);
+ assert.equal(estimate([{...items[0],days:0}],8).rows.fixed.days,0);
  assert.equal(estimate(items,null).rows.fixed.days,1);
  assert.equal(estimate(items,null).rows.lists.days,0.1);
  assert.equal(estimate([],8).rows,null);
  for(const quantity of [-1,1.5,Infinity,100001,NaN]) assert.equal(estimate(items,8,{lists:{days:0,started:false,quantity}}).rows,null);
  const zero = estimate(items,8,{lists:{days:0,started:false,quantity:0}});
- assert.equal(zero.rows.lists.days,0); assert.equal(zero.rows.fixed.days,8);
+ assert.equal(zero.rows.lists.days,0); assert.equal(zero.rows.fixed.days,1);
 });
 test('admin normalization preserves standards including intentional zero and portal variants share a standard', () => {
  const standards = {[key('task:day1','Setup')]:{days:0.25,unit:'prijslijst'},zero:{days:0,unit:''},bad:{days:-1,unit:'x'}};
@@ -70,8 +68,8 @@ test('only selected work is estimated and customer confirmation alone reaches 10
  const selected=selectedEstimateItems(tasks,{[key('task:day1','Setup')]:true},config);
  assert.equal(selected.length,1); assert.equal(selected[0].started,true);
  const allocation=estimate(selected,8).rows;
- assert.equal(weightedProgress(8,allocation,{}),50);
- assert.equal(weightedProgress(8,allocation,{[selected[0].key]:{approvedAt:'date'}}),100);
+ assert.equal(weightedProgress(1,allocation,{}),50);
+ assert.equal(weightedProgress(1,allocation,{[selected[0].key]:{approvedAt:'date'}}),100);
 });
 test('budget state provides automatic rows everywhere, preserves manual snapshots and flags changed selection', async()=>{
  const taskKey=key('task:day1','Setup');
@@ -85,7 +83,7 @@ test('budget state provides automatic rows everywhere, preserves manual snapshot
   '@/lib/local-db':{query:async sql=>({rows:sql.includes('join public.deals')?[{accepted_at:'date',calculator_inputs:{implementationDays:8},modules:[],implementation_item_progress:selected}]:saved?[{key:'implementation-budget:impl',payload:saved}]:[]})},
  })('@/lib/implementation-budget-server');
  let result=await server.getImplementationBudgetState('impl');
- assert.equal(result.automatic,true); assert.equal(result.allocationComplete,true); assert.equal(result.rows[taskKey].days,8);
+ assert.equal(result.automatic,true); assert.equal(result.allocationComplete,false); assert.equal(result.rows[taskKey].days,2);
  saved={version:'v1',rows:{[taskKey]:{days:8,started:true,quantity:3}}};
  config={...config,implementationActivityBudgets:{}};
  result=await server.getImplementationBudgetState('impl');
@@ -103,11 +101,11 @@ test('extra activities and custom groups are text only and never block standard 
  const selected=selectedEstimateItems(tasks,{[taskKey]:false,[extraKey]:true},config);
  assert.equal(selected.length,1);assert.equal(selected[0].key,taskKey);
  const result=estimate(selected,14);
- assert.deepEqual(result.missing,[]);assert.equal(result.rows[taskKey].days,14);assert.equal(result.rows[extraKey],undefined);
+ assert.deepEqual(result.missing,[]);assert.equal(result.rows[taskKey].days,1);assert.equal(result.rows[extraKey],undefined);
 });
 test('one missing configured standard does not leave every known activity blank', () => {
  const result=estimate([...items,{key:'missing',label:'Nog geen norm',days:null,unit:'',started:false}],8);
  assert.ok(result.rows.fixed.days>0);assert.ok(result.rows.lists.days>0);
  assert.equal(result.rows.missing,undefined);assert.deepEqual(result.missing,['missing']);
- assert.ok(Math.abs(result.rows.fixed.days+result.rows.lists.days-8)<1e-10);
+ assert.ok(Math.abs(result.rows.fixed.days+result.rows.lists.days-1.1)<1e-10);
 });

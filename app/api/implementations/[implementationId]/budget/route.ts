@@ -33,10 +33,10 @@ export async function PUT(request:Request,context:Context) {
   const state=await access(request,context,true);if(state.error)return state.error;
   const body=await request.json();
   if(state.budget===null || state.budget===undefined) return json({error:"Geen controleerbaar dagenbudget uit een goedgekeurde offerte beschikbaar."},400);
-  if(body.budget!==state.budget || !validateBudgetRows(body.rows,state.budget)) return json({error:"De som van de begrote dagen moet gelijk zijn aan het goedgekeurde dagenbudget. Vernieuw bij een gewijzigde offerte."},400);
+  if(body.budget!==state.budget || !validateBudgetRows(body.rows,body.draft === true ? null : state.budget)) return json({error:"De som van de begrote dagen moet gelijk zijn aan het goedgekeurde dagenbudget. Vernieuw bij een gewijzigde offerte."},400);
   const current = await getImplementationBudgetState(state.implementation!.id);
   const totalDays = Object.values(body.rows as Record<string, {days:number}>).reduce((sum, row) => sum + row.days, 0);
-  if (Math.abs((totalDays - state.budget) * current.hoursPerDay) >= 0.005) return json({error:"Het totaal aantal uren moet overeenkomen met de goedgekeurde offerte."},400);
+  if (body.draft !== true && Math.abs((totalDays - state.budget) * current.hoursPerDay) >= 0.005) return json({error:"Het totaal aantal uren moet overeenkomen met de goedgekeurde offerte."},400);
   const selected = new Set(current.items.map(item => item.key));
   if (current.budget !== body.budget || selected.size !== Object.keys(body.rows).length || Object.keys(body.rows).some(key => !selected.has(key))) {
     return json({error:"De geselecteerde werkzaamheden of offerte zijn gewijzigd. Vernieuw de pagina en controleer de verdeling."},409);

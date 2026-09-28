@@ -1,4 +1,5 @@
 "use client";
+import ImplementationSection from "@/components/implementation-section";
 import ImplementationForecastCard from "@/components/implementation-forecast";
 import { useEffect, useState } from "react";
 import { estimateImplementation, withEstimateQuantity, type EstimateItem } from "@/lib/implementation-estimates";
@@ -81,8 +82,7 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
     } catch (error) { setMessage(error instanceof Error ? error.message : "Opslaan mislukt."); }
     finally { setBusy(false); }
   }
-  return <section className="card panel implementation-budget-panel">
-    <h2>Urenbudget en voortgang</h2>
+  return <ImplementationSection preference="budgetOpen" title="Urenbudget en voortgang" className="card panel implementation-budget-panel">
     <ImplementationForecastCard implementationId={implementationId} refreshKey={version} />
     <p>{!loaded ? "Dagenbudget laden..." : budget === null
       ? "Het dagenbudget uit de goedgekeurde offerte is niet beschikbaar. Controleer de oorspronkelijke offerte; er wordt geen budget geschat."
@@ -132,5 +132,5 @@ export default function ImplementationBudgetPanel({ implementationId, items, can
       <button type="button" className="primary-button" disabled={!ready || !valid || !items.length} onClick={() => void save()}>{balanced ? "Urenverdeling opslaan" : "Begroting als concept opslaan"}</button>
     </div>
     <p role="status">{message || (dirty ? "Wijzigingen nog niet opgeslagen." : "")}</p>
-  </section>;
+  </ImplementationSection>;
 }

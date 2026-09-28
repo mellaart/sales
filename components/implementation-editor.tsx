@@ -2456,7 +2456,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
           </div>
         </header>
 
-        <ImplementationBudgetPanel implementationId={implementation.id} canEdit={canEdit} approvals={implementationCustomerWorkApprovals}
+        <ImplementationBudgetPanel key={`budgetOpen:${user?.id}`} implementationId={implementation.id} canEdit={canEdit} approvals={implementationCustomerWorkApprovals}
           items={selectedEstimateItems([...configuredImplementationTasks, ...configuredImplementationItems], implementationItemProgress, pricingConfig)} />
         <section className="kpi-grid">
           <StatCard title="Pakket" value={implementation.package_name || "-"} icon={Package} sublabel="Gekozen pakket" />

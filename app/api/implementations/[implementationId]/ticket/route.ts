@@ -27,10 +27,16 @@ export async function POST(request: Request, context: { params: Promise<{ implem
     const implementation = access.data as { id: string; deal_id: string; assigned_consultant_id: string | null } | null;
     if (!implementation) return json({ error: "Implementatie niet gevonden of niet toegankelijk." }, 404);
     const key = `implementation-ticket:${implementation.id}`;
-    const existing = await query<{ payload: { ticketId?: string } }>("select payload from public.app_settings where key = $1", [key]);
+    const input = await request.json().catch(() => null);
+    const existing = await query<{ payload: { ticketId?: string; attemptedAt?: string } }>("select payload from public.app_settings where key = $1", [key]);
     if (existing.rows[0]) {
       const ticketId = existing.rows[0].payload.ticketId;
-      return ticketId ? json({ ticketId, alreadyCreated: true }) : json({ error: "Het ticket wordt aangemaakt of de uitkomst is nog onbekend. Controleer eerst in Troublefree of het ticket bestaat voordat je het opnieuw laat aanmaken." }, 409);
+      if (ticketId) return json({ ticketId, alreadyCreated: true });
+      if (input?.retryConfirmed !== true) return json({ error: "Het ticket wordt aangemaakt of de uitkomst is nog onbekend. Controleer eerst in Troublefree of het ticket bestaat voordat je het opnieuw laat aanmaken." }, 409);
+    }
+    const previousAttempt = existing.rows[0]?.payload;
+    if (previousAttempt && (!previousAttempt.attemptedAt || !Number.isFinite(Date.parse(previousAttempt.attemptedAt)) || Date.now() - Date.parse(previousAttempt.attemptedAt) < 300_000)) {
+      return json({ error: "Wacht minimaal vijf minuten na de vorige poging en controleer in Troublefree of er geen ticket bestaat." }, 409);
     }
     const { rows } = await query<{ smart_trade_relation_id: number | null }>("select smart_trade_relation_id from public.deals where id = $1", [implementation.deal_id]);
     const relation = positiveId(rows[0]?.smart_trade_relation_id);
@@ -42,11 +48,16 @@ export async function POST(request: Request, context: { params: Promise<{ implem
     if (!relation) return json({ error: "Het relatienummer ontbreekt. Koppel eerst de klantrelatie aan deze deal." }, 400);
     if (!employee) return json({ error: "Vul op de Admin-pagina het medewerker relatie-ID van de toegewezen implementatieconsultant in." }, 400);
     const headers = getSmartTradePullHeaders("live", { "content-type": "application/json" });
-    const claim = await query("insert into public.app_settings (key, payload) values ($1, $2::jsonb) on conflict (key) do nothing returning key", [key, JSON.stringify({ status: "pending", createdBy: actor.user.id, attemptedAt: new Date().toISOString() })]);
+    const claimPayload = JSON.stringify({ status: "pending", createdBy: actor.user.id, attemptedAt: new Date().toISOString(),
+      ...(previousAttempt ? { previousAttempt, retryConfirmedBy: actor.user.id } : {}),
+    });
+    const claim = previousAttempt
+      ? await query("update public.app_settings set payload = $2::jsonb, updated_at = now() where key = $1 and payload = $3::jsonb returning key", [key, claimPayload, JSON.stringify(previousAttempt)])
+      : await query("insert into public.app_settings (key, payload) values ($1, $2::jsonb) on conflict (key) do nothing returning key", [key, claimPayload]);
     if (!claim.rows.length) return json({ error: "Dit implementatieticket wordt al aangemaakt. Probeer de status later opnieuw te controleren." }, 409);
     // Retain the claim on network errors or ambiguous replies: a retry must not create a duplicate.
     const response = await fetchWithSmartTradeTimeout("https://my.troublefree.nl/v3/api/ticketing/tickets", headers, "live", {
-      method: "POST", body: JSON.stringify({ relation, name: "Implementatie", description: "Consultancy", labels: [100, 99], primaryLabel: 100, employee, priority: 2, mainTask: { assignedTo: { team: 100, relation: employee } } }),
+      method: "POST", body: JSON.stringify({ relation, name: "Implementatie", description: "Consultancy", labels: [100, 99], primaryLabel: 100, employee, priority: 2, mainTask: { name: "Consultancy", assignedTo: { team: 100, relation: employee } } }),
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {

@@ -970,19 +970,21 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     return true;
   }
 
-  async function handleImplementationTicket(mode: "create" | "link" = "create") {
-    if (!implementation || !canManageImplementation || !implementationTicketLoaded || implementationTicketPending || implementationTicketBusy) return;
+  async function handleImplementationTicket(mode: "create" | "link" | "retry" = "create") {
+    if (!implementation || !canManageImplementation || !implementationTicketLoaded || (implementationTicketPending && mode !== "retry") || implementationTicketBusy) return;
+    if (mode === "retry" && !window.confirm("Heb je in Troublefree gecontroleerd dat er geen implementatieticket is aangemaakt? Alleen dan kun je veilig opnieuw proberen.")) return;
     setImplementationTicketBusy(true);
     setImplementationTicketMessage("");
     try {
       const response = await fetch(`/api/implementations/${encodeURIComponent(implementation.id)}/ticket`, {
         method: mode === "link" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        ...(mode === "link" ? { body: JSON.stringify({ ticketId: existingImplementationTicketId.trim(), ...(implementationTicketId ? { expectedTicketId: implementationTicketId } : {}) }) } : {}),
+        ...(mode === "link" ? { body: JSON.stringify({ ticketId: existingImplementationTicketId.trim(), ...(implementationTicketId ? { expectedTicketId: implementationTicketId } : {}) }) } : { body: JSON.stringify({ retryConfirmed: mode === "retry" }) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Ticket verwerken mislukt.");
       setImplementationTicketId(data.ticketId);
+      setImplementationTicketPending(false);
       setExistingImplementationTicketId("");
       setImplementationTicketMessage(`Implementatie ticket ${data.ticketId} ${mode === "link" ? "gekoppeld" : data.alreadyCreated ? "bestaat al" : "aangemaakt"}.`);
     } catch (error) {
@@ -2739,6 +2741,10 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                       </button>
                     </>
                   ) : null}
+                {implementationTicketPending && canManageImplementation ? (
+                  <button type="button" className="secondary-button" disabled={implementationTicketBusy}
+                    onClick={() => void handleImplementationTicket("retry")}>Ticket opnieuw aanmaken</button>
+                ) : null}
                 <button type="button" className="primary-button"
                   disabled={!canManageImplementation || !customerIntakeRelationId || !implementationTicketLoaded || implementationTicketPending || implementationTicketBusy || Boolean(implementationTicketId)}
                   onClick={() => void handleImplementationTicket()}>

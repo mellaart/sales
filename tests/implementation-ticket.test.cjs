@@ -32,7 +32,7 @@ test('implementation tickets use server-side IDs, permissions and durable duplic
     const code = ts.transpileModule(fs.readFileSync('app/api/implementations/[implementationId]/ticket/route.ts','utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     const module = { exports: {} };
     new Function('module','exports','require',code)(module,module.exports,name => { assert.ok(name in dependencies); return dependencies[name]; });
-    const post = () => module.exports.POST(new Request('https://example.test', { method: 'POST' }), { params: Promise.resolve({ implementationId: 'impl' }) });
+    const post = (body) => module.exports.POST(new Request('https://example.test', { method: 'POST', ...(body ? {body:JSON.stringify(body)} : {}) }), { params: Promise.resolve({ implementationId: 'impl' }) });
     actor.ok = false; assert.equal((await post()).status,401); actor.ok = true;
     actor.user.email = 'other@example.test'; assert.equal((await post()).status,403); actor.user.email = 'admin@example.test';
     implementationId = null; assert.equal((await post()).status,404); implementationId = 'impl';
@@ -47,7 +47,7 @@ test('implementation tickets use server-side IDs, permissions and durable duplic
     assert.equal(calls.length,0);
     const results = await Promise.all([post(),post()]);
     assert.ok(results.some(r => r.status === 200)); assert.equal(calls.length,1);
-    assert.deepEqual(calls[0], { url: 'https://my.troublefree.nl/v3/api/ticketing/tickets', method: 'POST', payload: { relation:123,name:'Implementatie',description:'Consultancy',labels:[100,99],primaryLabel:100,employee:456,priority:2,mainTask:{assignedTo:{team:100,relation:456}} } });
+    assert.deepEqual(calls[0], { url: 'https://my.troublefree.nl/v3/api/ticketing/tickets', method: 'POST', payload: { relation:123,name:'Implementatie',description:'Consultancy',labels:[100,99],primaryLabel:100,employee:456,priority:2,mainTask:{name:'Consultancy',assignedTo:{team:100,relation:456}} } });
     assert.equal((await post()).body.alreadyCreated,true); assert.equal(calls.length,1);
     implementationId = 'uncertain'; fail = true;
     assert.equal((await post()).status,502);
@@ -80,6 +80,17 @@ test('implementation tickets use server-side IDs, permissions and durable duplic
     const links = await Promise.all([put('111'),put('222')]);
     assert.equal(links.filter(result=>result.status===200).length,1);
     assert.equal(links.filter(result=>result.status===409).length,1);
+
+    implementationId = 'uncertain';
+    assert.equal((await post({retryConfirmed:true})).status,409, 'cannot retry an active or recent attempt');
+    await db.exec("update app_settings set payload = jsonb_set(payload, '{attemptedAt}', to_jsonb('2026-01-01T00:00:00Z'::text)) where key = 'implementation-ticket:uncertain'");
+    assert.equal((await post()).status,409, 'old attempts still require confirmation');
+    fail = false;
+    const retries = await Promise.all([post({retryConfirmed:true}), post({retryConfirmed:true})]);
+    assert.ok(retries.some(r => r.status === 200));
+    assert.equal(calls.length,3, 'concurrent confirmed retries create only one ticket');
+    assert.equal((await post({retryConfirmed:true})).body.alreadyCreated,true);
+    assert.equal(calls.length,3, 'linked tickets cannot be retried');
 
   } finally { await db.close(); }
 });

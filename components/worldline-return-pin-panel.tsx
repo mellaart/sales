@@ -64,6 +64,7 @@ export default function WorldlineReturnPinPanel({
   const [showPins, setShowPins] = useState(false);
 
   const latestForm = forms[0] ?? null;
+  const recipientEmail = (mailDetails?.email ?? latestForm?.formData.email ?? "").trim().toLowerCase();
   const acceptedForms = useMemo(() => forms.filter((form) => form.status === "accepted"), [forms]);
 
   const loadForms = useCallback(async (showMessage = false) => {
@@ -150,7 +151,6 @@ export default function WorldlineReturnPinPanel({
   async function prepareOutlookDraft() {
     if (!latestForm || !canWrite || outlookBusy) return;
 
-    const recipientEmail = (mailDetails?.email ?? latestForm.formData.email).trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) {
       setMessage("Vul eerst een geldig e-mailadres in op het retourpinnenformulier.");
       return;
@@ -217,7 +217,7 @@ export default function WorldlineReturnPinPanel({
 
       if (outlookWindow) outlookWindow.location.href = json.webLink;
       else window.location.assign(json.webLink);
-      setMessage("E-mail met acceptatieformulierlink is verzonden.");
+      setMessage(`E-mail met acceptatieformulierlink is verzonden naar ${recipientEmail}.`);
     } catch (error) {
       outlookWindow?.close();
       setMessage(error instanceof Error ? error.message : "E-mail verzenden mislukt.");
@@ -238,6 +238,12 @@ export default function WorldlineReturnPinPanel({
           </div>
         </div>
         <StatusPill tone={statusTone(latestForm)}>{loading ? "Laden..." : statusLabel(latestForm)}</StatusPill>
+      </div>
+
+      <div className={styles.linkRow}>
+        <span>Verzenden naar</span>
+        <input value={recipientEmail} readOnly aria-label="Ontvanger acceptatieformulier retourpinnen"
+          placeholder="Geen e-mailadres ingevuld" />
       </div>
 
       <div className={styles.actions}>

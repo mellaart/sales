@@ -8516,3 +8516,10 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
   .work-line-budget > .work-budget-fields { grid-column: 2 / -1; grid-row: 2; }
   .work-line-budget > .work-line-delete { grid-column: 3; grid-row: 1; }
 }
+
+.deal-implementation-details { align-items: start; }
+.deal-implementation-details > .implementation-communication-copy { grid-column: 2 / -1; gap: 16px; }
+.deal-implementation-details h3 { margin: 0; }
+@media (max-width: 700px) {
+  .deal-implementation-details > .implementation-communication-copy { grid-column: 1 / -1; }
+}

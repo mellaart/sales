@@ -1,6 +1,7 @@
 "use client";
 
 import { getDealRelationId } from "@/lib/deal-relation";
+import DealImplementationDetails from "@/components/deal-implementation-details";
 import DealFulfillmentPanel from "@/components/deal-fulfillment-panel";
 
 import Link from "next/link";
@@ -2684,6 +2685,10 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     : "Direct verzenden via Outlook"}
                 </button>
               </article>
+
+              <DealImplementationDetails key={implementation.id} implementation={implementation}
+                canEdit={canManageImplementation} userId={user?.id ?? ""}
+                onSaved={patch => setImplementation(current => current ? { ...current, ...patch } : current)} />
 
               <article className="implementation-communication-card">
                 <div className="implementation-communication-icon"><Mail size={22} /></div>

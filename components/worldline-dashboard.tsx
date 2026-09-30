@@ -3171,11 +3171,6 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
                 </div>
               ) : null}
 
-              <WorldlineReturnPinPanel
-                projectId={activeProject.id}
-                canWrite={canWriteWorldline}
-              />
-
               <div className="worldline-field-list">
                 {Array.from(getAgreementSections()).map(([sectionTitle, definitions]) => (
                   <div key={sectionTitle} className="worldline-field-section">

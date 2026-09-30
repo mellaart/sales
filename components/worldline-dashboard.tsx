@@ -1527,7 +1527,9 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
     setDocuments([]);
 
     try {
-      const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
+      const term = query.trim();
+      const parameter = /^\d+$/.test(term) ? "relationId" : "query";
+      const response = await fetch(`/api/smart-trade/relations/search?${parameter}=${encodeURIComponent(term)}`, { cache: "no-store" });
       const json = (await response.json().catch(() => ({}))) as RelationSearchResponse;
 
       if (!response.ok) {
@@ -2968,7 +2970,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
             <div>
               <div className="eyebrow">Relatie</div>
               <h2 className="headline">Relatie selecteren</h2>
-              <p className="subtext">Zoek op bedrijfsnaam, contactnaam, e-mail of relatienummer.</p>
+              <p className="subtext">Zoek op bedrijfsnaam, contactnaam of e-mail. Vul een relatie-ID in om de relatie rechtstreeks op te halen, ook als deze niet in de zoeklijst staat.</p>
             </div>
             <div className="icon-badge"><Search size={26} /></div>
           </div>
@@ -2983,7 +2985,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
             />
             <button type="submit" className={`primary-button ${styles.assetSearchButton}`} disabled={searching || busy}>
               <Search size={16} />
-              {searching ? "Zoeken..." : "Zoeken"}
+              {searching ? "Zoeken..." : /^\d+$/.test(query.trim()) ? "Relatie ophalen" : "Zoeken"}
             </button>
           </form>
 

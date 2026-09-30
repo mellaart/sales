@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRelationName, searchRelations } from "@/lib/smart-trade-api";
+import { getRelationName, getRelationById, searchRelations } from "@/lib/smart-trade-api";
 
 const MAX_QUERY_LENGTH = 120;
 const RELATION_SEARCH_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -83,6 +83,19 @@ function createRelationSearchResponse(relations: RelationSearchResult[], cacheSt
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
+    // Explicit ID lookup is also used for pin-only customers. Do not apply
+    // the software-customer filter or reuse cached name-search results.
+    if (url.searchParams.has("relationId")) {
+      const id = (url.searchParams.get("relationId") ?? "").trim();
+      if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))) {
+        return NextResponse.json({ error: "Vul een geldig relatie-ID in." }, { status: 400 });
+      }
+      const relation = await getRelationById(id);
+      if (String(relation.id) !== id) {
+        return NextResponse.json({ error: "De opgehaalde relatie komt niet overeen met het ingevoerde ID." }, { status: 502 });
+      }
+      return createRelationSearchResponse(mapRelationSearchResults([relation]), "miss");
+    }
     const rawQuery = url.searchParams.get("query") ?? "";
     const query = rawQuery.trim();
 

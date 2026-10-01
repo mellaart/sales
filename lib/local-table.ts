@@ -1,3 +1,4 @@
+import { withImplementationAssetProgress } from "@/lib/implementation-assets-progress";
 import { query } from "@/lib/local-db";
 import { canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
 import { isProtectedAdminEmail } from "@/lib/protected-admin";
@@ -443,7 +444,7 @@ export async function executeLocalTableQuery(input: LocalTableQuery, actor: Acto
       withOrderAndLimit(table, input, values),
     ].filter(Boolean).join(" ");
     const { rows } = await query(sql, values);
-    return formatResult(rows, input);
+    return formatResult(table === "implementations" ? await withImplementationAssetProgress(rows) : rows, input);
   }
 
   if (!serviceMode && !actor) throw new Error("Niet ingelogd.");

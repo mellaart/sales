@@ -3186,7 +3186,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                     }`}
                   >
                     <span className="implementation-progress-number">{item.number}</span>
-                    <strong>{item.label}</strong>
+                    <strong title={item.key === "assets" ? "Automatisch afgevinkt zodra alle assets vanuit de deal zijn aangemaakt." : undefined}>{item.label}</strong>
                     <input
                       type="checkbox"
                       checked={Boolean(progress[item.key])}

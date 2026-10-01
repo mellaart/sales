@@ -1,3 +1,4 @@
+import { allDealAssetsCreated } from "@/lib/implementation-assets-progress";
 import { getDealRelationId } from "@/lib/deal-relation";
 import { NextResponse } from "next/server";
 import { buildDealAssetPlan, type DealAssetPlanItem } from "@/lib/deal-assets";
@@ -502,6 +503,15 @@ export async function POST(
 
     const refreshed = await loadContext(request, dealId);
     if ("error" in refreshed) return jsonResponse({ error: refreshed.error }, refreshed.status);
+
+    if (allDealAssetsCreated(refreshed.context.deal, refreshed.context.creations)) {
+      await query(
+        `update public.implementations
+         set progress = coalesce(progress, '{}'::jsonb) || '{"assets":true}'::jsonb, updated_at = now()
+         where deal_id = $1 and (progress->>'assets') is distinct from 'true'`,
+        [dealId],
+      );
+    }
 
     return jsonResponse({
       message: createdItems.length

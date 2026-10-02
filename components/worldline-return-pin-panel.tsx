@@ -295,7 +295,7 @@ export default function WorldlineReturnPinPanel({
               <strong><ShieldCheck size={19} aria-hidden="true" /> Bewijs lokaal vastgelegd</strong>
             </div>
             {index === 0 && canWrite ? (
-              <button type="button" className={styles.pinToggle} onClick={() => setShowPins((shown) => !shown)}>
+              <button type="button" className={styles.pinToggle} aria-pressed={showPins} onClick={() => setShowPins((shown) => !shown)}>
                 {showPins ? <EyeOff size={17} /> : <Eye size={17} />}
                 {showPins ? "Pincodes verbergen" : "Pincodes tonen"}
               </button>
@@ -324,7 +324,7 @@ export default function WorldlineReturnPinPanel({
             {acceptedForm.formData.authorizedUsers.map((authorizedUser) => (
               <div className={styles.userRow} key={authorizedUser.id}>
                 <span>{authorizedUser.name}</span>
-                <strong>{index === 0 && canWrite && showPins ? authorizedUser.pinCode : "••••"}</strong>
+                <span className={styles.pinCode}>{index === 0 && canWrite && showPins ? (authorizedUser.pinCode || "Niet beschikbaar") : "••••"}</span>
               </div>
             ))}
           </div>

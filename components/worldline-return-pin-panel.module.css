@@ -221,10 +221,22 @@
   font-size: 13px;
 }
 
-.userRow strong {
-  color: #dbeafe;
-  text-align: right;
-  letter-spacing: 0;
+.panel .userRow .pinCode {
+  justify-self: end;
+  align-self: center;
+  min-width: 64px;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid #94a3b8;
+  border-radius: 5px;
+  background: #e2e8f0;
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  letter-spacing: 0.08em;
 }
 
 .message {

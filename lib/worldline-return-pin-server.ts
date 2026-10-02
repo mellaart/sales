@@ -113,14 +113,21 @@ function encryptFormData(formData: WorldlineReturnPinFormData) {
 }
 
 function decryptFormData(value: unknown) {
-  const formData = normalizeWorldlineReturnPinFormData(value);
-  return {
-    ...formData,
-    authorizedUsers: formData.authorizedUsers.map((user) => ({
-      ...user,
-      pinCode: decryptPinCode(user.pinCode),
-    })),
-  };
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  // Ciphertext is longer than the input PIN limit. Decrypt before normalizing
+  // customer fields, otherwise normalization truncates the encrypted value.
+  return normalizeWorldlineReturnPinFormData({
+    ...source,
+    authorizedUsers: Array.isArray(source.authorizedUsers)
+      ? source.authorizedUsers.map((value) => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+          const user = value as Record<string, unknown>;
+          return { ...user, pinCode: typeof user.pinCode === "string" ? decryptPinCode(user.pinCode) : "" };
+        })
+      : [],
+  });
 }
 
 function signaturePayload(id: string, tokenVersion: number) {

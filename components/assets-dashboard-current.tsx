@@ -581,6 +581,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const [offerGuidance, setOfferGuidance] = useState("");
   const [miscellaneousDescription, setMiscellaneousDescription] = useState("");
   const [miscellaneousPrice, setMiscellaneousPrice] = useState("");
+  const [extraTravelVisits, setExtraTravelVisits] = useState(0);
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
 
@@ -937,14 +938,15 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const travelImplementationDays = pricingConfig.implementationDayRate > 0
     ? Math.max(0, travelImplementationTotal / pricingConfig.implementationDayRate)
     : 0;
-  const canCalculateTravelCosts = travelImplementationDays > 0;
+  const totalTravelVisits = travelImplementationDays + extraTravelVisits;
+  const canCalculateTravelCosts = totalTravelVisits > 0;
   const effectiveIncludeTravelCosts = !pinQuote && includeTravelCosts && canCalculateTravelCosts;
   const travelCostQuote = useMemo(
     () => getTravelCostQuoteForPostcode(pricingConfig, travelPostcodePrefix),
     [pricingConfig, travelPostcodePrefix],
   );
   const travelCostTotal = effectiveIncludeTravelCosts && travelCostQuote
-    ? travelImplementationDays * travelCostQuote.pricePerDay
+    ? totalTravelVisits * travelCostQuote.pricePerDay
     : 0;
   const currentCompleteMonthly = currentRecurringMonthly
     + currentCustomerPortalMonthlyTotal
@@ -1084,6 +1086,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
           smartConnectConnections,
           includeTravelCosts: effectiveIncludeTravelCosts,
           travelPostcodePrefix,
+          extraTravelVisits: pinQuote ? 0 : extraTravelVisits,
           travelCostPerDay: travelCostQuote?.pricePerDay ?? 0,
           travelCostTotal,
           travelRegion: travelCostQuote?.postcodeRow?.region ?? null,
@@ -1177,6 +1180,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setOfferGuidance("");
     setMiscellaneousDescription("");
     setMiscellaneousPrice("");
+    setExtraTravelVisits(0);
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -1219,6 +1223,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setOfferGuidance("");
     setMiscellaneousDescription("");
     setMiscellaneousPrice("");
+    setExtraTravelVisits(0);
 
     try {
       const [assetsResult, relationResult] = await Promise.allSettled([
@@ -1826,6 +1831,23 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
                   placeholder="Bijv. 2160,00"
                 />
               </label>
+              <label className="input-wrap">
+                <span className="input-label">Extra bezoeken (reiskosten)</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={extraTravelVisits}
+                  onChange={(event) => setExtraTravelVisits(Math.max(0, Math.floor(Number(event.target.value) || 0)))}
+                  style={{ maxWidth: 160 }}
+                />
+                <span className="subtext">
+                  Boven op de standaard reiskosten: {extraTravelVisits} × {euro.format(travelCostQuote?.pricePerDay ?? 0)}
+                  {extraTravelVisits > 0 && !travelCostQuote?.postcodeRow ? " — kies hieronder een postcode voor het tarief." : ""}
+                  {extraTravelVisits > 0 && !includeTravelCosts ? " — reiskosten staan uit." : ""}
+                </span>
+              </label>
               <div className={styles.miscellaneousOfferTotal}>
                 <span>Eenmalige kosten</span>
                 <strong>{euro.format(miscellaneousAmount)}</strong>
@@ -1914,7 +1936,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
                     <strong>{canCalculateTravelCosts ? "Prijs implementatie inclusief reiskosten" : "Geen reiskosten voor geselecteerde modules"}</strong>
                     <span>
                       {canCalculateTravelCosts
-                        ? `${formatDays(travelImplementationDays)} x ${euro.format(travelCostQuote?.pricePerDay ?? 0)}`
+                        ? `${formatDays(totalTravelVisits)} x ${euro.format(travelCostQuote?.pricePerDay ?? 0)}`
                         : "Deze modules worden op afstand ingesteld"}
                     </span>
                   </span>
@@ -1958,7 +1980,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
                     <div className="total-row">
                       <span>
                         {effectiveIncludeTravelCosts && travelCostQuote
-                          ? `Reiskosten (${Math.ceil(travelImplementationDays)} ${Math.ceil(travelImplementationDays) === 1 ? "afspraak" : "afspraken"} op locatie)`
+                          ? `Reiskosten (${Math.ceil(totalTravelVisits)} ${Math.ceil(totalTravelVisits) === 1 ? "afspraak" : "afspraken"} op locatie)`
                           : "Reiskosten"}
                       </span>
                       <strong>{euro.format(travelCostTotal)}</strong>

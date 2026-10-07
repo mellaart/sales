@@ -75,6 +75,7 @@ export type DealCalculatorInputs = {
   includeTravelCosts?: boolean;
   customerPostcode?: string;
   travelPostcodePrefix?: string;
+  extraTravelVisits?: number;
   travelCostPerDay?: number;
   travelCostTotal?: number;
   travelRegion?: number | null;

@@ -24,6 +24,8 @@ import {
 } from "@/lib/pricing";
 import { type AssetExpansionLine, getSupabaseClient, getUserDisplayName } from "@/lib/supabase";
 import styles from "./assets-dashboard.module.css";
+import { WorldlineQuoteFields } from "./worldline-quote-fields";
+import { defaultWorldlineQuote, getWorldlineQuoteLines, getWorldlineQuoteGuidance, isWorldlineQuoteValid } from "@/lib/worldline-quote";
 
 const SMART_TRADE_ASSET_PREFIX = "Smart Trade ";
 const SMART_TRADE_PACKAGE_NAMES = ["Lite", "Starter", "Basic", "Premium", "Enterprise"];
@@ -580,6 +582,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const [dealContactName, setDealContactName] = useState("");
   const [contactPersonStatus, setContactPersonStatus] = useState("");
   const [loadingContactPerson, setLoadingContactPerson] = useState(false);
+  const [worldlineQuote, setWorldlineQuote] = useState(defaultWorldlineQuote);
   const [offerGuidance, setOfferGuidance] = useState("");
   const [miscellaneousDescription, setMiscellaneousDescription] = useState("");
   const [miscellaneousPrice, setMiscellaneousPrice] = useState("");
@@ -774,6 +777,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     : [], [offerPackage, extraAdministrations, administrationPriceValid, administrationPrice, shouldIncludeSupport, includeMissingSupportOffer]);
   const administrationIncomplete = !pinQuote && extraAdministrations > 0 && (!offerPackage || !administrationPriceValid);
   const assetDealLines = useMemo(() => {
+    if (pinQuote) return getWorldlineQuoteLines(worldlineQuote);
     const lines: AssetExpansionLine[] = [...administrationLines];
 
     if (offerPackage && safeExtraUsersToOffer > 0) {
@@ -909,9 +913,10 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
       });
     }
 
-    return pinQuote ? lines.filter(line => line.group === "Servicekosten") : lines;
+    return lines;
   }, [
     administrationLines,
+    worldlineQuote,
     pinQuote,
     addedModules,
     chauffeurExtraUserLicenseTotal,
@@ -1003,6 +1008,11 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
       return;
     }
 
+    if (pinQuote && !isWorldlineQuoteValid(worldlineQuote)) {
+      setTransferStatus("Controleer de Worldline-offerte: vul geldige bedragen en omschrijvingen in.");
+      return;
+    }
+
     if (administrationIncomplete) {
       setTransferStatus("Geen artikelprijs gevonden voor extra administraties bij dit pakket.");
       return;
@@ -1071,7 +1081,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
         user_id: user.id,
         customer_name: selectedRelation.name,
         smart_trade_relation_id: Number(selectedRelation.id),
-        quote_title: `${pinQuote ? "Offerte CCV / Worldline" : "Uitbreidingen"} ${selectedRelation.name}`,
+        quote_title: `${pinQuote ? `Offerte ${worldlineQuote.product.trim()}` : "Uitbreidingen"} ${selectedRelation.name}`,
         contact_name: dealContactName.trim() || null,
         sales_name: getUserDisplayName(user, profile),
         package_key: activeResult.key,
@@ -1121,7 +1131,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
               currentCustomerPortalMonthly: currentCustomerPortalMonthlyTotal,
               currentSmartConnectMonthly: existingSmartConnectMonthlyTotal,
             },
-            guidanceText: offerGuidance.trim() || undefined,
+            guidanceText: pinQuote ? getWorldlineQuoteGuidance(worldlineQuote, offerGuidance) : offerGuidance.trim() || undefined,
             createdAt: new Date().toISOString(),
             lines: assetDealLines,
           },
@@ -1193,6 +1203,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setContactPersonStatus("");
     setLoadingContactPerson(false);
     setOfferGuidance("");
+    setWorldlineQuote(defaultWorldlineQuote());
     setMiscellaneousDescription("");
     setMiscellaneousPrice("");
     setExtraTravelVisits(0);
@@ -1237,6 +1248,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setContactPersonStatus("Primaire contactpersoon wordt opgehaald...");
     setLoadingContactPerson(true);
     setOfferGuidance("");
+    setWorldlineQuote(defaultWorldlineQuote());
     setMiscellaneousDescription("");
     setMiscellaneousPrice("");
     setExtraTravelVisits(0);
@@ -1308,7 +1320,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
           <div>
             <div className="eyebrow">Deals</div>
             <h2 className="headline">{pinQuote ? "Offerte voorbereiden" : "Uitbreidingen doorzetten"}</h2>
-            <p className="subtext">{pinQuote ? "Selecteer een relatie en vul de gewenste servicekosten in om een offerte als deal op te slaan." : transferHint}</p>
+            <p className="subtext">{pinQuote ? "Sla de offerte op als deal. Daar kun je de offerte bekijken en de PDF downloaden." : transferHint}</p>
           </div>
 
           <div className="brand-actions">
@@ -1318,7 +1330,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
             <button
               type="button"
               className="primary-button"
-              disabled={transferBusy || administrationIncomplete}
+              disabled={transferBusy || administrationIncomplete || (pinQuote && (!selectedRelation || !isWorldlineQuoteValid(worldlineQuote)))}
               onClick={() => void handleSendExpansionsToDeals()}
             >
               <FileText size={16} />
@@ -1354,9 +1366,9 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
       <div className="container stack-4">
         <header className="brand-hero card">
           <div>
-            <div className="brand-mark">{pinQuote ? "Worldline · CCV" : "Assets"}</div>
+            <div className="brand-mark">{pinQuote ? "Worldline" : "Assets"}</div>
             <h1>{pinQuote ? "Offerte" : "Assets en upsell-kansen"}</h1>
-            <p>{pinQuote ? "Bereid een offerte voor CCV en Worldline voor. Zoek een relatie en voeg servicekosten en een toelichting toe." : "Zoek een debiteur en bekijk Smart Trade assets, Worldline servicekosten en CCV servicekosten."}</p>
+            <p>{pinQuote ? "Maak een Worldline-offerte met apparaten, setup, servicekosten en optioneel een pincontract." : "Zoek een debiteur en bekijk Smart Trade assets, Worldline servicekosten en CCV servicekosten."}</p>
           </div>
           <div className="brand-actions">
             {!pinQuote ? <StatusPill tone="success">{assetClassTotals.length} assetclass totalen</StatusPill> : null}
@@ -1798,7 +1810,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
 
         </> : null}
 
-        <section className="card panel">
+        {pinQuote ? (selectedRelation ? <WorldlineQuoteFields value={worldlineQuote} onChange={setWorldlineQuote} /> : <section className="card panel"><div className="empty-state">Kies eerst een relatie om de Worldline-offerte samen te stellen.</div></section>) : <section className="card panel">
           <div className="top-row"><div><div className="eyebrow">{pinQuote ? "Offerte" : "Stap 7"}</div><h2 className="headline">Servicekosten</h2><p className="subtext">CCV en Worldline worden herkend op assetclass. Offerte-aantallen starten op 0.</p></div><div className="icon-badge"><Boxes size={26} /></div></div>
           {!selectedRelation ? <div className="empty-state">Kies eerst een relatie om servicekosten te bekijken.</div> : (
             <div className={styles.upsellPanel}>
@@ -1810,7 +1822,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
               <div className={styles.quoteTotal}><span>Servicekosten offerte per jaar</span><strong>{euro.format(serviceCostAnnualTotal)} p/j</strong></div>
             </div>
           )}
-        </section>
+        </section>}
 
         {!pinQuote ? <>
         <section className="card panel">

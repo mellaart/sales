@@ -38,3 +38,18 @@ test('invalid prices, quantities and missing descriptions block saving; zero set
   assert.equal(isWorldlineQuoteValid({ ...defaultWorldlineQuote(), product: ' ' }), false);
   assert.equal(isWorldlineQuoteValid({ ...defaultWorldlineQuote(), setupPrice: '0', productPrice: '599.99' }), true);
 });
+
+test('saved Worldline guidance becomes tables without losing edited rates or free text', () => {
+  const { getWorldlineGuidanceBlocks } = mod.exports;
+  const text = getWorldlineQuoteGuidance(defaultWorldlineQuote(), 'Afspraak voor deze klant');
+  const blocks = getWorldlineGuidanceBlocks(text);
+  const tables = blocks.filter(b => b.type === 'table');
+  assert.equal(tables.length, 2);
+  assert.equal(tables[1].rows.length, 6);
+  assert.deepEqual(tables[1].rows[0], ['Maestro / V PAY', '€ 0,06 per transactie']);
+  assert.match(tables[0].note, /niet inbegrepen/);
+  assert.ok(blocks.some(b => b.type === 'text' && b.text.includes('Optionele consultancy')));
+  assert.equal(blocks[0].text, 'Afspraak voor deze klant');
+  assert.deepEqual(getWorldlineGuidanceBlocks('Eigen toelichting: ongewijzigd'), [{ type: 'text', text: 'Eigen toelichting: ongewijzigd' }]);
+  assert.deepEqual(getWorldlineGuidanceBlocks('Transactiekosten via Worldline\nVrij tarief op aanvraag'), [{type:'text',text:'Transactiekosten via Worldline\nVrij tarief op aanvraag'}]);
+});

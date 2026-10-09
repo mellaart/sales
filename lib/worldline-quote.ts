@@ -57,3 +57,43 @@ export function getWorldlineQuoteGuidance(quote: WorldlineQuote, extra: string) 
     quote.includeContract ? "Worldline transactiecontract\nInzicht in pintransacties via het online portaal. Contact en beheer via Troublefree. Wissel-/leentoestel bij onverhoopte storing." : "",
   ].filter(Boolean).join("\n\n");
 }
+
+export type WorldlineGuidanceBlock =
+  | { type: "text"; text: string }
+  | { type: "table"; title: string; rows: [string, string][]; note?: string };
+
+// Read the saved guidance too, so existing quotes receive the same layout.
+export function getWorldlineGuidanceBlocks(text: string): WorldlineGuidanceBlock[] {
+  const lines = text.split("\n");
+  const blocks: WorldlineGuidanceBlock[] = [];
+  let pending: string[] = [];
+  const flush = () => {
+    if (pending.join("\n").trim()) blocks.push({ type: "text", text: pending.join("\n").trim() });
+    pending = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const title = lines[i].trim();
+    if (title === "PIN-contract via Worldline" && lines[i + 1]?.trim().startsWith("Service Fee Compliancy:")) {
+      flush();
+      const content = lines[++i].trim().slice("Service Fee Compliancy:".length).trim();
+      const noteStart = content.indexOf("Facturatie rechtstreeks");
+      blocks.push({ type: "table", title, rows: [["Service Fee Compliancy", noteStart >= 0 ? content.slice(0, noteStart).trim() : content]], note: noteStart >= 0 ? content.slice(noteStart) : undefined });
+    } else if (title === "Transactiekosten via Worldline") {
+      const rows: [string, string][] = [];
+      let next = i + 1;
+      for (; next < lines.length; next++) {
+        const row = lines[next].trim();
+        const separator = row.indexOf(":");
+        if (separator <= 0 || !row.slice(separator + 1).trim()) break;
+        rows.push([row.slice(0, separator).trim(), row.slice(separator + 1).trim()]);
+      }
+      if (rows.length) {
+        flush();
+        blocks.push({ type: "table", title, rows });
+        i = next - 1;
+      } else pending.push(lines[i]);
+    } else pending.push(lines[i]);
+  }
+  flush();
+  return blocks;
+}

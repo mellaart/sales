@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { getWorldlineGuidanceBlocks } from "@/lib/worldline-quote";
 import { getAssetExpansionTotals, getAssetExpansionUnitAmount } from "@/lib/asset-expansions";
 import { loadPdfImage, type PdfImageAsset } from "@/lib/pdf-image";
 import { DEFAULT_PRICE_CONFIG, getDefaultModuleWorkItems, type ExpansionWorkItemConfig, type ExpansionWorkItemKey } from "@/lib/price-config";
@@ -114,7 +115,7 @@ function addParagraph(doc: jsPDF, text: string, y: number) {
   return addWrappedText(doc, text, 16, y, 178, 5) + 3;
 }
 
-function addGuidanceText(doc: jsPDF, text: string, y: number) {
+function addGuidanceText(doc: jsPDF, text: string, y: number, paragraphGap = 3) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(25, 40, 55);
@@ -131,9 +132,66 @@ function addGuidanceText(doc: jsPDF, text: string, y: number) {
       doc.text(line, 16, y);
       y += 5;
     }
-    y += 3;
+    y += paragraphGap;
   }
 
+  return y;
+}
+
+function addQuoteGuidance(doc: jsPDF, text: string, y: number) {
+  const blocks = getWorldlineGuidanceBlocks(text);
+  if (!blocks.some(block => block.type === "table")) {
+    return addGuidanceText(doc, text, addSectionTitle(doc, "Toelichting", y + 2));
+  }
+  for (const block of blocks) {
+    if (block.type === "text") {
+      y = addGuidanceText(doc, block.text, y + 2, 1);
+      continue;
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const rows = block.rows.map(([label, rate]) => {
+      const left = doc.splitTextToSize(label, 108) as string[];
+      const right = doc.splitTextToSize(rate, 58) as string[];
+      return { left, right, height: Math.max(left.length, right.length) * 4.2 + 4 };
+    });
+    const tableHeight = 19 + rows.reduce((sum, row) => sum + row.height, 0);
+    // Move a normal tariff table as a whole; oversized tables repeat their header.
+    y = ensurePage(doc, y, Math.min(tableHeight, 262));
+    const header = (top: number) => {
+      top = addSectionTitle(doc, block.title, top + 2);
+      doc.setFillColor(244, 247, 251);
+      doc.setDrawColor(219, 228, 238);
+      doc.rect(16, top - 4, 178, 8, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(64, 80, 100);
+      doc.text(block.title.startsWith("Transactie") ? "Betaalkaart" : "Omschrijving", 19, top + 1);
+      doc.text("Tarief", 131, top + 1);
+      return top + 4;
+    };
+    y = header(y);
+    rows.forEach((row, index) => {
+      if (y + row.height > 282) {
+        doc.addPage();
+        y = header(20);
+      }
+      if (index % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(16, y, 178, row.height, "F");
+      }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(25, 40, 55);
+      row.left.forEach((line, i) => doc.text(line, 19, y + 4.5 + i * 4.2));
+      row.right.forEach((line, i) => doc.text(line, 131, y + 4.5 + i * 4.2));
+      y += row.height;
+      doc.setDrawColor(226, 233, 241);
+      doc.line(16, y, 194, y);
+    });
+    y += 7;
+    if (block.note) y = addGuidanceText(doc, block.note, y);
+  }
   return y;
 }
 
@@ -794,8 +852,7 @@ async function buildQuotePdf(input: OfferTemplateInput) {
 
     const guidanceText = input.assetsExpansion?.guidanceText?.trim();
     if (guidanceText) {
-      y = addSectionTitle(doc, "Toelichting", y + 2);
-      y = addGuidanceText(doc, guidanceText, y);
+      y = addQuoteGuidance(doc, guidanceText, y);
     }
 
     y = addSectionTitle(doc, "Tot slot", y + 2);

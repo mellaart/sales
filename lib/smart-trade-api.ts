@@ -140,6 +140,7 @@ type SmartTradeAssetsApiResponse = {
     id?: number | string;
     name?: string | null;
     owner?: unknown;
+    decommissionedAt?: string | null;
     quantity?: number | string | null;
     assetclass?: unknown;
     assetClass?: unknown;
@@ -845,8 +846,16 @@ function mapAssetModules(asset: SmartTradeAssetRow) {
     });
 }
 
-function mapAssetRow(asset: SmartTradeAssetRow, assetClasses: Map<string, string>): AssetWithModules | null {
+function isAssetDecommissioned(asset: SmartTradeAssetRow, now: number) {
+  if (!asset.decommissionedAt) return false;
+  const decommissionedAt = Date.parse(asset.decommissionedAt);
+  // Uitgebruikname is het eerste tijdstip waarop het asset niet meer meetelt.
+  return Number.isFinite(decommissionedAt) && decommissionedAt <= now;
+}
+
+function mapAssetRow(asset: SmartTradeAssetRow, assetClasses: Map<string, string>, now: number): AssetWithModules | null {
   if (asset.id === undefined || asset.id === null) return null;
+  if (isAssetDecommissioned(asset, now)) return null;
 
   return {
     id: String(asset.id),
@@ -873,6 +882,9 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
     assets = await fetchRelationIncludedAssets(config, headers, relationId).catch(() => []);
   }
 
+  const now = Date.now();
+  assets = assets.filter((asset) => !isAssetDecommissioned(asset, now));
+
   const shouldFallback = assets.some((asset) => !asset.contractAgreements);
   if (shouldFallback) {
     const fallbackAssets: AssetWithModules[] = [];
@@ -888,7 +900,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
       const detailAsset = detailJson.data;
       if (!detailAsset) continue;
 
-      const mappedAsset = mapAssetRow(detailAsset, assetClasses);
+      const mappedAsset = mapAssetRow(detailAsset, assetClasses, now);
       if (mappedAsset) fallbackAssets.push(mappedAsset);
     }
 
@@ -896,7 +908,7 @@ export async function getAssetsWithModulesForRelation(_relationId: string | numb
   }
 
   return assets
-    .map((asset) => mapAssetRow(asset, assetClasses))
+    .map((asset) => mapAssetRow(asset, assetClasses, now))
     .filter((asset): asset is AssetWithModules => asset !== null);
 }
 

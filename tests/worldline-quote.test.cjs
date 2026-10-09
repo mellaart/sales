@@ -48,8 +48,20 @@ test('saved Worldline guidance becomes tables without losing edited rates or fre
   assert.equal(tables[1].rows.length, 6);
   assert.deepEqual(tables[1].rows[0], ['Maestro / V PAY', '€ 0,06 per transactie']);
   assert.match(tables[0].note, /niet inbegrepen/);
-  assert.ok(blocks.some(b => b.type === 'text' && b.text.includes('Optionele consultancy')));
+  assert.ok(blocks.some(b => b.type === 'section' && b.title === 'Optionele consultancy op locatie'));
   assert.equal(blocks[0].text, 'Afspraak voor deze klant');
   assert.deepEqual(getWorldlineGuidanceBlocks('Eigen toelichting: ongewijzigd'), [{ type: 'text', text: 'Eigen toelichting: ongewijzigd' }]);
   assert.deepEqual(getWorldlineGuidanceBlocks('Transactiekosten via Worldline\nVrij tarief op aanvraag'), [{type:'text',text:'Transactiekosten via Worldline\nVrij tarief op aanvraag'}]);
 });
+
+ test('consultancy and contract sections preserve conditions and become separate bullet groups', () => {
+ const blocks = mod.exports.getWorldlineGuidanceBlocks(getWorldlineQuoteGuidance(defaultWorldlineQuote(), ''));
+ const sections = blocks.filter(b => b.type === 'section');
+ assert.equal(sections.length, 2);
+ assert.match(sections[0].intro, /niet verplicht en niet inbegrepen/);
+ assert.match(sections[0].intro, /Prijs op aanvraag/);
+ assert.equal(sections[0].items.length, 5);
+ assert.equal(sections[1].items.length, 3);
+ const noContract = mod.exports.getWorldlineGuidanceBlocks(getWorldlineQuoteGuidance({...defaultWorldlineQuote(), includeContract:false}, ''));
+ assert.equal(noContract.filter(b => b.type === 'section').length, 1);
+ });

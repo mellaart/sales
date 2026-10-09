@@ -140,10 +140,56 @@ function addGuidanceText(doc: jsPDF, text: string, y: number, paragraphGap = 3) 
 
 function addQuoteGuidance(doc: jsPDF, text: string, y: number) {
   const blocks = getWorldlineGuidanceBlocks(text);
-  if (!blocks.some(block => block.type === "table")) {
+  if (blocks.every(block => block.type === "text")) {
     return addGuidanceText(doc, text, addSectionTitle(doc, "Toelichting", y + 2));
   }
-  for (const block of blocks) {
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+    const block = blocks[blockIndex];
+    if (block.type === "section") {
+      const next = blocks[blockIndex + 1];
+      const sections = next?.type === "section" ? [block, next] : [block];
+      if (sections.length === 2) blockIndex++;
+      doc.setFontSize(9);
+      const cards = sections.map((section, index) => {
+        const width = sections.length === 1 ? 178 : index === 0 ? 110 : 62;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        const heading = doc.splitTextToSize(section.title, width - 8) as string[];
+        doc.setFontSize(9);
+        const intro = section.intro ? doc.splitTextToSize(section.intro, width - 8) as string[] : [];
+        doc.setFont("helvetica", "normal");
+        const items = section.items.map(item => doc.splitTextToSize(item, width - 13) as string[]);
+        const height = 10 + heading.length * 4.5 + (intro.length ? intro.length * 4.2 + 3 : 0)
+          + items.reduce((sum, lines) => sum + lines.length * 4.2 + 2, 0);
+        return { width, heading, intro, items, height };
+      });
+      const height = Math.max(...cards.map(card => card.height));
+      y = ensurePage(doc, y, height + 4);
+      cards.forEach((card, index) => {
+        const x = index === 0 ? 16 : 132;
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(219, 228, 238);
+        doc.roundedRect(x, y, card.width, height, 2, 2, "FD");
+        let top = y + 7;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(17, 58, 86);
+        card.heading.forEach(line => { doc.text(line, x + 4, top); top += 4.5; });
+        top += 2;
+        doc.setFontSize(9);
+        card.intro.forEach(line => { doc.text(line, x + 4, top); top += 4.2; });
+        if (card.intro.length) top += 3;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(25, 40, 55);
+        card.items.forEach(lines => {
+          doc.text("•", x + 4, top);
+          lines.forEach(line => { doc.text(line, x + 8, top); top += 4.2; });
+          top += 2;
+        });
+      });
+      y += height + 6;
+      continue;
+    }
     if (block.type === "text") {
       y = addGuidanceText(doc, block.text, y + 2, 1);
       continue;

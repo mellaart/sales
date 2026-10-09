@@ -60,6 +60,7 @@ export function getWorldlineQuoteGuidance(quote: WorldlineQuote, extra: string) 
 
 export type WorldlineGuidanceBlock =
   | { type: "text"; text: string }
+  | { type: "section"; title: string; intro: string; items: string[] }
   | { type: "table"; title: string; rows: [string, string][]; note?: string };
 
 // Read the saved guidance too, so existing quotes receive the same layout.
@@ -73,7 +74,25 @@ export function getWorldlineGuidanceBlocks(text: string): WorldlineGuidanceBlock
   };
   for (let i = 0; i < lines.length; i++) {
     const title = lines[i].trim();
-    if (title === "PIN-contract via Worldline" && lines[i + 1]?.trim().startsWith("Service Fee Compliancy:")) {
+    if (title === "Optionele consultancy op locatie" || title === "Worldline transactiecontract") {
+      const content: string[] = [];
+      let next = i + 1;
+      for (; next < lines.length; next++) {
+        const line = lines[next].trim();
+        if (!line || line === "Worldline transactiecontract" || line === "Optionele consultancy op locatie") break;
+        content.push(line);
+      }
+      if (content.length) {
+        flush();
+        const isConsultancy = title === "Optionele consultancy op locatie";
+        blocks.push({ type: "section", title,
+          intro: isConsultancy ? content.filter(line => !line.startsWith("- ")).join("\n") : "",
+          items: isConsultancy ? content.filter(line => line.startsWith("- ")).map(line => line.slice(2))
+            : content.flatMap(line => line.replace(/^- /, "").split(/(?<=\.)\s+(?=[A-Z])/)),
+        });
+        i = next - 1;
+      } else pending.push(lines[i]);
+    } else if (title === "PIN-contract via Worldline" && lines[i + 1]?.trim().startsWith("Service Fee Compliancy:")) {
       flush();
       const content = lines[++i].trim().slice("Service Fee Compliancy:".length).trim();
       const noteStart = content.indexOf("Facturatie rechtstreeks");

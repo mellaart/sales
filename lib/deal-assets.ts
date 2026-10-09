@@ -372,6 +372,7 @@ export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "packa
         if (key) assetClass = classes.customerPortal[key];
       } else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Extra gebruiker`) assetClass = classes.extraUser;
       else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
+      else if (group === "Extra administratie" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
       else if (group === "Chauffeursmodule" && label === "Licentie extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurExtraUser;
       else if (group === "Chauffeursmodule" && label === "Supportcontract extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurSupportExtraUser;
       else if (group === "Modules") {

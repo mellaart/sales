@@ -2570,7 +2570,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   ) : null}
                 </div>
                 {canManageImplementation && !acceptedAt ? (
-                  <button type="button" className="primary-button" disabled={manualApprovalBusy}
+                  <button type="button" className="primary-button deal-telephone-approval" disabled={manualApprovalBusy}
                     onClick={() => void handleTelephoneApproval()}>
                     <CheckCircle2 size={16} /> {manualApprovalBusy ? "Akkoord vastleggen..." : "Telefonisch akkoord vastleggen"}
                   </button>

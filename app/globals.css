@@ -8528,3 +8528,7 @@ html:is([data-app-theme="customer"], [data-app-theme="corporate-modern"], [data-
 @media (max-width: 700px) {
   .deal-implementation-details > .implementation-communication-copy { grid-column: 1 / -1; }
 }
+
+.deal-telephone-approval {
+  margin-top: 20px;
+}

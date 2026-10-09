@@ -447,7 +447,7 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
 
   lines.forEach((line) => {
     const descriptionLines = doc.splitTextToSize(line.label, 88) as string[];
-    const rowHeight = Math.max(14, descriptionLines.length * 4.4 + 8);
+    const rowHeight = Math.max(9, descriptionLines.length * 4.4 + 4);
     y = ensurePage(doc, y, rowHeight + 10);
 
     doc.text(`${line.quantity}x`, x + 2, y);
@@ -458,7 +458,7 @@ function addExpansionPriceTable(doc: jsPDF, title: string, lines: AssetExpansion
     y += rowHeight;
     doc.setDrawColor(234, 239, 245);
     doc.line(x, y - 3, x + 178, y - 3);
-    y += 5;
+    y += 2;
   });
 
   const totals = getAssetExpansionTotals(lines);

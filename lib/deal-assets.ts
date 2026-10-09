@@ -247,6 +247,7 @@ const MODULE_LABELS: Record<string, string> = {
   verhuur: "Verhuur",
   voorraad: "Voorraad",
   prijsstaffels: "Uitgebreide prijsstaffels",
+  suiteMkb: "Suite MKB koppeling",
 };
 
 const PORTAL_LABELS: Record<string, string> = {
@@ -366,6 +367,23 @@ export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "packa
       const label = String(line.label ?? "");
       const group = String(line.group ?? "");
       const quantity = Number(line.quantity);
+      if (group === "Modules") {
+        // Existing expansion quotes combine multiple modules in one display line.
+        // Keep the original key for single-module lines to preserve creation history.
+        const labels = label.startsWith("Module-uitbreiding: ")
+          ? label.slice("Module-uitbreiding: ".length).split(", ")
+          : [label];
+        for (const moduleLabel of labels) {
+          const key = Object.keys(MODULE_LABELS).find(key => MODULE_LABELS[key].toLowerCase() === moduleLabel.trim().toLowerCase());
+          const assetClass = key === "suiteMkb" ? classes.smartConnect.suiteMkb : key ? classes.modules[key] : undefined;
+          if (!assetClass || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) {
+            warnings.push(`${moduleLabel}: deze uitbreiding moet handmatig worden verwerkt; er wordt hiervoor geen asset aangemaakt.`);
+            continue;
+          }
+          addRepeated(items, labels.length === 1 ? `expansion-${index}` : `expansion-${index}-${key}`, assetClass, moduleLabel.trim(), quantity, group);
+        }
+        continue;
+      }
       let assetClass: number | undefined;
       if (group === "Klantenportaal") {
         const key = Object.keys(PORTAL_LABELS).find(key => label.toLowerCase() === `smart trade - ${PORTAL_LABELS[key]}`.toLowerCase());
@@ -375,10 +393,6 @@ export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "packa
       else if (group === "Extra administratie" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
       else if (group === "Chauffeursmodule" && label === "Licentie extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurExtraUser;
       else if (group === "Chauffeursmodule" && label === "Supportcontract extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurSupportExtraUser;
-      else if (group === "Modules") {
-        const key = Object.keys(MODULE_LABELS).find(key => MODULE_LABELS[key].toLowerCase() === label.toLowerCase());
-        if (key) assetClass = classes.modules[key];
-      }
       if (!assetClass || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) {
         warnings.push(`${label}: deze uitbreiding moet handmatig worden verwerkt; er wordt hiervoor geen asset aangemaakt.`);
         continue;

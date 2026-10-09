@@ -485,6 +485,11 @@ select optgroup {
   flex-wrap: wrap;
 }
 
+.quote-form-actions {
+  margin-top: 20px;
+  gap: 14px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;

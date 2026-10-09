@@ -2608,7 +2608,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
               <div className="section">
                 <TextArea label="Notities" value={notes} onChange={setNotes} placeholder="Interne of commerciële notities" />
-                <div className="button-row">
+                <div className="button-row quote-form-actions">
                   <button type="button" className="primary-button" onClick={() => void handleSave()}><CloudUpload size={16} /> Opslaan en herberekenen</button>
                   <button type="button" className="secondary-button" onClick={() => void handlePdfExport()}><Download size={16} /> Exporteer PDF</button>
                 </div>

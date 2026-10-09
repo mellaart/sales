@@ -184,6 +184,11 @@
   background: var(--surface-deep);
 }
 
+.transferActions {
+  gap: 14px;
+  padding-block: 6px;
+}
+
 .transferPanelTop {
   display: flex;
   justify-content: space-between;

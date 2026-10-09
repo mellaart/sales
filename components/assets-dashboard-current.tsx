@@ -1323,7 +1323,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
             <p className="subtext">{pinQuote ? "Sla de offerte op als deal. Daar kun je de offerte bekijken en de PDF downloaden." : transferHint}</p>
           </div>
 
-          <div className="brand-actions">
+          <div className={`brand-actions ${styles.transferActions}`}>
             <StatusPill tone={assetDealLines.length > 0 ? "success" : "warning"}>
               {assetDealLines.length} regels
             </StatusPill>

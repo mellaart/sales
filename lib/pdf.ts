@@ -216,21 +216,34 @@ function addQuoteHeader(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
   doc.setTextColor(17, 58, 86);
-  doc.text(input.quoteTitle || `Offerte Smart Trade ${input.result.name}`, 16, 72);
-
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 233, 241);
-  doc.roundedRect(16, 80, 178, 18, 2, 2, "FD");
+  const titleLines = doc.splitTextToSize(input.quoteTitle || `Offerte Smart Trade ${input.result.name}`, 178) as string[];
+  const titleLineHeight = 9;
+  titleLines.forEach((line, index) => doc.text(line, 16, 72 + index * titleLineHeight));
+  const detailsTop = 80 + (titleLines.length - 1) * titleLineHeight;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(95, 112, 131);
-  doc.text(`Klant: ${valueOrDash(input.customerName)}`, 20, 87);
-  doc.text(`Contactpersoon: ${valueOrDash(input.contactName)}`, 20, 93);
-  doc.text(`Sales consultant: ${valueOrDash(input.salesName)}`, 112, 87);
-  doc.text(`Layout: ${layoutName}`, 112, 93);
+  const customerLines = doc.splitTextToSize(`Klant: ${valueOrDash(input.customerName)}`, 84) as string[];
+  const contactLines = doc.splitTextToSize(`Contactpersoon: ${valueOrDash(input.contactName)}`, 84) as string[];
+  const salesLines = doc.splitTextToSize(`Sales consultant: ${valueOrDash(input.salesName)}`, 78) as string[];
+  const layoutLines = doc.splitTextToSize(`Layout: ${layoutName}`, 78) as string[];
+  const firstRowHeight = Math.max(customerLines.length, salesLines.length) * 4;
+  const secondRowHeight = Math.max(contactLines.length, layoutLines.length) * 4;
+  const detailsHeight = 10 + firstRowHeight + secondRowHeight;
 
-  return 110;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 233, 241);
+  doc.roundedRect(16, detailsTop, 178, detailsHeight, 2, 2, "FD");
+  doc.setTextColor(95, 112, 131);
+  const drawLines = (lines: string[], x: number, y: number) => {
+    lines.forEach((line, index) => doc.text(line, x, y + index * 4));
+  };
+  drawLines(customerLines, 20, detailsTop + 7);
+  drawLines(salesLines, 112, detailsTop + 7);
+  drawLines(contactLines, 20, detailsTop + 9 + firstRowHeight);
+  drawLines(layoutLines, 112, detailsTop + 9 + firstRowHeight);
+
+  return detailsTop + detailsHeight + 12;
 }
 
 function addPriceTable(

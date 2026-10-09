@@ -1,0 +1,31 @@
+.panel {
+  display: grid;
+  gap: 20px;
+}
+
+.totals {
+  display: grid;
+  gap: 10px;
+}
+
+.totals > div {
+  min-height: 48px;
+  padding: 12px 16px;
+  line-height: 1.5;
+}
+
+.contractToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.contractToggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}

@@ -320,7 +320,19 @@ function addQuoteHeader(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
   doc.setTextColor(17, 58, 86);
-  const titleLines = doc.splitTextToSize(input.quoteTitle || `Offerte Smart Trade ${input.result.name}`, 178) as string[];
+  const customerTitle = input.customerName.trim().replace(/\s+/g, " ");
+  let subjectTitle = (input.quoteTitle || `Offerte Smart Trade ${input.result.name}`).trim().replace(/\s+/g, " ");
+  // Older quotes stored the relationship name at the end of the subject.
+  if (customerTitle && subjectTitle.toLowerCase().endsWith(customerTitle.toLowerCase())) {
+    const prefix = subjectTitle.slice(0, -customerTitle.length);
+    if (!prefix || /[\s:|–—-]$/.test(prefix)) {
+      subjectTitle = prefix.replace(/[\s:|–—-]+$/, "") || "Offerte";
+    }
+  }
+  const titleLines = customerTitle ? [subjectTitle, customerTitle] : [subjectTitle];
+  const widestTitle = Math.max(...titleLines.map(line => doc.getTextWidth(line)));
+  // Fit both logical lines to the page instead of breaking a relationship name.
+  doc.setFontSize(Math.min(20, 20 * 178 / Math.max(178, widestTitle)));
   const titleLineHeight = 9;
   titleLines.forEach((line, index) => doc.text(line, 16, 72 + index * titleLineHeight));
   const detailsTop = 80 + (titleLines.length - 1) * titleLineHeight;

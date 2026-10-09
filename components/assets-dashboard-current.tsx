@@ -7,7 +7,7 @@ import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
-import { EXTRA_ADMINISTRATION_ARTICLES, getExtraAdministrationLines } from "@/lib/extra-administrations";
+import { EXTRA_ADMINISTRATION_ARTICLES, EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines } from "@/lib/extra-administrations";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { createDealWithFallback } from "@/lib/deal-storage";
 import { getTravelCostQuoteForPostcode, normalizePostcodePrefix } from "@/lib/price-config";
@@ -566,7 +566,6 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const [searching, setSearching] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [extraAdministrations, setExtraAdministrations] = useState(0);
-  const [administrationPrices, setAdministrationPrices] = useState<Record<string, string>>({});
   const [extraUsersToOffer, setExtraUsersToOffer] = useState(0);
   const [chauffeurExtraUsersToOffer, setChauffeurExtraUsersToOffer] = useState(0);
   const [includeMissingSupportOffer, setIncludeMissingSupportOffer] = useState(false);
@@ -768,9 +767,8 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     [miscellaneousDescription],
   );
   const hasMiscellaneousOfferItem = Boolean(miscellaneousOfferText) && miscellaneousAmount > 0;
-  const administrationPriceText = offerPackage ? administrationPrices[offerPackage.key] ?? "" : "";
-  const administrationPrice = Number(administrationPriceText.replace(",", "."));
-  const administrationPriceValid = administrationPriceText.trim() !== "" && Number.isFinite(administrationPrice) && administrationPrice >= 0;
+  const administrationPrice = offerPackage ? EXTRA_ADMINISTRATION_MONTHLY_PRICES[offerPackage.key] : NaN;
+  const administrationPriceValid = Number.isFinite(administrationPrice) && administrationPrice >= 0;
   const administrationLines = useMemo(() => offerPackage && extraAdministrations > 0 && administrationPriceValid
     ? getExtraAdministrationLines(offerPackage, extraAdministrations, administrationPrice, shouldIncludeSupport || includeMissingSupportOffer)
     : [], [offerPackage, extraAdministrations, administrationPriceValid, administrationPrice, shouldIncludeSupport, includeMissingSupportOffer]);
@@ -1006,7 +1004,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     }
 
     if (administrationIncomplete) {
-      setTransferStatus("Vul eerst de maandprijs voor extra administraties in bij stap 8.");
+      setTransferStatus("Geen artikelprijs gevonden voor extra administraties bij dit pakket.");
       return;
     }
 
@@ -1181,7 +1179,6 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setSelectedRelation(null);
     setAssets([]);
     setExtraAdministrations(0);
-    setAdministrationPrices({});
     setExtraUsersToOffer(0);
     setChauffeurExtraUsersToOffer(0);
     setSelectedModuleKeys([]);
@@ -1225,7 +1222,6 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setLoadingAssets(true);
     setAssets([]);
     setExtraAdministrations(0);
-    setAdministrationPrices({});
     setExtraUsersToOffer(0);
     setChauffeurExtraUsersToOffer(0);
     setSelectedModuleKeys([]);
@@ -1825,8 +1821,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
               <div className={styles.assetMeta}>Artikel {EXTRA_ADMINISTRATION_ARTICLES[offerPackage.key]}</div>
               <label className={styles.upsellUserInput}><span>Aantal extra administraties</span><NumberStepper ariaLabel="Aantal extra administraties" min={0} value={extraAdministrations} onChange={(value) => setExtraAdministrations(Math.min(1000, Math.max(0, Math.floor(value))))} /></label>
               {extraAdministrations > 0 ? <>
-                <label className="input-wrap"><span className="input-label">Maandprijs per extra administratie (excl. btw)</span><input className="input" inputMode="decimal" value={administrationPriceText} onChange={(event) => setAdministrationPrices((prices) => ({ ...prices, [offerPackage.key]: event.target.value }))} placeholder="Vul de artikelprijs in" /></label>
-                {!administrationPriceValid ? <div className="empty-state">Vul de maandprijs in voordat je de uitbreiding als deal opslaat.</div> : null}
+                {!administrationPriceValid ? <div className="empty-state">Geen artikelprijs gevonden voor dit pakket.</div> : null}
                 <div className={styles.quoteRows}>{administrationLines.map((line) => <div key={line.label} className={styles.quoteRow}><span>{line.quantity}x</span><strong>{line.label}</strong><span>{euro.format(line.amount / line.quantity)} p/m</span><strong>{euro.format(line.amount)} p/m</strong></div>)}</div>
                 {administrationPriceValid ? <div className={styles.quoteTotal}><span>Extra administraties inclusief eventuele support</span><strong>{euro.format(getAssetExpansionTotals(administrationLines).monthly)} p/m</strong></div> : null}
               </> : null}

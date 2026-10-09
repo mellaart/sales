@@ -8,7 +8,7 @@ function load(file) {
   new Function('module', 'exports', js)(mod, mod.exports);
   return mod.exports;
 }
-const { getExtraAdministrationLines: lines, EXTRA_ADMINISTRATION_ARTICLES: articles } = load('lib/extra-administrations.ts');
+const { getExtraAdministrationLines: lines, EXTRA_ADMINISTRATION_ARTICLES: articles, EXTRA_ADMINISTRATION_MONTHLY_PRICES: prices } = load('lib/extra-administrations.ts');
 const { buildDealAssetPlan } = load('lib/deal-assets.ts');
 for (const [key, name, id, supportClass] of [['lite','Lite',478,33], ['starter','Starter',605,25], ['basic','Basic',602,29], ['premium','Premium',604,21], ['enterprise','Enterprise',603,37]]) {
   test(`${name}: article, totals and one support asset per administration`, () => {
@@ -35,4 +35,13 @@ test('rejects missing prices and invalid quantities', () => {
   const pkg={key:'lite',name:'Lite',supportExtra:5};
   for(const price of [NaN,Infinity,-1]) assert.throws(()=>lines(pkg,1,price,true));
   for(const qty of [-1,1.5,Infinity,1001]) assert.throws(()=>lines(pkg,qty,25,true));
+});
+
+test('uses the confirmed monthly article prices for all packages', () => {
+  assert.deepEqual(prices, {starter:19.20,premium:34.15,enterprise:40.30,basic:27.95,lite:12.90});
+  for (const [key, price] of Object.entries(prices)) {
+    const result = lines({key,name:key,supportExtra:5},2,price,true);
+    assert.equal(result[0].amount,2*price);
+    assert.equal(result[1].amount,10);
+  }
 });

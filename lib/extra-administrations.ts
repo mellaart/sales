@@ -10,6 +10,14 @@ export const EXTRA_ADMINISTRATION_ARTICLES: Readonly<Record<string, number>> = {
   lite: 478,
 };
 
+export const EXTRA_ADMINISTRATION_MONTHLY_PRICES: Readonly<Record<string, number>> = {
+  starter: 19.20,
+  premium: 34.15,
+  enterprise: 40.30,
+  basic: 27.95,
+  lite: 12.90,
+};
+
 export function getExtraAdministrationLines(
   pkg: PackageConfig,
   quantity: number,

@@ -15,15 +15,23 @@ type BuilderState = {
 
 function getStoredToken() {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(LOCAL_AUTH_TOKEN_KEY);
+  try {
+    return window.localStorage.getItem(LOCAL_AUTH_TOKEN_KEY);
+  } catch {
+    return null; // The same-origin session cookie is also accepted by the server.
+  }
 }
 
 function setStoredToken(token: string | null) {
   if (typeof window === "undefined") return;
-  if (token) {
-    window.localStorage.setItem(LOCAL_AUTH_TOKEN_KEY, token);
-  } else {
-    window.localStorage.removeItem(LOCAL_AUTH_TOKEN_KEY);
+  try {
+    if (token) {
+      window.localStorage.setItem(LOCAL_AUTH_TOKEN_KEY, token);
+    } else {
+      window.localStorage.removeItem(LOCAL_AUTH_TOKEN_KEY);
+    }
+  } catch {
+    // Authentication also uses the HttpOnly session cookie.
   }
 }
 
@@ -245,7 +253,7 @@ function createLocalBrowserClient() {
           return { data: { session: null }, error: { message: payload?.error || "Sessie ophalen mislukt." } };
         }
         const token = payload?.data?.session?.access_token ?? null;
-        if (token) setStoredToken(token);
+        setStoredToken(token);
         return { data: { session: payload?.data?.session ?? null }, error: null };
       },
       async refreshSession() {

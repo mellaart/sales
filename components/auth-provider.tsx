@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { LOCAL_AUTH_TOKEN_KEY } from "@/lib/local-auth-shared";
 import { getEffectiveUserRole } from "@/lib/protected-admin";
 import { fetchProfile, getSupabaseClient, type ProfileRecord, type UserRole } from "@/lib/supabase";
 
@@ -35,14 +36,18 @@ function fallbackRole(user: User | null): UserRole | null {
   return getEffectiveUserRole((user.user_metadata?.role as UserRole) || "sales", user.email);
 }
 
-function timeout(milliseconds: number) {
-  return new Promise<typeof AUTH_TIMEOUT_RESULT>((resolve) => {
-    setTimeout(() => resolve(AUTH_TIMEOUT_RESULT), milliseconds);
-  });
-}
-
 async function withAuthTimeout<T>(promise: Promise<T>) {
-  return Promise.race([promise, timeout(AUTH_REQUEST_TIMEOUT_MS)]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<typeof AUTH_TIMEOUT_RESULT>((resolve) => {
+        timer = setTimeout(() => resolve(AUTH_TIMEOUT_RESULT), AUTH_REQUEST_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function isAuthTimeout<T>(value: T | typeof AUTH_TIMEOUT_RESULT): value is typeof AUTH_TIMEOUT_RESULT {
@@ -52,15 +57,20 @@ function isAuthTimeout<T>(value: T | typeof AUTH_TIMEOUT_RESULT): value is typeo
 function clearSupabaseAuthStorage() {
   if (typeof window === "undefined") return;
 
-  for (const storage of [window.localStorage, window.sessionStorage]) {
-    const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(
-      (key): key is string => Boolean(key),
-    );
+  for (const storageName of ["localStorage", "sessionStorage"] as const) {
+    try {
+      const storage = window[storageName];
+      const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(
+        (key): key is string => Boolean(key),
+      );
 
-    for (const key of keys) {
-      if ((key.startsWith("sb-") && key.includes("auth-token")) || key === "supabase.auth.token") {
-        storage.removeItem(key);
+      for (const key of keys) {
+        if ((key.startsWith("sb-") && key.includes("auth-token")) || key === "supabase.auth.token" || key === LOCAL_AUTH_TOKEN_KEY) {
+          storage.removeItem(key);
+        }
       }
+    } catch {
+      // Storage can be unavailable; React auth state must still be cleared.
     }
   }
 }
@@ -68,14 +78,22 @@ function clearSupabaseAuthStorage() {
 function getLastActivityAt() {
   if (typeof window === "undefined") return Date.now();
 
-  const storedValue = Number(window.localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY));
-  return Number.isFinite(storedValue) && storedValue > 0 ? storedValue : Date.now();
+  try {
+    const storedValue = Number(window.localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY));
+    return Number.isFinite(storedValue) && storedValue > 0 ? storedValue : Date.now();
+  } catch {
+    return Date.now();
+  }
 }
 
 function setLastActivityAt(value = Date.now()) {
   if (typeof window === "undefined") return;
 
-  window.localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(value));
+  try {
+    window.localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(value));
+  } catch {
+    // Server-side session expiry remains authoritative without browser storage.
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -86,16 +104,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<User | null>(null);
   const idleLogoutInProgressRef = useRef(false);
   const lastActivityWriteRef = useRef(0);
+  const authRevisionRef = useRef(0);
+  const signingOutRef = useRef(false);
 
   const applyUser = useCallback(async (nextUser: User | null, active = true) => {
-    if (!active) return;
+    if (!active || (nextUser && signingOutRef.current)) return;
+    const revision = ++authRevisionRef.current;
 
     userRef.current = nextUser;
     setUser(nextUser);
 
     if (nextUser) {
-      const nextProfile = await fetchProfile(nextUser.id);
-      if (!active) return;
+      const result = await withAuthTimeout(fetchProfile(nextUser.id)).catch(() => null);
+      const nextProfile = isAuthTimeout(result) ? null : result;
+      if (!active || revision !== authRevisionRef.current) return;
 
       const nextRole = getEffectiveUserRole(nextProfile?.role ?? fallbackRole(nextUser), nextUser.email ?? nextProfile?.email);
       setProfile(nextProfile && nextRole ? { ...nextProfile, role: nextRole } : nextProfile);
@@ -117,14 +139,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const signOut = useCallback(async () => {
-    const supabase = getSupabaseClient();
-
+    signingOutRef.current = true;
+    ++authRevisionRef.current;
     setLoading(true);
 
     try {
+      const supabase = getSupabaseClient();
       if (supabase) {
         await withAuthTimeout(supabase.auth.signOut({ scope: "local" }));
       }
+    } catch {
+      // A failed logout request must not prevent returning to the login page.
     } finally {
       clearSupabaseAuthStorage();
       userRef.current = null;
@@ -137,26 +162,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    let syncing = false;
 
     async function syncAuthState(showLoading = false) {
-      const supabase = getSupabaseClient();
-
+      if (syncing || signingOutRef.current) return;
+      syncing = true;
+      const revision = authRevisionRef.current;
       if (showLoading) {
         setLoading(true);
       }
 
-      if (!supabase) {
-        if (active) {
-          await applyUser(null, active);
-          setLoading(false);
-        }
-        return;
-      }
-
       try {
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          if (active) {
+            await applyUser(null, active);
+            setLoading(false);
+          }
+          return;
+        }
+
         const result = await withAuthTimeout(supabase.auth.getSession());
 
-        if (!active) return;
+        if (!active || signingOutRef.current || revision !== authRevisionRef.current) return;
 
         if (isAuthTimeout(result)) {
           setLoading(false);
@@ -169,42 +197,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (currentSession && expiresSoon) {
           const refreshResult = await withAuthTimeout(supabase.auth.refreshSession());
-          if (!active) return;
+          if (!active || signingOutRef.current || revision !== authRevisionRef.current) return;
           if (!isAuthTimeout(refreshResult)) {
-            currentSession = refreshResult && "data" in refreshResult ? refreshResult.data.session ?? currentSession : currentSession;
+            currentSession = refreshResult && "data" in refreshResult ? refreshResult.data.session ?? null : currentSession;
           }
         }
 
         await applyUser(currentSession?.user ?? null, active);
         setLoading(false);
       } catch {
-        if (active) {
+        if (active && !signingOutRef.current && revision === authRevisionRef.current) {
           if (!userRef.current) {
             await applyUser(null, active);
           }
           setLoading(false);
         }
+      } finally {
+        syncing = false;
       }
     }
 
     async function initAuth() {
-      const supabase = getSupabaseClient();
-
       await syncAuthState(true);
 
-      if (!supabase || !active) return undefined;
+      if (!active) return undefined;
 
       try {
+        const supabase = getSupabaseClient();
+        if (!supabase) return undefined;
         const {
           data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (!session && event !== "SIGNED_OUT") {
-            setLoading(false);
-            return;
-          }
+        } = supabase.auth.onAuthStateChange((event, session) => {
+          if (!active) return;
+          if (event === "SIGNED_IN") signingOutRef.current = false;
 
-          await applyUser(session?.user ?? null, active);
-          setLoading(false);
+          // Do not await another auth-backed request inside the auth callback.
+          setTimeout(() => {
+            if (!active) return;
+            void applyUser(session?.user ?? null, active).finally(() => {
+              if (active) setLoading(false);
+            });
+          }, 0);
         });
 
         function handleWindowFocus() {
@@ -217,11 +250,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        function handlePageShow(event: PageTransitionEvent) {
+          if (event.persisted) void syncAuthState(false);
+        }
+
+        window.addEventListener("pageshow", handlePageShow);
         window.addEventListener("focus", handleWindowFocus);
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
           subscription.unsubscribe();
+          window.removeEventListener("pageshow", handlePageShow);
           window.removeEventListener("focus", handleWindowFocus);
           document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
@@ -241,8 +280,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [applyUser]);
 
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       idleLogoutInProgressRef.current = false;
       return;
     }
@@ -302,7 +343,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [signOut, user]);
+  }, [signOut, userId]);
 
   return (
     <AuthContext.Provider value={{ user, profile, role, loading, refreshProfile, signOut }}>

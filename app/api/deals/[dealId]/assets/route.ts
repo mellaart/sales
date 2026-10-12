@@ -1,7 +1,7 @@
 import { allDealAssetsCreated } from "@/lib/implementation-assets-progress";
 import { getDealRelationId } from "@/lib/deal-relation";
 import { NextResponse } from "next/server";
-import { buildDealAssetPlan, type DealAssetPlanItem } from "@/lib/deal-assets";
+import { normalizeAssetName, nextAvailableAssetName, buildDealAssetPlan, type DealAssetPlanItem } from "@/lib/deal-assets";
 import { requireLocalUser } from "@/lib/local-auth";
 import { query } from "@/lib/local-db";
 import { executeLocalTableQuery } from "@/lib/local-table";
@@ -113,30 +113,6 @@ function assetIdFromResponse(body: unknown) {
     ? record.data as Record<string, unknown>
     : record;
   return positiveInteger(data.id);
-}
-
-function normalizeAssetName(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
-}
-
-function nextAvailableAssetName(baseName: string, usedNames: Set<string>) {
-  const cleanName = baseName.trim().replace(/\s+/g, " ");
-  if (!cleanName) return baseName;
-
-  if (!usedNames.has(normalizeAssetName(cleanName))) {
-    usedNames.add(normalizeAssetName(cleanName));
-    return cleanName;
-  }
-
-  for (let suffix = 2; suffix < 1000; suffix += 1) {
-    const candidate = `${cleanName} (${suffix})`;
-    if (!usedNames.has(normalizeAssetName(candidate))) {
-      usedNames.add(normalizeAssetName(candidate));
-      return candidate;
-    }
-  }
-
-  throw new Error(`Er konden geen unieke assetnamen meer worden gemaakt voor ${cleanName}.`);
 }
 
 function isDuplicateAssetNameError(status: number, body: unknown) {
@@ -254,7 +230,7 @@ async function loadContext(request: Request, dealId: string): Promise<
     const {rows} = await query<{payload:{administrationName?:string;startDate?:string}}>("select payload from public.app_settings where key=$1", [`deal-fulfillment:${deal.id}`]);
     implementation = {id:"",administration_name:rows[0]?.payload.administrationName??null,planned_go_live_date:rows[0]?.payload.startDate??null};
   }
-  const plan = buildDealAssetPlan(deal);
+  const plan = buildDealAssetPlan(deal, implementation?.administration_name);
   const prerequisiteErrors: string[] = [];
 
   if (!deal.accepted_at) prerequisiteErrors.push("De klant moet de offerte eerst akkoord geven.");
@@ -460,7 +436,7 @@ export async function POST(
         if (isDuplicateAssetNameError(response.status, body) && attempt < 19) {
           createItem = {
             ...createItem,
-            name: nextAvailableAssetName(item.name, usedNames),
+            name: nextAvailableAssetName(assetContext.plan.items.find(planned => planned.key === item.key)!.name, usedNames),
           };
           await query(
             "update public.deal_asset_creations set asset_name = $2, updated_at = now() where id = $1",

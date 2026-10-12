@@ -351,7 +351,7 @@ function smartConnectTier(connections: number) {
   return { tier: "ten" as const, label: "10 connecties", capacity: 10 };
 }
 
-export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "package_name" | "calculator_inputs" | "modules">): DealAssetPlan {
+function buildBaseDealAssetPlan(deal: Pick<DealRecord, "package_key" | "package_name" | "calculator_inputs" | "modules">): DealAssetPlan {
   const inputs = asRecord(deal.calculator_inputs);
   const packageKey = packageKeyForDeal(deal);
   const warnings: string[] = [];
@@ -380,11 +380,12 @@ export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "packa
             warnings.push(`${moduleLabel}: deze uitbreiding moet handmatig worden verwerkt; er wordt hiervoor geen asset aangemaakt.`);
             continue;
           }
-          addRepeated(items, labels.length === 1 ? `expansion-${index}` : `expansion-${index}-${key}`, assetClass, moduleLabel.trim(), quantity, group);
+          addRepeated(items, labels.length === 1 ? `expansion-${index}` : `expansion-${index}-${key}`, assetClass, `Smart Trade ${PACKAGE_LABELS[packageKey]} ${key === "suiteMkb" ? "connect Suite MKB" : `module - ${MODULE_LABELS[key!]}`}`, quantity, group);
         }
         continue;
       }
       let assetClass: number | undefined;
+      let assetName = label;
       if (group === "Klantenportaal") {
         const key = Object.keys(PORTAL_LABELS).find(key => label.toLowerCase() === `smart trade - ${PORTAL_LABELS[key]}`.toLowerCase());
         if (key) assetClass = classes.customerPortal[key];
@@ -397,7 +398,16 @@ export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "packa
         warnings.push(`${label}: deze uitbreiding moet handmatig worden verwerkt; er wordt hiervoor geen asset aangemaakt.`);
         continue;
       }
-      addRepeated(items, `expansion-${index}`, assetClass, label, quantity, group);
+      const prefix = `Smart Trade ${PACKAGE_LABELS[packageKey]}`;
+      if (assetClass === classes.extraUser) assetName = `${prefix} licentie extra gebruiker`;
+      else if (assetClass === classes.supportExtraUser) assetName = `${prefix} supportcontract extra gebruiker`;
+      else if (assetClass === classes.chauffeurExtraUser) assetName = `${prefix} licentie extra gebruiker (chauffeursmodule)`;
+      else if (assetClass === classes.chauffeurSupportExtraUser) assetName = `${prefix} supportcontract extra gebruiker (chauffeursmodule)`;
+      else if (group === "Klantenportaal") {
+        const key = Object.keys(classes.customerPortal).find(key => classes.customerPortal[key] === assetClass);
+        if (key) assetName = `${prefix} klantportaal - ${PORTAL_LABELS[key]}`;
+      }
+      addRepeated(items, `expansion-${index}`, assetClass, assetName, quantity, group);
     }
     return {packageKey,items,warnings};
   }
@@ -540,4 +550,41 @@ export function buildDealAssetPlan(deal: Pick<DealRecord, "package_key" | "packa
   }
 
   return { packageKey, items, warnings };
+}
+
+export function buildDealAssetPlan(
+  deal: Pick<DealRecord, "package_key" | "package_name" | "calculator_inputs" | "modules">,
+  administrationName?: string | null,
+): DealAssetPlan {
+  const plan = buildBaseDealAssetPlan(deal);
+  const administration = administrationName?.trim().replace(/\s+/g, " ");
+  if (!administration) return plan;
+  return {
+    ...plan,
+    items: plan.items.map(item => ({ ...item, name: `${item.name} (${administration})` })),
+  };
+}
+
+export function normalizeAssetName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
+}
+
+export function nextAvailableAssetName(baseName: string, usedNames: Set<string>) {
+  const cleanName = baseName.trim().replace(/\s+/g, " ");
+  if (!cleanName) return baseName;
+
+  if (!usedNames.has(normalizeAssetName(cleanName))) {
+    usedNames.add(normalizeAssetName(cleanName));
+    return cleanName;
+  }
+
+  for (let suffix = 2; suffix < 1000; suffix += 1) {
+    const candidate = `${cleanName} (${suffix})`;
+    if (!usedNames.has(normalizeAssetName(candidate))) {
+      usedNames.add(normalizeAssetName(candidate));
+      return candidate;
+    }
+  }
+
+  throw new Error(`Er konden geen unieke assetnamen meer worden gemaakt voor ${cleanName}.`);
 }

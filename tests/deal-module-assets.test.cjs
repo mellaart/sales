@@ -67,3 +67,41 @@ test('regular Suite MKB sales still create their usual module asset', () => {
   assert.equal(plan.items.filter(item => item.assetClassId === 349).length, 1);
   assert.deepEqual(plan.warnings, []);
 });
+
+test('Pieper naming: regular assets include administration before the sequence number', () => {
+  const deal = { package_key: 'enterprise', package_name: 'Enterprise',
+    modules: [{ key: 'powerBi', qty: 1 }],
+    calculator_inputs: { extraUsers: 2, chauffeurExtraUsers: 1 } };
+  const original = buildDealAssetPlan(deal);
+  const plan = buildDealAssetPlan(deal, ' pieper_ermelo ');
+  assert.deepEqual(plan.items.map(x => x.key), original.items.map(x => x.key));
+  assert.equal(plan.items.find(x => x.key === 'license:1').name, 'Smart Trade Enterprise licentie (pieper_ermelo)');
+  assert.equal(plan.items.find(x => x.key === 'chauffeur-extra-user:1').name,
+    'Smart Trade Enterprise licentie extra gebruiker (chauffeursmodule) (pieper_ermelo)');
+  const { nextAvailableAssetName, normalizeAssetName } = mod.exports;
+  const name = plan.items.find(x => x.key === 'extra-user:1').name;
+  const used = new Set([normalizeAssetName(name), normalizeAssetName(`${name} (2)`)]);
+  assert.equal(nextAvailableAssetName(name, used), `${name} (3)`);
+  assert.equal(nextAvailableAssetName(name, used), `${name} (4)`);
+  assert.equal(nextAvailableAssetName(name.replace('pieper_ermelo', 'andere_admin'), used),
+    name.replace('pieper_ermelo', 'andere_admin'));
+});
+
+test('expansion names match regular assets for modules, connections and chauffeur licences', () => {
+  const plan = buildDealAssetPlan(expansion('enterprise', [
+    line('Suite MKB koppeling'), line('Power BI'),
+    { ...line('Smart Trade Enterprise Extra gebruiker'), group: 'Gebruikers' },
+    { ...line('Smart Trade Enterprise Supportcontract Extra gebruiker'), group: 'Extra administratie' },
+    { ...line('Licentie extra gebruiker (chauffeursmodule)'), group: 'Chauffeursmodule' },
+    { ...line('Supportcontract extra gebruiker (chauffeursmodule)'), group: 'Chauffeursmodule' },
+  ]), 'pieper_ermelo');
+  assert.deepEqual(plan.warnings, []);
+  assert.deepEqual(plan.items.map(x => x.name), [
+    'Smart Trade Enterprise connect Suite MKB (pieper_ermelo)',
+    'Smart Trade Enterprise module - Power BI (pieper_ermelo)',
+    'Smart Trade Enterprise licentie extra gebruiker (pieper_ermelo)',
+    'Smart Trade Enterprise supportcontract extra gebruiker (pieper_ermelo)',
+    'Smart Trade Enterprise licentie extra gebruiker (chauffeursmodule) (pieper_ermelo)',
+    'Smart Trade Enterprise supportcontract extra gebruiker (chauffeursmodule) (pieper_ermelo)',
+  ]);
+});

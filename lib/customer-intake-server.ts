@@ -52,6 +52,7 @@ type CustomerIntakeRow = {
   submitted_at: string | null;
   processed_at: string | null;
   processed_by: string | null;
+  invitation_sent_at: string | null;
   notification_sent_at: string | null;
   notification_error: string | null;
   smart_trade_synced_at: string | null;
@@ -206,6 +207,7 @@ function toSummary(
     directDebitMandate: normalizeDirectDebitMandateEvidence(row.direct_debit_mandate),
     publicUrl: getCustomerIntakePublicUrl(request, row),
     expiresAt: row.expires_at,
+    invitationSentAt: row.invitation_sent_at ?? null,
     submittedAt: row.submitted_at,
     smartTradeSyncedAt: row.smart_trade_synced_at,
     smartTradeSyncAttemptedAt: row.smart_trade_sync_attempted_at,

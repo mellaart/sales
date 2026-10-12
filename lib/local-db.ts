@@ -626,6 +626,7 @@ export async function ensureLocalSchema() {
           updated_at timestamptz not null default now()
         );
 
+        alter table public.customer_intakes add column if not exists invitation_sent_at timestamptz;
         alter table public.customer_intakes add column if not exists notification_sent_at timestamptz;
         alter table public.customer_intakes add column if not exists notification_error text;
         alter table public.customer_intakes add column if not exists direct_debit_mandate jsonb;

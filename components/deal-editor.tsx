@@ -1729,6 +1729,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     outlookWindow: Window | null,
     payload: {
       template: "customer-intake";
+      dealId: string;
       recipientEmail: string;
       customerName: string;
       contactName: string;
@@ -1771,6 +1772,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     );
     const json = await response.json().catch(() => ({})) as {
       webLink?: string;
+      invitationSentAt?: string | null;
       reconnectRequired?: boolean;
       connectUrl?: string;
       error?: string;
@@ -1786,6 +1788,9 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       throw new Error(json.error || "E-mail verzenden mislukt.");
     }
 
+    setCustomerIntake(current => current ? {
+      ...current, invitationSentAt: json.invitationSentAt || new Date().toISOString(),
+    } : current);
     if (outlookWindow) {
       outlookWindow.location.href = json.webLink;
     } else {
@@ -1800,7 +1805,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setCustomerIntakeStatus("Vul eerst een geldig e-mailadres van de klant in.");
       return;
     }
-    if (customerOutlookBusy) return;
+    if (customerOutlookBusy || customerIntakeSent) return;
 
     const outlookWindow = window.open("about:blank", "_blank");
     if (outlookWindow) outlookWindow.opener = null;
@@ -1821,6 +1826,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         outlookWindow,
         {
           template: "customer-intake",
+          dealId,
           recipientEmail,
           customerName,
           contactName,
@@ -1886,6 +1892,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setCustomerIntakeStatus("PDF van het klantformulier maken mislukt.");
     }
   }
+
+  const customerIntakeSent = Boolean(customerIntake?.invitationSentAt || customerIntake?.submittedAt);
 
   const newCustomerMailMissingFields = [
     !customerIntake?.submittedAt ? "klantformulier" : "",
@@ -2662,28 +2670,36 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   <strong>
                     {customerIntake?.submittedAt
                       ? "Ontvangen van de klant"
-                      : customerIntake
+                      : customerIntakeSent
+                        ? "Verstuurd naar de klant"
+                        : customerIntake
                         ? "Klaar om te versturen"
                         : "Nog niet verstuurd"}
                   </strong>
                   <p>
                     {customerIntake?.submittedAt
                       ? "De ingevulde gegevens zijn ontvangen en staan klaar voor de implementatie."
-                      : "Verzend het klantformulier direct via Outlook. Het e-mailadres uit Offerte layout wordt gebruikt."}
+                      : customerIntakeSent
+                        ? "Het klantformulier is verstuurd. We wachten op de ingevulde gegevens."
+                        : "Verzend het klantformulier direct via Outlook. Het e-mailadres uit Offerte layout wordt gebruikt."}
                   </p>
                 </div>
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={customerIntakeBusy || customerOutlookBusy}
-                  title={customerIntakeEmail.trim()
+                  disabled={customerIntakeBusy || customerOutlookBusy || customerIntakeSent}
+                  title={customerIntakeSent
+                    ? "Het klantformulier is al verstuurd of ontvangen"
+                    : customerIntakeEmail.trim()
                     ? "Maak een e-mail met het klantformulier"
                     : "Vul eerst het e-mailadres van de klant in bij Offerte layout"}
                   onClick={() => void handleOutlookDraft()}
                 >
                   <Mail size={16} /> {customerOutlookBusy
                     ? "Verzenden..."
-                    : "Direct verzenden via Outlook"}
+                    : customerIntakeSent
+                      ? "Klantformulier verstuurd"
+                      : "Direct verzenden via Outlook"}
                 </button>
               </article>
 

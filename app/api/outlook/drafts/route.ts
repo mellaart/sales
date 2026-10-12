@@ -1,3 +1,5 @@
+import { getCustomerIntakeForDeal, requireAccessibleCalculatorDeal } from "@/lib/customer-intake-server";
+import { query } from "@/lib/local-db";
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
 import {
@@ -447,6 +449,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Vul een geldig e-mailadres van de klant in." }, { status: 400 });
       }
 
+      let sentIntakeId: string | null = null;
       let subject = "";
       let htmlBody = "";
       const attachments: Array<{
@@ -461,6 +464,21 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "De beveiligde klantlink is ongeldig." }, { status: 400 });
         }
         subject = `Klantgegevens Smart Trade - ${customerName || "nieuwe klant"}`;
+        if (new URL(request.url).pathname === "/api/outlook/send") {
+          const dealId = jsonText(payload, "dealId", 100);
+          if (!dealId) return NextResponse.json({ error: "Deal-ID ontbreekt." }, { status: 400 });
+          const actor = { user: verified.user, profile: verified.profile };
+          const access = await requireAccessibleCalculatorDeal(dealId, actor);
+          if (!access.ok) return NextResponse.json({ error: access.error }, { status: 403 });
+          const result = await getCustomerIntakeForDeal(request, dealId, actor);
+          if (!("intake" in result) || !result.intake || result.intake.publicUrl !== publicUrl) {
+            return NextResponse.json({ error: "Het klantformulier is niet gevonden of de link is verouderd." }, { status: 409 });
+          }
+          if (result.intake.invitationSentAt || result.intake.submittedAt) {
+            return NextResponse.json({ error: "Het klantformulier is al verstuurd of ontvangen." }, { status: 409 });
+          }
+          sentIntakeId = result.intake.id;
+        }
         htmlBody = customerIntakeEmail({ contactName, publicUrl });
       } else if (template === "dns-instructions") {
         const domain = jsonText(payload, "domain", 253).toLowerCase();
@@ -556,8 +574,18 @@ export async function POST(request: Request) {
         attachments,
       });
 
+      let invitationSentAt: string | null = null;
+      if (sentIntakeId) {
+        const { rows } = await query<{ invitation_sent_at: string }>(
+          `update public.customer_intakes
+           set invitation_sent_at = now(), updated_at = now()
+           where id = $1 returning invitation_sent_at`,
+          [sentIntakeId],
+        );
+        invitationSentAt = rows[0]?.invitation_sent_at ?? null;
+      }
       return NextResponse.json(
-        { webLink },
+        { webLink, invitationSentAt },
         { status: 201, headers: { "Cache-Control": "no-store" } },
       );
     }

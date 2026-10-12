@@ -68,6 +68,7 @@ export type CustomerIntakeSummary = {
   directDebitMandate: CustomerDirectDebitMandateEvidence | null;
   publicUrl: string;
   expiresAt: string;
+  invitationSentAt?: string | null;
   submittedAt: string | null;
   smartTradeSyncedAt: string | null;
   smartTradeSyncAttemptedAt: string | null;

@@ -169,7 +169,6 @@ export function getNewCustomerEmailMissingFields(input: {
 }) {
   const missing: string[] = [];
   if (!input.intakeSubmitted) missing.push("ontvangen klantformulier");
-  if (!input.implementation.assigned_consultant_name?.trim()) missing.push("toegewezen consultant");
   if (!input.implementation.administration_name?.trim()) missing.push("administratie");
   if (!input.implementation.planned_go_live_date?.trim()) missing.push("geplande livegang");
   if (!input.implementation.financial_package?.trim()) missing.push("financieel pakket");
@@ -282,7 +281,7 @@ export function buildNewCustomerEmail(input: NewCustomerEmailInput) {
     section("Modules", modules.length > 0 ? bulletList(modules) : lineList(["Geen aanvullende modules"])),
     section("Implementatie", bulletList([implementationLine])),
     section("Consultant", bulletList([
-      escapeHtml(implementation.assigned_consultant_name?.trim() || "Nog niet toegewezen"),
+      escapeHtml(implementation.assigned_consultant_name?.trim() || "Nog geen consultant toegewezen"),
     ])),
     section("Administratie", bulletList([
       escapeHtml(implementation.administration_name?.trim() || "-"),

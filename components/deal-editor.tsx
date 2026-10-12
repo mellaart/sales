@@ -1889,7 +1889,6 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
   const newCustomerMailMissingFields = [
     !customerIntake?.submittedAt ? "klantformulier" : "",
-    !implementation?.assigned_consultant_name?.trim() ? "consultant" : "",
     !implementation?.administration_name?.trim() ? "administratie" : "",
     !implementation?.planned_go_live_date?.trim() ? "livegang" : "",
     !implementation?.financial_package?.trim() ? "financieel pakket" : "",

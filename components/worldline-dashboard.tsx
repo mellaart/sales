@@ -3093,6 +3093,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
                   projectId={activeProject.id}
                   canWrite={canWriteWorldline}
                   returnTo="/retourpinnen"
+                  onSent={loadProjectOverview}
                   beforePrepare={async () => {
                     await flushAgreementFields();
                     if (agreementFieldsDirtyRef.current) throw new Error("Gegevens opslaan mislukt. Sla de gegevens eerst opnieuw op.");

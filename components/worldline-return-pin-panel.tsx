@@ -49,11 +49,13 @@ export default function WorldlineReturnPinPanel({
   returnTo = "/worldline",
   beforePrepare,
   mailDetails,
+  onSent,
 }: {
   projectId: string;
   canWrite: boolean;
   returnTo?: string;
   beforePrepare?: () => Promise<void>;
+  onSent?: () => Promise<void>;
   mailDetails?: { email: string; companyName: string; contactName: string };
 }) {
   const [forms, setForms] = useState<WorldlineReturnPinFormSummary[]>([]);
@@ -200,6 +202,7 @@ export default function WorldlineReturnPinPanel({
       );
       const json = await response.json().catch(() => ({})) as {
         webLink?: string;
+        projectStatusUpdated?: boolean;
         reconnectRequired?: boolean;
         connectUrl?: string;
         error?: string;
@@ -217,7 +220,8 @@ export default function WorldlineReturnPinPanel({
 
       if (outlookWindow) outlookWindow.location.href = json.webLink;
       else window.location.assign(json.webLink);
-      setMessage(`E-mail met acceptatieformulierlink is verzonden naar ${recipientEmail}.`);
+      setMessage(`E-mail met acceptatieformulierlink is verzonden naar ${recipientEmail}.${json.projectStatusUpdated === false ? " Dossierstatus bijwerken is mislukt; verstuur de e-mail niet opnieuw." : ""}`);
+      await onSent?.();
     } catch (error) {
       outlookWindow?.close();
       setMessage(error instanceof Error ? error.message : "E-mail verzenden mislukt.");

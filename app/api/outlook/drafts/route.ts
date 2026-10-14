@@ -1,3 +1,5 @@
+import { getLocalWorldlinePermission } from "@/lib/worldline-access-server";
+import { getPublicWorldlineReturnPinForm } from "@/lib/worldline-return-pin-server";
 import { getCustomerIntakeForDeal, requireAccessibleCalculatorDeal } from "@/lib/customer-intake-server";
 import { query } from "@/lib/local-db";
 import { NextResponse } from "next/server";
@@ -450,6 +452,7 @@ export async function POST(request: Request) {
       }
 
       let sentIntakeId: string | null = null;
+      let sentReturnPinFormId: string | null = null;
       let subject = "";
       let htmlBody = "";
       const attachments: Array<{
@@ -559,6 +562,15 @@ export async function POST(request: Request) {
         if (!validHttpUrl(publicUrl)) {
           return NextResponse.json({ error: "De beveiligde retourpinnenlink is ongeldig." }, { status: 400 });
         }
+        if (await getLocalWorldlinePermission(verified.profile) !== "write") {
+          return NextResponse.json({ error: "Geen schrijfrechten voor Worldline." }, { status: 403 });
+        }
+        const link = new URL(publicUrl);
+        const formId = link.pathname.match(/^\/retourpinnen\/([0-9a-f-]{36})$/i)?.[1];
+        if (!formId) return NextResponse.json({ error: "Ongeldige retourpinnenlink." }, { status: 400 });
+        const form = await getPublicWorldlineReturnPinForm(formId, Number(link.searchParams.get("v")), link.searchParams.get("token") || "");
+        if ("error" in form) return NextResponse.json({ error: form.error }, { status: 400 });
+        sentReturnPinFormId = formId;
         subject = `Acceptatieformulier retourpinnen${customerName ? ` - ${customerName}` : ""}`;
         htmlBody = worldlineReturnPinEmail({ contactName, customerName, publicUrl });
       } else {
@@ -574,6 +586,21 @@ export async function POST(request: Request) {
         attachments,
       });
 
+      let projectStatusUpdated = false;
+      if (sentReturnPinFormId && new URL(request.url).pathname === "/api/outlook/send") {
+        try {
+          await query(
+            `update public.worldline_projects project
+             set status = 'waiting_customer', updated_at = now()
+             from public.worldline_return_pin_forms form
+             where form.id = $1 and project.id = form.project_id and project.status = 'concept'`,
+            [sentReturnPinFormId],
+          );
+          projectStatusUpdated = true;
+        } catch (error) {
+          console.error("Retourpinnenmail verzonden, dossierstatus bijwerken mislukt", error);
+        }
+      }
       let invitationSentAt: string | null = null;
       if (sentIntakeId) {
         const { rows } = await query<{ invitation_sent_at: string }>(
@@ -585,7 +612,7 @@ export async function POST(request: Request) {
         invitationSentAt = rows[0]?.invitation_sent_at ?? null;
       }
       return NextResponse.json(
-        { webLink, invitationSentAt },
+        { webLink, invitationSentAt, projectStatusUpdated },
         { status: 201, headers: { "Cache-Control": "no-store" } },
       );
     }

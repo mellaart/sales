@@ -21,6 +21,7 @@ function context(overrides = {}) {
   const popup = { location: { href: '' }, close() { this.closed = true; } };
   const dependencies = {
     latestForm: { formData: { email: 'old@example.test', companyName: 'Old', acceptedByName: 'Old contact' }, publicUrl: 'https://example.test/retourpinnen/form?token=test' },
+    recipientEmail: (overrides.mailDetails?.email ?? 'new@example.test'), onSent: undefined,
     canWrite: true, outlookBusy: false, mailDetails: { email: 'new@example.test', companyName: 'New', contactName: 'New contact' },
     returnTo: '/retourpinnen',
     beforePrepare: async () => { calls.push('saved'); },
@@ -48,7 +49,7 @@ test('Retourpinnen saves first and uses current contact fields and its own Outlo
 });
 
 test('existing Worldline flow keeps form contact data', async () => {
-  const { dependencies, calls } = context({ mailDetails: undefined, beforePrepare: undefined, returnTo: '/worldline' });
+  const { dependencies, calls } = context({ recipientEmail: 'old@example.test', mailDetails: undefined, beforePrepare: undefined, returnTo: '/worldline' });
   await panelFunction('prepareOutlookDraft', dependencies)();
   assert.equal(calls[1].body.recipientEmail, 'old@example.test');
   assert.ok(calls[0].url.includes('returnTo=%2Fworldline'));
@@ -64,3 +65,13 @@ test('failed save prevents draft creation; invalid address prevents any requests
     assert.equal(calls.length, 0);
   }
 });
+
+ test('successful send refreshes the dossier overview; failed send does not', async () => {
+   let refreshed = 0;
+   const c = context({ onSent: async () => { refreshed++; } });
+   await panelFunction('prepareOutlookDraft', c.dependencies)();
+   assert.equal(refreshed, 1);
+   c.dependencies.fetch = async () => ({ ok: false, json: async () => ({ error: 'failed' }) });
+   await panelFunction('prepareOutlookDraft', c.dependencies)();
+   assert.equal(refreshed, 1);
+ });

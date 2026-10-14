@@ -1,4 +1,5 @@
 import "./globals.css";
+import { STARTUP_DIAGNOSTICS_SCRIPT } from "@/lib/startup-diagnostics";
 
 import type { Metadata } from "next";
 import { AuthGuard } from "@/components/auth-guard";
@@ -22,6 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="nl">
+      <head><script dangerouslySetInnerHTML={{ __html: STARTUP_DIAGNOSTICS_SCRIPT }} /></head>
       <body>
         <AuthProvider>
           <PricingProvider>

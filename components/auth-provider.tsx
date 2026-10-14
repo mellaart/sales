@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { markStartupPhase } from "@/lib/startup-diagnostics";
 import type { User } from "@supabase/supabase-js";
 import { LOCAL_AUTH_TOKEN_KEY } from "@/lib/local-auth-shared";
 import { getEffectiveUserRole } from "@/lib/protected-admin";
@@ -115,7 +116,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(nextUser);
 
     if (nextUser) {
+      markStartupPhase("profile-start");
       const result = await withAuthTimeout(fetchProfile(nextUser.id)).catch(() => null);
+      markStartupPhase("profile-ready");
       const nextProfile = isAuthTimeout(result) ? null : result;
       if (!active || revision !== authRevisionRef.current) return;
 
@@ -161,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    markStartupPhase("react-ready");
     let active = true;
     let syncing = false;
 
@@ -182,7 +186,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        markStartupPhase("session-start");
         const result = await withAuthTimeout(supabase.auth.getSession());
+        markStartupPhase("session-ready");
 
         if (!active || signingOutRef.current || revision !== authRevisionRef.current) return;
 
@@ -205,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         await applyUser(currentSession?.user ?? null, active);
         setLoading(false);
+        markStartupPhase("auth-ready");
       } catch {
         if (active && !signingOutRef.current && revision === authRevisionRef.current) {
           if (!userRef.current) {

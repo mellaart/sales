@@ -54,6 +54,7 @@ function harness(t, options = {}) {
   } };
   const { AuthProvider } = load('components/auth-provider.tsx', {
     react,
+    "@/lib/startup-diagnostics": { markStartupPhase() {} },
     '@/lib/local-auth-shared': { LOCAL_AUTH_TOKEN_KEY: 'smarttrade-auth-token' },
     '@/lib/protected-admin': { getEffectiveUserRole: role => role },
     '@/lib/supabase': { getSupabaseClient: () => client, fetchProfile: options.fetchProfile ?? (async () => ({ role: 'sales' })) },

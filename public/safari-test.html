@@ -16,6 +16,9 @@ body{font:17px/1.5 system-ui,sans-serif;background:#f4f6fa;color:#182334;margin:
 <pre id="results">De testresultaten verschijnen hier. Blijft dit staan, meld dat dan terug.</pre>
 <button id="copy" type="button">Kopieer testresultaten</button>
 <p id="copy-status" role="status"></p>
+<h2>Werkelijke inlogpagina</h2>
+<p>Hieronder start de echte app. Vul hier geen wachtwoord in. Het scherm en de opstartfasen worden maximaal 30 seconden gemeten.</p>
+<div id="runtime-container"></div>
 <p><a href="/login">Open het inlogscherm rechtstreeks</a></p>
 <p>De test leest geen offertes, wachtwoorden of klantgegevens en verstuurt het resultaat niet. Plak de resultaten zelf in de chat. Gebruik dezelfde Safari-instellingen waarbij de website traag is.</p>
 </main>
@@ -23,7 +26,7 @@ body{font:17px/1.5 system-ui,sans-serif;background:#f4f6fa;color:#182334;margin:
 (function () {
   var started = Date.now();
   var output = document.getElementById('results');
-  var lines = ['Smart Trade verbindingstest v1', 'Tijd: ' + new Date().toISOString(), 'Browser: ' + navigator.userAgent];
+  var lines = ['Smart Trade verbindingstest v2', 'Tijd: ' + new Date().toISOString(), 'Browser: ' + navigator.userAgent];
   document.getElementById('script-status').textContent = 'JavaScript is gestart. De metingen lopen…';
   function report(line) { lines.push(line); output.textContent = lines.join('\n'); }
   report('HTML en JavaScript van de eenvoudige pagina werken.');
@@ -47,10 +50,53 @@ body{font:17px/1.5 system-ui,sans-serif;background:#f4f6fa;color:#182334;margin:
     if (!window.performance || !performance.getEntriesByType) return;
     var entry = performance.getEntriesByType('navigation')[0];
     if (!entry) return;
-    report('Eerste antwoord testpagina: ' + Math.round(entry.responseStart) + ' ms; HTML compleet: ' + Math.round(entry.responseEnd) + ' ms');
+    report('Eerste antwoord testpagina: ' + Math.round(entry.responseStart) + ' ms; HTML compleet: ' + (entry.responseEnd ? Math.round(entry.responseEnd) + ' ms' : 'nog bezig'));
     report('DNS: ' + Math.round(entry.domainLookupEnd - entry.domainLookupStart) + ' ms; verbinding: ' + Math.round(entry.connectEnd - entry.connectStart) + ' ms');
   }
-  navigationTiming();
+  window.addEventListener('load', navigationTiming);
+  var runtimeFrame;
+  var phases = {};
+  var validPhases = ['inline-script','react-ready','session-start','session-ready','profile-start','profile-ready','auth-ready','dom-ready','window-load','script-error','promise-error'];
+  window.addEventListener('message', function (event) {
+    if (!runtimeFrame || event.source !== runtimeFrame.contentWindow || event.origin !== location.origin) return;
+    var data = event.data;
+    if (!data || data.type !== 'smarttrade-startup' || validPhases.indexOf(data.phase) === -1 || typeof data.ms !== 'number') return;
+    phases[data.phase] = true;
+    report('APP ' + data.phase + ': ' + data.ms + ' ms' + (typeof data.extra === 'string' ? ' ' + data.extra.slice(0, 220) : ''));
+  });
+  function startRuntimeTest() {
+    report('De echte inlogpagina wordt nu gestart. Wacht tot de app-meting klaar is.');
+    runtimeFrame = document.createElement('iframe');
+    runtimeFrame.title = 'Inlogpagina voor opstartmeting';
+    runtimeFrame.style.cssText = 'width:100%;height:480px;border:1px solid #ccd4df;border-radius:8px;background:white';
+    runtimeFrame.src = '/login?reauth=1&safari_diagnostics=1';
+    document.getElementById('runtime-container').appendChild(runtimeFrame);
+    var began = Date.now();
+    var sampled = {};
+    var probe = window.setInterval(function () {
+      try {
+        var doc = runtimeFrame.contentDocument;
+        var heading = doc && doc.querySelector('h1');
+        if (heading && !sampled.heading) {
+          sampled.heading = true;
+          var rect = heading.getBoundingClientRect();
+          var style = runtimeFrame.contentWindow.getComputedStyle(heading);
+          report('APP titel in DOM na ' + (Date.now() - began) + ' ms; afmeting ' + Math.round(rect.width) + 'x' + Math.round(rect.height) + '; display=' + style.display + '; visibility=' + style.visibility);
+        }
+        if (phases['react-ready'] && !sampled.paint) {
+          sampled.paint = true;
+          runtimeFrame.contentWindow.requestAnimationFrame(function () {
+            report('APP animatieframe na ' + (Date.now() - began) + ' ms');
+          });
+        }
+      } catch (e) { /* Only inspect the same-origin test page. */ }
+    }, 250);
+    window.setTimeout(function () {
+      window.clearInterval(probe);
+      report('APP meting klaar. React gestart: ' + (phases['react-ready'] ? 'ja' : 'nee') + '; sessiecontrole klaar: ' + (phases['auth-ready'] ? 'ja' : 'nee'));
+      document.getElementById('script-status').textContent = 'Alle metingen zijn afgerond. Kopieer de resultaten naar de chat.';
+    }, 30000);
+  }
   request('/login?safari_test=' + started).then(function (html) {
     report('Inlogformulier in HTML: ' + (html.indexOf('Welkom terug') !== -1 ? 'ja' : 'nee'));
     var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -68,7 +114,8 @@ body{font:17px/1.5 system-ui,sans-serif;background:#f4f6fa;color:#182334;margin:
     return Promise.all(requests);
   }).catch(function (error) { report('Test afgebroken: ' + error.message); }).then(function () {
     report('Metingen klaar na ' + (Date.now() - started) + ' ms. Dit test downloaden, niet het uitvoeren van de volledige app.');
-    document.getElementById('script-status').textContent = 'De metingen zijn afgerond. Kopieer de resultaten naar de chat.';
+    document.getElementById('script-status').textContent = 'Downloadtest klaar. De echte app wordt nu 30 seconden gevolgd…';
+    startRuntimeTest();
   });
   document.getElementById('copy').onclick = function () {
     if (navigator.clipboard && navigator.clipboard.writeText) {

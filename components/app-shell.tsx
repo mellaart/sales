@@ -210,7 +210,7 @@ export function AppShellHeader() {
   const adminMenuTabs = adminTab ? [adminTab, ...adminUtilityTabs] : [];
   const salesMenuActive = salesMenuTabs.some((tab) => pathname.startsWith(tab.pathPrefix));
   const pinMenuActive = pinMenuTabs.some((tab) => (
-    tab.key === "worldline" ? (pathname === "/worldline" || pathname === "/worldline/offerte" || pathname === "/retourpinnen") : pathname.startsWith(tab.pathPrefix)
+    tab.key === "worldline" ? (pathname === "/worldline" || pathname === "/worldline/offerte" || pathname === "/worldline/testen" || pathname === "/retourpinnen") : pathname.startsWith(tab.pathPrefix)
   ));
   const adminMenuActive = adminMenuTabs.some((tab) => pathname.startsWith(tab.pathPrefix));
 
@@ -319,6 +319,7 @@ export function AppShellHeader() {
                   {pinMenuTabs.some(tab => tab.key === "worldline") ? (
                     <>
                     <Link href="/worldline/offerte" className={`nav-menu-item ${pathname === "/worldline/offerte" ? "active" : ""}`} role="menuitem">Offerte</Link>
+                    <Link href="/worldline/testen" className={`nav-menu-item ${pathname === "/worldline/testen" ? "active" : ""}`} role="menuitem">Worldline testen</Link>
                     <Link href="/retourpinnen" className={`nav-menu-item ${pathname === "/retourpinnen" ? "active" : ""}`} role="menuitem">Retourpinnen</Link>
                     </>
                   ) : null}

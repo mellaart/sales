@@ -177,6 +177,9 @@ test('missing cookie redirects before JavaScript; login, public links and APIs r
   assert.equal(response.status, 307);
   assert.equal(response.headers.get('location'), 'https://sales.example/login?returnTo=%2Fdeals%3Fview%3Dopen');
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const internalWorldlineTest = middleware(new NextRequest('https://sales.example/worldline/testen'));
+  assert.equal(internalWorldlineTest.status, 307);
+  assert.equal(internalWorldlineTest.headers.get('location'), 'https://sales.example/login?returnTo=%2Fworldline%2Ftesten');
   const proxied = middleware(new NextRequest('http://localhost:3007/deals', { headers: { host: 'sales.example' } }));
   assert.equal(proxied.headers.get('location'), 'https://sales.example/login?returnTo=%2Fdeals');
   for (const path of ['/login', '/reset-password', '/worldline-test', '/offerte/example', '/klantgegevens/example', '/implementatie-volgen/example', '/retourpinnen/example']) {

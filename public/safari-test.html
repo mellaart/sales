@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Smart Trade verbindingstest</title>
+<style>
+body{font:17px/1.5 system-ui,sans-serif;background:#f4f6fa;color:#182334;margin:0;padding:24px}main{max-width:720px;margin:auto}h1{font-size:26px}li{margin:12px 0}button,a{font:inherit}button{background:#184bb5;color:white;border:0;border-radius:8px;padding:12px 18px;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:18px;border:1px solid #ccd4df;border-radius:8px;font:14px/1.5 monospace}a{color:#184bb5}
+</style>
+</head>
+<body><main>
+<h1>Smart Trade verbindingstest</h1>
+<p><strong>De eenvoudige pagina is ontvangen.</strong> Deze tekst verschijnt zonder de app of JavaScript te hoeven starten.</p>
+<p id="script-status">JavaScript is nog niet gestart.</p>
+<pre id="results">De testresultaten verschijnen hier. Blijft dit staan, meld dat dan terug.</pre>
+<button id="copy" type="button">Kopieer testresultaten</button>
+<p id="copy-status" role="status"></p>
+<p><a href="/login">Open het inlogscherm rechtstreeks</a></p>
+<p>De test leest geen offertes, wachtwoorden of klantgegevens en verstuurt het resultaat niet. Plak de resultaten zelf in de chat. Gebruik dezelfde Safari-instellingen waarbij de website traag is.</p>
+</main>
+<script>
+(function () {
+  var started = Date.now();
+  var output = document.getElementById('results');
+  var lines = ['Smart Trade verbindingstest v1', 'Tijd: ' + new Date().toISOString(), 'Browser: ' + navigator.userAgent];
+  document.getElementById('script-status').textContent = 'JavaScript is gestart. De metingen lopen…';
+  function report(line) { lines.push(line); output.textContent = lines.join('\n'); }
+  report('HTML en JavaScript van de eenvoudige pagina werken.');
+  function request(path) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      var began = Date.now();
+      xhr.open('GET', path, true);
+      xhr.timeout = 25000;
+      xhr.onload = function () {
+        report(path.split('?')[0] + ': HTTP ' + xhr.status + ', ' + (Date.now() - began) + ' ms, ' + xhr.responseText.length + ' tekens');
+        if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
+        else reject(new Error('HTTP ' + xhr.status));
+      };
+      xhr.onerror = function () { reject(new Error('Verbindingsfout na ' + (Date.now() - began) + ' ms')); };
+      xhr.ontimeout = function () { reject(new Error('Geen antwoord binnen 25 seconden')); };
+      xhr.send();
+    });
+  }
+  function navigationTiming() {
+    if (!window.performance || !performance.getEntriesByType) return;
+    var entry = performance.getEntriesByType('navigation')[0];
+    if (!entry) return;
+    report('Eerste antwoord testpagina: ' + Math.round(entry.responseStart) + ' ms; HTML compleet: ' + Math.round(entry.responseEnd) + ' ms');
+    report('DNS: ' + Math.round(entry.domainLookupEnd - entry.domainLookupStart) + ' ms; verbinding: ' + Math.round(entry.connectEnd - entry.connectStart) + ' ms');
+  }
+  navigationTiming();
+  request('/login?safari_test=' + started).then(function (html) {
+    report('Inlogformulier in HTML: ' + (html.indexOf('Welkom terug') !== -1 ? 'ja' : 'nee'));
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var nodes = doc.querySelectorAll('script[src],link[rel="stylesheet"]');
+    var requests = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var path = nodes[i].getAttribute('src') || nodes[i].getAttribute('href');
+      // Only test the site's own public app assets; never follow external URLs.
+      if (path && path.indexOf('/_next/static/') === 0) {
+        (function (asset) {
+          requests.push(request(asset).catch(function (error) { report(asset + ': ' + error.message); }));
+        })(path);
+      }
+    }
+    return Promise.all(requests);
+  }).catch(function (error) { report('Test afgebroken: ' + error.message); }).then(function () {
+    report('Metingen klaar na ' + (Date.now() - started) + ' ms. Dit test downloaden, niet het uitvoeren van de volledige app.');
+    document.getElementById('script-status').textContent = 'De metingen zijn afgerond. Kopieer de resultaten naar de chat.';
+  });
+  document.getElementById('copy').onclick = function () {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(lines.join('\n')).then(function () {
+        document.getElementById('copy-status').textContent = 'Gekopieerd. Plak dit in de chat.';
+      }, function () { document.getElementById('copy-status').textContent = 'Kopiëren lukt niet. Selecteer de tekst hierboven of maak een screenshot.'; });
+    } else document.getElementById('copy-status').textContent = 'Selecteer de tekst hierboven of maak een screenshot.';
+  };
+})();
+</script>
+</body></html>

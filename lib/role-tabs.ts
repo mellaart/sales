@@ -28,6 +28,7 @@ export type RoleTabAccessMap = Record<UserRole, Record<AppTabKey, TabPermission>
 export const USER_ROLES: UserRole[] = [
   "sales",
   "support",
+  "support_plus",
   "consultant",
   "worldline",
   "worldline_consultant",
@@ -38,6 +39,7 @@ export const USER_ROLES: UserRole[] = [
 export const ROLE_LABELS: Record<UserRole, string> = {
   sales: "Sales",
   support: "Support",
+  support_plus: "Support Plus",
   consultant: "Consultant",
   worldline: "Support Pin",
   worldline_consultant: "Consultant Pin",
@@ -65,6 +67,7 @@ export const ROLE_TAB_ACCESS: RoleTabAccessMap = {
   sales: buildRoleAccess(["calculator", "deals", "assets", "implementation"]),
   consultant: buildRoleAccess(["deals", "assets", "implementation"], ["prices", "postcode"]),
   support: buildRoleAccess(["deals", "assets", "testen"]),
+  support_plus: buildRoleAccess(["deals", "assets"], ["prices", "postcode"]),
   worldline: buildRoleAccess(["worldline", "ccv"]),
   worldline_consultant: buildRoleAccess(["worldline", "ccv"]),
   manager: buildRoleAccess(["calculator", "deals", "assets", "testen"], ["implementation"]),

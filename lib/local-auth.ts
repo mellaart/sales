@@ -739,7 +739,7 @@ export function clearLocalSessionCookie(response: NextResponse) {
 }
 
 export function canReadAllDeals(role: UserRole | null) {
-  return role === "admin" || role === "manager" || role === "support";
+  return role === "admin" || role === "manager" || role === "support" || role === "support_plus";
 }
 
 export function isLocalAdmin(profile: Pick<ProfileRecord, "email" | "role">) {

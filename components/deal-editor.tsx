@@ -1910,6 +1910,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       role === "admin" ||
       role === "manager" ||
       role === "support" ||
+      role === "support_plus" ||
       dealOwnerId === user.id
     ),
   );

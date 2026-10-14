@@ -9,6 +9,7 @@ export type UserRole =
   | "manager"
   | "admin"
   | "support"
+  | "support_plus"
   | "consultant"
   | "worldline"
   | "worldline_consultant";
@@ -155,7 +156,7 @@ export function canManageRoles(role: UserRole | null) {
 }
 
 export function canViewAllDeals(role: UserRole | null) {
-  return role === "admin" || role === "manager" || role === "support";
+  return role === "admin" || role === "manager" || role === "support" || role === "support_plus";
 }
 
 function normalizeText(value: unknown): string | null {

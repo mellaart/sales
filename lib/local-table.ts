@@ -633,6 +633,7 @@ export function toUserRole(value: unknown): UserRole {
   return value === "admin" ||
     value === "manager" ||
     value === "support" ||
+    value === "support_plus" ||
     value === "consultant" ||
     value === "worldline" ||
     value === "worldline_consultant"

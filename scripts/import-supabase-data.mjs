@@ -97,7 +97,7 @@ function normalizeEmail(value) {
 
 function normalizeRole(value, email) {
   if (normalizeEmail(email) === "erik@smarttrade.nl") return "admin";
-  return ["sales", "support", "consultant", "worldline", "worldline_consultant", "manager", "admin"].includes(value)
+  return ["sales", "support", "support_plus", "consultant", "worldline", "worldline_consultant", "manager", "admin"].includes(value)
     ? value
     : "sales";
 }
@@ -148,7 +148,7 @@ async function ensureLocalSchema(client) {
       mobile_phone text,
       employee_relation_id bigint,
       role text not null default 'sales'
-        check (role in ('sales', 'support', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin')),
+        check (role in ('sales', 'support', 'support_plus', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin')),
       must_set_password boolean not null default false,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
@@ -157,7 +157,7 @@ async function ensureLocalSchema(client) {
     alter table public.profiles drop constraint if exists profiles_role_check;
     alter table public.profiles
       add constraint profiles_role_check
-      check (role in ('sales', 'support', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin'));
+      check (role in ('sales', 'support', 'support_plus', 'consultant', 'worldline', 'worldline_consultant', 'manager', 'admin'));
 
     create table if not exists public.app_sessions (
       token_hash text primary key,

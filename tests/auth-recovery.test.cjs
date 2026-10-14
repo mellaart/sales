@@ -149,7 +149,46 @@ test('returning after ten idle hours reaches login even when logout fails', asyn
   h.storage.set('smarttrade-last-activity-at', String(Date.now() - 10 * 60 * 60 * 1000 - 1));
   h.listeners.get('focus')();
   await tick();
-  assert.equal(h.window.destination, '/login?timeout=1');
+  assert.equal(h.window.destination, '/login?timeout=1&reauth=1');
   assert.equal(h.states[0], null);
   assert.equal(h.states[3], false);
+});
+
+test('ten-hour idle redirect does not wait for an unresponsive logout request', async t => {
+  const h = harness(t, { signOut: () => new Promise(() => {}) });
+  await tick();
+  h.startIdle();
+  h.storage.set('smarttrade-last-activity-at', String(Date.now() - 10 * 60 * 60 * 1000 - 1));
+  h.listeners.get('focus')();
+  assert.equal(h.window.destination, '/login?timeout=1&reauth=1');
+  // No timeout has been advanced: navigation happens in the same event.
+});
+
+test('missing cookie redirects before JavaScript; login, public links and APIs remain usable', t => {
+  const { NextRequest } = require('next/server');
+  const previousEnv = { ...process.env };
+  t.after(() => { process.env = previousEnv; });
+  process.env.NEXT_PUBLIC_SUPABASE_URL = '';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = '';
+  const { middleware, config } = load('middleware.ts', {
+    '@/lib/local-auth-shared': { LOCAL_SESSION_COOKIE: 'st_session' },
+  });
+  const response = middleware(new NextRequest('https://sales.example/deals?view=open'));
+  assert.equal(response.status, 307);
+  assert.equal(response.headers.get('location'), 'https://sales.example/login?returnTo=%2Fdeals%3Fview%3Dopen');
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const proxied = middleware(new NextRequest('http://localhost:3007/deals', { headers: { host: 'sales.example', 'x-forwarded-proto': 'https' } }));
+  assert.equal(proxied.headers.get('location'), 'https://sales.example/login?returnTo=%2Fdeals');
+  for (const path of ['/login', '/reset-password', '/worldline-test', '/offerte/example', '/klantgegevens/example', '/implementatie-volgen/example', '/retourpinnen/example']) {
+    assert.equal(middleware(new NextRequest('https://sales.example' + path)).headers.get('x-middleware-next'), '1');
+  }
+  assert.equal(middleware(new NextRequest('https://sales.example/deals', { headers: { cookie: 'st_session=example' } })).headers.get('x-middleware-next'), '1');
+  const { unstable_doesMiddlewareMatch } = require('next/experimental/testing/server');
+  for (const url of ['/api/local/auth/login', '/api/local/auth/session', '/_next/static/chunks/app.js', '/logo.svg']) {
+    assert.equal(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url }), false);
+  }
+  assert.equal(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: '/deals' }), true);
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'example';
+  assert.equal(middleware(new NextRequest('https://sales.example/deals')).headers.get('x-middleware-next'), '1');
 });

@@ -59,10 +59,10 @@ export default function LoginPage() {
     setReauthenticationRequired(requiresReauthentication);
     setLoginParametersLoaded(true);
 
-    if (requiresReauthentication) {
+    if (searchParams.get("timeout") === "1") {
+      setStatus("Je sessie is verlopen. Log opnieuw in om verder te gaan.");
+    } else if (requiresReauthentication) {
       setStatus("Log opnieuw in om de deal veilig te openen.");
-    } else if (searchParams.get("timeout") === "1") {
-      setStatus("Je bent automatisch uitgelogd omdat de website langer dan 10 uur niet is gebruikt.");
     }
   }, []);
 

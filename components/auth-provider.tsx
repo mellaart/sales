@@ -303,10 +303,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (idleLogoutInProgressRef.current) return;
 
       idleLogoutInProgressRef.current = true;
-      await signOut();
-
+      // Start revoking the session, but do not keep the screen blocked by a
+      // suspended/offline request when returning to a mobile browser tab.
+      void signOut();
       if (window.location.pathname !== "/login") {
-        window.location.replace("/login?timeout=1");
+        window.location.replace("/login?timeout=1&reauth=1");
       }
     }
 

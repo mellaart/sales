@@ -260,7 +260,7 @@ function createLocalBrowserClient() {
         return this.getSession();
       },
       async signOut() {
-        await apiFetch("/api/local/auth/logout", { method: "POST" }).catch(() => null);
+        await apiFetch("/api/local/auth/logout", { method: "POST", keepalive: true }).catch(() => null);
         setStoredToken(null);
         window.dispatchEvent(new CustomEvent("smarttrade-auth-change", { detail: null }));
         return { error: null };

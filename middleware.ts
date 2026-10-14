@@ -20,7 +20,10 @@ export function middleware(request: NextRequest) {
   // Next may build request.url with the internal listener hostname. Keep
   // redirects on the original host when running behind the production proxy.
   const host = request.headers.get("host") || request.nextUrl.host;
-  const protocol = request.headers.get("x-forwarded-proto") === "https" ? "https:" : request.nextUrl.protocol;
+  // Production terminates TLS at Apache without forwarding its scheme.
+  // Public redirects must still use HTTPS; allow HTTP only for local tests.
+  const localHost = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host);
+  const protocol = localHost ? request.nextUrl.protocol : "https:";
   const destination = new URL("/login", `${protocol}//${host}`);
   destination.searchParams.set("returnTo", pathname + search);
   const response = NextResponse.redirect(destination);

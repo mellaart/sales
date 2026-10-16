@@ -11,21 +11,24 @@ test('telephone approval requires personal admin access and explicit confirmatio
 });
 test('telephone approval records matching deal and approval, preserves recorder audit and is idempotent',async()=>{
  const db=new PGlite();try{
- await db.exec(`create table deals(id text primary key, user_id text, contact_name text,contact_email text,accepted_at timestamptz,accepted_by_name text,accepted_by_email text);
+ await db.exec(`create table deals(id text primary key, user_id text, contact_name text,contact_email text,calculator_inputs jsonb,accepted_at timestamptz,accepted_by_name text,accepted_by_email text);
  create table deal_approvals(id text primary key,deal_id text unique,created_by text,status text,recipient_email text,contact_name text,quote_snapshot jsonb,snapshot_hash text,accepted_at timestamptz,accepted_by_name text,accepted_by_email text,accepted_ip text,accepted_user_agent text,updated_at timestamptz,token_version integer default 1);
  create table app_settings(key text primary key,payload jsonb);
  insert into deals(id,user_id,contact_name) values('deal','user','Contact');`);
+ await db.query('update deals set calculator_inputs=$1::jsonb', [JSON.stringify({assetsExpansion:{relationId:22,lines:[{group:'Gebruikers',label:'Smart Trade Basic Extra gebruiker',quantity:2,cadence:'monthly'}]}})]);
+ const license=compile(fs.readFileSync('lib/admin-tool-licenses.ts','utf8'),{'@/lib/local-db':{},'@/lib/deal-relation':{getDealRelationId:()=>22},'@/lib/smart-trade-api':{}});
  const source=fs.readFileSync('lib/deal-approval-server.ts','utf8');const fragment=source.slice(source.indexOf('export async function recordTelephoneDealApproval'));
  const code=ts.transpileModule(fragment,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const mod={exports:{}};
- new Function('exports','withTransaction','canManageDeal','createId','quoteSnapshotFromDeal','snapshotHashFromDeal',code)(mod.exports,fn=>db.transaction(fn),()=>true,()=> 'approval',()=>({total:100}),()=> 'snapshot');
+ new Function('exports','withTransaction','canManageDeal','createId','quoteSnapshotFromDeal','snapshotHashFromDeal','queueLicenseIncrease','syncLicenseIncreases',code)(mod.exports,fn=>db.transaction(fn),()=>true,()=> 'approval',()=>({total:100}),()=> 'snapshot',license.queueLicenseIncrease,async()=>{});
  const actor={user:{id:'user',email:'owner@test.nl'},profile:{full_name:'Owner'}};
  const first=await mod.exports.recordTelephoneDealApproval('deal',actor);
  assert.ok(first.accepted_at);assert.match(first.accepted_by_name,/Telefonisch akkoord/);
  const approval=(await db.query('select * from deal_approvals')).rows[0];assert.equal(approval.status,'accepted');assert.equal(approval.snapshot_hash,'snapshot');
  const second=await mod.exports.recordTelephoneDealApproval('deal',{...actor,profile:{full_name:'Different'}});
  assert.equal(second.accepted_by_name,first.accepted_by_name);
- const audit=(await db.query('select * from app_settings')).rows;assert.equal(audit.length,1);assert.equal(audit[0].payload.method,'telephone');assert.equal(audit[0].payload.recordedBy,'user');
+ assert.equal((await db.query("select payload from app_settings where key='admin-tool-license:deal'")).rows[0].payload.quantity,2);
+ const audit=(await db.query("select * from app_settings where key like 'deal-telephone-approval:%'")).rows;assert.equal(audit.length,1);assert.equal(audit[0].payload.method,'telephone');assert.equal(audit[0].payload.recordedBy,'user');
  await db.exec("update deals set accepted_at=null where id='deal'; update deal_approvals set status='open',snapshot_hash='old' where deal_id='deal'");
  await mod.exports.recordTelephoneDealApproval('deal',actor);
  const existing=(await db.query('select * from deal_approvals')).rows;assert.equal(existing.length,1);assert.equal(existing[0].status,'accepted');assert.equal(existing[0].snapshot_hash,'snapshot');

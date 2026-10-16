@@ -42,10 +42,11 @@ test('acceptance saves both statuses and durable mail before attempting delivery
       '@/lib/local-auth':{},
       '@/lib/local-db':{query:(sql,args)=>db.query(sql,args),withTransaction: callback=>db.transaction(tx=>callback(tx))},
       '@/lib/development-lines':development,
+      '@/lib/admin-tool-licenses':{...load('lib/admin-tool-licenses.ts', {'@/lib/local-db':{},'@/lib/deal-relation':load('lib/deal-relation.ts'),'@/lib/smart-trade-api':{}}),syncLicenseIncreases:async()=>{}},
       '@/lib/deal-approval-notification':{deliverPendingApprovalNotifications:async()=>{deliveryCalls++;throw new Error('mail failure')}},
     }, '\nexport const testHash = snapshotHashFromDeal;');
-    const deal={id:'deal',user_id:'sales',customer_name:'Voorbeeld BV',quote_title:'Uitbreiding',package_name:'Uitbreiding',monthly_total:30.15,implementation_total:0,total_users:0,modules:[],calculator_inputs:{}};
-    await db.query('insert into deals(id,user_id,customer_name,quote_title,package_name,monthly_total,implementation_total,total_users,modules,calculator_inputs) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[deal.id,deal.user_id,deal.customer_name,deal.quote_title,deal.package_name,deal.monthly_total,0,0,'[]','{}']);
+    const deal={id:'deal',user_id:'sales',customer_name:'Voorbeeld BV',quote_title:'Uitbreiding',package_name:'Uitbreiding',monthly_total:30.15,implementation_total:0,total_users:0,modules:[],calculator_inputs:{assetsExpansion:{relationId:22,lines:[{group:'Gebruikers',label:'Smart Trade Basic Extra gebruiker',quantity:2,cadence:'monthly'}]}}};
+    await db.query('insert into deals(id,user_id,customer_name,quote_title,package_name,monthly_total,implementation_total,total_users,modules,calculator_inputs) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[deal.id,deal.user_id,deal.customer_name,deal.quote_title,deal.package_name,deal.monthly_total,0,0,'[]',JSON.stringify(deal.calculator_inputs)]);
     await db.query("insert into deal_approvals(id,deal_id,status,token_version,snapshot_hash,quote_snapshot,expires_at) values ('approval','deal','open',1,$1,'{}',now()+interval '1 day')",[approvalModule.testHash(deal)]);
     const request=new Request('https://example.test');
     const result=await approvalModule.acceptPublicDealApproval(request,'approval',1,{name:'Klant',email:'klant@example.test'});
@@ -53,7 +54,8 @@ test('acceptance saves both statuses and durable mail before attempting delivery
     assert.equal((await db.query('select accepted_by_name from deals')).rows[0].accepted_by_name,'Klant');
     assert.equal((await db.query('select payload from app_settings')).rows[0].payload.status,'pending');
     await approvalModule.acceptPublicDealApproval(request,'approval',1,{name:'Other',email:'other@example.test'});
-    assert.equal((await db.query('select count(*) from app_settings')).rows[0].count,1);
+    assert.equal((await db.query('select count(*) from app_settings')).rows[0].count,2);
+    assert.equal((await db.query("select payload from app_settings where key='admin-tool-license:deal'")).rows[0].payload.quantity,2);
     assert.equal((await db.query('select accepted_by_name from deals')).rows[0].accepted_by_name,'Klant');
     assert.equal(deliveryCalls,2);
     // Restore the denormalized deal status without changing the recorded consent.
@@ -61,7 +63,8 @@ test('acceptance saves both statuses and durable mail before attempting delivery
     // The intentionally failing mail transport is allowed to report a recovery failure.
     await assert.rejects(() => approvalModule.recoverAcceptedDealApproval('approval',1), /mail failure/);
     assert.equal((await db.query('select accepted_by_name from deals')).rows[0].accepted_by_name,'Klant');
-    assert.equal((await db.query('select count(*) from app_settings')).rows[0].count,1);
+    assert.equal((await db.query('select count(*) from app_settings')).rows[0].count,2);
+    assert.equal((await db.query("select payload from app_settings where key='admin-tool-license:deal'")).rows[0].payload.quantity,2);
     await db.exec("update deals set monthly_total = 50");
     await assert.rejects(() => approvalModule.recoverAcceptedDealApproval('approval',1), /gewijzigd/);
   } finally { await db.close(); }

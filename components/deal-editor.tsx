@@ -156,6 +156,7 @@ function formatApprovalDate(value: string | null) {
 }
 
 type DealAssetOverview = {
+  licenseSync?: {status: string; quantity: number; administration?: string; previous?: number; target?: number; message?: string} | null;
   ready: boolean;
   prerequisiteErrors: string[];
   warnings: string[];
@@ -2859,6 +2860,16 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
 
             <div className="customer-intake-controls">
               <div className="customer-intake-fields">
+                {assetOverview?.licenseSync ? (
+                  <div role="status" className="soft-card">
+                    <strong>Gebruikers in admintool: {assetOverview.licenseSync.status === "synced" ? "verhoogd" : assetOverview.licenseSync.status === "pending" ? "in wachtrij" : "controle nodig"}</strong>
+                    <p>{assetOverview.licenseSync.administration ? `${assetOverview.licenseSync.administration}: ` : ""}
+                      +{assetOverview.licenseSync.quantity} gewone gebruikers
+                      {assetOverview.licenseSync.target !== undefined ? ` (${assetOverview.licenseSync.previous} → ${assetOverview.licenseSync.target})` : ""}.
+                      {" "}{assetOverview.licenseSync.message || "Wordt automatisch verwerkt na akkoord."}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="customer-intake-summary asset-creation-summary">
                   <div>
                     <span>Relatie-ID</span>

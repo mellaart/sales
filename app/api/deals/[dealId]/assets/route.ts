@@ -1,3 +1,4 @@
+import { getLicenseSync } from "@/lib/admin-tool-licenses";
 import { allDealAssetsCreated } from "@/lib/implementation-assets-progress";
 import { getDealRelationId } from "@/lib/deal-relation";
 import { NextResponse } from "next/server";
@@ -297,7 +298,7 @@ export async function GET(
     const result = await loadContext(request, dealId);
     if ("error" in result) return jsonResponse({ error: result.error }, result.status);
 
-    return jsonResponse({ overview: toOverview(result.context) });
+    return jsonResponse({ overview: {...toOverview(result.context), licenseSync: await getLicenseSync(dealId)} });
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Assets voorbereiden mislukt.",

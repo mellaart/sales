@@ -1,3 +1,4 @@
+import { queueLicenseIncrease, syncLicenseIncreases } from "@/lib/admin-tool-licenses";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { canReadAllDeals, isLocalAdmin, type LocalUser } from "@/lib/local-auth";
 import { createId, query, withTransaction } from "@/lib/local-db";
@@ -515,12 +516,7 @@ export async function acceptPublicDealApproval(
     }
 
     const dealResult = await client.query<DealRow>(
-      `select id, user_id, customer_name, quote_title, contact_name, package_name,
-              total_users, monthly_total, implementation_total, sales_name,
-              modules, calculator_inputs
-       from public.deals
-       where id = $1
-       for update`,
+      `select * from public.deals where id = $1 for update`,
       [approval.deal_id],
     );
     const deal = dealResult.rows[0];
@@ -573,9 +569,11 @@ export async function acceptPublicDealApproval(
         acceptedAt: updated.accepted_at, name: updated.accepted_by_name, email: updated.accepted_by_email,
       })],
     );
+    await queueLicenseIncrease(client, deal);
     return updated;
   });
 
+  await syncLicenseIncreases(result.deal_id).catch(() => console.error("Admintool-verwerking blijft in de wachtrij."));
   // Mail errors must never undo the customer's agreement; failed jobs remain queued.
   await deliverPendingApprovalNotifications(`deal-approval-notification:${result.id}:${result.token_version}`)
     .catch(error => console.error("Akkoordmail kon niet worden verwerkt:", error));
@@ -660,7 +658,7 @@ export async function getDealApprovalForActor(
 }
 
 export async function recordTelephoneDealApproval(dealId: string, actor: Actor) {
-  return withTransaction(async client => {
+  const accepted = await withTransaction(async client => {
     // Same lock order as online approval: approval first, then deal.
     const current = await client.query<DealApprovalRow>("select * from public.deal_approvals where deal_id = $1 for update", [dealId]);
     const result = await client.query<DealRow & {accepted_at: string | null; accepted_by_name: string | null; accepted_by_email: string | null; contact_email: string | null}>("select * from public.deals where id = $1 for update", [dealId]);
@@ -688,6 +686,9 @@ export async function recordTelephoneDealApproval(dealId: string, actor: Actor) 
       "insert into public.app_settings (key,payload) values ($1,$2::jsonb) on conflict (key) do nothing",
       [`deal-telephone-approval:${approval.id}:${approval.token_version}`, JSON.stringify({method:"telephone",dealId,recordedBy:actor.user.id,recordedByName:recorder,recordedAt:approval.accepted_at,snapshotHash:approval.snapshot_hash})],
     );
+    await queueLicenseIncrease(client, deal);
     return updated.rows[0];
   });
+  await syncLicenseIncreases(dealId).catch(() => console.error("Admintool-verwerking blijft in de wachtrij."));
+  return accepted;
 }

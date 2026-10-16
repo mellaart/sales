@@ -164,3 +164,39 @@ Wanneer `git pull` al is uitgevoerd maar de app nog niet opnieuw is gebouwd of g
 cd "$HOME/apps/sales"
 scripts/deploy-production.sh --force
 ```
+
+
+## Automatische verhoging gebruikers in admintool
+
+`ADMIN_TOOL_API_TOKEN` staat uitsluitend in `.env.local` op de server. Gebruik nooit
+`NEXT_PUBLIC_` voor deze sleutel. Na een wijziging herbouwt/herstart de bestaande deploy de app.
+
+Nieuwe online of telefonische akkoorden op bestaande-klantuitbreidingen zetten een
+opdracht in `app_settings` onder `admin-tool-license:<deal-id>`, in dezelfde transactie
+als het akkoord. Alleen maandelijkse regels “Gebruikers / Smart Trade <pakket> Extra
+gebruiker” tellen mee. Chauffeurs, support, planningsapp, nieuwe implementaties en
+historische akkoorden worden niet opgehoogd. Een deal wordt maximaal eenmaal verwerkt;
+maak voor een latere aanvullende verkoop een nieuwe deal.
+
+De app zoekt de administratienaam uit de laatste haakjes van bestaande assets in het
+`company`-veld van alle pagina's van GET `/api/companies`. Ze schrijft het huidige
+`system_max_users` plus het verkochte aantal via PUT `/api/companies/<id>` en leest
+het resultaat terug. Status en oude/nieuwe limiet staan bij “Assets aanmaken” in de deal.
+De bestaande beveiligde klantformulier-cron herhaalt nog niet gestarte opdrachten
+iedere tien minuten. Er is geen extra cron-secret nodig.
+
+Vóór PUT worden doelwaarde en een blijvende bedrijfsvergrendeling opgeslagen.
+`applying` na een onderbreking en `review` na een onduidelijk antwoord worden NOOIT
+automatisch opnieuw verstuurd. Controleer dan eerst het logboek van de admintool
+tegen `companyId`, `previous`, `target` en het deal-ID in de opgeslagen opdracht.
+Pas nadat de daadwerkelijke verwerking is vastgesteld, kan een beheerder de opdracht
+als `synced` afsluiten en de bijbehorende `admin-tool-company-lock:<company-id>`
+verwijderen. Als aantoonbaar niets is verwerkt, kan de opdracht terug naar `pending`
+en de vergrendeling worden verwijderd. Doe beide wijzigingen samen in een transactie.
+Een blokkade houdt volgende verkopen voor dat bedrijf tegen; andere bedrijven gaan door.
+
+De API ondersteunt voor zover gedocumenteerd geen conditionele update of atomische
+verhoging. De app serialiseert eigen verkopen per bedrijf, maar gelijktijdige handmatige
+limietwijzigingen in de admintool zijn daarmee niet beschermd. Voer die niet tegelijk
+uit met automatische verwerking; voor volledige bescherming is API-ondersteuning voor
+conditionele/atomische wijzigingen nodig.

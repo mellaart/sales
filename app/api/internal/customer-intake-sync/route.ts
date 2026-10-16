@@ -1,3 +1,4 @@
+import { syncLicenseIncreases } from "@/lib/admin-tool-licenses";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -58,8 +59,9 @@ export async function POST(request: Request) {
       console.error("Akkoordmeldingen verwerken mislukt:", error);
       return { sent: 0, failed: 1 };
     });
+    const licenses = await syncLicenseIncreases().catch(() => ({synced:0,failed:1}));
     const result = await syncPendingCustomerIntakes();
-    return jsonResponse({ ok: result.failed === 0 && approvalNotifications.failed === 0, ...result, approvalNotifications }, result.failed > 0 || approvalNotifications.failed > 0 ? 207 : 200);
+    return jsonResponse({ ok: result.failed === 0 && approvalNotifications.failed === 0 && licenses.failed === 0, ...result, approvalNotifications, licenses }, result.failed > 0 || approvalNotifications.failed > 0 || licenses.failed > 0 ? 207 : 200);
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error

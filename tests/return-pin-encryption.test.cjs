@@ -25,6 +25,8 @@ test('stored encrypted PINs are decrypted before input normalization and still h
   const original=JSON.stringify(form);
   const api=load('lib/worldline-return-pin-server.ts',{
    'node:crypto':crypto,
+   '@/lib/customer-sms-settings':{},
+   '@/lib/messagebird-verify':{},
    '@/lib/local-db':{query:async(sql)=>({rows:sql.includes('from public.worldline_projects')?[{id:'project',relation_name:'Test'}]:[form]})},
    '@/lib/worldline':{},
    '@/lib/worldline-return-pin':load('lib/worldline-return-pin.ts'),

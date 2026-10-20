@@ -1,8 +1,10 @@
+import { isCustomerSmsRequired } from "@/lib/customer-sms-settings";
 import { NextResponse } from "next/server";
 import { requireLocalUser } from "@/lib/local-auth";
 import { getLocalWorldlinePermission } from "@/lib/worldline-access-server";
 import {
   createWorldlineReturnPinForm,
+  saveReturnPinMobile,
   getWorldlineReturnPinForms,
 } from "@/lib/worldline-return-pin-server";
 
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
       access.permission === "write",
     );
     if ("error" in result) return jsonResponse({ error: result.error }, 404);
-    return jsonResponse({ forms: result.forms });
+    return jsonResponse({ forms: result.forms, smsRequired: await isCustomerSmsRequired() });
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Retourpinnenformulier laden mislukt.",
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null) as {
       projectId?: unknown;
       forceNew?: unknown;
+      mobilePhone?: unknown;
     } | null;
     const projectId = projectIdValue(body?.projectId);
     if (!projectId) return jsonResponse({ error: "Worldline-project ontbreekt." }, 400);
@@ -74,11 +77,26 @@ export async function POST(request: Request) {
       projectId,
       access.verified.user.id,
       body?.forceNew === true,
+      typeof body?.mobilePhone === "string" ? body.mobilePhone : "",
     );
     return jsonResponse({ form: result.form });
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Retourpinnenlink maken mislukt.",
     }, 500);
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const access = await verifyAccess(request, true);
+    if ("error" in access) return jsonResponse({ error: access.error }, access.status);
+    const body = await request.json();
+    const projectId = projectIdValue(body?.projectId);
+    if (!projectId || typeof body?.mobilePhone !== "string") return jsonResponse({ error: "Project of mobiel nummer ontbreekt." }, 400);
+    await saveReturnPinMobile(projectId, body.mobilePhone);
+    return jsonResponse({ saved: true });
+  } catch (error) {
+    return jsonResponse({ error: error instanceof Error ? error.message : "Opslaan mislukt." }, 400);
   }
 }

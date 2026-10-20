@@ -1,3 +1,5 @@
+import { isCustomerSmsRequired } from "@/lib/customer-sms-settings";
+import { normalizeMessageBirdMobileNumber, maskMessageBirdMobileNumber, startMessageBirdSmsVerification, verifyMessageBirdSmsCode } from "@/lib/messagebird-verify";
 import {
   createCipheriv,
   createDecipheriv,
@@ -34,6 +36,9 @@ type WorldlineProjectRow = {
 type WorldlineReturnPinRow = {
   id: string;
   project_id: string;
+  mobile_phone: string | null;
+  sms_verify_id: string | null;
+  sms_verify_sent_at: string | null;
   version: number;
   status: WorldlineReturnPinStatus;
   token_version: number;
@@ -191,6 +196,7 @@ function toInternalSummary(request: Request, row: WorldlineReturnPinRow): Worldl
   return {
     id: row.id,
     projectId: row.project_id,
+    mobilePhone: row.mobile_phone ?? "",
     version: row.version,
     status: row.status,
     formData: decryptFormData(row.form_data),
@@ -310,7 +316,10 @@ export async function createWorldlineReturnPinForm(
   projectId: string,
   createdBy: string,
   forceNew: boolean,
+  mobilePhone = "",
 ) {
+  const mobile = normalizeMessageBirdMobileNumber(mobilePhone);
+  if ((mobilePhone.trim() || await isCustomerSmsRequired()) && !mobile) throw new Error("Vul eerst een geldig mobiel nummer in voor sms-verificatie.");
   const result = await withTransaction(async (client) => {
     const projectResult = await client.query<WorldlineProjectRow>(
       `select id, relation_name, relation_email, agreement_fields
@@ -350,8 +359,8 @@ export async function createWorldlineReturnPinForm(
     const formData = initialFormData(project);
     const created = await client.query<WorldlineReturnPinRow>(
       `insert into public.worldline_return_pin_forms
-        (id, project_id, version, created_by, form_data, acceptance_version, expires_at)
-       values ($1, $2, $3, $4, $5::jsonb, $6, now() + ($7 * interval '1 day'))
+        (id, project_id, version, created_by, form_data, acceptance_version, expires_at, mobile_phone)
+       values ($1, $2, $3, $4, $5::jsonb, $6, now() + ($7 * interval '1 day'), $8)
        returning *`,
       [
         id,
@@ -361,6 +370,7 @@ export async function createWorldlineReturnPinForm(
         JSON.stringify(encryptFormData(formData)),
         WORLDLINE_RETURN_PIN_ACCEPTANCE_VERSION,
         RETURN_PIN_FORM_TTL_DAYS,
+        mobile,
       ],
     );
     return { project, row: created.rows[0] };
@@ -376,6 +386,7 @@ export async function getPublicWorldlineReturnPinForm(
   id: string,
   tokenVersion: number,
   token: string,
+  deviceToken = "",
 ) {
   const { rows } = await query<WorldlineReturnPinRow & { relation_name: string }>(
     `select form.*, project.relation_name
@@ -394,6 +405,9 @@ export async function getPublicWorldlineReturnPinForm(
     return { error: "Deze klantlink is verlopen. Vraag uw contactpersoon om een nieuwe link." } as const;
   }
 
+  if (await isCustomerSmsRequired() && !trustedReturnPinDevice(row, deviceToken)) {
+    return { verificationRequired: true as const, mobilePhone: maskMessageBirdMobileNumber(row.mobile_phone ?? "") };
+  }
   return { form: toPublicSummary(row, row.relation_name) } as const;
 }
 
@@ -419,6 +433,9 @@ export async function acceptPublicWorldlineReturnPinForm(
       return { error: "Deze klantlink is ongeldig." } as const;
     }
     if (row.status === "revoked") return { error: "Deze klantlink is ingetrokken." } as const;
+    if (await isCustomerSmsRequired() && !trustedReturnPinDevice(row, returnPinDeviceCookie(request, id))) {
+      return { error: "Verifieer eerst uw toegang met de sms-code." } as const;
+    }
     if (row.status === "accepted") {
       return { form: toPublicSummary(row, row.relation_name) } as const;
     }
@@ -477,5 +494,50 @@ export async function acceptPublicWorldlineReturnPinForm(
     );
     const updated = updatedResult.rows[0];
     return { form: toPublicSummary(updated, row.relation_name) } as const;
+  });
+}
+
+export function returnPinCookieName(id: string) { return `return-pin-device-${id}`; }
+export function returnPinDeviceCookie(request: Request, id: string) {
+  return request.headers.get("cookie")?.split(";").map(part => part.trim()).find(part => part.startsWith(`${returnPinCookieName(id)}=`))?.split("=").slice(1).join("=") ?? "";
+}
+function deviceSignature(row: WorldlineReturnPinRow, expires: number) {
+  return createHmac("sha256", secretMaterial()).update(JSON.stringify(["return-pin-device", row.id, row.token_version, row.mobile_phone, expires])).digest("base64url");
+}
+function trustedReturnPinDevice(row: WorldlineReturnPinRow, value: string) {
+  const [expiry, signature = ""] = value.split(".");
+  const expires = Number(expiry);
+  if (!Number.isSafeInteger(expires) || expires <= Date.now()) return false;
+  const expected = Buffer.from(deviceSignature(row, expires));
+  const actual = Buffer.from(signature);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+export async function saveReturnPinMobile(projectId: string, value: string) {
+  const mobile = normalizeMessageBirdMobileNumber(value);
+  if ((value.trim() || await isCustomerSmsRequired()) && !mobile) throw new Error("Vul een geldig mobiel nummer in voor sms-verificatie.");
+  await query(`update public.worldline_return_pin_forms set mobile_phone = $2, sms_verify_id = null,
+    sms_verify_sent_at = null, updated_at = now() where id = (
+      select id from public.worldline_return_pin_forms where project_id = $1 order by version desc limit 1
+    ) and status <> 'revoked'
+    and mobile_phone is distinct from $2`, [projectId, mobile]);
+}
+export async function returnPinSmsAction(id: string, version: number, token: string, action: string, code: string) {
+  return withTransaction(async client => {
+    const { rows } = await client.query<WorldlineReturnPinRow>(`select * from public.worldline_return_pin_forms where id = $1 for update`, [id]);
+    const row = rows[0];
+    if (!row || row.token_version !== version || !verifyReturnPinFormToken(id, version, token) || row.status === "revoked" || (row.status === "open" && new Date(row.expires_at).getTime() <= Date.now())) throw new Error("Deze klantlink is ongeldig, verlopen of ingetrokken.");
+    const mobile = normalizeMessageBirdMobileNumber(row.mobile_phone ?? "");
+    if (!mobile) throw new Error("Er is nog geen mobiel nummer ingesteld. Neem contact op met uw contactpersoon.");
+    if (action === "send") {
+      if (row.sms_verify_sent_at && Date.now() - new Date(row.sms_verify_sent_at).getTime() < 60000) throw new Error("Wacht een minuut voordat u een nieuwe code aanvraagt.");
+      const result = await startMessageBirdSmsVerification({ recipient: mobile, reference: `returnpin${id.replace(/-/g, "")}` });
+      await client.query(`update public.worldline_return_pin_forms set sms_verify_id = $2, sms_verify_sent_at = now() where id = $1`, [id, result.id]);
+      return { sent: true as const };
+    }
+    if (action !== "verify" || !/^\d{6}$/.test(code) || !row.sms_verify_id) throw new Error("Vraag een sms-code aan en vul de zes cijfers in.");
+    await verifyMessageBirdSmsCode(row.sms_verify_id, code);
+    await client.query(`update public.worldline_return_pin_forms set sms_verify_id = null where id = $1`, [id]);
+    const expires = row.status === "accepted" ? Date.now() + 30 * 86400000 : Math.min(Date.now() + 30 * 86400000, new Date(row.expires_at).getTime());
+    return { verified: true as const, deviceToken: `${expires}.${deviceSignature(row, expires)}`, expires };
   });
 }

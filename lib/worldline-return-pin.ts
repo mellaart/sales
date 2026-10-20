@@ -46,6 +46,7 @@ export type WorldlineReturnPinEvidence = {
 export type WorldlineReturnPinFormSummary = {
   id: string;
   projectId: string;
+  mobilePhone: string;
   version: number;
   status: WorldlineReturnPinStatus;
   formData: WorldlineReturnPinFormData;
@@ -59,7 +60,7 @@ export type WorldlineReturnPinFormSummary = {
 
 export type PublicWorldlineReturnPinForm = Omit<
   WorldlineReturnPinFormSummary,
-  "projectId" | "publicUrl" | "evidence"
+  "projectId" | "publicUrl" | "evidence" | "mobilePhone"
 > & {
   customerName: string;
 };

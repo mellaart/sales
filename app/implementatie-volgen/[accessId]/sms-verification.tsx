@@ -6,6 +6,7 @@ import { type FormEvent, useState } from "react";
 import styles from "./implementation-progress.module.css";
 
 type SmsVerificationProps = {
+  endpoint?: string;
   accessId: string;
   token: string;
   tokenVersion: number;
@@ -13,6 +14,7 @@ type SmsVerificationProps = {
 };
 
 export default function SmsVerification({
+  endpoint,
   accessId,
   token,
   tokenVersion,
@@ -28,7 +30,7 @@ export default function SmsVerification({
     setError("");
     try {
       const response = await fetch(
-        `/api/implementation-portals/${encodeURIComponent(accessId)}/sms-verification`,
+        endpoint ?? `/api/implementation-portals/${encodeURIComponent(accessId)}/sms-verification`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -51,7 +53,7 @@ export default function SmsVerification({
     setError("");
     try {
       const response = await fetch(
-        `/api/implementation-portals/${encodeURIComponent(accessId)}/sms-verification`,
+        endpoint ?? `/api/implementation-portals/${encodeURIComponent(accessId)}/sms-verification`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

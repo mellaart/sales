@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ClipboardCopy,
@@ -58,6 +58,11 @@ export default function WorldlineReturnPinPanel({
   onSent?: () => Promise<void>;
   mailDetails?: { email: string; companyName: string; contactName: string };
 }) {
+  const mobileDirty = useRef(false);
+  const [mobilePhone, setMobilePhone] = useState("");
+  const [savedMobilePhone, setSavedMobilePhone] = useState("");
+  const [smsRequired, setSmsRequired] = useState(true);
+  const [mobileSaving, setMobileSaving] = useState(false);
   const [forms, setForms] = useState<WorldlineReturnPinFormSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -78,6 +83,7 @@ export default function WorldlineReturnPinPanel({
       );
       const json = await response.json().catch(() => ({})) as {
         forms?: WorldlineReturnPinFormSummary[];
+        smsRequired?: boolean;
         error?: string;
       };
       if (!response.ok) {
@@ -85,6 +91,12 @@ export default function WorldlineReturnPinPanel({
         return;
       }
       setForms(json.forms ?? []);
+      setSmsRequired(json.smsRequired !== false);
+      const phone = json.forms?.[0]?.mobilePhone ?? "";
+      if (!mobileDirty.current) {
+        setMobilePhone(phone);
+        setSavedMobilePhone(phone);
+      }
       if (showMessage) setMessage("Status is bijgewerkt.");
     } catch {
       setMessage("Retourpinnenformulier laden mislukt.");
@@ -94,6 +106,9 @@ export default function WorldlineReturnPinPanel({
   }, [projectId]);
 
   useEffect(() => {
+    mobileDirty.current = false;
+    setMobilePhone("");
+    setSavedMobilePhone("");
     setForms([]);
     setMessage("");
     setShowPins(false);
@@ -116,7 +131,7 @@ export default function WorldlineReturnPinPanel({
       const response = await fetch("/api/worldline/return-pin-forms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, forceNew }),
+        body: JSON.stringify({ projectId, forceNew, mobilePhone }),
       });
       const json = await response.json().catch(() => ({})) as {
         form?: WorldlineReturnPinFormSummary;
@@ -126,6 +141,7 @@ export default function WorldlineReturnPinPanel({
         setMessage(json.error || "Retourpinnenlink maken mislukt.");
         return;
       }
+      mobileDirty.current = false;
       await loadForms(false);
       setMessage(forceNew ? "Nieuwe klantlink is klaar." : "Klantlink is klaar.");
     } catch (error) {
@@ -133,6 +149,20 @@ export default function WorldlineReturnPinPanel({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveMobile() {
+    if (!latestForm || !canWrite || mobileSaving || mobilePhone === savedMobilePhone) return;
+    setMobileSaving(true);
+    try {
+      const response = await fetch("/api/worldline/return-pin-forms", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, mobilePhone }) });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Mobiel nummer opslaan mislukt.");
+      mobileDirty.current = false;
+      setSavedMobilePhone(mobilePhone);
+      setMessage("Mobiel nummer is opgeslagen.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Opslaan mislukt."); }
+    finally { setMobileSaving(false); }
   }
 
   async function copyLink() {
@@ -250,9 +280,19 @@ export default function WorldlineReturnPinPanel({
           placeholder="Geen e-mailadres ingevuld" />
       </div>
 
+      <div className="implementation-portal-sms-setting">
+        <label className="input-wrap">
+          <span className="input-label">Mobiel nummer voor sms-verificatie{smsRequired ? " (verplicht)" : " (optioneel)"}</span>
+          <input type="tel" autoComplete="tel" placeholder="06 12345678" value={mobilePhone}
+            disabled={!canWrite || loading || busy || mobileSaving || latestForm?.status === "revoked"}
+            onChange={event => { mobileDirty.current = true; setMobilePhone(event.target.value); }} onBlur={() => void saveMobile()} />
+        </label>
+        <span className="implementation-portal-sms-save-state" aria-live="polite">{mobileSaving ? "Opslaan..." : latestForm && mobilePhone === savedMobilePhone ? "Opgeslagen" : latestForm ? "Nog niet opgeslagen" : "Wordt opgeslagen bij aanmaken"}</span>
+      </div>
+
       <div className={styles.actions}>
         {!latestForm ? (
-          <button type="button" className="primary-button" disabled={busy || loading || !canWrite} onClick={() => void createForm(false)}>
+          <button type="button" className="primary-button" disabled={busy || loading || !canWrite || (smsRequired && !mobilePhone.trim())} onClick={() => void createForm(false)}>
             <Link2 size={16} /> {busy ? "Link maken..." : "Klantformulier maken"}
           </button>
         ) : (
@@ -264,7 +304,7 @@ export default function WorldlineReturnPinPanel({
               <ClipboardCopy size={16} /> Kopieer link
             </button>
             {canWrite ? (
-              <button type="button" className="primary-button" disabled={busy || outlookBusy} onClick={() => void prepareOutlookDraft()}>
+              <button type="button" className="primary-button" disabled={busy || outlookBusy || mobileSaving || mobilePhone !== savedMobilePhone || (smsRequired && !mobilePhone.trim())} onClick={() => void prepareOutlookDraft()}>
                 <Mail size={16} /> {outlookBusy ? "Verzenden..." : "Direct verzenden via Outlook"}
               </button>
             ) : null}

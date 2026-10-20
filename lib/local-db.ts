@@ -738,6 +738,10 @@ export async function ensureLocalSchema() {
           unique (project_id, version)
         );
 
+        alter table public.worldline_return_pin_forms add column if not exists mobile_phone text;
+        alter table public.worldline_return_pin_forms add column if not exists sms_verify_id text;
+        alter table public.worldline_return_pin_forms add column if not exists sms_verify_sent_at timestamptz;
+
         create index if not exists worldline_return_pin_forms_project_version_idx
           on public.worldline_return_pin_forms(project_id, version desc);
         create index if not exists worldline_return_pin_forms_status_expires_idx

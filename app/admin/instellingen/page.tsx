@@ -64,7 +64,7 @@ export default function SettingsPage() {
         <MessageSquare size={24} aria-hidden="true" />
         <div className={styles.label}><h2 id="sms-setting">SMS klantenformulier</h2>
           <p id="sms-setting-description">{enabled === null ? "Instelling laden..." : enabled
-            ? "Aan: mobiel nummer en sms-verificatie verplicht voor de implementatie-klantpagina."
+            ? "Aan: mobiel nummer en sms-verificatie verplicht voor de implementatie-klantpagina en het acceptatieformulier retourpinnen."
             : "Uit: toegang via de geheime klantlink, zonder sms-verificatie of verplicht mobiel nummer."}</p>
         </div>
         <input className={styles.toggle} type="checkbox" role="switch" aria-labelledby="sms-setting"

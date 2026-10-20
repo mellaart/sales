@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   acceptPublicWorldlineReturnPinForm,
+  returnPinDeviceCookie,
+  returnPinCookieName,
+  returnPinSmsAction,
   getPublicWorldlineReturnPinForm,
 } from "@/lib/worldline-return-pin-server";
 
@@ -32,9 +35,9 @@ export async function GET(
   try {
     const { formId } = await context.params;
     const { token, tokenVersion } = tokenValues(request);
-    const result = await getPublicWorldlineReturnPinForm(formId, tokenVersion, token);
+    const result = await getPublicWorldlineReturnPinForm(formId, tokenVersion, token, returnPinDeviceCookie(request, formId));
     if ("error" in result) return jsonResponse({ error: result.error }, 404);
-    return jsonResponse({ form: result.form });
+    return jsonResponse(result);
   } catch (error) {
     return jsonResponse({
       error: error instanceof Error ? error.message : "Retourpinnenformulier laden mislukt.",
@@ -50,9 +53,18 @@ export async function POST(
     const { formId } = await context.params;
     const { token, tokenVersion } = tokenValues(request);
     const body = await request.json().catch(() => null) as {
+      action?: unknown;
+      code?: unknown;
       formData?: unknown;
       confirmed?: unknown;
     } | null;
+    if (body?.action === "send" || body?.action === "verify") {
+      const result = await returnPinSmsAction(formId, tokenVersion, token, body.action, typeof body.code === "string" ? body.code : "");
+      const response = jsonResponse({ sent: result.sent, verified: result.verified });
+      if (result.deviceToken) response.cookies.set({ name: returnPinCookieName(formId), value: result.deviceToken,
+        httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", expires: new Date(result.expires) });
+      return response;
+    }
     const result = await acceptPublicWorldlineReturnPinForm(
       request,
       formId,

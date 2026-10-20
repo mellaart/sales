@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import SmsVerification from "@/app/implementatie-volgen/[accessId]/sms-verification";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
@@ -47,6 +48,7 @@ export default function WorldlineReturnPinForm({
   token: string;
   tokenVersion: number;
 }) {
+  const [verificationPhone, setVerificationPhone] = useState<string | null>(null);
   const [form, setForm] = useState<PublicWorldlineReturnPinForm | null>(null);
   const [formData, setFormData] = useState<WorldlineReturnPinFormData>(EMPTY_WORLDLINE_RETURN_PIN_FORM_DATA);
   const [confirmed, setConfirmed] = useState(false);
@@ -70,10 +72,16 @@ export default function WorldlineReturnPinForm({
       try {
         const response = await fetch(endpoint, { cache: "no-store" });
         const json = await response.json().catch(() => ({})) as {
+          verificationRequired?: boolean;
+          mobilePhone?: string;
           form?: PublicWorldlineReturnPinForm;
           error?: string;
         };
         if (!active) return;
+        if (response.ok && json.verificationRequired) {
+          setVerificationPhone(json.mobilePhone ?? "uw mobiele nummer");
+          return;
+        }
         if (!response.ok || !json.form) {
           setError(json.error || "Het retourpinnenformulier kon niet worden geladen.");
           return;
@@ -174,6 +182,8 @@ export default function WorldlineReturnPinForm({
       </main>
     );
   }
+
+  if (verificationPhone !== null) return <SmsVerification accessId={formId} token={token} tokenVersion={tokenVersion} mobilePhone={verificationPhone} endpoint={endpoint} />;
 
   if (!form) {
     return (

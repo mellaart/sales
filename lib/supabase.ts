@@ -31,6 +31,8 @@ export type ProfileRecord = {
 };
 
 export type AssetExpansionLine = {
+  moduleKey?: string;
+  requiresTravel?: boolean;
   group: string;
   label: string;
   quantity: number;
@@ -61,6 +63,7 @@ export type AssetExpansionSummary = {
 
 export type DealCalculatorInputs = {
   implementationDays?: number;
+  implementationDayRate?: number;
   extraUsers: number;
   chauffeurExtraUsers?: number;
   planningAppUsers?: number;

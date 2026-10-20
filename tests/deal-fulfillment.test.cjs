@@ -11,7 +11,12 @@ test('deal order requires acceptance, preview is read-only and ambiguous creatio
  const db=new PGlite();try{
  await db.exec('create table app_settings(key text primary key,payload jsonb,updated_at timestamptz);create table implementations(id text,deal_id text,smart_trade_order_id text);create table profiles(id text,employee_relation_id int);insert into profiles values (\'actor\',21)');
  let accepted=null,calls=0,fail=false,amount=100;
+ const trade={'getSmartTradePullConfig':()=>({baseUrl:'https://example.test'}),getSmartTradePullHeaders:()=>({}),fetchWithSmartTradeTimeout:async()=>{calls++;if(fail)throw new Error('timeout');return new Response(JSON.stringify({data:{id:444}}));}};
+ const batch=load('lib/implementation-order-batch.ts',{'@/lib/local-db':{query:(s,v)=>db.query(s,v)},'@/lib/smart-trade-pull-test':trade});
  const api=load('app/api/deals/[dealId]/order/route.ts',{
+ '@/lib/implementation-order-batch':batch,
+ '@/lib/admin-api':{getServiceClient:()=>null},
+ '@/lib/price-settings-storage':{readStoredPricingConfig:async()=>({pricingConfig:{modules:[],packages:[]}})},
  '@/lib/deal-relation':load('lib/deal-relation.ts'),
  'next/server':{NextResponse:{json:(body,init)=>({body,...init})}},'@/lib/local-auth':{requireLocalUser:async()=>({ok:true,user:{id:'actor',email:'admin'},profile:{}})},'@/lib/local-db':{query:(s,v)=>db.query(s,v)},'@/lib/local-table':{executeLocalTableQuery:async()=>({data:{id:'deal',accepted_at:accepted,smart_trade_relation_id:123,implementation_total:amount,calculator_inputs:{},package_name:'Basic'}})},'@/lib/protected-admin':{isProtectedAdminEmail:()=>true},'@/lib/implementation-order':load('lib/implementation-order.ts'),'@/lib/smart-trade-pull-test':{getSmartTradePullConfig:()=>({baseUrl:'https://example.test'}),getSmartTradePullHeaders:()=>({}),fetchWithSmartTradeTimeout:async()=>{calls++;if(fail)throw new Error('timeout');return new Response(JSON.stringify({data:{id:444}}));}}});
  const context={params:Promise.resolve({dealId:'deal'})};const post=mode=>api.POST(new Request('https://example.test',{method:'POST',body:JSON.stringify({mode})}),context);

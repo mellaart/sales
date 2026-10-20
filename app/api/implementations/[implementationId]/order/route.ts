@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { getImplementationOrderBreakdown, IMPLEMENTATION_ARTICLE_ID } from "@/lib/implementation-order";
+import { getImplementationOrderBreakdown, getImplementationModuleOrders } from "@/lib/implementation-order";
 import { requireLocalUser } from "@/lib/local-auth";
 import { query } from "@/lib/local-db";
 import { executeLocalTableQuery } from "@/lib/local-table";
 import { PROTECTED_ADMIN_EMAILS, isProtectedAdminEmail } from "@/lib/protected-admin";
-import {
-  fetchWithSmartTradeTimeout,
-  getSmartTradePullConfig,
-  getSmartTradePullHeaders,
-} from "@/lib/smart-trade-pull-test";
+import { createImplementationOrderBatch } from "@/lib/implementation-order-batch";
+import { readStoredPricingConfig } from "@/lib/price-settings-storage";
+import { getServiceClient } from "@/lib/admin-api";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,63 +47,11 @@ function positiveInteger(value: unknown) {
   return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
 }
 
-function decimalString(value: number) {
-  return String(Math.round((value + Number.EPSILON) * 100) / 100);
-}
-
-async function responseBody(response: Response) {
-  const text = await response.text();
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-}
-
-function apiErrorMessage(status: number, body: unknown) {
-  if (body && typeof body === "object") {
-    const record = body as Record<string, unknown>;
-    const errors = record.errors;
-    if (errors && typeof errors === "object") {
-      const details = Object.entries(errors as Record<string, unknown>)
-        .flatMap(([field, value]) => (Array.isArray(value) ? value : [value])
-          .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
-          .map((item) => `${field}: ${item.trim()}`))
-        .join(" ");
-      if (details) return details;
-    }
-
-    const message = record.message ?? record.error ?? record.userMessage;
-    if (typeof message === "string" && message.trim()) return message.trim();
-  }
-
-  if (typeof body === "string" && body.trim()) {
-    if (/<(?:!doctype|html|head|body)\b/i.test(body)) {
-      return `Smart Trade API gaf status ${status}; de live orderroute is niet beschikbaar.`;
-    }
-    return body.trim().slice(0, 700);
-  }
-  return `Smart Trade API gaf status ${status}.`;
-}
-
-function orderIdFromResponse(body: unknown) {
-  if (!body || typeof body !== "object") return null;
-  const record = body as Record<string, unknown>;
-  const data = record.data && typeof record.data === "object"
-    ? record.data as Record<string, unknown>
-    : record;
-  const id = data.id;
-  return typeof id === "string" || typeof id === "number" ? String(id) : null;
-}
-
 export async function POST(
   request: Request,
   context: { params: Promise<{ implementationId: string }> },
 ) {
-  let claimedImplementationId: string | null = null;
-  let liveOrderAcceptedBySmartTrade = false;
+  let liveOrdersCreated = false;
 
   try {
     const verified = await requireLocalUser(request);
@@ -201,56 +147,16 @@ export async function POST(
       }, 409);
     }
 
-    const implementationDescription = breakdown.description;
-    const lines = [{
-      sortOrder: 1,
-      article: IMPLEMENTATION_ARTICLE_ID,
-      quantity: "1",
-      unit: "st",
-      description: implementationDescription,
-      headerText: implementationDescription,
-      remark: "",
-      price: decimalString(breakdown.implementationAmount),
-    }];
-    if (breakdown.travelAmount > 0 && breakdown.travelArticleId && breakdown.travelRegion) {
-      const travelDescription = `Reiskosten - Regio ${breakdown.travelRegion}`;
-      lines.push({
-        sortOrder: 2,
-        article: breakdown.travelArticleId,
-        quantity: String(breakdown.travelQuantity),
-        unit: "st",
-        description: travelDescription,
-        headerText: implementationDescription,
-        remark: "",
-        price: decimalString(breakdown.travelPricePerUnit),
-      });
-    }
-
-    const payload = {
-      debtor: relationId,
-      invoiceRelation: relationId,
-      employee: employeeId,
-      deliveryMethod: 2,
-      shouldCondseHeader: true,
-      reference: breakdown.reference,
-      commentAboveLines: "",
-      lines,
-    };
-
+    const { pricingConfig } = await readStoredPricingConfig(getServiceClient());
+    const orders = getImplementationModuleOrders(deal, pricingConfig.modules, pricingConfig.packages, pricingConfig.implementationDayRate);
+    const payloads = orders.map(order => ({
+      debtor: relationId, invoiceRelation: relationId, employee: employeeId,
+      deliveryMethod: 2, shouldCondseHeader: true, reference: order.reference,
+      commentAboveLines: "", lines: order.lines,
+    }));
     if (mode === "preview") {
-      return jsonResponse({
-        ok: true,
-        mode,
-        previewed: true,
-        created: false,
-        orderId: null,
-        orderCreatedAt: null,
-        relationId,
-        employeeId,
-        reference: breakdown.reference,
-        breakdown,
-        lines,
-      });
+      return jsonResponse({ ok: true, mode, previewed: true, created: false,
+        relationId, employeeId, breakdown, orders });
     }
 
     if (mode === "create") {
@@ -268,60 +174,23 @@ export async function POST(
           error: "Deze implementatieorder wordt al aangemaakt of de status van een eerdere poging moet in Smart Trade worden gecontroleerd.",
         }, 409);
       }
-      claimedImplementationId = implementation.id;
     }
 
-    const config = getSmartTradePullConfig("live");
-    const targetUrl = `${config.baseUrl.replace(/\/+$/, "")}/orders`;
-    const headers = getSmartTradePullHeaders("live", { "content-type": "application/json" });
-    const response = await fetchWithSmartTradeTimeout(targetUrl, headers, "live", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    const apiBody = await responseBody(response);
-
-    if (!response.ok) {
-      if (claimedImplementationId) {
-        await query(
-          `update public.implementations
-           set smart_trade_order_pending_at = null, updated_at = now()
-           where id = $1 and smart_trade_order_id is null`,
-          [claimedImplementationId],
-        );
-        claimedImplementationId = null;
-      }
-      return jsonResponse({
-        error: apiErrorMessage(response.status, apiBody),
-        apiStatus: response.status,
-      }, 502);
-    }
-
-    if (mode === "create") liveOrderAcceptedBySmartTrade = true;
-
-    let orderId: string | null = null;
-    let orderCreatedAt: string | null = null;
-    if (mode === "create") {
-      orderId = orderIdFromResponse(apiBody) || "Aangemaakt";
-      const { rows } = await query<{
-        smart_trade_order_id: string;
-        smart_trade_order_created_at: string;
-      }>(
-        `update public.implementations
-         set smart_trade_order_id = $2,
-             smart_trade_order_created_at = now(),
-             smart_trade_order_pending_at = null,
-             progress = coalesce(progress, '{}'::jsonb)
-               || jsonb_build_object('implementationOrder', true),
-             updated_at = now()
-         where id = $1
-         returning smart_trade_order_id, smart_trade_order_created_at`,
-        [implementation.id, orderId],
-      );
-      orderCreatedAt = rows[0]?.smart_trade_order_created_at ?? new Date().toISOString();
-      claimedImplementationId = null;
-      liveOrderAcceptedBySmartTrade = false;
-    }
-
+    const createdOrders = await createImplementationOrderBatch(
+      `deal-order:${implementation.deal_id}`, payloads, verified.user.id,
+    );
+    liveOrdersCreated = true;
+    const orderId = createdOrders.map(order => order.orderId).join(", ");
+    const { rows } = await query<{ smart_trade_order_created_at: string }>(
+      `update public.implementations
+       set smart_trade_order_id = $2, smart_trade_order_created_at = now(),
+           smart_trade_order_pending_at = null,
+           progress = coalesce(progress, '{}'::jsonb) || jsonb_build_object('implementationOrder', true),
+           updated_at = now()
+       where id = $1 returning smart_trade_order_created_at`,
+      [implementation.id, orderId],
+    );
+    const orderCreatedAt = rows[0]?.smart_trade_order_created_at ?? new Date().toISOString();
     return jsonResponse({
       ok: true,
       mode,
@@ -331,23 +200,13 @@ export async function POST(
       orderCreatedAt,
       relationId,
       employeeId,
-      reference: breakdown.reference,
+      createdOrders,
       breakdown,
-      lines,
     }, 201);
   } catch (error) {
-    if (claimedImplementationId && !liveOrderAcceptedBySmartTrade) {
-      await query(
-        `update public.implementations
-         set smart_trade_order_pending_at = null, updated_at = now()
-         where id = $1 and smart_trade_order_id is null`,
-        [claimedImplementationId],
-      ).catch(() => undefined);
-    }
-
     return jsonResponse({
-      error: liveOrderAcceptedBySmartTrade
-        ? "Smart Trade heeft de order geaccepteerd, maar Sales kon de bevestiging niet opslaan. Controleer Smart Trade voordat je opnieuw probeert."
+      error: liveOrdersCreated
+        ? "De orders zijn aangemaakt, maar het implementatiedossier kon niet worden bijgewerkt. Controleer de opgeslagen orders bij de deal; maak ze niet opnieuw aan."
         : error instanceof Error ? error.message : "Implementatieorder verwerken mislukt.",
     }, 500);
   }

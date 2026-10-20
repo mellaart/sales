@@ -1,5 +1,8 @@
 "use client";
 
+import { ImplementationOrderPreview, CreatedImplementationOrders } from "@/components/implementation-order-list";
+import type { ImplementationModuleOrder } from "@/lib/implementation-order";
+import type { CreatedModuleOrder } from "@/lib/implementation-order-batch";
 import { getDealRelationId } from "@/lib/deal-relation";
 import DealImplementationDetails from "@/components/deal-implementation-details";
 import DealFulfillmentPanel from "@/components/deal-fulfillment-panel";
@@ -179,6 +182,8 @@ type DealAssetOverview = {
 };
 
 type ImplementationOrderResponse = {
+  orders?: ImplementationModuleOrder[];
+  createdOrders?: CreatedModuleOrder[];
   error?: string;
   orderId?: string | null;
   orderCreatedAt?: string | null;
@@ -376,6 +381,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     })();
     return () => controller.abort();
   }, [implementation?.id]);
+  const [createdImplementationOrders, setCreatedImplementationOrders] = useState<CreatedModuleOrder[]>([]);
+  const [implementationOrdersPending, setImplementationOrdersPending] = useState(false);
   const [implementationOrderPreview, setImplementationOrderPreview] = useState<ImplementationOrderResponse | null>(null);
   const [implementationOrderMessage, setImplementationOrderMessage] = useState("");
   const [implementationOrderMessageTone, setImplementationOrderMessageTone] = useState<"info" | "success" | "error">("info");
@@ -1063,6 +1070,16 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
+  useEffect(() => {
+    if (!implementation?.id || !canManageImplementation) return;
+    const controller = new AbortController();
+    void fetch(`/api/deals/${encodeURIComponent(dealId)}/order`, { signal: controller.signal })
+      .then(async response => response.ok ? response.json() : null)
+      .then(data => { if (data && !controller.signal.aborted) { setCreatedImplementationOrders(data.orders ?? []); setImplementationOrdersPending(Boolean(data.pending)); } })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [implementation?.id, canManageImplementation, dealId]);
+
   async function handleImplementationOrder(mode: "preview" | "create") {
     if (!implementation || !canManageImplementation || implementationOrderBusy) return;
 
@@ -1088,11 +1105,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
         setImplementationOrderPreview(json);
         setImplementationOrderMessageTone("success");
         setImplementationOrderMessage(
-          `Controle geslaagd voor relatie ${json.relationId}. De live order kan worden aangemaakt.`,
+          `Controle geslaagd voor relatie ${json.relationId}: ${json.orders?.length ?? 0} afzonderlijke verkooporders.`,
         );
         return;
       }
 
+      setCreatedImplementationOrders(json.createdOrders ?? []);
       setImplementation((current) => current ? {
         ...current,
         smart_trade_order_id: json.orderId ?? "Aangemaakt",
@@ -1106,9 +1124,16 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setImplementationOrderPreview(null);
       setImplementationOrderMessageTone("success");
       setImplementationOrderMessage(
-        `Smart Trade-order ${json.orderId || "is"} aangemaakt. Implementatieorder staat op Verwerkt.`,
+        `Smart Trade-verkooporders ${json.orderId || ""} aangemaakt. Implementatieorders staan op Verwerkt.`,
       );
     } catch (error) {
+      setImplementationOrderPreview(null);
+      if (mode === "create") {
+        setImplementationOrdersPending(true);
+        const status = await fetch(`/api/deals/${encodeURIComponent(dealId)}/order`)
+          .then(response => response.ok ? response.json() : null).catch(() => null);
+        if (status) setCreatedImplementationOrders(status.orders ?? []);
+      }
       setImplementationOrderMessageTone("error");
       setImplementationOrderMessage(
         error instanceof Error ? error.message : "Implementatieorder verwerken mislukt.",
@@ -1232,6 +1257,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           modules: selectedModuleRows,
           notes,
           calculator_inputs: {
+            implementationDayRate: pricingConfig.implementationDayRate,
             extraUsers,
             chauffeurExtraUsers,
             planningAppUsers,
@@ -1273,6 +1299,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       modules: selectedModuleRows,
       notes,
       calculator_inputs: {
+        implementationDayRate: pricingConfig.implementationDayRate,
         implementationDays,
         extraUsers,
         chauffeurExtraUsers,
@@ -2776,19 +2803,19 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
               <article className="implementation-communication-card implementation-order-card">
                 <div className="implementation-communication-icon"><ClipboardCheck size={22} /></div>
                 <div className="implementation-communication-copy">
-                  <span>Implementatieorder</span>
+                  <span>Implementatieorders</span>
                   <strong>
                     {implementation.smart_trade_order_id
-                      ? `Smart Trade-order ${implementation.smart_trade_order_id}`
+                      ? `Smart Trade-verkooporders ${implementation.smart_trade_order_id}`
                       : customerIntakeRelationId
                         ? `Relatie ${customerIntakeRelationId}`
                         : "Order wordt voorbereid"}
                   </strong>
                   <p>
                     {implementation.smart_trade_order_id
-                      ? "De implementatieorder is verwerkt in Smart Trade."
+                      ? "De implementatieorders zijn verwerkt in Smart Trade."
                       : customerIntakeRelationId
-                        ? "Controleer de order voordat deze live wordt aangemaakt."
+                        ? "Controleer per module het bedrag en de reiskosten voordat de verkooporders worden aangemaakt."
                         : "Koppel of verwerk eerst de Smart Trade-relatie via het klantformulier."}
                   </p>
                 </div>
@@ -2799,7 +2826,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     <button
                       type="button"
                       className="secondary-button"
-                      disabled={!canManageImplementation || !customerIntakeRelationId || Boolean(implementationOrderBusy)}
+                      disabled={!canManageImplementation || !customerIntakeRelationId || implementationOrdersPending || createdImplementationOrders.length > 0 || Boolean(implementationOrderBusy)}
                       onClick={() => void handleImplementationOrder("preview")}
                     >
                       {implementationOrderBusy === "preview"
@@ -2810,7 +2837,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     <button
                       type="button"
                       className="primary-button"
-                      disabled={!canManageImplementation || !implementationOrderPreview || Boolean(implementationOrderBusy)}
+                      disabled={!canManageImplementation || !implementationOrderPreview || implementationOrdersPending || createdImplementationOrders.length > 0 || Boolean(implementationOrderBusy)}
                       title={implementationOrderPreview
                         ? "Maak de gecontroleerde order live aan in Smart Trade"
                         : "Controleer de order eerst"}
@@ -2823,6 +2850,8 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                     </button>
                   </div>
                 )}
+                {implementationOrderPreview?.orders ? <ImplementationOrderPreview orders={implementationOrderPreview.orders} /> : null}
+                {createdImplementationOrders.length > 0 || implementationOrdersPending ? <CreatedImplementationOrders orders={createdImplementationOrders} pending={implementationOrdersPending} /> : null}
                 {implementationOrderMessage ? (
                   <div className={`implementation-order-message ${implementationOrderMessageTone}`}>
                     {implementationOrderMessage}

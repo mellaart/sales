@@ -855,6 +855,8 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
         lines.push({
           group: "Implementatie",
           label: `Implementatie ${moduleConfig.name}`,
+          moduleKey: moduleConfig.key,
+          requiresTravel: moduleConfig.requiresTravel !== false,
           quantity: 1,
           cadence: "once",
           amount: implementationCost,
@@ -1100,6 +1102,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
         modules: selectedModuleRows,
         notes,
         calculator_inputs: {
+          implementationDayRate: pricingConfig.implementationDayRate,
           extraUsers: safeExtraUsersToOffer,
           chauffeurExtraUsers: safeChauffeurExtraUsersToOffer,
           selectedPackage: activeResult.key,

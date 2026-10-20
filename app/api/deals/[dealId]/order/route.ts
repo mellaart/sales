@@ -4,8 +4,10 @@ import {requireLocalUser} from "@/lib/local-auth";
 import {executeLocalTableQuery} from "@/lib/local-table";
 import {query} from "@/lib/local-db";
 import {isProtectedAdminEmail} from "@/lib/protected-admin";
-import {getImplementationOrderBreakdown,IMPLEMENTATION_ARTICLE_ID} from "@/lib/implementation-order";
-import {fetchWithSmartTradeTimeout,getSmartTradePullConfig,getSmartTradePullHeaders} from "@/lib/smart-trade-pull-test";
+import {getImplementationOrderBreakdown,getImplementationModuleOrders} from "@/lib/implementation-order";
+import {createImplementationOrderBatch, type CreatedModuleOrder} from "@/lib/implementation-order-batch";
+import {readStoredPricingConfig} from "@/lib/price-settings-storage";
+import {getServiceClient} from "@/lib/admin-api";
 export const dynamic="force-dynamic";
 const json=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{"Cache-Control":"no-store"}});
 type Context={params:Promise<{dealId:string}>};
@@ -18,11 +20,11 @@ async function load(request:Request,context:Context){
  if(!deal)return {error:json({error:"Deal niet toegankelijk."},404)};
  deal.smart_trade_relation_id=getDealRelationId(deal);
  const existing=await query<{id:string;smart_trade_order_id:string|null}>("select id,smart_trade_order_id from public.implementations where deal_id=$1 limit 1",[dealId]);
- const saved=await query<{payload:{orderId?:string;status?:string}}>("select payload from public.app_settings where key=$1",[`deal-order:${dealId}`]);
- return {actor,deal,implementation:existing.rows[0] as {id:string;smart_trade_order_id:string|null}|undefined,saved:(saved.rows[0]?.payload as {orderId?:string;status?:string}|undefined),key:`deal-order:${dealId}`};
+ const saved=await query<{payload:{orderId?:string;status?:string;orders?:CreatedModuleOrder[]}}>("select payload from public.app_settings where key=$1",[`deal-order:${dealId}`]);
+ return {actor,deal,implementation:existing.rows[0] as {id:string;smart_trade_order_id:string|null}|undefined,saved:(saved.rows[0]?.payload as {orderId?:string;status?:string;orders?:CreatedModuleOrder[]}|undefined),key:`deal-order:${dealId}`};
 }
 export async function GET(request:Request,context:Context){
- try{const state=await load(request,context);if(state.error)return state.error;return json({orderId:state.implementation?.smart_trade_order_id??state.saved?.orderId??null,pending:state.saved?.status==="pending",implementationId:state.implementation?.id??null});}catch{return json({error:"Orderstatus laden mislukt."},500);}
+ try{const state=await load(request,context);if(state.error)return state.error;return json({orderId:state.implementation?.smart_trade_order_id??state.saved?.orderId??null,pending:state.saved?.status==="pending",orders:state.saved?.orders??[],implementationId:state.implementation?.id??null});}catch{return json({error:"Orderstatus laden mislukt."},500);}
 }
 export async function POST(request:Request,context:Context){
  try{
@@ -37,22 +39,14 @@ export async function POST(request:Request,context:Context){
  if(breakdown.travelAmount>0&&!breakdown.travelArticleId)return json({error:"Controleer de reiskostenregio in de deal."},400);
  const employeeResult=await query<{employee_relation_id:number}>("select employee_relation_id from public.profiles where id=$1",[state.actor!.user.id]);
  const employee=Number(employeeResult.rows[0]?.employee_relation_id);if(!Number.isSafeInteger(employee)||employee<=0)return json({error:"Vul eerst je medewerker relatie-ID in bij Admin."},400);
- const lines=[];
- if(breakdown.implementationAmount>0)lines.push({sortOrder:1,article:IMPLEMENTATION_ARTICLE_ID,quantity:"1",unit:"st",description:breakdown.description,headerText:breakdown.description,remark:"",price:String(breakdown.implementationAmount)});
- if(breakdown.travelAmount>0)lines.push({sortOrder:2,article:breakdown.travelArticleId,quantity:String(breakdown.travelQuantity),unit:"st",description:`Reiskosten - Regio ${breakdown.travelRegion}`,headerText:breakdown.description,remark:"",price:String(breakdown.travelPricePerUnit)});
+ const {pricingConfig}=await readStoredPricingConfig(getServiceClient());
+ const orders=getImplementationModuleOrders(deal,pricingConfig.modules,pricingConfig.packages,pricingConfig.implementationDayRate);
  const body=await request.json().catch(()=>({}));
- if(body.mode!=="create")return json({lines,total:breakdown.totalAmount,relationId:relation});
- const claim=await query("insert into public.app_settings (key,payload) values ($1,$2::jsonb) on conflict (key) do nothing returning key",[state.key,JSON.stringify({status:"pending",createdBy:state.actor!.user.id,attemptedAt:new Date().toISOString()})]);
- if(!claim.rows.length)return json({error:"Deze order wordt al verwerkt."},409);
- const response=await fetchWithSmartTradeTimeout(`${getSmartTradePullConfig("live").baseUrl.replace(/\/+$/,"")}/orders`,getSmartTradePullHeaders("live",{"content-type":"application/json"}),"live",{method:"POST",body:JSON.stringify({debtor:relation,invoiceRelation:relation,employee,deliveryMethod:2,shouldCondseHeader:true,reference:breakdown.reference,commentAboveLines:"",lines})});
- const result=await response.json().catch(()=>null);
- if(!response.ok){
-  if(response.status>=400&&response.status<500&&response.status!==408)await query("delete from public.app_settings where key=$1",[state.key]);
-  return json({error:`Order aanmaken mislukt (status ${response.status}). Controleer Smart Trade voordat je opnieuw probeert.`},502);
- }
- const orderId=result?.data?.id??result?.id;
- if(!orderId)return json({error:"Geen ordernummer ontvangen. Controleer Smart Trade; opnieuw aanmaken is geblokkeerd."},502);
- await query("update public.app_settings set payload=$2::jsonb,updated_at=now() where key=$1",[state.key,JSON.stringify({status:"created",orderId:String(orderId),createdAt:new Date().toISOString()})]);
- return json({orderId:String(orderId)},201);
- }catch{return json({error:"Orderaanmaak kon niet worden bevestigd. Controleer Smart Trade voordat je opnieuw probeert."},502);}
+ if(body.mode!=="create")return json({orders,total:breakdown.totalAmount,relationId:relation});
+ const createdOrders=await createImplementationOrderBatch(state.key,orders.map(order=>({
+  debtor:relation,invoiceRelation:relation,employee,deliveryMethod:2,shouldCondseHeader:true,
+  reference:order.reference,commentAboveLines:"",lines:order.lines,
+ })),state.actor!.user.id);
+ return json({orderId:createdOrders.map(order=>order.orderId).join(", "),orders:createdOrders},201);
+ }catch(error){return json({error:error instanceof Error?error.message:"Orderaanmaak kon niet worden bevestigd. Controleer Smart Trade voordat je opnieuw probeert."},502);}
 }

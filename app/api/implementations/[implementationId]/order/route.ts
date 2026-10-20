@@ -24,6 +24,7 @@ type ImplementationRow = {
 type DealRow = {
   smart_trade_relation_id: number | null;
   package_name: string | null;
+  modules: unknown;
   implementation_total: number | null;
   calculator_inputs: unknown;
 };
@@ -151,7 +152,7 @@ export async function POST(
 
     const [{ rows: dealRows }, { rows: employeeRows }] = await Promise.all([
       query<DealRow>(
-        `select smart_trade_relation_id, package_name, implementation_total, calculator_inputs
+        `select smart_trade_relation_id, package_name, modules, implementation_total, calculator_inputs
          from public.deals
          where id = $1
          limit 1`,

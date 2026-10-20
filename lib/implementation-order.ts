@@ -19,6 +19,7 @@ export const TRAVEL_ARTICLE_BY_REGION: Readonly<Record<number, number>> = {
 
 type ImplementationOrderDeal = {
   package_name?: unknown;
+  modules?: unknown;
   implementation_total?: unknown;
   calculator_inputs?: unknown;
 };
@@ -72,14 +73,56 @@ function objectValue(value: unknown): Record<string, unknown> {
   return {};
 }
 
-export function getImplementationOrderDescription(packageName: unknown) {
-  const normalizedPackage = typeof packageName === "string"
-    ? packageName.trim().replace(/^Smart\s+Trade\b[\s-]*/i, "")
-    : "";
+function moduleName(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value.trim()
+    .replace(/^Implementatie\s+/i, "")
+    .replace(/^Smart\s+Trade\b[\s-]*/i, "")
+    .replace(/^Suite MKB koppeling$/i, "Suite MKB");
+}
 
-  return normalizedPackage
-    ? `Smart Trade ${normalizedPackage} implementatie`
-    : "Smart Trade implementatie";
+export function getImplementationOrderDescription(packageName: unknown, calculatorInputs?: unknown, modules?: unknown) {
+  const inputs = objectValue(calculatorInputs);
+  const expansion = objectValue(inputs.assetsExpansion);
+  const names: string[] = [];
+  const addName = (value: unknown) => {
+    const name = moduleName(value);
+    if (name && !names.some((existing) => existing.toLowerCase() === name.toLowerCase())) names.push(name);
+  };
+
+  if (Array.isArray(expansion.lines)) {
+    // Expansion module selections also contain existing modules; only purchased lines apply.
+    for (const value of expansion.lines) {
+      const line = objectValue(value);
+      if (finiteNumber(line.quantity) <= 0 || typeof line.label !== "string") continue;
+      if (line.group === "Modules") {
+        for (const name of line.label.replace(/^Module-uitbreiding:\s*/i, "").split(",")) addName(name);
+      } else if (line.group === "Implementatie") {
+        addName(line.label);
+      } else if (line.group === "Pakket" && typeof line.note === "string") {
+        const separator = line.note.indexOf(":");
+        if (separator >= 0) {
+          for (const name of line.note.slice(separator + 1).split(",")) addName(name);
+        }
+      }
+    }
+  } else {
+    let moduleRows = modules;
+    if (typeof moduleRows === "string") {
+      try { moduleRows = JSON.parse(moduleRows); } catch { moduleRows = []; }
+    }
+    if (Array.isArray(moduleRows)) {
+      for (const value of moduleRows) {
+        const row = objectValue(value);
+        if (row.qty != null && finiteNumber(row.qty) <= 0) continue;
+        addName(row.name);
+      }
+    }
+  }
+
+  const packageLabel = moduleName(packageName);
+  const label = names.join(", ") || (/^uitbreiding$/i.test(packageLabel) ? "" : packageLabel);
+  return label ? `Implementatie ${label}` : "Implementatie";
 }
 
 export function getImplementationOrderBreakdown(
@@ -98,7 +141,7 @@ export function getImplementationOrderBreakdown(
   const travelQuantity = travelAmount > 0 && travelPricePerUnit > 0
     ? roundQuantity(travelAmount / travelPricePerUnit)
     : 0;
-  const description = getImplementationOrderDescription(deal.package_name);
+  const description = getImplementationOrderDescription(deal.package_name, inputs, deal.modules);
 
   return {
     description,

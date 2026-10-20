@@ -13,8 +13,8 @@ async function load(request:Request,context:Context){
  const actor=await requireLocalUser(request);if(!actor.ok)return {error:json({error:"Niet ingelogd."},401)};
  if(!isProtectedAdminEmail(actor.user.email))return {error:json({error:"Geen rechten om orders te verwerken."},403)};
  const {dealId}=await context.params;
- const result=await executeLocalTableQuery({table:"deals",action:"select",select:"id,accepted_at,smart_trade_relation_id,package_name,implementation_total,calculator_inputs",filters:[{column:"id",op:"eq",value:dealId}],maybeSingle:true},{user:actor.user,profile:actor.profile});
- const deal=result.data as {id:string;accepted_at:string|null;smart_trade_relation_id:number|null;package_name:string;implementation_total:number;calculator_inputs:unknown}|null;
+ const result=await executeLocalTableQuery({table:"deals",action:"select",select:"id,accepted_at,smart_trade_relation_id,package_name,modules,implementation_total,calculator_inputs",filters:[{column:"id",op:"eq",value:dealId}],maybeSingle:true},{user:actor.user,profile:actor.profile});
+ const deal=result.data as {id:string;accepted_at:string|null;smart_trade_relation_id:number|null;package_name:string;modules:unknown;implementation_total:number;calculator_inputs:unknown}|null;
  if(!deal)return {error:json({error:"Deal niet toegankelijk."},404)};
  deal.smart_trade_relation_id=getDealRelationId(deal);
  const existing=await query<{id:string;smart_trade_order_id:string|null}>("select id,smart_trade_order_id from public.implementations where deal_id=$1 limit 1",[dealId]);

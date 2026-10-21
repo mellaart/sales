@@ -229,7 +229,9 @@ async function loadContext(request: Request, dealId: string): Promise<
   let implementation = implementationRows[0] ?? null;
   if (!implementation) {
     const {rows} = await query<{payload:{administrationName?:string;startDate?:string}}>("select payload from public.app_settings where key=$1", [`deal-fulfillment:${deal.id}`]);
-    implementation = {id:"",administration_name:rows[0]?.payload.administrationName??null,planned_go_live_date:rows[0]?.payload.startDate??null};
+    const savedName = rows[0]?.payload.administrationName?.trim();
+    const licenseSync = savedName ? null : await getLicenseSync(deal.id);
+    implementation = {id:"",administration_name:savedName || licenseSync?.administration?.trim() || null,planned_go_live_date:rows[0]?.payload.startDate??null};
   }
   const plan = buildDealAssetPlan(deal, implementation?.administration_name);
   const prerequisiteErrors: string[] = [];

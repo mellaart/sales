@@ -2862,7 +2862,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           </section>
         ) : null}
 
-        {!implementation ? <DealFulfillmentPanel dealId={dealId} accepted={Boolean(acceptedAt)} amount={implementationTotal} canOrder={canManageImplementation} onSaved={()=>void refreshDealAssets()} /> : null}
+        {!implementation ? <DealFulfillmentPanel dealId={dealId} accepted={Boolean(acceptedAt)} amount={implementationTotal} canOrder={canManageImplementation} administrationName={assetOverview?.administrationName} startDate={assetOverview?.plannedGoLiveDate} onSaved={()=>void refreshDealAssets()} /> : null}
         {(
           <section className="card panel customer-intake-panel">
             <div className="top-row customer-intake-heading">

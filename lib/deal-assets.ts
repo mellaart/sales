@@ -5,6 +5,7 @@ type PackageKey = "lite" | "starter" | "basic" | "premium" | "enterprise";
 type PackageAssetClasses = {
   license: number;
   extraUser: number;
+  extraAdministration: number;
   chauffeurExtraUser: number;
   planningAppUser: number;
   support: number;
@@ -43,10 +44,11 @@ const PACKAGE_LABELS: Record<PackageKey, string> = {
   enterprise: "Enterprise",
 };
 
-// Assetklasse-ID's uit Assets.xlsx. De IDs zijn bewust hier vastgelegd, zodat
+// Assetklasse-ID's uit Assets.xlsx en bevestigde extra-administratieklassen. De IDs zijn bewust hier vastgelegd, zodat
 // een offerte altijd met de juiste Smart Trade-assetklasse wordt verwerkt.
 const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
   lite: {
+    extraAdministration: 116,
     license: 30,
     extraUser: 32,
     chauffeurExtraUser: 198,
@@ -82,6 +84,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
     smartConnect: { one: 44, three: 46, five: 47, ten: 49, extra: 45, suiteMkb: 351 },
   },
   starter: {
+    extraAdministration: 118,
     license: 22,
     extraUser: 24,
     chauffeurExtraUser: 202,
@@ -117,6 +120,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
     smartConnect: { one: 87, three: 85, five: 84, ten: 82, extra: 86, suiteMkb: 350 },
   },
   basic: {
+    extraAdministration: 115,
     license: 26,
     extraUser: 28,
     chauffeurExtraUser: 200,
@@ -152,6 +156,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
     smartConnect: { one: 93, three: 91, five: 90, ten: 88, extra: 92, suiteMkb: 349 },
   },
   premium: {
+    extraAdministration: 117,
     license: 18,
     extraUser: 20,
     chauffeurExtraUser: 204,
@@ -189,6 +194,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
     smartConnect: { one: 99, three: 97, five: 96, ten: 94, extra: 98, suiteMkb: 348 },
   },
   enterprise: {
+    extraAdministration: 119,
     license: 34,
     extraUser: 36,
     chauffeurExtraUser: 196,
@@ -391,6 +397,7 @@ function buildBaseDealAssetPlan(deal: Pick<DealRecord, "package_key" | "package_
         if (key) assetClass = classes.customerPortal[key];
       } else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Extra gebruiker`) assetClass = classes.extraUser;
       else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
+      else if (group === "Extra administratie" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} extra administratie`) assetClass = classes.extraAdministration;
       else if (group === "Extra administratie" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
       else if (group === "Chauffeursmodule" && label === "Licentie extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurExtraUser;
       else if (group === "Chauffeursmodule" && label === "Supportcontract extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurSupportExtraUser;

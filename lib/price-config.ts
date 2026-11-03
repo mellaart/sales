@@ -148,7 +148,7 @@ const MODULE_DETAILS: Record<string, Pick<ModuleConfig, "setupCost" | "dependenc
   kassa: { setupCost: 720 },
   terrein: { setupCost: 720 },
   voorraad: { setupCost: 720 },
-  partijregistratie: { setupCost: 720, dependencyNote: "Vereist: Voorraad" },
+  partijregistratie: { setupCost: 720, dependencyNote: "Vereist: Terrein automatisering en voorraad" },
   chauffeurs: { setupCost: 720, dependencyNote: "Vereist bij chauffeursgebruikers: Digitale ondertekening" },
   assets: { setupCost: 720 },
   ticketing: { setupCost: 720 },
@@ -416,6 +416,7 @@ function normalizePackage(input: unknown, fallback: PackageConfig): PackageConfi
 function normalizeModule(input: unknown, fallback: ModuleConfig): ModuleConfig {
   const source = input && typeof input === "object" ? (input as Partial<ModuleConfig>) : {};
   const isPlanningApp = fallback.key === "hoveniersapp";
+  const dependencyNote = typeof source.dependencyNote === "string" ? source.dependencyNote.trim() : "";
   const workItems = cleanWorkItems(source.workItems)?.map((item) => (
     isPlanningApp ? item.replace(/hoveniersapp/gi, "Planningsapp") : item
   ));
@@ -430,8 +431,8 @@ function normalizeModule(input: unknown, fallback: ModuleConfig): ModuleConfig {
       : fallback.description,
     monthlyPrice: safeNumber(source.monthlyPrice, fallback.monthlyPrice),
     setupCost: safeNumber(source.setupCost, fallback.setupCost ?? 0),
-    dependencyNote: typeof source.dependencyNote === "string" && source.dependencyNote.trim()
-      ? source.dependencyNote.trim()
+    dependencyNote: dependencyNote && !(fallback.key === "partijregistratie" && dependencyNote === "Vereist: Voorraad")
+      ? dependencyNote
       : fallback.dependencyNote ?? null,
     noPackageSwitch: Boolean(source.noPackageSwitch ?? fallback.noPackageSwitch),
     requiresTravel: Boolean(source.requiresTravel ?? fallback.requiresTravel ?? true),

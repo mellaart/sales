@@ -36,7 +36,7 @@ const SERVICE_COST_OPTIONS = [
 ];
 const MODULE_DEPENDENCIES: Record<string, string[]> = {
   suiteMkb: ["rapportage"],
-  partijregistratie: ["voorraad"],
+  partijregistratie: ["terrein", "voorraad"],
   hoveniersapp: ["ticketing"],
 };
 type RelationOption = {

@@ -36,6 +36,8 @@ import {
   type WorldlineProject,
   type WorldlineProjectStatus,
 } from "@/lib/worldline";
+import { fillUboPdf } from "@/lib/worldline-ubo-pdf";
+import type { UboPrefill } from "@/lib/worldline-ubo";
 import styles from "@/components/assets-dashboard.module.css";
 
 type RelationOption = {
@@ -66,6 +68,7 @@ type WorldlineArchiveView = "active" | "archived";
 type PreparedWorldlineFile = {
   blob: Blob;
   fileName: string;
+  warnings?: string[];
 };
 
 type SignedUploadResponse = {
@@ -1107,11 +1110,20 @@ async function prepareUboDocuments(
   pdfDoc.setTitle(`UBO-registratieformulier ${relation.name}`);
   pdfDoc.setSubject(`Worldline project ${project.id}`);
   const form = pdfDoc.getForm();
-  const companyName = (fields.companyName || relation.name).trim();
-  const vatNumber = (fields.vatNumber || "").trim();
-
-  form.getTextField("1723.1.01.VP.1").setText(companyName);
-  form.getTextField("1723.1.01.VP.2").setText(vatNumber);
+  const client = getSupabaseClient();
+  const session = await client?.auth.getSession();
+  const token = session?.data.session?.access_token;
+  if (!token) throw new Error("Je sessie is verlopen. Log opnieuw in.");
+  const response = await fetch("/api/worldline/ubo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ projectId: project.id }),
+  });
+  const prefill = await response.json() as UboPrefill & { error?: string };
+  if (!response.ok) throw new Error(prefill.error || "KvK-gegevens konden niet worden gelezen.");
+  prefill.text["1723.1.01.VP.1"] = (fields.companyName || relation.name).trim();
+  prefill.text["1723.1.01.VP.2"] = (fields.vatNumber || "").trim();
+  fillUboPdf(pdfDoc, prefill);
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   form.updateFieldAppearances(font);
@@ -1130,6 +1142,7 @@ async function prepareUboDocuments(
     {
       blob: new Blob([pdfArrayBuffer], { type: "application/pdf" }),
       fileName: "UBO-registratieformulier.pdf",
+      warnings: prefill.warnings,
     },
   ];
 }
@@ -1141,6 +1154,7 @@ async function downloadUboDocuments(
 ) {
   const files = await prepareUboDocuments(relation, project, fields);
   files.forEach((file) => downloadBlob(file.blob, file.fileName));
+  return files.flatMap(file => file.warnings ?? []);
 }
 
 async function prepareRefundAddendum(
@@ -2530,8 +2544,8 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
     setStatus("UBO-documenten worden voorbereid...");
 
     try {
-      await downloadUboDocuments(selectedRelation, activeProject, agreementFieldsRef.current);
-      setStatus("KYC- en AML-vragenlijst en UBO-registratieformulier gedownload.");
+      const warnings = await downloadUboDocuments(selectedRelation, activeProject, agreementFieldsRef.current);
+      setStatus(["KYC- en AML-vragenlijst en UBO-registratieformulier gedownload.", ...warnings].join(" "));
     } catch (error) {
       setStatus(`UBO-documenten downloaden mislukt: ${getErrorMessage(error, "documenten konden niet worden voorbereid.")}`);
     }
@@ -2641,6 +2655,7 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
           ? prepareRefundAddendum(selectedRelation, fields)
           : Promise.resolve(null),
       ]);
+      const uboWarnings = uboFiles.flatMap(file => file.warnings ?? []);
       const attachments = [
         agreementFile,
         ...uboFiles,
@@ -2685,9 +2700,9 @@ export default function WorldlineDashboard({ returnPinOnly = false }: { returnPi
         window.location.assign(json.webLink);
       }
       setStatus(
-        refundSelected
+        [refundSelected
           ? "E-mail met vier Worldline-documenten is verzonden."
-          : "E-mail met drie Worldline-documenten is verzonden.",
+          : "E-mail met drie Worldline-documenten is verzonden.", ...uboWarnings].join(" "),
       );
     } catch (error) {
       const message = getErrorMessage(error, "E-mail verzenden mislukt.");

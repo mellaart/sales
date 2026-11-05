@@ -6,7 +6,7 @@ export const IMPLEMENTATION_DNS_RECORDS = {
   dkimSmartsoftName: "smtp01-smartsoft._domainkey",
   dkimSmartsoftTarget: "smtp01._domainkey.smartsoft.nu",
   dkimTroublefreeName: "smtp02-tfh._domainkey",
-  dkimTroublefreeTarget: "smtp02-tfh._domainkey.troublefreehosting.nl",
+  dkimTroublefreeTarget: "smtp02._domainkey.troublefreehosting.nl",
 } as const;
 
 export type DnsCheckStatus = "pass" | "fail" | "error";

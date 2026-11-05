@@ -207,7 +207,7 @@ function dnsInstructionsEmail(input: {
     '<p style="margin:0 0 4pt"><strong>DKIM-record 2</strong></p>',
     '<p style="margin:0">Naam: smtp02-tfh._domainkey</p>',
     '<p style="margin:0">Type: CNAME</p>',
-    '<p style="margin:0 0 12pt">Waarde: smtp02-tfh._domainkey.troublefreehosting.nl</p>',
+    '<p style="margin:0 0 12pt">Waarde: smtp02._domainkey.troublefreehosting.nl</p>',
     '<p style="margin:0 0 4pt"><strong>Let op:</strong></p>',
     '<p style="margin:0 0 4pt">Sommige DNS-beheerders vereisen een punt aan het eind van de waardes.</p>',
     '<p style="margin:0 0 12pt">Controleer het SPF-record via <a href="https://www.kitterman.com/spf/validate.html" style="color:#0563c1;text-decoration:underline">Kitterman&rsquo;s SPF Checker</a>.</p>',

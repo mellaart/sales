@@ -3285,7 +3285,7 @@ export default function ImplementationEditor({ implementationId }: { implementat
                   <h4>DKIM-record 2</h4>
                   <DnsCheckRow
                     label="Naam: smtp02-tfh._domainkey"
-                    value="Type: CNAME | Waarde: smtp02-tfh._domainkey.troublefreehosting.nl"
+                    value="Type: CNAME | Waarde: smtp02._domainkey.troublefreehosting.nl"
                     result={dnsCheck?.checks.dkimTroublefree}
                     loading={dnsCheckLoading}
                   />

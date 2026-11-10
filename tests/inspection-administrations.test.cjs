@@ -10,7 +10,7 @@ function load(file) {
 }
 const { getInspectionAdministrationLines: lines, INSPECTION_ADMINISTRATION_ARTICLES: articles } = load('lib/inspection-administrations.ts');
 const { buildDealAssetPlan } = load('lib/deal-assets.ts');
-for (const [key, name, article] of [['starter','Starter',625], ['premium','Premium',624], ['enterprise','Enterprise',623], ['basic','Basic',622], ['lite','Lite',621]]) {
+for (const [key, name, article, assetClass] of [['starter','Starter',625,193], ['premium','Premium',624,192], ['enterprise','Enterprise',623,194], ['basic','Basic',622,190], ['lite','Lite',621,191]]) {
   test(`${name}: conversion preserves current package and article without support`, () => {
     const result = lines({key, name, supportExtra:10}, 15);
     assert.equal(articles[key], article);
@@ -20,8 +20,18 @@ for (const [key, name, article] of [['starter','Starter',625], ['premium','Premi
     assert.equal(result[0].amount, 15);
     assert.ok(result[0].note.startsWith(`Artikel ${article}.`));
     const plan = buildDealAssetPlan({package_key:key, package_name:name, modules:[], calculator_inputs:{quoteLayout:'assets-expansion',assetsExpansion:{lines:result}}});
-    assert.equal(plan.items.length, 0, 'conversion must not create an extra administration asset');
-    assert.equal(plan.warnings.length, 1, 'conversion requires manual handling without a known asset class');
+    assert.equal(plan.items.length, 1);
+    assert.equal(plan.items[0].assetClassId, assetClass);
+    assert.equal(plan.warnings.length, 0);
+    const namedLines = lines({key, name}, 15, 'Acme');
+    const deal = {package_key:key, package_name:name, modules:[], calculator_inputs:{quoteLayout:'assets-expansion',assetsExpansion:{administrationName:'Acme',lines:namedLines}}};
+    for (const administration of [undefined, 'Acme']) {
+      const namedPlan = buildDealAssetPlan(deal, administration);
+      assert.equal(namedPlan.items.length, 1);
+      assert.equal(namedPlan.items[0].assetClassId, assetClass);
+      assert.equal(namedPlan.items[0].name, `Smart Trade ${name} inkijk administratie (Acme)`);
+      assert.equal(namedPlan.warnings.length, 0);
+    }
   });
 }
 test('rejects missing prices and unknown packages', () => {
@@ -48,4 +58,12 @@ test('includes the administration in the quote line persisted to the deal', () =
   assert.equal(result[0].label, 'Smart Trade Starter inkijk administratie (Acme Noord)');
   assert.equal(result[0].amount, 19.2);
   assert.equal(result.length, 1);
+});
+
+test('does not map an inspection conversion to a different package or multiple assets', () => {
+  for (const line of [lines({key:'enterprise',name:'Enterprise'}, 15)[0], {...lines({key:'starter',name:'Starter'}, 15)[0],quantity:2}]) {
+    const plan = buildDealAssetPlan({package_key:'starter',package_name:'Starter',modules:[],calculator_inputs:{quoteLayout:'assets-expansion',assetsExpansion:{lines:[line]}}});
+    assert.equal(plan.items.length, 0);
+    assert.equal(plan.warnings.length, 1);
+  }
 });

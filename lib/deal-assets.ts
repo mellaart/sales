@@ -6,6 +6,7 @@ type PackageAssetClasses = {
   license: number;
   extraUser: number;
   extraAdministration: number;
+  inspectionAdministration: number;
   chauffeurExtraUser: number;
   planningAppUser: number;
   support: number;
@@ -49,6 +50,7 @@ const PACKAGE_LABELS: Record<PackageKey, string> = {
 const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
   lite: {
     extraAdministration: 116,
+    inspectionAdministration: 191,
     license: 30,
     extraUser: 32,
     chauffeurExtraUser: 198,
@@ -85,6 +87,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
   },
   starter: {
     extraAdministration: 118,
+    inspectionAdministration: 193,
     license: 22,
     extraUser: 24,
     chauffeurExtraUser: 202,
@@ -121,6 +124,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
   },
   basic: {
     extraAdministration: 115,
+    inspectionAdministration: 190,
     license: 26,
     extraUser: 28,
     chauffeurExtraUser: 200,
@@ -157,6 +161,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
   },
   premium: {
     extraAdministration: 117,
+    inspectionAdministration: 192,
     license: 18,
     extraUser: 20,
     chauffeurExtraUser: 204,
@@ -195,6 +200,7 @@ const PACKAGE_ASSET_CLASSES: Record<PackageKey, PackageAssetClasses> = {
   },
   enterprise: {
     extraAdministration: 119,
+    inspectionAdministration: 194,
     license: 34,
     extraUser: 36,
     chauffeurExtraUser: 196,
@@ -397,6 +403,10 @@ function buildBaseDealAssetPlan(deal: Pick<DealRecord, "package_key" | "package_
         if (key) assetClass = classes.customerPortal[key];
       } else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Extra gebruiker`) assetClass = classes.extraUser;
       else if (group === "Gebruikers" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
+      else if (group === "Inkijk administratie" && quantity === 1 && (
+        label === `Smart Trade ${PACKAGE_LABELS[packageKey]} inkijk administratie`
+        || (label.startsWith(`Smart Trade ${PACKAGE_LABELS[packageKey]} inkijk administratie (`) && label.endsWith(")"))
+      )) assetClass = classes.inspectionAdministration;
       else if (group === "Extra administratie" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} extra administratie`) assetClass = classes.extraAdministration;
       else if (group === "Extra administratie" && label === `Smart Trade ${PACKAGE_LABELS[packageKey]} Supportcontract Extra gebruiker`) assetClass = classes.supportExtraUser;
       else if (group === "Chauffeursmodule" && label === "Licentie extra gebruiker (chauffeursmodule)") assetClass = classes.chauffeurExtraUser;
@@ -564,11 +574,17 @@ export function buildDealAssetPlan(
   administrationName?: string | null,
 ): DealAssetPlan {
   const plan = buildBaseDealAssetPlan(deal);
-  const administration = administrationName?.trim().replace(/\s+/g, " ");
+  const administration = (administrationName || deal.calculator_inputs?.assetsExpansion?.administrationName)?.trim().replace(/\s+/g, " ");
   if (!administration) return plan;
   return {
     ...plan,
-    items: plan.items.map(item => ({ ...item, name: `${item.name} (${administration})` })),
+    items: plan.items.map(item => {
+      // Inkijk-offerteregels bevatten de administratienaam al; voeg deze maar één keer toe.
+      const name = item.source === "Inkijk administratie"
+        ? item.name.replace(/(inkijk administratie)(?: \(.*\))?$/, "$1")
+        : item.name;
+      return { ...item, name: `${name} (${administration})` };
+    }),
   };
 }
 

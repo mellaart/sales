@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import CalculatorRelationSearch, { type CalculatorRelation } from "@/components/calculator-relation-search";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -147,6 +148,8 @@ export default function PriceCalculator() {
     () => pricingConfig.packages.filter((packageConfig) => packageConfig.key !== "lite"),
     [pricingConfig.packages],
   );
+  const [customerType, setCustomerType] = useState<"new" | "existing">("new");
+  const [selectedRelation, setSelectedRelation] = useState<CalculatorRelation | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerPostcode, setCustomerPostcode] = useState("");
   const [contactName, setContactName] = useState("");
@@ -374,6 +377,11 @@ export default function PriceCalculator() {
       return;
     }
 
+    if (customerType === "existing" && !selectedRelation) {
+      setStatus("Kies eerst een bestaande relatie voor deze offerte.");
+      return;
+    }
+
     setSavingDeal(true);
     setStatus("Berekening wordt opgeslagen...");
 
@@ -381,6 +389,8 @@ export default function PriceCalculator() {
       const payload = {
         user_id: user.id,
         customer_name: customerName.trim() || null,
+        smart_trade_relation_id: customerType === "existing" && selectedRelation ? Number(selectedRelation.id) : null,
+        customer_email: customerType === "existing" ? selectedRelation?.email ?? null : null,
         quote_title: quoteTitle.trim() || "Prijsvoorstel Smart Trade",
         contact_name: contactName.trim() || null,
         sales_name: salesName.trim() || currentSalesName || null,
@@ -448,6 +458,10 @@ export default function PriceCalculator() {
   }
 
   async function handlePdfExport() {
+    if (customerType === "existing" && !selectedRelation) {
+      setStatus("Kies eerst een bestaande relatie voor deze offerte.");
+      return;
+    }
     setExportingPdf(true);
     setStatus("PDF wordt gemaakt...");
 
@@ -606,10 +620,32 @@ export default function PriceCalculator() {
 
             <div className="section">
               <div className="section-title"><FileText size={16} /> Klant en offerte</div>
+              <label className="input-wrap">
+                <span className="input-label">Type klant</span>
+                <select className="input" value={customerType} onChange={(event) => {
+                  setCustomerType(event.target.value as "new" | "existing");
+                  setSelectedRelation(null);
+                  setCustomerName("");
+                  setContactName("");
+                  handleCustomerPostcodeChange("");
+                  setStatus("");
+                }}>
+                  <option value="new">Nieuwe klant</option>
+                  <option value="existing">Bestaande klant — extra bedrijf</option>
+                </select>
+              </label>
+              {customerType === "existing" ? <CalculatorRelationSearch selected={selectedRelation} onSelect={(relation) => {
+                setSelectedRelation(relation);
+                setCustomerName(relation.name);
+                setContactName("");
+                handleCustomerPostcodeChange(relation.postcode ?? "");
+                setStatus("");
+              }} /> : null}
+
               <div className="field-grid-2">
                 <label className="input-wrap">
                   <span className="input-label">Klantnaam</span>
-                  <input className="input" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Bijv. Groenbedrijf Jansen" />
+                  <input className="input" value={customerName} readOnly={customerType === "existing"} onChange={(event) => setCustomerName(event.target.value)} placeholder="Bijv. Groenbedrijf Jansen" />
                 </label>
                 <label className="input-wrap">
                   <span className="input-label">Postcode klant</span>

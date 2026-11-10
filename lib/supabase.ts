@@ -42,6 +42,7 @@ export type AssetExpansionLine = {
 };
 
 export type AssetExpansionSummary = {
+  administrationName?: string;
   source: "assets";
   relationId: string;
   relationName: string;

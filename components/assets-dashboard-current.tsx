@@ -7,7 +7,7 @@ import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
 import { StatusPill } from "@/components/ui";
-import { INSPECTION_ADMINISTRATION_ARTICLES, getInspectionAdministrationLines } from "@/lib/inspection-administrations";
+import { INSPECTION_ADMINISTRATION_ARTICLES, getInspectionAdministrationLines, getAdministrationNames } from "@/lib/inspection-administrations";
 import { EXTRA_ADMINISTRATION_ARTICLES, EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines } from "@/lib/extra-administrations";
 import { getAssetExpansionTotals } from "@/lib/asset-expansions";
 import { createDealWithFallback } from "@/lib/deal-storage";
@@ -570,6 +570,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [extraAdministrations, setExtraAdministrations] = useState(0);
   const [inspectionAdministration, setInspectionAdministration] = useState(false);
+  const [selectedInspectionName, setSelectedInspectionName] = useState("");
   const [extraUsersToOffer, setExtraUsersToOffer] = useState(0);
   const [chauffeurExtraUsersToOffer, setChauffeurExtraUsersToOffer] = useState(0);
   const [includeMissingSupportOffer, setIncludeMissingSupportOffer] = useState(false);
@@ -778,12 +779,14 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     ? getExtraAdministrationLines(offerPackage, extraAdministrations, administrationPrice, shouldIncludeSupport || includeMissingSupportOffer)
     : [], [offerPackage, extraAdministrations, administrationPriceValid, administrationPrice, shouldIncludeSupport, includeMissingSupportOffer]);
   const administrationIncomplete = !pinQuote && extraAdministrations > 0 && (!offerPackage || !administrationPriceValid);
+  const inspectionNames = useMemo(() => getAdministrationNames(visibleAssets.filter((asset) => getSmartTradePackageName(asset) === selectedPackageName)), [visibleAssets, selectedPackageName]);
+  const inspectionName = inspectionNames.length === 1 ? inspectionNames[0] : inspectionNames.includes(selectedInspectionName) ? selectedInspectionName : "";
   const inspectionPrice = selectedPackage?.licenseExtra ?? NaN;
   const inspectionPriceValid = Number.isFinite(inspectionPrice) && inspectionPrice >= 0;
   const inspectionLines = useMemo(() => inspectionAdministration && selectedPackage && inspectionPriceValid
-    ? getInspectionAdministrationLines(selectedPackage, inspectionPrice)
-    : [], [inspectionAdministration, selectedPackage, inspectionPriceValid, inspectionPrice]);
-  const inspectionIncomplete = !pinQuote && inspectionAdministration && (!selectedPackage || !inspectionPriceValid || hasPackageChange);
+    ? getInspectionAdministrationLines(selectedPackage, inspectionPrice, inspectionName)
+    : [], [inspectionAdministration, selectedPackage, inspectionPriceValid, inspectionPrice, inspectionName]);
+  const inspectionIncomplete = !pinQuote && inspectionAdministration && (!selectedPackage || !inspectionPriceValid || !inspectionName || hasPackageChange);
   const assetDealLines = useMemo(() => {
     if (pinQuote) return getWorldlineQuoteLines(worldlineQuote);
     const lines: AssetExpansionLine[] = [...administrationLines, ...inspectionLines];
@@ -1027,7 +1030,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     if (inspectionIncomplete) {
       setTransferStatus(hasPackageChange
         ? "Een inkijk administratie behoudt het huidige pakket. Herstel eerst de modulekeuze en pakketwijziging."
-        : "Geen artikelprijs gevonden voor inkijk administratie bij het huidige pakket.");
+        : !inspectionName ? "Kies de administratie die moet worden omgezet." : "Geen artikelprijs gevonden voor inkijk administratie bij het huidige pakket.");
       return;
     }
 
@@ -1139,6 +1142,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
             source: "assets" as const,
             relationId: selectedRelation.id,
             relationName: selectedRelation.name,
+            administrationName: inspectionAdministration ? inspectionName || undefined : undefined,
             currentPackageName: selectedPackageName,
             targetPackageName: activeResult.name,
             priceComparison: pinQuote ? undefined : {
@@ -1209,6 +1213,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setAssets([]);
     setExtraAdministrations(0);
     setInspectionAdministration(false);
+    setSelectedInspectionName("");
     setExtraUsersToOffer(0);
     setChauffeurExtraUsersToOffer(0);
     setSelectedModuleKeys([]);
@@ -1254,6 +1259,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setAssets([]);
     setExtraAdministrations(0);
     setInspectionAdministration(false);
+    setSelectedInspectionName("");
     setExtraUsersToOffer(0);
     setChauffeurExtraUsersToOffer(0);
     setSelectedModuleKeys([]);
@@ -1867,6 +1873,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
             <div className={styles.upsellPanel}>
               <div className={styles.assetTitle}>Smart Trade {selectedPackage.name} inkijk administratie</div>
               <div className={styles.assetMeta}>Artikel {INSPECTION_ADMINISTRATION_ARTICLES[selectedPackage.key]} · Pakket blijft {selectedPackage.name}</div>
+              {inspectionNames.length === 1 ? <div className={styles.assetMeta}>Administratie: {inspectionName}</div> : inspectionNames.length > 1 ? <label className={styles.upsellUserInput}><span>Administratie omzetten</span><select value={inspectionName} onChange={(event) => setSelectedInspectionName(event.target.value)}><option value="">Kies een administratie</option>{inspectionNames.map((name) => <option key={name} value={name}>{name}</option>)}</select></label> : <div className="empty-state">Geen administratienaam tussen haakjes gevonden in de bestaande assets van dit pakket.</div>}
               <label className={styles.upsellUserInput}><input type="checkbox" checked={inspectionAdministration} onChange={(event) => setInspectionAdministration(event.target.checked)} /><span>Huidige administratie omzetten naar inkijk administratie</span></label>
               {inspectionAdministration ? <>
                 {hasPackageChange ? <div className="empty-state">Inkijk administratie kan niet gecombineerd worden met een pakketwijziging. Herstel eerst de modulekeuze en pakketwijziging. <button type="button" className="button secondary" onClick={handleResetModules}>Huidig pakket behouden</button></div> : null}

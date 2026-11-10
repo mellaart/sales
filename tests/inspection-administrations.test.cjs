@@ -29,3 +29,23 @@ test('rejects missing prices and unknown packages', () => {
   assert.throws(() => lines({key:'unknown',name:'Unknown'}, 15));
   assert.equal(lines({key:'starter',name:'Starter'}, 0)[0].amount, 0);
 });
+
+test('reads unique administration suffixes and ignores descriptive/numeric suffixes', () => {
+  const { getAdministrationNames } = load('lib/inspection-administrations.ts');
+  assert.deepEqual(getAdministrationNames([
+    {name:'Smart Trade Starter licentie ( Acme )'},
+    {name:'Smart Trade Starter support (acme) (2)'},
+    {name:'Smart Trade Starter licentie (Beta)'},
+    {name:'Smart Trade Starter (chauffeursmodule)'},
+    {name:'Smart Trade Starter (123)'},
+    {name:'Smart Trade Starter zonder administratie'},
+  ]), ['Acme', 'Beta']);
+  assert.deepEqual(getAdministrationNames([]), []);
+});
+
+test('includes the administration in the quote line persisted to the deal', () => {
+  const result = lines({key:'starter',name:'Starter'}, 19.2, '  Acme   Noord  ');
+  assert.equal(result[0].label, 'Smart Trade Starter inkijk administratie (Acme Noord)');
+  assert.equal(result[0].amount, 19.2);
+  assert.equal(result.length, 1);
+});

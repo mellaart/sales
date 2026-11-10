@@ -55,7 +55,7 @@ export default function CalculatorRelationSearch({ selected, onSelect }: {
       </div>
       <form className={styles.assetSearchForm} onSubmit={search}>
         <input className="input" aria-label="Zoek relatie" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Bedrijfsnaam, e-mail of relatienummer" />
-        <button type="submit" className="button secondary" disabled={busy}><Search size={16} />{busy ? "Zoeken..." : "Zoek relatie"}</button>
+        <button type="submit" className={`primary-button ${styles.assetSearchButton}`} disabled={busy}><Search size={16} />{busy ? "Zoeken..." : "Zoek relatie"}</button>
       </form>
       {relations.length > 0 ? <div className={styles.relationResultList}>
         {relations.map((relation) => <button key={relation.id} type="button"

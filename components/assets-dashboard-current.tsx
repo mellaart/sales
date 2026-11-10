@@ -604,6 +604,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     return () => controller.abort();
   }, []);
 
+  const administrationNames = useMemo(() => getAdministrationNames(assets), [assets]);
   const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
   const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);
   const existingServiceCostCounts = useMemo(() => getServiceCostCounts(assets), [assets]);
@@ -1497,6 +1498,37 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
         </section>
 
         {!pinQuote ? <>
+        {selectedRelation ? (
+          <section className="card panel" aria-labelledby="administrations-heading">
+            <div className="top-row">
+              <div>
+                <div className="eyebrow">Administratiecheck</div>
+                <h2 className="headline" id="administrations-heading">Administraties bij deze klant</h2>
+                <p className="subtext">Herkenning op basis van de namen tussen haakjes in alle opgehaalde assets.</p>
+              </div>
+              <div className="icon-badge"><Building2 size={26} /></div>
+            </div>
+            <div role="status">
+              {loadingAssets ? (
+                <p className="subtext">Administraties worden gecontroleerd...</p>
+              ) : assetStatus ? (
+                <p className="subtext">Administraties konden niet worden gecontroleerd. {assetStatus}</p>
+              ) : administrationNames.length === 0 ? (
+                <p className="subtext">Geen administratienamen tussen haakjes gevonden. We kunnen niet vaststellen of deze klant meerdere administraties heeft.</p>
+              ) : (
+                <>
+                  <p><strong>{administrationNames.length > 1
+                    ? `Meerdere administraties aanwezig: ${administrationNames.length} herkend.`
+                    : "1 administratie herkend in de assets."}</strong></p>
+                  <ul>{administrationNames.map((name) => <li key={name}>{name}</li>)}</ul>
+                  {administrationNames.length > 1 ? (
+                    <p className="subtext">Upsell-kans: bespreek per bedrijf welke extra gebruikers, modules of uitbreidingen nodig zijn. De assettotalen hieronder zijn geen overzicht per administratie.</p>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </section>
+        ) : null}
         <section className="card panel">
           <div className="top-row">
             <div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Boxes, Building2, ChevronRight, FileText, Hash, Mail, MapPin, Search, Sparkles, UserRound } from "lucide-react";
+import { getPackageAdministrationNames, getAdministrationAssets } from "@/lib/asset-administrations";
 import { NumberStepper } from "@/components/number-stepper";
 import { useAuth } from "@/components/auth-provider";
 import { usePricingConfig } from "@/components/pricing-provider";
@@ -563,6 +564,8 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const [query, setQuery] = useState("");
   const [relations, setRelations] = useState<RelationOption[]>([]);
   const [selectedRelation, setSelectedRelation] = useState<RelationOption | null>(null);
+  const [selectedAdministration, setSelectedAdministration] = useState("");
+  const relationRequestRef = useRef(0);
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [searchStatus, setSearchStatus] = useState("");
   const [assetStatus, setAssetStatus] = useState("");
@@ -604,11 +607,13 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     return () => controller.abort();
   }, []);
 
-  const administrationNames = useMemo(() => getAdministrationNames(assets), [assets]);
-  const visibleAssets = useMemo(() => getVisibleAssets(assets), [assets]);
+  const administrationNames = useMemo(() => getPackageAdministrationNames(assets), [assets]);
+  const needsAdministration = !pinQuote && administrationNames.length > 1 && !administrationNames.includes(selectedAdministration);
+  const administrationAssets = useMemo(() => pinQuote ? assets : getAdministrationAssets(assets, selectedAdministration), [assets, selectedAdministration, pinQuote]);
+  const visibleAssets = useMemo(() => getVisibleAssets(administrationAssets), [administrationAssets]);
   const assetClassTotals = useMemo(() => getAssetClassTotals(visibleAssets), [visibleAssets]);
-  const existingServiceCostCounts = useMemo(() => getServiceCostCounts(assets), [assets]);
-  const existingSmartConnectRows = useMemo(() => getSmartConnectRows(assets), [assets]);
+  const existingServiceCostCounts = useMemo(() => getServiceCostCounts(administrationAssets), [administrationAssets]);
+  const existingSmartConnectRows = useMemo(() => getSmartConnectRows(administrationAssets), [administrationAssets]);
   const currentCustomerPortalKeys = useMemo(
     () => getCustomerPortalKeysFromAssets(visibleAssets, pricingConfig.customerPortalOptions),
     [pricingConfig.customerPortalOptions, visibleAssets],
@@ -983,7 +988,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const newCompleteMonthly = currentCompleteMonthly + assetExpansionTotals.monthly;
   const currentCompleteAnnual = existingServiceCostAnnualTotal;
   const newCompleteAnnual = currentCompleteAnnual + assetExpansionTotals.annual;
-  const transferHint = !selectedRelation
+  const transferHint = needsAdministration ? "Kies eerst een administratie." : !selectedRelation
     ? "Kies eerst een relatie. Daarna kun je geselecteerde uitbreidingen doorzetten naar Deals."
     : assetDealLines.length === 0
       ? "Selecteer of vul minimaal één uitbreiding in voordat je een deal maakt."
@@ -1020,6 +1025,11 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
 
     if (!selectedRelation) {
       setTransferStatus("Kies eerst een relatie.");
+      return;
+    }
+
+    if (needsAdministration || loadingAssets) {
+      setTransferStatus("Kies eerst een administratie en wacht tot de assets geladen zijn.");
       return;
     }
 
@@ -1143,7 +1153,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
             source: "assets" as const,
             relationId: selectedRelation.id,
             relationName: selectedRelation.name,
-            administrationName: inspectionAdministration ? inspectionName || undefined : undefined,
+            administrationName: inspectionAdministration ? inspectionName || undefined : selectedAdministration || undefined,
             currentPackageName: selectedPackageName,
             targetPackageName: activeResult.name,
             priceComparison: pinQuote ? undefined : {
@@ -1205,6 +1215,9 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
 
   async function handleSearchRelations(event: FormEvent) {
     event.preventDefault();
+    relationRequestRef.current++;
+    setLoadingAssets(false);
+    setLoadingContactPerson(false);
 
     setSearchStatus("");
     setAssetStatus("");
@@ -1212,6 +1225,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setSearching(true);
     setSelectedRelation(null);
     setAssets([]);
+    setSelectedAdministration("");
     setExtraAdministrations(0);
     setInspectionAdministration(false);
     setSelectedInspectionName("");
@@ -1253,11 +1267,13 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   }
 
   async function handleSelectRelation(relation: RelationOption) {
+    const request = ++relationRequestRef.current;
     setSelectedRelation(relation);
     setAssetStatus("");
     setTransferStatus("");
     setLoadingAssets(true);
     setAssets([]);
+    setSelectedAdministration("");
     setExtraAdministrations(0);
     setInspectionAdministration(false);
     setSelectedInspectionName("");
@@ -1293,6 +1309,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
           }),
       ]);
 
+      if (request !== relationRequestRef.current) return;
       if (relationResult.status === "fulfilled") {
         const relationDetails = relationResult.value;
         const primaryContactName = typeof relationDetails.primaryContact?.name === "string"
@@ -1327,18 +1344,44 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
       }
 
       const nextAssets: AssetRecord[] = json.assets ?? [];
-      const nextVisibleAssets = getVisibleAssets(nextAssets);
+      const nextVisibleAssets = getVisibleAssets(pinQuote ? nextAssets : getAdministrationAssets(nextAssets, ""));
       setAssets(nextAssets);
       setSelectedModuleKeys(applyModuleDependencies(getModuleKeysFromAssets(nextVisibleAssets, modules)));
       setSelectedCustomerPortalOptionKeys(getCustomerPortalKeysFromAssets(nextVisibleAssets, pricingConfig.customerPortalOptions));
 
       if (nextAssets.length === 0) setAssetStatus(`Geen assets gevonden voor ${relation.name}.`);
     } catch (error) {
+      if (request !== relationRequestRef.current) return;
       setAssetStatus(error instanceof Error ? error.message : "Assets ophalen mislukt.");
     } finally {
-      setLoadingAssets(false);
-      setLoadingContactPerson(false);
+      if (request === relationRequestRef.current) {
+        setLoadingAssets(false);
+        setLoadingContactPerson(false);
+      }
     }
+  }
+
+  function handleSelectAdministration(name: string) {
+    if (name === selectedAdministration) return;
+    const nextVisibleAssets = getVisibleAssets(getAdministrationAssets(assets, name));
+    setSelectedAdministration(name);
+    setExtraAdministrations(0);
+    setInspectionAdministration(false);
+    setSelectedInspectionName("");
+    setExtraUsersToOffer(0);
+    setChauffeurExtraUsersToOffer(0);
+    setSelectedModuleKeys(applyModuleDependencies(getModuleKeysFromAssets(nextVisibleAssets, modules)));
+    setSelectedCustomerPortalOptionKeys(getCustomerPortalKeysFromAssets(nextVisibleAssets, pricingConfig.customerPortalOptions));
+    setAllowPackageDowngrade(false);
+    setIncludeMissingSupportOffer(false);
+    setSmartConnectConnections(0);
+    setServiceCostQuantities(getInitialServiceCostQuantities());
+    setIncludeTravelCosts(true);
+    setOfferGuidance("");
+    setMiscellaneousDescription("");
+    setMiscellaneousPrice("");
+    setExtraTravelVisits(0);
+    setTransferStatus("");
   }
 
   function renderTransferActionPanel() {
@@ -1358,7 +1401,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
             <button
               type="button"
               className="primary-button"
-              disabled={transferBusy || administrationIncomplete || inspectionIncomplete || (pinQuote && (!selectedRelation || !isWorldlineQuoteValid(worldlineQuote)))}
+              disabled={transferBusy || needsAdministration || loadingAssets || administrationIncomplete || inspectionIncomplete || (pinQuote && (!selectedRelation || !isWorldlineQuoteValid(worldlineQuote)))}
               onClick={() => void handleSendExpansionsToDeals()}
             >
               <FileText size={16} />
@@ -1504,7 +1547,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
               <div>
                 <div className="eyebrow">Administratiecheck</div>
                 <h2 className="headline" id="administrations-heading">Administraties bij deze klant</h2>
-                <p className="subtext">Herkenning op basis van de namen tussen haakjes in alle opgehaalde assets.</p>
+                <p className="subtext">Alleen namen tussen haakjes in Smart Trade-assets met een pakket tellen mee.</p>
               </div>
               <div className="icon-badge"><Building2 size={26} /></div>
             </div>
@@ -1520,20 +1563,31 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
                   <p><strong>{administrationNames.length > 1
                     ? `Meerdere administraties aanwezig: ${administrationNames.length} herkend.`
                     : "1 administratie herkend in de assets."}</strong></p>
-                  <ul>{administrationNames.map((name) => <li key={name}>{name}</li>)}</ul>
+                  {administrationNames.length > 1 ? <div className={styles.relationResultList}>
+                    {administrationNames.map((name) => <button type="button" key={name}
+                      className={`${styles.relationResultCard} ${selectedAdministration === name ? styles.selectedResultCard : ""}`}
+                      aria-pressed={selectedAdministration === name} disabled={transferBusy}
+                      onClick={() => handleSelectAdministration(name)}>
+                      <Building2 size={18} /><strong>{name}</strong>
+                      <span>{selectedAdministration === name ? "Geselecteerd" : "Bekijk assets"}</span>
+                    </button>)}
+                  </div> : <p>{administrationNames[0]}</p>}
                   {administrationNames.length > 1 ? (
-                    <p className="subtext">Upsell-kans: bespreek per bedrijf welke extra gebruikers, modules of uitbreidingen nodig zijn. De assettotalen hieronder zijn geen overzicht per administratie.</p>
+                    <p className="subtext">Kies een administratie om de bijbehorende assets en upsell-mogelijkheden te bekijken. Assets zonder administratienaam worden niet aan een bedrijf toegewezen.</p>
                   ) : null}
                 </>
               )}
             </div>
           </section>
         ) : null}
+        </> : null}
+        {needsAdministration ? <section className="card panel"><p className="subtext">Kies hierboven een administratie om de assets te bekijken.</p></section> : <>
+        {!pinQuote ? <>
         <section className="card panel">
           <div className="top-row">
             <div>
               <div className="eyebrow">Stap 2</div>
-              <h2 className="headline">{selectedRelation ? `Assets voor ${selectedRelation.name}` : "Assets"}</h2>
+              <h2 className="headline">{selectedRelation ? `Assets voor ${selectedAdministration || selectedRelation.name}` : "Assets"}</h2>
               <p className="subtext">We tonen totalen per assetclass. Bij meerdere Smart Trade pakketten blijft alleen de pakketgroep met het hoogste asset-ID zichtbaar.</p>
             </div>
             <div className="icon-badge"><Boxes size={26} /></div>
@@ -2140,6 +2194,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
         </section>
 
         {renderTransferActionPanel()}
+        </>}
       </div>
     </div>
   );

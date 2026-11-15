@@ -19,22 +19,6 @@ if [ "${1:-}" = "--force" ]; then
   FORCE_DEPLOY="1"
 fi
 
-export PATH="$HOME/.local/node20/bin:$HOME/.local/node/bin:$HOME/.local/bin:$HOME/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
-
-for NODE_BIN_DIR in "$HOME"/.nvm/versions/node/*/bin; do
-  if [ -d "$NODE_BIN_DIR" ]; then
-    export PATH="$NODE_BIN_DIR:$PATH"
-  fi
-done
-
-if [ -s "$HOME/.nvm/nvm.sh" ]; then
-  set +u
-  # shellcheck disable=SC1091
-  . "$HOME/.nvm/nvm.sh"
-  nvm use 20 >/dev/null 2>&1 || true
-  set -u
-fi
-
 log() {
   printf "%s %s\n" "$(date "+%Y-%m-%d %H:%M:%S")" "$*"
 }
@@ -104,30 +88,11 @@ fi
 git checkout "$BRANCH"
 git pull --ff-only "$REMOTE" "$BRANCH"
 
-NPM_BIN="$(command -v npm || true)"
-
-if [ -z "$NPM_BIN" ]; then
-  log "npm niet gevonden. PATH=$PATH"
-  exit 127
-fi
-
-NPM_REAL="$NPM_BIN"
-if command -v readlink >/dev/null 2>&1; then
-  NPM_REAL="$(readlink -f "$NPM_BIN" 2>/dev/null || printf "%s" "$NPM_BIN")"
-fi
-
-NPM_DIR="$(dirname "$NPM_REAL")"
-if [ -x "$NPM_DIR/node" ]; then
-  export PATH="$NPM_DIR:$PATH"
-  NODE_BIN="$NPM_DIR/node"
-else
-  NODE_BIN="$(command -v node || true)"
-fi
-
-if [ -z "$NODE_BIN" ]; then
-  log "node niet gevonden. PATH=$PATH"
-  exit 127
-fi
+# Select the runtime after pulling, so runtime changes take effect in this deploy.
+# shellcheck source=scripts/use-node24.sh
+. "$APP_DIR/scripts/use-node24.sh"
+NPM_BIN="$(command -v npm)"
+NPM_DIR="$(dirname "$NODE_BIN")"
 
 log "Node: $("$NODE_BIN" -v 2>/dev/null || echo onbekend) ($NODE_BIN)"
 log "NPM: $(env PATH="$NPM_DIR:$PATH" "$NPM_BIN" -v 2>/dev/null || echo onbekend) ($NPM_BIN)"

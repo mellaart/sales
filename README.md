@@ -8,6 +8,14 @@ Versie 8 voegt rolgebaseerde toegang toe bovenop de calculator, offerteflow, dea
 - `manager`: ziet, wijzigt en verwijdert alle deals
 - `admin`: alles van manager plus rolbeheer via `/admin`
 
+## Node.js-runtime
+
+Gebruik Node.js 24.22.3 of nieuwer binnen 24.x, met npm 11. `.nvmrc` legt de geteste versie vast.
+Productie gebruikt `$HOME/.local/node24/bin/node`. Installeer een officiële Node.js-distributie
+met gecontroleerde SHA-256 voordat de productieprocedure wordt gestart.
+`scripts/use-node24.sh` selecteert en controleert de runtime voor de uitrol en de wekelijkse taak;
+zonder geschikte Node.js-versie stopt de uitrol voordat de app wordt gestopt.
+
 ## Setup
 
 1. Installeer dependencies:

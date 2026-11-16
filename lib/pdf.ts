@@ -983,6 +983,12 @@ async function buildQuotePdf(input: OfferTemplateInput) {
     y,
   );
 
+  y = addParagraph(
+    doc,
+    "De eenmalige kosten worden in drie termijnen gefactureerd: 30% na ondertekening van de offerte, 30% op de eerste implementatiedag en de resterende 40% bij livegang.",
+    y,
+  );
+
   y = addSectionTitle(doc, "Implementatie", y + 2);
   y = addParagraph(doc, text.implementation, y);
   if (!isCompactLayout) {

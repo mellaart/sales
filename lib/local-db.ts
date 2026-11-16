@@ -787,7 +787,12 @@ export async function ensureLocalSchema() {
           updated_at timestamptz not null default now()
         );
       `);
-    })();
+    })().catch((error) => {
+      // A temporary database outage must not poison every subsequent request.
+      // Reset on the shared promise so concurrent callers cannot clear a later retry.
+      schemaReady = null;
+      throw error;
+    });
   }
 
   await schemaReady;

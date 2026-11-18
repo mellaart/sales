@@ -295,7 +295,7 @@ export default function HomeDashboard() {
           implementationId: implementation.id,
           customerName: implementation.customer_name || "Onbekende klant",
           consultantName: implementation.assigned_consultant_name || "Nog niet toegewezen",
-          label: "Factuur start implementatie",
+          label: "Factuur start implementatie 30%",
           date: getImplementationDateLabel(implementation.implementation_start_date),
           dateKey: implementationStartDateKey,
         });
@@ -307,7 +307,7 @@ export default function HomeDashboard() {
           implementationId: implementation.id,
           customerName: implementation.customer_name || "Onbekende klant",
           consultantName: implementation.assigned_consultant_name || "Nog niet toegewezen",
-          label: "Factuur einde implementatie",
+          label: "Factuur einde implementatie 40%",
           date: getImplementationDateLabel(implementation.actual_go_live_date),
           dateKey: getImplementationDateKey(implementation.actual_go_live_date) ?? "",
         });

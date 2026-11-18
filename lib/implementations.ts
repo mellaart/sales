@@ -34,10 +34,11 @@ export const IMPLEMENTATION_PROGRESS_ITEMS = [
   { number: 7, key: "adminDemoDisabled", label: "Admintool - Demo uitschakelen" },
   { number: 8, key: "adminModules", label: "Admintool - Modules" },
   { number: 9, key: "adminUserCount", label: "Admintool - Aantal gebruikers" },
-  { number: 10, key: "implementationStartInvoice", label: "Factuur start implementatie" },
-  { number: 11, key: "implementationStartContract", label: "Contract implementatie starten" },
-  { number: 12, key: "implementationEndInvoice", label: "Factuur einde implementatie" },
-  { number: 13, key: "goLiveContract", label: "Contract livegang starten" },
+  { number: 10, key: "implementationApprovalInvoice", label: "Factuur akkoord implementatie 30%" },
+  { number: 11, key: "implementationStartInvoice", label: "Factuur start implementatie 30%" },
+  { number: 12, key: "implementationEndInvoice", label: "Factuur einde implementatie 40%" },
+  { number: 13, key: "implementationStartContract", label: "Contract implementatie starten" },
+  { number: 14, key: "goLiveContract", label: "Contract livegang starten" },
 ] as const;
 
 export type ImplementationProgressKey = typeof IMPLEMENTATION_PROGRESS_ITEMS[number]["key"];

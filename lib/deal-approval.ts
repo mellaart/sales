@@ -2,6 +2,7 @@ export type DealApprovalStatus = "open" | "accepted" | "revoked";
 
 export type DealApprovalQuoteSnapshot = {
   customerName: string;
+  administrationName: string;
   quoteTitle: string;
   contactName: string;
   packageName: string;

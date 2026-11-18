@@ -194,6 +194,10 @@ export default function DealApprovalForm({
                 <dd>{approval.quote.customerName || "-"}</dd>
               </div>
               <div>
+                <dt>Administratie</dt>
+                <dd>{approval.quote.administrationName || "Niet vastgelegd"}</dd>
+              </div>
+              <div>
                 <dt>Pakket</dt>
                 <dd>{approval.quote.packageName || "Smart Trade"}</dd>
               </div>

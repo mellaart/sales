@@ -138,6 +138,9 @@ function quoteSnapshotFromDeal(deal: DealRow): DealApprovalQuoteSnapshot {
     ? deal.calculator_inputs as Record<string, unknown>
     : {};
   const developmentLines = normalizeDevelopmentLines(calculatorInputs.developmentLines);
+  const expansion = calculatorInputs.assetsExpansion && typeof calculatorInputs.assetsExpansion === "object" && !Array.isArray(calculatorInputs.assetsExpansion)
+    ? calculatorInputs.assetsExpansion as Record<string, unknown>
+    : {};
   const developmentHourlyRate = Math.max(
     0,
     asNumber(calculatorInputs.developmentHourlyRate) || DEFAULT_DEVELOPMENT_HOURLY_RATE,
@@ -148,6 +151,7 @@ function quoteSnapshotFromDeal(deal: DealRow): DealApprovalQuoteSnapshot {
 
   return {
     customerName: asText(deal.customer_name),
+    administrationName: asText(expansion.administrationName),
     quoteTitle: asText(deal.quote_title) || "Offerte Smart Trade",
     contactName: asText(deal.contact_name),
     packageName: asText(deal.package_name),
@@ -170,6 +174,7 @@ function normalizeQuoteSnapshot(value: unknown): DealApprovalQuoteSnapshot {
 
   return {
     customerName: asText(source.customerName),
+    administrationName: asText(source.administrationName),
     quoteTitle: asText(source.quoteTitle) || "Offerte Smart Trade",
     contactName: asText(source.contactName),
     packageName: asText(source.packageName),
@@ -196,8 +201,12 @@ function canonicalValue(value: unknown): unknown {
 }
 
 function snapshotHashFromDeal(deal: DealRow) {
+  // The administration is already covered by calculatorInputs. Keep the original
+  // quote hash shape so existing approval links remain valid after this addition.
+  const quote: Partial<DealApprovalQuoteSnapshot> = quoteSnapshotFromDeal(deal);
+  delete quote.administrationName;
   const evidence = {
-    quote: quoteSnapshotFromDeal(deal),
+    quote,
     modules: deal.modules ?? [],
     calculatorInputs: deal.calculator_inputs ?? {},
   };

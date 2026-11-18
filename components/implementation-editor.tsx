@@ -2191,11 +2191,11 @@ export default function ImplementationEditor({ implementationId }: { implementat
     { kind: "intake" as const, number: 1, key: "customerIntake", label: "Klantformulier" },
   ].sort((left, right) => left.number - right.number);
   const progressRequiresAction = (key: ImplementationProgressKey) => (
-    (key === "implementationStartInvoice" || key === "implementationStartContract")
-      && Boolean(implementation.implementation_start_date)
-  ) || (
-    (key === "implementationEndInvoice" || key === "goLiveContract")
-      && Boolean(implementation.actual_go_live_date)
+    key === "implementationApprovalInvoice"
+    || key === "implementationStartInvoice"
+    || key === "implementationEndInvoice"
+    || key === "implementationStartContract"
+    || key === "goLiveContract"
   );
   const completedImplementationTasks = configuredImplementationTasks.filter(
     (item) => isImplementationItemCompleted(item, implementationItemProgress),

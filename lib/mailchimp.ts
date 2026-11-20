@@ -18,7 +18,8 @@ type MailchimpMember = {
 };
 
 export type MailchimpPreviewContact = SmartTradeMailchimpContact & {
-  state: "new" | "update" | "unchanged" | "blocked";
+  state: "new" | "update" | "unchanged" | "blocked" | "failed";
+  syncError: string | null;
   mailchimpStatus: string | null;
 };
 
@@ -35,6 +36,7 @@ export type MailchimpPreview = {
     update: number;
     unchanged: number;
     blocked: number;
+    failed: number;
     removeTags: number;
   };
   apiKeyExpiresAt: string | null;
@@ -60,7 +62,7 @@ type MailchimpSyncOptions = {
   onlyEmails?: string[];
 };
 
-const BLOCKED_STATUSES = new Set(["unsubscribed", "cleaned", "pending", "transactional"]);
+const BLOCKED_STATUSES = new Set(["unsubscribed", "cleaned", "pending", "transactional", "archived"]);
 const SYNC_CONCURRENCY = 5;
 const MAILCHIMP_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -188,35 +190,38 @@ export async function getMailchimpAudiences() {
 async function getMembers(config: MailchimpConfig, audienceId: string) {
   const members = new Map<string, MailchimpMember>();
   const count = 1000;
-  let offset = 0;
-
-  while (true) {
-    const path = `/lists/${encodeURIComponent(audienceId)}/members?count=${count}&offset=${offset}`
-      + "&fields=members.email_address,members.status,members.merge_fields,members.tags,total_items";
-    const json = await mailchimpRequest<{
-      members?: Array<{
-        email_address?: string;
-        status?: string;
-        merge_fields?: Record<string, unknown>;
-        tags?: Array<{ name?: string }>;
-      }>;
-      total_items?: number;
-    }>(config, path);
-    const rows = json.members ?? [];
-    for (const row of rows) {
-      const email = row.email_address?.trim().toLowerCase();
-      if (!email) continue;
-      members.set(email, {
-        email,
-        status: row.status?.trim().toLowerCase() || "unknown",
-        company: typeof row.merge_fields?.[config.companyMergeTag] === "string"
-          ? String(row.merge_fields[config.companyMergeTag]).trim()
-          : "",
-        tags: (row.tags ?? []).map((tag) => tag.name?.trim() || "").filter(Boolean).sort(),
-      });
+  // Archived members are omitted from the default list but still exist in Mailchimp.
+  for (const status of [null, "archived"]) {
+    let offset = 0;
+    while (true) {
+      const path = `/lists/${encodeURIComponent(audienceId)}/members?count=${count}&offset=${offset}`
+        + (status ? `&status=${status}` : "")
+        + "&fields=members.email_address,members.status,members.merge_fields,members.tags,total_items";
+      const json = await mailchimpRequest<{
+        members?: Array<{
+          email_address?: string;
+          status?: string;
+          merge_fields?: Record<string, unknown>;
+          tags?: Array<{ name?: string }>;
+        }>;
+        total_items?: number;
+      }>(config, path);
+      const rows = json.members ?? [];
+      for (const row of rows) {
+        const email = row.email_address?.trim().toLowerCase();
+        if (!email) continue;
+        members.set(email, {
+          email,
+          status: row.status?.trim().toLowerCase() || "unknown",
+          company: typeof row.merge_fields?.[config.companyMergeTag] === "string"
+            ? String(row.merge_fields[config.companyMergeTag]).trim()
+            : "",
+          tags: (row.tags ?? []).map((tag) => tag.name?.trim() || "").filter(Boolean).sort(),
+        });
+      }
+      offset += rows.length;
+      if (rows.length === 0 || offset >= Number(json.total_items ?? 0)) break;
     }
-    offset += rows.length;
-    if (rows.length === 0 || offset >= Number(json.total_items ?? 0)) break;
   }
   return members;
 }
@@ -263,15 +268,24 @@ export async function buildMailchimpPreview(
     companyFieldPromise,
   ]);
   const managedTags = new Set([...settings.managedTags, ...source.tags]);
+  const failures = new Map<string, string>();
+  if (Array.isArray(settings.lastSyncResult?.failures)) {
+    for (const failure of settings.lastSyncResult.failures) {
+      if (failure && typeof failure.email === "string" && typeof failure.error === "string") {
+        failures.set(failure.email.toLowerCase(), failure.error);
+      }
+    }
+  }
   const contacts: MailchimpPreviewContact[] = source.contacts.map((contact) => {
     const current = members.get(contact.email);
-    if (!current) return { ...contact, state: "new", mailchimpStatus: null };
+    const syncError = failures.get(contact.email) ?? null;
+    if (!current) return { ...contact, state: syncError ? "failed" : "new", mailchimpStatus: null, syncError };
     if (BLOCKED_STATUSES.has(current.status)) {
-      return { ...contact, state: "blocked", mailchimpStatus: current.status };
+      return { ...contact, state: "blocked", mailchimpStatus: current.status, syncError: null };
     }
     const currentManagedTags = current.tags.filter((tag) => managedTags.has(tag));
     const changed = current.company !== contact.company || !arraysEqual(currentManagedTags, contact.tags);
-    return { ...contact, state: changed ? "update" : "unchanged", mailchimpStatus: current.status };
+    return { ...contact, state: changed ? (syncError ? "failed" : "update") : "unchanged", mailchimpStatus: current.status, syncError: changed ? syncError : null };
   });
   const currentEmails = new Set(source.contacts.map((contact) => contact.email));
   const removeTags = settings.previousEmails.filter((email) => !currentEmails.has(email) && members.has(email)).length;
@@ -289,6 +303,7 @@ export async function buildMailchimpPreview(
       update: contacts.filter((contact) => contact.state === "update").length,
       unchanged: contacts.filter((contact) => contact.state === "unchanged").length,
       blocked: contacts.filter((contact) => contact.state === "blocked").length,
+      failed: contacts.filter((contact) => contact.state === "failed").length,
       removeTags,
     },
     companyFieldReady,

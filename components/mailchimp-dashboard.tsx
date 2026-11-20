@@ -21,7 +21,7 @@ import {
   type RoleTabAccessMap,
 } from "@/lib/role-tabs";
 
-type ContactState = "new" | "update" | "unchanged" | "blocked";
+type ContactState = "new" | "update" | "unchanged" | "blocked" | "failed";
 
 type MailchimpContact = {
   email: string;
@@ -32,6 +32,7 @@ type MailchimpContact = {
   conflict: boolean;
   state: ContactState;
   mailchimpStatus: string | null;
+  syncError: string | null;
 };
 
 type MailchimpPreview = {
@@ -48,7 +49,7 @@ type MailchimpPreview = {
     tags: string[];
   };
   contacts: MailchimpContact[];
-  counts: Record<"total" | "new" | "update" | "unchanged" | "blocked" | "removeTags", number>;
+  counts: Record<"total" | "new" | "update" | "unchanged" | "blocked" | "failed" | "removeTags", number>;
   apiKeyExpiresAt: string | null;
   apiKeyExpiryDays: number | null;
   companyFieldReady: boolean;
@@ -82,6 +83,7 @@ const STATE_LABELS: Record<ContactState, string> = {
   update: "Bijwerken",
   unchanged: "Ongewijzigd",
   blocked: "Niet opnieuw inschrijven",
+  failed: "Mislukt",
 };
 
 function localDate(value: string | null) {
@@ -577,7 +579,7 @@ export default function MailchimpDashboard() {
           <div className="top-row"><div><div className="eyebrow">Vooroverzicht</div><h2>Contacten en tags</h2><p className="subtext">{preview?.source.relationCount ?? 0} relaties, {preview?.source.contactPersonCount ?? 0} geselecteerde contactpersonen en {preview?.source.tags.length ?? 0} tags.</p></div><StatusPill tone={preview?.source.conflictCount ? "warning" : "success"}>{preview?.source.conflictCount ?? 0} conflicten</StatusPill></div>
           <div className="mailchimp-filters">
             <label className="mailchimp-search"><Search size={17} /><input aria-label="Zoek contacten" placeholder="Zoek bedrijf, e-mail, relatie of tag" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-            <select className="input" aria-label="Filter op status" value={stateFilter} onChange={(event) => setStateFilter(event.target.value as StateFilter)}><option value="all">Alle statussen</option><option value="new">Nieuw</option><option value="update">Bijwerken</option><option value="unchanged">Ongewijzigd</option><option value="blocked">Niet herinschrijven</option><option value="conflict">Conflicten</option></select>
+            <select className="input" aria-label="Filter op status" value={stateFilter} onChange={(event) => setStateFilter(event.target.value as StateFilter)}><option value="all">Alle statussen</option><option value="new">Nieuw</option><option value="update">Bijwerken</option><option value="unchanged">Ongewijzigd</option><option value="blocked">Niet herinschrijven</option><option value="failed">Mislukt</option><option value="conflict">Conflicten</option></select>
             <select className="input" aria-label="Filter op tag" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}><option value="">Alle tags</option>{preview?.source.tags.map((tag) => <option value={tag} key={tag}>{tag}</option>)}</select>
           </div>
 
@@ -591,7 +593,7 @@ export default function MailchimpDashboard() {
                     <td>{contact.email}</td>
                     <td><div className="mailchimp-tags">{contact.tags.map((tag) => <span key={tag}><Tags size={11} />{tag}</span>)}</div></td>
                     <td>{contact.sources.includes("relation") ? "Relatie" : ""}{contact.sources.length > 1 ? " + " : ""}{contact.sources.includes("contact") ? "Contactpersoon" : ""}</td>
-                    <td><StatusPill tone={contact.state === "unchanged" ? "success" : "warning"}>{STATE_LABELS[contact.state]}</StatusPill>{contact.mailchimpStatus ? <small>Mailchimp: {contact.mailchimpStatus}</small> : null}</td>
+                    <td><StatusPill tone={contact.state === "unchanged" ? "success" : "warning"}>{STATE_LABELS[contact.state]}</StatusPill>{contact.mailchimpStatus ? <small>Mailchimp: {contact.mailchimpStatus === "archived" ? "Gearchiveerd" : contact.mailchimpStatus}</small> : null}{contact.syncError ? <small>{contact.syncError}</small> : null}</td>
                   </tr>
                 ))}
                 {!filteredContacts.length ? <tr><td colSpan={5} className="worldline-mcc-empty">Geen contacten gevonden.</td></tr> : null}

@@ -166,7 +166,12 @@ export function normalizeCustomerIntakeData(value: unknown): CustomerIntakeData 
   const normalized = { ...EMPTY_CUSTOMER_INTAKE_DATA };
 
   for (const key of Object.keys(normalized) as Array<keyof CustomerIntakeData>) {
-    normalized[key] = textValue(input[key], FIELD_LIMITS[key]) as never;
+    const value = input[key];
+    const isPhone = key === "phone" || key === "mobile" || key === "contactPhone" || key === "administrationPhone";
+    normalized[key] = textValue(
+      isPhone && typeof value === "string" ? value.replace(/\s/g, "") : value,
+      FIELD_LIMITS[key],
+    ) as never;
   }
 
   if (!normalized.contactFirstName && !normalized.contactLastName && normalized.contactName) {

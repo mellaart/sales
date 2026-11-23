@@ -6,6 +6,7 @@ import { CheckCircle2, LoaderCircle, LockKeyhole, Send, ShieldCheck } from "luci
 import {
   directDebitConsentText,
   EMPTY_CUSTOMER_INTAKE_DATA,
+  normalizeCustomerIntakeData,
   type CustomerDirectDebitMandateDetails,
   type CustomerIntakeData,
   type CustomerIntakeStatus,
@@ -145,7 +146,7 @@ export default function CustomerIntakeForm({
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ formData }),
+        body: JSON.stringify({ formData: normalizeCustomerIntakeData(formData) }),
       });
       const json = await response.json().catch(() => ({})) as {
         error?: string;

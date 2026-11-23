@@ -444,6 +444,11 @@ function buildBaseDealAssetPlan(deal: Pick<DealRecord, "package_key" | "package_
   const extraUsers = positiveInteger(inputs.extraUsers);
   const chauffeurExtraUsers = positiveInteger(inputs.chauffeurExtraUsers);
   const planningAppUsers = positiveInteger(inputs.planningAppUsers);
+  const extraAdministrations = Math.min(1000, positiveInteger(inputs.extraAdministrations));
+  addRepeated(items, "extra-administration", assetClasses.extraAdministration, `Smart Trade ${packageLabel} extra administratie`, extraAdministrations, "Extra administratie");
+  if (includeSupport) {
+    addRepeated(items, "support-extra-administration", assetClasses.supportExtraUser, `Smart Trade ${packageLabel} supportcontract extra gebruiker`, extraAdministrations, "Extra administratie");
+  }
 
   addRepeated(items, "license", assetClasses.license, `Smart Trade ${packageLabel} licentie`, 1, "Licentie");
 

@@ -148,6 +148,8 @@ function moduleLines(deal: NewCustomerDeal, calculatorInputs: Record<string, unk
     if (name) lines.push(`Klantportaal - ${escapeHtml(name)}`);
   }
 
+  const extraAdministrations = positiveInteger(calculatorInputs.extraAdministrations);
+  if (extraAdministrations > 0) lines.push(`${extraAdministrations}x Extra administratie`);
   const smartConnectConnections = positiveInteger(calculatorInputs.smartConnectConnections);
   if (smartConnectConnections > 0) {
     lines.push(`Smart Connect - ${smartConnectConnections} ${smartConnectConnections === 1 ? "connectie" : "connecties"}`);

@@ -1,5 +1,9 @@
 "use client";
 
+import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines } from "@/lib/extra-administrations";
+import ExtraAdministrationsEditor from "@/components/extra-administrations-editor";
+
+
 import { ImplementationOrderPreview, CreatedImplementationOrders } from "@/components/implementation-order-list";
 import type { ImplementationModuleOrder } from "@/lib/implementation-order";
 import type { CreatedModuleOrder } from "@/lib/implementation-order-batch";
@@ -112,6 +116,7 @@ function normalizeInputs(
     customerPortalOptionKeys: Array.isArray(customerPortalOptionKeys)
       ? customerPortalOptionKeys.filter((key): key is string => typeof key === "string")
       : [],
+    extraAdministrations: Math.min(1000, Math.max(0, Math.floor(Number(deal.calculator_inputs?.extraAdministrations) || 0))),
     smartConnectConnections: Math.max(0, Number(deal.calculator_inputs?.smartConnectConnections ?? 0)),
     developmentLines: normalizeDevelopmentLines(deal.calculator_inputs?.developmentLines),
     developmentHourlyRate: Math.max(
@@ -416,6 +421,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
+  const [extraAdministrations, setExtraAdministrations] = useState(0);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [developmentLines, setDevelopmentLines] = useState<DevelopmentLine[]>([]);
   const [developmentHourlyRate, setDevelopmentHourlyRate] = useState(pricingConfig.developmentHourlyRate);
@@ -512,6 +518,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       setTravelPostcodePrefix(inputs.travelPostcodePrefix ?? "");
       setSelectedCustomerPortalOptionKeys(inputs.customerPortalOptionKeys ?? []);
       setSmartConnectConnections(inputs.smartConnectConnections ?? 0);
+      setExtraAdministrations(inputs.extraAdministrations ?? 0);
       setDevelopmentLines(inputs.developmentLines ?? []);
       setDevelopmentHourlyRate(inputs.developmentHourlyRate ?? pricingConfig.developmentHourlyRate);
       setQuantities(inputs.quantities);
@@ -666,7 +673,11 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const planningAppMonthlyTotal = planningAppUsers * pricingConfig.planningAppUserMonthly;
   const licenseWithModulesMonthly = activeResult.licenseMonthly + activeResult.moduleMonthly + planningAppMonthlyTotal;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
-  const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
+  const administrationLines = useMemo(() => getExtraAdministrationLines(
+    activePackage, extraAdministrations, EXTRA_ADMINISTRATION_MONTHLY_PRICES[activePackage.key], includeSupport,
+  ), [activePackage, extraAdministrations, includeSupport]);
+  const extraAdministrationsMonthly = administrationLines.reduce((sum, line) => sum + line.amount, 0);
+  const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal + extraAdministrationsMonthly;
   const monthlyTotal = Math.max(
     0,
     activeResult.monthlyAfterDiscount
@@ -745,8 +756,12 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
       });
     }
 
+    rows.push(...administrationLines.map((line) => ({
+      amount: `${line.quantity}x`, description: line.label,
+      price: line.amount / line.quantity, total: line.amount,
+    })));
     return rows;
-  }, [pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
+  }, [administrationLines, pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
   const selectedModuleRows = modules
     .filter((module) => (effectiveQuantities[module.key] ?? 0) > 0)
     .map((module) => {
@@ -1319,6 +1334,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
           name: option.name,
           monthlyPrice: option.monthlyPrice,
         })),
+        extraAdministrations,
         smartConnectConnections,
         smartConnectPricing,
         developmentLines: normalizeDevelopmentLines(developmentLines),
@@ -2390,6 +2406,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   </div>
                 </div>
 
+                <ExtraAdministrationsEditor value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
                 <div className="section">
                   <div className="section-title"><Code2 size={16} /> Ontwikkelingen</div>
                   <DevelopmentLinesEditor
@@ -2483,6 +2500,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                         supportMonthly,
                         customerPortalMonthly: customerPortalMonthlyTotal,
                         smartConnectMonthly: smartConnectPricing.monthlyTotal,
+                        extraAdministrationsMonthly,
                         monthlyTotal,
                         implementationBase: activeResult.implementationBase,
                         implementationAdjustment: manualImplementationAdjustment,

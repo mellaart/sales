@@ -50,3 +50,17 @@ test('uses the confirmed monthly article prices for all packages', () => {
     assert.equal(result[1].amount,10);
   }
 });
+
+for (const key of Object.keys(prices)) {
+  test(`${key}: standard new customer quote creates extra administrations and optional support`, () => {
+    const base = { package_key: key, package_name: key, modules: [], calculator_inputs: { quoteLayout: 'standard', extraAdministrations: 2, includeSupport: true } };
+    const plan = buildDealAssetPlan(base);
+    const added = plan.items.filter(item => item.source === 'Extra administratie');
+    assert.equal(added.length, 4);
+    assert.equal(new Set(plan.items.map(item => item.key)).size, plan.items.length);
+    const noSupport = buildDealAssetPlan({...base, calculator_inputs: {...base.calculator_inputs, includeSupport: false}});
+    assert.equal(noSupport.items.filter(item => item.source === 'Extra administratie').length, 2);
+    const original = buildDealAssetPlan({...base, calculator_inputs: {quoteLayout: 'standard'}});
+    assert.equal(original.items.filter(item => item.source === 'Extra administratie').length, 0);
+  });
+}

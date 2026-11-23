@@ -1,3 +1,4 @@
+import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines } from "@/lib/extra-administrations";
 import type { EditablePricingConfig } from "@/lib/price-config";
 import { getTravelCostQuoteForPostcode } from "@/lib/price-config";
 import {
@@ -17,6 +18,7 @@ export type DealPriceSummary = {
   supportMonthly: number;
   customerPortalMonthly: number;
   smartConnectMonthly: number;
+  extraAdministrationsMonthly?: number;
   monthlyTotal: number;
   implementationBase: number;
   implementationAdjustment: number;
@@ -115,12 +117,17 @@ export function getDealPriceSummary(
     safeNumber(inputs?.smartConnectConnections, 0),
     pricingConfig,
   );
+  const extraAdministrationsMonthly = getExtraAdministrationLines(
+    activePackage, Math.min(1000, Math.max(0, Math.floor(safeNumber(inputs?.extraAdministrations)))),
+    EXTRA_ADMINISTRATION_MONTHLY_PRICES[activePackage.key], includeSupport,
+  ).reduce((sum, line) => sum + line.amount, 0);
   const monthlyTotal = Math.max(
     0,
     activeResult.monthlyAfterDiscount
       - activeResult.supportMonthly
       + supportMonthly
       + customerPortalMonthly
+      + extraAdministrationsMonthly
       + smartConnectMonthly
       + planningAppMonthly,
   );
@@ -150,6 +157,7 @@ export function getDealPriceSummary(
     supportMonthly,
     customerPortalMonthly,
     smartConnectMonthly,
+    extraAdministrationsMonthly,
     monthlyTotal,
     implementationBase: activeResult.implementationBase,
     implementationAdjustment,

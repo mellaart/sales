@@ -16,6 +16,7 @@ export default function PriceBreakdown({ summary }: { summary: DealPriceSummary 
       {summary.customerPortalMonthly > 0 ? (
         <div><span>Klantportaal p/m</span><strong>{euro.format(summary.customerPortalMonthly)}</strong></div>
       ) : null}
+      {(summary.extraAdministrationsMonthly ?? 0) > 0 ? <div><span>Extra administraties p/m (incl. eventuele support)</span><strong>{euro.format(summary.extraAdministrationsMonthly!)}</strong></div> : null}
       {summary.smartConnectMonthly > 0 ? (
         <div><span>Smart Connect p/m</span><strong>{euro.format(summary.smartConnectMonthly)}</strong></div>
       ) : null}

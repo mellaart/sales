@@ -1,5 +1,9 @@
 "use client";
 
+import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines } from "@/lib/extra-administrations";
+import ExtraAdministrationsEditor from "@/components/extra-administrations-editor";
+
+
 import Link from "next/link";
 import CalculatorRelationSearch, { type CalculatorRelation } from "@/components/calculator-relation-search";
 import { useRouter } from "next/navigation";
@@ -164,6 +168,7 @@ export default function PriceCalculator() {
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [includeSupport, setIncludeSupport] = useState(true);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
+  const [extraAdministrations, setExtraAdministrations] = useState(0);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [developmentLines, setDevelopmentLines] = useState<DevelopmentLine[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>(
@@ -272,7 +277,11 @@ export default function PriceCalculator() {
   const planningAppMonthlyTotal = planningAppUsers * pricingConfig.planningAppUserMonthly;
   const licenseWithModulesMonthly = activeResult.licenseMonthly + activeResult.moduleMonthly + planningAppMonthlyTotal;
   const customerPortalMonthlyTotal = selectedCustomerPortalOptions.reduce((sum, option) => sum + option.monthlyPrice, 0);
-  const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal;
+  const administrationLines = useMemo(() => getExtraAdministrationLines(
+    activePackage, extraAdministrations, EXTRA_ADMINISTRATION_MONTHLY_PRICES[activePackage.key], includeSupport,
+  ), [activePackage, extraAdministrations, includeSupport]);
+  const extraAdministrationsMonthly = administrationLines.reduce((sum, line) => sum + line.amount, 0);
+  const expansionMonthlyTotal = customerPortalMonthlyTotal + smartConnectPricing.monthlyTotal + extraAdministrationsMonthly;
   const monthlyTotal = Math.max(
     0,
     activeResult.monthlyAfterDiscount
@@ -299,7 +308,7 @@ export default function PriceCalculator() {
   const developmentHours = getDevelopmentHours(developmentLines);
   const developmentTotal = getDevelopmentTotal(developmentLines, developmentHourlyRate);
   const oneTimeTotal = implementationTotal + developmentTotal;
-  const selectedExpansionCount = selectedCustomerPortalOptions.length + (smartConnectPricing.connectionCount > 0 ? 1 : 0);
+  const selectedExpansionCount = selectedCustomerPortalOptions.length + (smartConnectPricing.connectionCount > 0 ? 1 : 0) + (extraAdministrations > 0 ? 1 : 0);
   const extraMonthlyRows = useMemo(() => {
     const rows = selectedCustomerPortalOptions.map((option) => ({
       amount: "1x",
@@ -326,8 +335,12 @@ export default function PriceCalculator() {
       });
     }
 
+    rows.push(...administrationLines.map((line) => ({
+      amount: `${line.quantity}x`, description: line.label,
+      price: line.amount / line.quantity, total: line.amount,
+    })));
     return rows;
-  }, [pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
+  }, [administrationLines, pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
   const pdfResult = useMemo(
     () => getCalculatorPdfResult(
       activeResult,
@@ -431,6 +444,7 @@ export default function PriceCalculator() {
             name: option.name,
             monthlyPrice: option.monthlyPrice,
           })),
+          extraAdministrations,
           smartConnectConnections,
           smartConnectPricing,
           developmentLines: normalizeDevelopmentLines(developmentLines),
@@ -892,6 +906,7 @@ export default function PriceCalculator() {
                 onChange={setDevelopmentLines}
               />
             </div>
+            <ExtraAdministrationsEditor value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
           </section>
 
           <section className="deals-results card panel">
@@ -923,6 +938,7 @@ export default function PriceCalculator() {
                   {smartConnectPricing.monthlyTotal > 0 ? (
                     <div><span>Smart Connect p/m</span><strong>{euro.format(smartConnectPricing.monthlyTotal)}</strong></div>
                   ) : null}
+                  {extraAdministrationsMonthly > 0 ? <div><span>Extra administraties p/m (incl. eventuele support)</span><strong>{euro.format(extraAdministrationsMonthly)}</strong></div> : null}
                   <div className="total-row"><span>Maandprijs</span><strong>{euro.format(monthlyTotal)}</strong></div>
                   <div><span>Implementatie</span><strong>{euro.format(activeResult.implementationBase)}</strong></div>
                   <div><span>Correctie implementatie</span><strong>{euro.format(manualImplementationAdjustment)}</strong></div>

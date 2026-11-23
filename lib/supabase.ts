@@ -74,6 +74,7 @@ export type DealCalculatorInputs = {
   quantities: Record<string, number>;
   includeSupport?: boolean;
   customerPortalOptionKeys?: string[];
+  extraAdministrations?: number;
   smartConnectConnections?: number;
   developmentLines?: DevelopmentLine[];
   developmentHourlyRate?: number;

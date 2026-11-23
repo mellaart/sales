@@ -64,3 +64,33 @@ for (const key of Object.keys(prices)) {
     assert.equal(original.items.filter(item => item.source === 'Extra administratie').length, 0);
   });
 }
+
+const { getExtraAdministrationQuoteRows } = load('lib/extra-administrations.ts');
+test('named administrations appear separately on the quote, including their support', () => {
+  const administrationLines = lines({key:'starter',name:'Starter',supportExtra:10},2,19.2,true);
+  const rows = getExtraAdministrationQuoteRows(administrationLines, ['  Amsterdam  BV ', 'Rotterdam BV', 'Removed']);
+  assert.equal(rows.length,4);
+  assert.ok(rows[0].description.endsWith('(Amsterdam BV)'));
+  assert.ok(rows[1].description.endsWith('(Rotterdam BV)'));
+  assert.ok(rows[2].description.endsWith('(Amsterdam BV)'));
+  assert.ok(rows[3].description.endsWith('(Rotterdam BV)'));
+  assert.ok(rows.every(row=>row.amount==='1x' && !row.description.includes('Removed')));
+  assert.equal(rows.reduce((sum,row)=>sum+row.total,0),58.4);
+  assert.equal(getExtraAdministrationQuoteRows(administrationLines, []).length,2);
+  assert.ok(getExtraAdministrationQuoteRows(administrationLines, ['Amsterdam'])[1].description.endsWith('(Administratie 2)'));
+});
+
+test('each extra administration and support asset uses its own name instead of the main administration', () => {
+  const deal = {package_key:'starter',package_name:'Starter',modules:[],calculator_inputs:{extraAdministrations:2,extraAdministrationNames:['  Amsterdam  BV ', 'Rotterdam BV'],includeSupport:true}};
+  for (const mainName of [undefined, 'Hoofdadministratie']) {
+    const plan=buildDealAssetPlan(deal,mainName);
+    for (const prefix of ['extra-administration','support-extra-administration']) {
+      assert.ok(plan.items.find(item=>item.key===`${prefix}:1`).name.endsWith('(Amsterdam BV)'));
+      assert.ok(plan.items.find(item=>item.key===`${prefix}:2`).name.endsWith('(Rotterdam BV)'));
+    }
+    const license=plan.items.find(item=>item.key==='license:1');
+    assert.equal(license.name,`Smart Trade Starter licentie${mainName ? ` (${mainName})` : ''}`);
+  }
+  const legacy=buildDealAssetPlan({...deal,calculator_inputs:{extraAdministrations:1}},'Hoofdadministratie');
+  assert.ok(legacy.items.find(item=>item.key==='extra-administration:1').name.endsWith('(Hoofdadministratie)'));
+});

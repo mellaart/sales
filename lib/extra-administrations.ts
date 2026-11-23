@@ -51,3 +51,22 @@ export function getExtraAdministrationLines(
   }
   return lines;
 }
+
+// Keep unnamed legacy quotes grouped; named administrations get their own offer rows.
+export function getExtraAdministrationQuoteRows(
+  lines: AssetExpansionLine[],
+  names: string[],
+) {
+  return lines.flatMap((line) => {
+    const price = line.amount / line.quantity;
+    if (!names.slice(0, line.quantity).some((name) => name.trim())) {
+      return [{ amount: `${line.quantity}x`, description: line.label, price, total: line.amount }];
+    }
+    return Array.from({ length: line.quantity }, (_, index) => ({
+      amount: "1x",
+      description: `${line.label} (${names[index]?.trim().replace(/\s+/g, " ") || `Administratie ${index + 1}`})`,
+      price,
+      total: price,
+    }));
+  });
+}

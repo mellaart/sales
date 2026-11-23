@@ -580,15 +580,22 @@ export function buildDealAssetPlan(
 ): DealAssetPlan {
   const plan = buildBaseDealAssetPlan(deal);
   const administration = (administrationName || deal.calculator_inputs?.assetsExpansion?.administrationName)?.trim().replace(/\s+/g, " ");
-  if (!administration) return plan;
+
   return {
     ...plan,
     items: plan.items.map(item => {
+      const extraAdministrationMatch = /^(?:support-)?extra-administration:(\d+)$/.exec(item.key);
+      const rawExtraName = extraAdministrationMatch
+        ? deal.calculator_inputs?.extraAdministrationNames?.[Number(extraAdministrationMatch[1]) - 1]
+        : undefined;
+      const extraName = typeof rawExtraName === "string" ? rawExtraName.trim().replace(/\s+/g, " ") : "";
+      const itemAdministration = extraName || administration;
+      if (!itemAdministration) return item;
       // Inkijk-offerteregels bevatten de administratienaam al; voeg deze maar één keer toe.
       const name = item.source === "Inkijk administratie"
         ? item.name.replace(/(inkijk administratie)(?: \(.*\))?$/, "$1")
         : item.name;
-      return { ...item, name: `${name} (${administration})` };
+      return { ...item, name: `${name} (${itemAdministration})` };
     }),
   };
 }

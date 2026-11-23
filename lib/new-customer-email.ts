@@ -149,7 +149,11 @@ function moduleLines(deal: NewCustomerDeal, calculatorInputs: Record<string, unk
   }
 
   const extraAdministrations = positiveInteger(calculatorInputs.extraAdministrations);
-  if (extraAdministrations > 0) lines.push(`${extraAdministrations}x Extra administratie`);
+  if (extraAdministrations > 0) {
+    const names = asArray(calculatorInputs.extraAdministrationNames).slice(0, extraAdministrations);
+    const named = names.map((name) => textValue(name)).filter(Boolean);
+    lines.push(`${extraAdministrations}x Extra administratie${named.length ? `: ${named.map(escapeHtml).join(", ")}` : ""}`);
+  }
   const smartConnectConnections = positiveInteger(calculatorInputs.smartConnectConnections);
   if (smartConnectConnections > 0) {
     lines.push(`Smart Connect - ${smartConnectConnections} ${smartConnectConnections === 1 ? "connectie" : "connecties"}`);

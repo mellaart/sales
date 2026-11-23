@@ -23,3 +23,12 @@ test('new customer deals remain without an existing relation link', () => {
   const payload = mod.exports.toSupabaseDealPayload({ id: 'local-deal-new', customer_name: 'Nieuwe klant' }, 'user-test');
   assert.equal(payload.smart_trade_relation_id, null);
 });
+
+test('deal synchronization preserves individual extra administration names', () => {
+  const payload = mod.exports.toSupabaseDealPayload({
+    id: 'local-deal-administrations', customer_name: 'Nieuwe klant',
+    calculator_inputs: { extraAdministrations: 2, extraAdministrationNames: ['Amsterdam BV', 'Rotterdam BV'] },
+  }, 'user-test');
+  assert.equal(payload.calculator_inputs.extraAdministrations, 2);
+  assert.deepEqual(payload.calculator_inputs.extraAdministrationNames, ['Amsterdam BV', 'Rotterdam BV']);
+});

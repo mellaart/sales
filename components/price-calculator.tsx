@@ -1,6 +1,6 @@
 "use client";
 
-import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines } from "@/lib/extra-administrations";
+import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines, getExtraAdministrationQuoteRows } from "@/lib/extra-administrations";
 import ExtraAdministrationsEditor from "@/components/extra-administrations-editor";
 
 
@@ -169,6 +169,7 @@ export default function PriceCalculator() {
   const [includeSupport, setIncludeSupport] = useState(true);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
   const [extraAdministrations, setExtraAdministrations] = useState(0);
+  const [extraAdministrationNames, setExtraAdministrationNames] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
   const [developmentLines, setDevelopmentLines] = useState<DevelopmentLine[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>(
@@ -335,12 +336,9 @@ export default function PriceCalculator() {
       });
     }
 
-    rows.push(...administrationLines.map((line) => ({
-      amount: `${line.quantity}x`, description: line.label,
-      price: line.amount / line.quantity, total: line.amount,
-    })));
+    rows.push(...getExtraAdministrationQuoteRows(administrationLines, extraAdministrationNames));
     return rows;
-  }, [administrationLines, pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
+  }, [administrationLines, extraAdministrationNames, pricingConfig.smartConnectExtraConnectionPrice, selectedCustomerPortalOptions, smartConnectPricing]);
   const pdfResult = useMemo(
     () => getCalculatorPdfResult(
       activeResult,
@@ -445,6 +443,7 @@ export default function PriceCalculator() {
             monthlyPrice: option.monthlyPrice,
           })),
           extraAdministrations,
+          extraAdministrationNames: extraAdministrationNames.slice(0, extraAdministrations).map((name) => name.trim()),
           smartConnectConnections,
           smartConnectPricing,
           developmentLines: normalizeDevelopmentLines(developmentLines),
@@ -906,7 +905,7 @@ export default function PriceCalculator() {
                 onChange={setDevelopmentLines}
               />
             </div>
-            <ExtraAdministrationsEditor value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
+            <ExtraAdministrationsEditor names={extraAdministrationNames} onNamesChange={setExtraAdministrationNames} value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
           </section>
 
           <section className="deals-results card panel">

@@ -1,5 +1,7 @@
 "use client";
 
+import { createSaveQueue } from "@/lib/save-queue";
+
 import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines, getExtraAdministrationQuoteRows } from "@/lib/extra-administrations";
 import ExtraAdministrationsEditor from "@/components/extra-administrations-editor";
 
@@ -12,7 +14,7 @@ import DealImplementationDetails from "@/components/deal-implementation-details"
 import DealFulfillmentPanel from "@/components/deal-fulfillment-panel";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -422,6 +424,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
   const [includeTravelCosts, setIncludeTravelCosts] = useState(true);
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
+  const saveQueue = useRef(createSaveQueue());
   const [extraAdministrations, setExtraAdministrations] = useState(0);
   const [extraAdministrationNames, setExtraAdministrationNames] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
@@ -1242,7 +1245,14 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
   }
 
-  async function handleSave(): Promise<boolean> {
+  function handleSave(): Promise<boolean> {
+    return saveQueue.current(() => performSave()).catch((error) => {
+      setStatus(error instanceof Error ? `Opslaan mislukt: ${error.message}` : "Opslaan mislukt.");
+      return false;
+    });
+  }
+
+  async function performSave(): Promise<boolean> {
     if (!user) {
       setStatus("Je moet ingelogd zijn om deze deal op te slaan.");
       return false;
@@ -1353,6 +1363,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
     }
     const saveMessage = result.warning ?? "Deal opnieuw berekend en opgeslagen.";
     if (approvalStatus && approvalRequestedAt) await refreshDealApproval();
+    await refreshDealAssets(true);
     setStatus(saveMessage);
     return true;
   }
@@ -2407,7 +2418,7 @@ export default function DealEditor({ dealId, focusMode = false }: { dealId: stri
                   </div>
                 </div>
 
-                <ExtraAdministrationsEditor names={extraAdministrationNames} onNamesChange={setExtraAdministrationNames} value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
+                <ExtraAdministrationsEditor onSave={handleSave} names={extraAdministrationNames} onNamesChange={setExtraAdministrationNames} value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
                 <div className="section">
                   <div className="section-title"><Code2 size={16} /> Ontwikkelingen</div>
                   <DevelopmentLinesEditor

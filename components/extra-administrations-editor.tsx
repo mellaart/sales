@@ -1,11 +1,13 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { Building2 } from "lucide-react";
 import { NumberStepper } from "@/components/number-stepper";
 import { euro, type PackageConfig } from "@/lib/pricing";
 import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines } from "@/lib/extra-administrations";
 
-export default function ExtraAdministrationsEditor({ value, onChange, names, onNamesChange, packageConfig, includeSupport }: {
+export default function ExtraAdministrationsEditor({ value, onChange, names, onNamesChange, onSave, packageConfig, includeSupport }: {
+  onSave: () => Promise<boolean>;
   names: string[];
   onNamesChange: (names: string[]) => void;
   value: number;
@@ -13,6 +15,18 @@ export default function ExtraAdministrationsEditor({ value, onChange, names, onN
   packageConfig: PackageConfig;
   includeSupport: boolean;
 }) {
+  const [saveStatus, setSaveStatus] = useState("");
+  const saveVersion = useRef(0);
+  async function saveNames() {
+    const version = ++saveVersion.current;
+    setSaveStatus("Administratienamen opslaan...");
+    try {
+      const saved = await onSave();
+      if (version === saveVersion.current) setSaveStatus(saved ? "Administratienamen opgeslagen." : "Opslaan mislukt. Probeer opnieuw via Opslaan.");
+    } catch {
+      if (version === saveVersion.current) setSaveStatus("Opslaan mislukt. Probeer opnieuw via Opslaan.");
+    }
+  }
   const price = EXTRA_ADMINISTRATION_MONTHLY_PRICES[packageConfig.key];
   const lines = getExtraAdministrationLines(packageConfig, value, price, includeSupport);
   return (
@@ -27,13 +41,17 @@ export default function ExtraAdministrationsEditor({ value, onChange, names, onN
         <label className="input-wrap" key={index}>
           <span className="input-label">Administratienaam {index + 1}</span>
           <input className="input" value={names[index] ?? ""} placeholder={`Naam extra administratie ${index + 1}`}
+            onBlur={() => void saveNames()}
             onChange={(event) => {
+              ++saveVersion.current;
+              setSaveStatus("");
               const nextNames = Array.from({ length: value }, (_, position) => names[position] ?? "");
               nextNames[index] = event.target.value;
               onNamesChange(nextNames);
             }} />
         </label>
       ))}
+      {saveStatus ? <div className="save-status" role="status">{saveStatus}</div> : null}
       <p className="subtext">Smart Trade {packageConfig.name}: {euro.format(price)} per administratie per maand{includeSupport ? ` + ${euro.format(packageConfig.supportExtra)} support` : ""}.</p>
       {value > 0 ? <div className="summary-list">
         {lines.map((line) => <div key={line.label}><span>{line.quantity}× {line.label}</span><strong>{euro.format(line.amount)} p/m</strong></div>)}

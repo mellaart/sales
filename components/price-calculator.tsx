@@ -1,5 +1,7 @@
 "use client";
 
+import { createSaveQueue } from "@/lib/save-queue";
+
 import { EXTRA_ADMINISTRATION_MONTHLY_PRICES, getExtraAdministrationLines, getExtraAdministrationQuoteRows } from "@/lib/extra-administrations";
 import ExtraAdministrationsEditor from "@/components/extra-administrations-editor";
 
@@ -7,7 +9,7 @@ import ExtraAdministrationsEditor from "@/components/extra-administrations-edito
 import Link from "next/link";
 import CalculatorRelationSearch, { type CalculatorRelation } from "@/components/calculator-relation-search";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Boxes,
@@ -25,7 +27,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
-import { createDealWithFallback } from "@/lib/deal-storage";
+import { createDealWithFallback, updateDealWithFallback } from "@/lib/deal-storage";
 import { exportQuotePdf } from "@/lib/pdf";
 import {
   calculatePricing,
@@ -98,17 +100,6 @@ function getSmartConnectPricing(
   };
 }
 
-function withDealSaveTimeout<T>(promise: Promise<T>) {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => {
-      setTimeout(() => {
-        resolve({ error: "Opslaan duurt te lang. Controleer je verbinding en probeer opnieuw." } as T);
-      }, 15000);
-    }),
-  ]);
-}
-
 function getCalculatorPdfResult(
   result: PricingResult,
   supportMonthly: number,
@@ -168,6 +159,8 @@ export default function PriceCalculator() {
   const [travelPostcodePrefix, setTravelPostcodePrefix] = useState("");
   const [includeSupport, setIncludeSupport] = useState(true);
   const [selectedCustomerPortalOptionKeys, setSelectedCustomerPortalOptionKeys] = useState<string[]>([]);
+  const savedDealId = useRef<string | null>(null);
+  const saveQueue = useRef(createSaveQueue());
   const [extraAdministrations, setExtraAdministrations] = useState(0);
   const [extraAdministrationNames, setExtraAdministrationNames] = useState<string[]>([]);
   const [smartConnectConnections, setSmartConnectConnections] = useState(0);
@@ -377,20 +370,24 @@ export default function PriceCalculator() {
     setTravelPostcodePrefix(normalizePostcodePrefix(nextPostcode));
   }
 
-  async function handleSaveCalculation() {
+  function handleSaveCalculation(navigate = true): Promise<boolean> {
+    return saveQueue.current(() => performSaveCalculation(navigate));
+  }
+
+  async function performSaveCalculation(navigate: boolean): Promise<boolean> {
     if (!user) {
       setStatus("Je moet ingelogd zijn om deze berekening op te slaan.");
-      return;
+      return false;
     }
 
     if (!canUseCalculator) {
       setStatus("Je hebt geen schrijfrechten voor Calculator.");
-      return;
+      return false;
     }
 
     if (customerType === "existing" && !selectedRelation) {
       setStatus("Kies eerst een bestaande relatie voor deze offerte.");
-      return;
+      return false;
     }
 
     setSavingDeal(true);
@@ -454,17 +451,22 @@ export default function PriceCalculator() {
         },
       };
 
-      const result = await withDealSaveTimeout(createDealWithFallback(supabase, payload));
+      const result = savedDealId.current
+        ? await updateDealWithFallback(supabase, savedDealId.current, payload)
+        : await createDealWithFallback(supabase, payload);
 
       if (result.error || !result.deal?.id) {
         setStatus(`Opslaan mislukt: ${result.error ?? "Geen deal aangemaakt."}`);
-        return;
+        return false;
       }
 
       setStatus(result.warning ?? "Berekening opgeslagen als deal.");
-      router.push(`/deals/${result.deal.id}`);
+      savedDealId.current = result.deal.id;
+      if (navigate) router.push(`/deals/${result.deal.id}`);
+      return true;
     } catch (error) {
       setStatus(error instanceof Error ? `Opslaan mislukt: ${error.message}` : "Opslaan mislukt.");
+      return false;
     } finally {
       setSavingDeal(false);
     }
@@ -905,7 +907,7 @@ export default function PriceCalculator() {
                 onChange={setDevelopmentLines}
               />
             </div>
-            <ExtraAdministrationsEditor names={extraAdministrationNames} onNamesChange={setExtraAdministrationNames} value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
+            <ExtraAdministrationsEditor onSave={() => handleSaveCalculation(false)} names={extraAdministrationNames} onNamesChange={setExtraAdministrationNames} value={extraAdministrations} onChange={setExtraAdministrations} packageConfig={activePackage} includeSupport={includeSupport} />
           </section>
 
           <section className="deals-results card panel">

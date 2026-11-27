@@ -593,6 +593,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
   const [miscellaneousDescription, setMiscellaneousDescription] = useState("");
   const [miscellaneousPrice, setMiscellaneousPrice] = useState("");
   const [extraTravelVisits, setExtraTravelVisits] = useState(0);
+  const [implementationAdjustment, setImplementationAdjustment] = useState(0);
   const [transferStatus, setTransferStatus] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
 
@@ -922,6 +923,16 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
       });
     }
 
+    if (implementationAdjustment !== 0) {
+      lines.push({
+        group: "Implementatie",
+        label: "Correctie implementatie",
+        quantity: 1,
+        cadence: "once",
+        amount: implementationAdjustment,
+      });
+    }
+
     if (hasMiscellaneousOfferItem) {
       lines.push({
         group: "Diversen",
@@ -947,6 +958,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     hasPackageChange,
     hasModuleSelectionChanges,
     hasMiscellaneousOfferItem,
+    implementationAdjustment,
     includeMissingSupportOffer,
     missingSupportMonthlyTotal,
     miscellaneousAmount,
@@ -1247,6 +1259,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setMiscellaneousDescription("");
     setMiscellaneousPrice("");
     setExtraTravelVisits(0);
+    setImplementationAdjustment(0);
 
     try {
       const response = await fetch(`/api/smart-trade/relations/search?query=${encodeURIComponent(query)}`);
@@ -1296,6 +1309,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setMiscellaneousDescription("");
     setMiscellaneousPrice("");
     setExtraTravelVisits(0);
+    setImplementationAdjustment(0);
 
     try {
       const [assetsResult, relationResult] = await Promise.allSettled([
@@ -1381,6 +1395,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
     setMiscellaneousDescription("");
     setMiscellaneousPrice("");
     setExtraTravelVisits(0);
+    setImplementationAdjustment(0);
     setTransferStatus("");
   }
 
@@ -2075,7 +2090,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
 
               <div className={styles.priceComparisonRow}>
                 <span>Eenmalige kosten</span>
-                <span>Setup en diversen {euro.format(assetExpansionTotals.once)}</span>
+                <span>Setup, diversen en correctie {euro.format(assetExpansionTotals.once)}</span>
                 <span>Reiskosten {euro.format(travelCostTotal)}</span>
                 <strong>Totaal {euro.format(assetExpansionTotals.once + travelCostTotal)}</strong>
               </div>
@@ -2087,7 +2102,7 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
           <div className="top-row">
             <div>
               <div className="eyebrow">Offerte</div>
-              <h2 className="headline">Reiskosten</h2>
+              <h2 className="headline">Implementatie en reiskosten</h2>
               <p className="subtext">Bereken de reiskosten voor de implementatie op basis van de eerste twee cijfers van de postcode.</p>
             </div>
             <div className="icon-badge"><MapPin size={26} /></div>
@@ -2097,6 +2112,16 @@ export default function AssetsDashboardCurrent({ pinQuote = false }: { pinQuote?
             <div className="empty-state">Kies eerst een relatie om reiskosten te berekenen.</div>
           ) : (
             <>
+              <div className="field-grid-2 extra-user-correction">
+                <label className="input-wrap">
+                  <span className="input-label">Correctie implementatie (€)</span>
+                  <NumberStepper
+                    ariaLabel="Correctie implementatie"
+                    value={implementationAdjustment}
+                    onChange={setImplementationAdjustment}
+                  />
+                </label>
+              </div>
               <div className="calculator-module-grid travel-toggle-grid">
                 <label className={`calculator-module-card travel-toggle-card ${effectiveIncludeTravelCosts ? "active" : ""}`}>
                   <input
